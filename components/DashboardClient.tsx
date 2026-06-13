@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ActivityTemplate, ActivityLog, Note, Tag, RecurrenceAnalysis } from '@/types'
 import { Calendar } from './Calendar'
 import { DashboardPanel } from './DashboardPanel'
@@ -44,6 +44,9 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   currentUser = null,
 }) => {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const errorParam = searchParams ? searchParams.get('error') : null
+  const [showLocalBypass, setShowLocalBypass] = useState(false)
   // Modal states
   const [selectedDateStr, setSelectedDateStr] = useState<string>(getTodayDateStr())
   const [isDayLogsOpen, setIsDayLogsOpen] = useState(false)
@@ -323,6 +326,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   const todayNote = notes.find(note => note.date === todayStr) || null
 
   // Remove unnecessary loading view since auth state is initialized lazily
+  // Remove unnecessary loading view since auth state is initialized lazily
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950 p-4 transition-colors duration-200 relative">
@@ -346,152 +350,208 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
         )}
 
         <div className={`w-full max-w-sm bg-white/95 dark:bg-zinc-900/95 backdrop-blur-lg border border-slate-200/80 dark:border-zinc-800/80 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 flex flex-col items-center transition-all duration-300 ${shake ? 'animate-shake' : ''}`}>
-          <div className="flex flex-col items-center text-center space-y-2">
+          <div className="flex flex-col items-center text-center space-y-2 w-full">
             <div className="p-3.5 bg-slate-50 dark:bg-zinc-950 border border-slate-150 dark:border-zinc-850 rounded-2xl text-blue-500 dark:text-blue-400 shadow-sm">
               <Layers size={26} className="animate-pulse" />
             </div>
             <h1 className="text-lg font-black tracking-wider text-slate-900 dark:text-white uppercase">
-              {isRegisterMode ? 'Create Account' : 'Operations Login'}
+              Operations Login
             </h1>
             <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-bold max-w-[240px] leading-relaxed">
-              {isRegisterMode
-                ? 'Choose a unique username and a secure 4-digit PIN.'
-                : 'Enter your credentials to access your control panel.'}
+              Access your personal control panel, metrics, habits, and exercise workspace.
             </p>
           </div>
 
-          {/* Sign In vs Register Toggle */}
-          <div className="flex border border-slate-150 dark:border-zinc-850 bg-slate-50 dark:bg-zinc-950 p-1 rounded-xl w-full">
-            <button
-              disabled={isAuthLoading}
-              onClick={() => { setIsRegisterMode(false); setAuthError(''); setEnteredPin(''); }}
-              className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-black rounded-lg transition-all cursor-pointer ${
-                !isRegisterMode
-                  ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-200/50 dark:border-zinc-700 shadow-xs'
-                  : 'text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-400'
-              } disabled:opacity-50`}
+          {/* Primary Google Login Button */}
+          <div className="w-full space-y-3">
+            <a
+              href="/api/auth/google"
+              className="w-full bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-50 text-white dark:text-zinc-950 flex items-center justify-center gap-3 py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md select-none border border-slate-800 dark:border-zinc-200 hover:scale-[1.01] active:scale-[0.99]"
             >
-              Sign In
-            </button>
-            <button
-              disabled={isAuthLoading}
-              onClick={() => { setIsRegisterMode(true); setAuthError(''); setEnteredPin(''); }}
-              className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-black rounded-lg transition-all cursor-pointer ${
-                isRegisterMode
-                  ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-200/50 dark:border-zinc-700 shadow-xs'
-                  : 'text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-400'
-              } disabled:opacity-50`}
-            >
-              Register
-            </button>
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+              Sign In with Google
+            </a>
           </div>
 
-          {/* Username Text Input */}
-          <div className="w-full space-y-1.5">
-            <label className="block text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Username</label>
-            <input
-              disabled={isAuthLoading}
-              type="text"
-              placeholder="e.g. chinmay"
-              value={usernameInput}
-              onChange={(e) => {
-                setUsernameInput(e.target.value)
-                setAuthError('')
-              }}
-              className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-850 focus:border-blue-500 dark:focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-700 focus:outline-hidden transition-all shadow-3xs"
-            />
-          </div>
-
-          {/* Hidden PIN Input for system keyboard support */}
-          <input
-            ref={pinInputRef}
-            type="password"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={4}
-            value={enteredPin}
-            onChange={(e) => {
-              if (isAuthLoading) return
-              const val = e.target.value.replace(/\D/g, '')
-              setEnteredPin(val)
-              if (val.length === 4 && !isRegisterMode) {
-                handleAuthSubmit(usernameInput, val)
-              }
-            }}
-            className="opacity-0 absolute w-1 h-1 pointer-events-none"
-          />
-
-          {/* 4 PIN Dots */}
-          <div 
-            onClick={() => !isAuthLoading && pinInputRef.current?.focus()}
-            className="w-full space-y-2 cursor-pointer flex flex-col items-center"
-          >
-            <label className="block text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest text-center">Passcode PIN (Tap to Type)</label>
-            <div className="flex gap-4 justify-center py-1">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div
-                  key={i}
-                  className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-200 ${
-                    i < enteredPin.length
-                      ? 'bg-blue-500 border-blue-500 scale-110 shadow-md shadow-blue-500/50'
-                      : 'bg-slate-100 dark:bg-zinc-950 border-slate-300 dark:border-zinc-800'
-                  }`}
-                />
-              ))}
-            </div>
-          </div>
-
-          {authError && (
-            <div className="text-xs font-bold text-red-500 dark:text-red-400 text-center animate-pulse">
-              {authError}
+          {/* Configuration / Authentication Error Banner */}
+          {errorParam && (
+            <div className="w-full bg-red-500/10 border border-red-500/20 text-red-500 dark:text-red-400 p-3 rounded-2xl text-[10px] space-y-1.5 leading-relaxed">
+              <div className="font-extrabold uppercase tracking-wider">
+                {errorParam === 'google-config-missing' ? 'Google OAuth Keys Missing' : 'Authentication Error'}
+              </div>
+              <div>
+                {errorParam === 'google-config-missing' ? (
+                  <>
+                    Please add the following credentials to your <code className="font-mono bg-red-500/15 px-1 py-0.5 rounded">.env</code> file:
+                    <pre className="mt-1.5 p-1.5 bg-black/10 dark:bg-black/40 rounded font-mono text-[9px] text-slate-600 dark:text-zinc-400 select-all overflow-x-auto">
+                      GOOGLE_CLIENT_ID="..."{"\n"}
+                      GOOGLE_CLIENT_SECRET="..."{"\n"}
+                      NEXT_PUBLIC_SITE_URL="http://localhost:3000"
+                    </pre>
+                  </>
+                ) : (
+                  'Google authorization was unsuccessful or timed out. Please try again.'
+                )}
+              </div>
             </div>
           )}
 
-          {/* Keypad */}
-          <div className="grid grid-cols-3 gap-x-4 gap-y-3 justify-items-center w-full max-w-[260px]">
-            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(num => (
-              <button
-                disabled={isAuthLoading}
-                key={num}
-                onClick={() => handleKeyPress(num)}
-                className="w-14 h-14 rounded-full bg-slate-50 hover:bg-slate-100/80 active:bg-slate-200/80 dark:bg-zinc-950 dark:hover:bg-zinc-900/80 dark:active:bg-zinc-850/80 border border-slate-200 dark:border-zinc-850/80 text-slate-800 dark:text-zinc-200 font-black text-lg flex items-center justify-center transition-all duration-100 active:scale-90 cursor-pointer shadow-3xs disabled:opacity-30"
-              >
-                {num}
-              </button>
-            ))}
+          {/* Toggle Developer Local Bypass */}
+          <div className="w-full pt-2 border-t border-slate-100 dark:border-zinc-850 flex flex-col items-center">
             <button
-              disabled={isAuthLoading}
-              onClick={handleClear}
-              className="w-14 h-14 rounded-full text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-350 font-bold text-[10px] uppercase flex items-center justify-center transition-all cursor-pointer disabled:opacity-30 active:scale-90"
+              onClick={() => {
+                setShowLocalBypass(!showLocalBypass)
+                setAuthError('')
+                setEnteredPin('')
+              }}
+              className="text-[9px] font-black text-slate-400 hover:text-blue-500 dark:text-zinc-500 dark:hover:text-blue-400 uppercase tracking-widest cursor-pointer transition-colors"
             >
-              Clear
-            </button>
-            <button
-              disabled={isAuthLoading}
-              key="0"
-              onClick={() => handleKeyPress('0')}
-              className="w-14 h-14 rounded-full bg-slate-50 hover:bg-slate-100/80 active:bg-slate-200/80 dark:bg-zinc-950 dark:hover:bg-zinc-900/80 dark:active:bg-zinc-850/80 border border-slate-200 dark:border-zinc-850/80 text-slate-800 dark:text-zinc-200 font-black text-lg flex items-center justify-center transition-all duration-100 active:scale-90 cursor-pointer shadow-3xs disabled:opacity-30"
-            >
-              0
-            </button>
-            <button
-              disabled={isAuthLoading}
-              onClick={handleBackspace}
-              className="w-14 h-14 rounded-full text-slate-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 font-bold text-[10px] uppercase flex items-center justify-center transition-all cursor-pointer disabled:opacity-30 active:scale-90"
-            >
-              Del
+              {showLocalBypass ? 'Hide Local PIN Login' : 'Developer / Local PIN Bypass'}
             </button>
           </div>
 
-          {/* Registration Submit Button */}
-          {isRegisterMode && (
-            <button
-              onClick={() => handleAuthSubmit(usernameInput, enteredPin)}
-              disabled={isAuthLoading || usernameInput.trim().length === 0 || enteredPin.length !== 4}
-              className="w-full bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-950 py-3.5 rounded-2xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-md"
-            >
-              Register & Log In
-            </button>
+          {/* Collapsible Local Username/PIN Form */}
+          {showLocalBypass && (
+            <div className="w-full space-y-4 pt-2 border-t border-dashed border-slate-150 dark:border-zinc-800/80 animate-fade-in">
+              {/* Sign In vs Register Toggle */}
+              <div className="flex border border-slate-150 dark:border-zinc-850 bg-slate-50 dark:bg-zinc-950 p-1 rounded-xl w-full">
+                <button
+                  disabled={isAuthLoading}
+                  onClick={() => { setIsRegisterMode(false); setAuthError(''); setEnteredPin(''); }}
+                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-black rounded-lg transition-all cursor-pointer ${
+                    !isRegisterMode
+                      ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-200/50 dark:border-zinc-700 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-400'
+                  } disabled:opacity-50`}
+                >
+                  Sign In
+                </button>
+                <button
+                  disabled={isAuthLoading}
+                  onClick={() => { setIsRegisterMode(true); setAuthError(''); setEnteredPin(''); }}
+                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-black rounded-lg transition-all cursor-pointer ${
+                    isRegisterMode
+                      ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-200/50 dark:border-zinc-700 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-400'
+                  } disabled:opacity-50`}
+                >
+                  Register
+                </button>
+              </div>
+
+              {/* Username Text Input */}
+              <div className="w-full space-y-1.5">
+                <label className="block text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Username</label>
+                <input
+                  disabled={isAuthLoading}
+                  type="text"
+                  placeholder="e.g. amruta"
+                  value={usernameInput}
+                  onChange={(e) => {
+                    setUsernameInput(e.target.value)
+                    setAuthError('')
+                  }}
+                  className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-850 focus:border-blue-500 dark:focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-700 focus:outline-hidden transition-all shadow-3xs"
+                />
+              </div>
+
+              {/* Hidden PIN Input for system keyboard support */}
+              <input
+                ref={pinInputRef}
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={4}
+                value={enteredPin}
+                onChange={(e) => {
+                  if (isAuthLoading) return
+                  const val = e.target.value.replace(/\D/g, '')
+                  setEnteredPin(val)
+                  if (val.length === 4 && !isRegisterMode) {
+                    handleAuthSubmit(usernameInput, val)
+                  }
+                }}
+                className="opacity-0 absolute w-1 h-1 pointer-events-none"
+              />
+
+              {/* 4 PIN Dots */}
+              <div 
+                onClick={() => !isAuthLoading && pinInputRef.current?.focus()}
+                className="w-full space-y-2 cursor-pointer flex flex-col items-center"
+              >
+                <label className="block text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest text-center">Passcode PIN (Tap to Type)</label>
+                <div className="flex gap-4 justify-center py-1">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-200 ${
+                        i < enteredPin.length
+                          ? 'bg-blue-500 border-blue-500 scale-110 shadow-md shadow-blue-500/50'
+                          : 'bg-slate-100 dark:bg-zinc-950 border-slate-300 dark:border-zinc-800'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {authError && (
+                <div className="text-xs font-bold text-red-500 dark:text-red-400 text-center animate-pulse">
+                  {authError}
+                </div>
+              )}
+
+              {/* Keypad */}
+              <div className="grid grid-cols-3 gap-x-4 gap-y-3 justify-items-center w-full max-w-[260px] mx-auto">
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(num => (
+                  <button
+                    disabled={isAuthLoading}
+                    key={num}
+                    onClick={() => handleKeyPress(num)}
+                    className="w-12 h-12 rounded-full bg-slate-50 hover:bg-slate-100/80 active:bg-slate-200/80 dark:bg-zinc-950 dark:hover:bg-zinc-900/80 dark:active:bg-zinc-850/80 border border-slate-200 dark:border-zinc-850/80 text-slate-800 dark:text-zinc-200 font-black text-base flex items-center justify-center transition-all duration-100 active:scale-90 cursor-pointer shadow-3xs disabled:opacity-30"
+                  >
+                    {num}
+                  </button>
+                ))}
+                <button
+                  disabled={isAuthLoading}
+                  onClick={handleClear}
+                  className="w-12 h-12 rounded-full text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-350 font-bold text-[9px] uppercase flex items-center justify-center transition-all cursor-pointer disabled:opacity-30 active:scale-90"
+                >
+                  Clear
+                </button>
+                <button
+                  disabled={isAuthLoading}
+                  key="0"
+                  onClick={() => handleKeyPress('0')}
+                  className="w-12 h-12 rounded-full bg-slate-50 hover:bg-slate-100/80 active:bg-slate-200/80 dark:bg-zinc-950 dark:hover:bg-zinc-900/80 dark:active:bg-zinc-850/80 border border-slate-200 dark:border-zinc-850/80 text-slate-800 dark:text-zinc-200 font-black text-base flex items-center justify-center transition-all duration-100 active:scale-90 cursor-pointer shadow-3xs disabled:opacity-30"
+                >
+                  0
+                </button>
+                <button
+                  disabled={isAuthLoading}
+                  onClick={handleBackspace}
+                  className="w-12 h-12 rounded-full text-slate-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 font-bold text-[9px] uppercase flex items-center justify-center transition-all cursor-pointer disabled:opacity-30 active:scale-90"
+                >
+                  Del
+                </button>
+              </div>
+
+              {/* Registration Submit Button */}
+              {isRegisterMode && (
+                <button
+                  onClick={() => handleAuthSubmit(usernameInput, enteredPin)}
+                  disabled={isAuthLoading || usernameInput.trim().length === 0 || enteredPin.length !== 4}
+                  className="w-full bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-950 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-md border border-slate-800 dark:border-zinc-200"
+                >
+                  Register & Log In
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>
