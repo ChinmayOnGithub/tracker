@@ -330,11 +330,17 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   // Remove unnecessary loading view since auth state is initialized lazily
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950 p-4 transition-colors duration-200 relative">
-        <div className="absolute top-4 right-4">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950 p-4 transition-colors duration-300 relative overflow-hidden">
+        {/* Ambient background glowing orbs */}
+        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-blue-500/10 dark:bg-blue-600/5 blur-3xl pointer-events-none select-none animate-pulse duration-[6000ms]" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-purple-500/10 dark:bg-purple-600/5 blur-3xl pointer-events-none select-none animate-pulse duration-[8000ms]" />
+
+        {/* Theme Toggle Button */}
+        <div className="absolute top-4 right-4 z-20">
           <button
             onClick={toggleTheme}
-            className="w-8.5 h-8.5 rounded-lg flex items-center justify-center bg-white hover:bg-slate-50 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-850/60 text-slate-700 dark:text-zinc-300 transition-all cursor-pointer shadow-xs"
+            className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/80 hover:bg-slate-50 dark:bg-zinc-900/50 dark:hover:bg-zinc-800/80 border border-slate-200/80 dark:border-zinc-800/80 text-slate-700 dark:text-zinc-300 transition-all duration-200 cursor-pointer shadow-xs"
+            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
           >
             {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
           </button>
@@ -342,7 +348,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
 
         {/* Loading Overlay */}
         {isAuthLoading && (
-          <div className="absolute inset-0 bg-slate-50/70 dark:bg-zinc-950/70 backdrop-blur-xs flex flex-col items-center justify-center z-50 transition-all duration-300">
+          <div className="absolute inset-0 bg-slate-50/60 dark:bg-zinc-950/70 backdrop-blur-xs flex flex-col items-center justify-center z-50 transition-all duration-300">
             <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
             <p className="text-xs font-black text-slate-700 dark:text-zinc-300 uppercase tracking-widest mt-4 animate-pulse">
               {isRegisterMode ? 'Creating Account...' : 'Logging in...'}
@@ -350,10 +356,14 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
           </div>
         )}
 
-        <div className={`w-full max-w-sm bg-white/95 dark:bg-zinc-900/95 backdrop-blur-lg border border-slate-200/80 dark:border-zinc-800/80 rounded-3xl p-6 md:p-8 shadow-2xl space-y-6 flex flex-col items-center transition-all duration-300 ${shake ? 'animate-shake' : ''}`}>
-          <div className="flex flex-col items-center text-center space-y-2 w-full">
-            <div className="p-3.5 bg-slate-50 dark:bg-zinc-950 border border-slate-150 dark:border-zinc-850 rounded-2xl text-blue-500 dark:text-blue-400 shadow-sm">
-              <Layers size={26} className="animate-pulse" />
+        <div className={`w-full max-w-sm backdrop-blur-xl bg-white/80 dark:bg-zinc-900/40 border border-slate-200/50 dark:border-zinc-800/65 rounded-3xl p-6 md:p-8 shadow-[0_20px_50px_rgba(15,23,42,0.06)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.35)] space-y-6 flex flex-col items-center transition-all duration-300 relative z-10 ${shake ? 'animate-shake' : ''}`}>
+          <div className="flex flex-col items-center text-center space-y-2.5 w-full">
+            <div className="relative group mb-1">
+              {/* Outer logo glow aura */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-2xl blur-md opacity-20 group-hover:opacity-35 transition-opacity duration-300" />
+              <div className="relative p-3.5 bg-slate-50 dark:bg-zinc-950 border border-slate-200/60 dark:border-zinc-800/80 rounded-2xl text-blue-500 dark:text-blue-400 shadow-xs flex items-center justify-center">
+                <Layers size={24} className="animate-pulse" />
+              </div>
             </div>
             <h1 className="text-lg font-black tracking-wider text-slate-900 dark:text-white uppercase">
               Operations Login
@@ -364,10 +374,10 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
           </div>
 
           {/* Primary Google Login Button */}
-          <div className="w-full space-y-3">
+          <div className="w-full">
             <a
               href="/api/auth/google"
-              className="w-full bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-50 text-white dark:text-zinc-950 flex items-center justify-center gap-3 py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md select-none border border-slate-800 dark:border-zinc-200 hover:scale-[1.01] active:scale-[0.99]"
+              className="w-full bg-white hover:bg-slate-50 dark:bg-zinc-800/80 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-100 flex items-center justify-center gap-3 py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-wider transition-all duration-300 cursor-pointer shadow-[0_4px_12px_rgba(15,23,42,0.04)] dark:shadow-[0_4px_12px_rgba(0,0,0,0.2)] select-none border border-slate-200/80 dark:border-zinc-750 hover:border-slate-350 dark:hover:border-zinc-700 hover:scale-[1.02] active:scale-[0.98]"
             >
               <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -381,25 +391,27 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
 
           {/* Configuration / Authentication Error Banner */}
           {errorParam && (
-            <div className="w-full bg-red-500/10 border border-red-500/20 text-red-500 dark:text-red-400 p-3 rounded-2xl text-[10px] space-y-1.5 leading-relaxed">
-              <div className="font-extrabold uppercase tracking-wider">
-                {errorParam === 'google-config-missing' ? 'Google OAuth Keys Missing' : 'Authentication Error'}
+            <div className="w-full bg-red-550/5 dark:bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 p-4 rounded-2xl text-[10px] space-y-1.5 leading-relaxed relative overflow-hidden backdrop-blur-md">
+              <div className="absolute top-0 left-0 w-1 h-full bg-red-500" />
+              <div className="font-black uppercase tracking-wider flex items-center gap-1.5 text-red-700 dark:text-red-400">
+                <span className="text-[11px]">⚠️</span>
+                <span>{errorParam === 'google-config-missing' ? 'Google OAuth Keys Missing' : 'Authentication Error'}</span>
               </div>
-              <div>
+              <div className="pl-4">
                 {errorParam === 'google-config-missing' ? (
                   <>
-                    Please add the following credentials to your <code className="font-mono bg-red-500/15 px-1 py-0.5 rounded">.env</code> file:
-                    <pre className="mt-1.5 p-1.5 bg-black/10 dark:bg-black/40 rounded font-mono text-[9px] text-slate-600 dark:text-zinc-400 select-all overflow-x-auto">
+                    Please add the following credentials to your <code className="font-mono bg-red-500/15 px-1 py-0.5 rounded text-red-700 dark:text-red-300">.env</code> file:
+                    <pre className="mt-1.5 p-1.5 bg-black/5 dark:bg-black/35 rounded font-mono text-[9px] text-slate-600 dark:text-zinc-400 select-all overflow-x-auto border border-slate-200/50 dark:border-zinc-800/40">
                       GOOGLE_CLIENT_ID="..."{"\n"}
                       GOOGLE_CLIENT_SECRET="..."{"\n"}
                       NEXT_PUBLIC_SITE_URL="http://localhost:3000"
                     </pre>
                   </>
                 ) : (
-                  <div className="space-y-1">
+                  <div className="space-y-1 text-slate-500 dark:text-zinc-400">
                     <div>Google authorization was unsuccessful. Please try again.</div>
                     {detailsParam && (
-                      <div className="bg-black/10 dark:bg-black/35 font-mono p-1.5 rounded text-[9px] select-all overflow-x-auto mt-1.5">
+                      <div className="bg-black/5 dark:bg-black/35 font-mono p-1.5 rounded text-[9px] select-all overflow-x-auto mt-1.5 border border-slate-200/50 dark:border-zinc-800/40">
                         Details: {detailsParam}
                       </div>
                     )}
@@ -410,16 +422,19 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
           )}
 
           {/* Toggle Developer Local Bypass */}
-          <div className="w-full pt-2 border-t border-slate-100 dark:border-zinc-850 flex flex-col items-center">
+          <div className="w-full pt-4 border-t border-slate-100 dark:border-zinc-850/60 flex flex-col items-center">
             <button
               onClick={() => {
                 setShowLocalBypass(!showLocalBypass)
                 setAuthError('')
                 setEnteredPin('')
               }}
-              className="text-[9px] font-black text-slate-400 hover:text-blue-500 dark:text-zinc-500 dark:hover:text-blue-400 uppercase tracking-widest cursor-pointer transition-colors"
+              className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 hover:text-blue-500 dark:text-zinc-500 dark:hover:text-blue-400 uppercase tracking-widest cursor-pointer transition-colors duration-200 select-none"
             >
-              {showLocalBypass ? 'Hide Local PIN Login' : 'Developer / Local PIN Bypass'}
+              <span>{showLocalBypass ? 'Hide Local PIN Login' : 'Developer / Local PIN Bypass'}</span>
+              <span className={`transition-transform duration-350 text-[8px] ${showLocalBypass ? 'rotate-180' : ''}`}>
+                ▼
+              </span>
             </button>
           </div>
 
@@ -427,14 +442,14 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
           {showLocalBypass && (
             <div className="w-full space-y-4 pt-2 border-t border-dashed border-slate-150 dark:border-zinc-800/80 animate-fade-in">
               {/* Sign In vs Register Toggle */}
-              <div className="flex border border-slate-150 dark:border-zinc-850 bg-slate-50 dark:bg-zinc-950 p-1 rounded-xl w-full">
+              <div className="flex border border-slate-200/60 dark:border-zinc-800/80 bg-slate-50 dark:bg-zinc-950/80 p-1 rounded-xl w-full relative shadow-inner">
                 <button
                   disabled={isAuthLoading}
                   onClick={() => { setIsRegisterMode(false); setAuthError(''); setEnteredPin(''); }}
-                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-black rounded-lg transition-all cursor-pointer ${
+                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-black rounded-lg transition-all duration-200 cursor-pointer ${
                     !isRegisterMode
-                      ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-200/50 dark:border-zinc-700 shadow-xs'
-                      : 'text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-400'
+                      ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-200/40 dark:border-zinc-700/60 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-350'
                   } disabled:opacity-50`}
                 >
                   Sign In
@@ -442,10 +457,10 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
                 <button
                   disabled={isAuthLoading}
                   onClick={() => { setIsRegisterMode(true); setAuthError(''); setEnteredPin(''); }}
-                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-black rounded-lg transition-all cursor-pointer ${
+                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-black rounded-lg transition-all duration-200 cursor-pointer ${
                     isRegisterMode
-                      ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-200/50 dark:border-zinc-700 shadow-xs'
-                      : 'text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-400'
+                      ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-200/40 dark:border-zinc-700/60 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-350'
                   } disabled:opacity-50`}
                 >
                   Register
@@ -464,7 +479,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
                     setUsernameInput(e.target.value)
                     setAuthError('')
                   }}
-                  className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-850 focus:border-blue-500 dark:focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-700 focus:outline-hidden transition-all shadow-3xs"
+                  className="w-full bg-slate-50 dark:bg-zinc-950/60 border border-slate-200 dark:border-zinc-800/80 focus:border-blue-500 dark:focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-650 focus:outline-hidden transition-all duration-200 shadow-xs"
                 />
               </div>
 
@@ -490,20 +505,23 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
               {/* 4 PIN Dots */}
               <div 
                 onClick={() => !isAuthLoading && pinInputRef.current?.focus()}
-                className="w-full space-y-2 cursor-pointer flex flex-col items-center"
+                className="w-full space-y-2 cursor-pointer flex flex-col items-center select-none"
               >
                 <label className="block text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest text-center">Passcode PIN (Tap to Type)</label>
-                <div className="flex gap-4 justify-center py-1">
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-200 ${
-                        i < enteredPin.length
-                          ? 'bg-blue-500 border-blue-500 scale-110 shadow-md shadow-blue-500/50'
-                          : 'bg-slate-100 dark:bg-zinc-950 border-slate-300 dark:border-zinc-800'
-                      }`}
-                    />
-                  ))}
+                <div className="flex gap-4 justify-center py-2">
+                  {Array.from({ length: 4 }).map((_, i) => {
+                    const isFilled = i < enteredPin.length;
+                    return (
+                      <div
+                        key={i}
+                        className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-300 ${
+                          isFilled
+                            ? 'bg-blue-500 border-blue-500 scale-115 shadow-[0_0_12px_rgba(59,130,246,0.6)]'
+                            : 'bg-slate-50 dark:bg-zinc-950/80 border-slate-300 dark:border-zinc-800 hover:border-slate-400 dark:hover:border-zinc-700'
+                        }`}
+                      />
+                    );
+                  })}
                 </div>
               </div>
 
@@ -514,13 +532,13 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
               )}
 
               {/* Keypad */}
-              <div className="grid grid-cols-3 gap-x-4 gap-y-3 justify-items-center w-full max-w-[260px] mx-auto">
+              <div className="grid grid-cols-3 gap-x-4 gap-y-3 justify-items-center w-full max-w-[240px] mx-auto select-none">
                 {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(num => (
                   <button
                     disabled={isAuthLoading}
                     key={num}
                     onClick={() => handleKeyPress(num)}
-                    className="w-12 h-12 rounded-full bg-slate-50 hover:bg-slate-100/80 active:bg-slate-200/80 dark:bg-zinc-950 dark:hover:bg-zinc-900/80 dark:active:bg-zinc-850/80 border border-slate-200 dark:border-zinc-850/80 text-slate-800 dark:text-zinc-200 font-black text-base flex items-center justify-center transition-all duration-100 active:scale-90 cursor-pointer shadow-3xs disabled:opacity-30"
+                    className="w-11 h-11 rounded-full bg-white/70 hover:bg-slate-50 active:bg-slate-100 dark:bg-zinc-900/40 dark:hover:bg-zinc-800/60 dark:active:bg-zinc-850/60 border border-slate-200/60 dark:border-zinc-800/80 text-slate-800 dark:text-zinc-200 font-extrabold text-sm flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer shadow-xs disabled:opacity-30 disabled:pointer-events-none"
                   >
                     {num}
                   </button>
@@ -528,7 +546,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
                 <button
                   disabled={isAuthLoading}
                   onClick={handleClear}
-                  className="w-12 h-12 rounded-full text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-350 font-bold text-[9px] uppercase flex items-center justify-center transition-all cursor-pointer disabled:opacity-30 active:scale-90"
+                  className="w-11 h-11 rounded-full text-slate-450 hover:text-slate-650 dark:text-zinc-500 dark:hover:text-zinc-350 font-extrabold text-[9px] uppercase flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
                 >
                   Clear
                 </button>
@@ -536,14 +554,14 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
                   disabled={isAuthLoading}
                   key="0"
                   onClick={() => handleKeyPress('0')}
-                  className="w-12 h-12 rounded-full bg-slate-50 hover:bg-slate-100/80 active:bg-slate-200/80 dark:bg-zinc-950 dark:hover:bg-zinc-900/80 dark:active:bg-zinc-850/80 border border-slate-200 dark:border-zinc-850/80 text-slate-800 dark:text-zinc-200 font-black text-base flex items-center justify-center transition-all duration-100 active:scale-90 cursor-pointer shadow-3xs disabled:opacity-30"
+                  className="w-11 h-11 rounded-full bg-white/70 hover:bg-slate-50 active:bg-slate-100 dark:bg-zinc-900/40 dark:hover:bg-zinc-800/60 dark:active:bg-zinc-850/60 border border-slate-200/60 dark:border-zinc-800/80 text-slate-800 dark:text-zinc-200 font-extrabold text-sm flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer shadow-xs disabled:opacity-30 disabled:pointer-events-none"
                 >
                   0
                 </button>
                 <button
                   disabled={isAuthLoading}
                   onClick={handleBackspace}
-                  className="w-12 h-12 rounded-full text-slate-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 font-bold text-[9px] uppercase flex items-center justify-center transition-all cursor-pointer disabled:opacity-30 active:scale-90"
+                  className="w-11 h-11 rounded-full text-slate-450 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 font-extrabold text-[9px] uppercase flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
                 >
                   Del
                 </button>
@@ -554,7 +572,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
                 <button
                   onClick={() => handleAuthSubmit(usernameInput, enteredPin)}
                   disabled={isAuthLoading || usernameInput.trim().length === 0 || enteredPin.length !== 4}
-                  className="w-full bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-950 py-3 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-md border border-slate-800 dark:border-zinc-200"
+                  className="w-full bg-slate-900 hover:bg-slate-850 dark:bg-white dark:hover:bg-zinc-50 text-white dark:text-zinc-950 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 cursor-pointer shadow-md border border-slate-800 dark:border-zinc-200"
                 >
                   Register & Log In
                 </button>

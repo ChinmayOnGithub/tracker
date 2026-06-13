@@ -1,0 +1,28 @@
+[2026-06-13T19:45:48.924Z] Google auth callback exception
+Details: PrismaClientValidationError: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$db$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["db"].user.findFirst()` invocation in
+D:\github_projeccts\tracker\.next\dev\server\chunks\[root-of-the-server]__18qk9je._.js:275:145
+
+  272     return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].redirect(`${siteUrl}/?error=google-no-email`);
+  273 }
+  274 // Find or Create User
+→ 275 let user = await __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$db$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["db"].user.findFirst({
+        where: {
+          OR: [
+            {
+              googleId: "112491194085739558360"
+            },
+            {
+              email: "chinmaydpatil09@gmail.com"
+            }
+          ]
+        }
+      })
+
+Unknown argument `googleId`. Available options are marked with ?.
+    at ar (D:\github_projeccts\tracker\node_modules\@prisma\client\runtime\client.js:10:1374)
+    at handleRequestError (D:\github_projeccts\tracker\node_modules\@prisma\client\runtime\client.js:65:7929)
+    at handleAndLogRequestError (D:\github_projeccts\tracker\node_modules\@prisma\client\runtime\client.js:65:7581)
+    at request (D:\github_projeccts\tracker\node_modules\@prisma\client\runtime\client.js:65:7288)
+    at processTicksAndRejections (native)
+
