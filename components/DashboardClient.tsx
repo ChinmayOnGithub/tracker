@@ -51,8 +51,6 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
   const [templateToEdit, setTemplateToEdit] = useState<ActivityTemplate | null>(null)
 
-  const [mounted, setMounted] = useState(false)
-
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(initialAuthenticated)
   const [user, setUser] = useState<{ id: string; username: string } | null>(currentUser)
@@ -70,8 +68,6 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
 
   // Load client-specific states on mount
   useEffect(() => {
-    setMounted(true)
-    
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
     if (savedTheme) {
       setTheme(savedTheme)
@@ -237,6 +233,13 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   const selectedDayNote = notes.find(note => note.date === selectedDateStr) || null
 
   const todayStr = getTodayDateStr()
+
+  // Pre-calculate date details statically to avoid server-client hydration mismatch or loading delay
+  const [yearNum, monthNum, dayNum] = todayStr.split('-').map(Number)
+  const parsedDate = new Date(yearNum, monthNum - 1, dayNum)
+  const headerDateDay = parsedDate.getDate()
+  const headerDateWeekday = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][parsedDate.getDay()]
+  const headerDateMonthYear = `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parsedDate.getMonth()]} ${yearNum}`
 
   // Calculate stats for today's briefing
   const totalTasksDue = analyzedTemplates.filter(
@@ -503,15 +506,15 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
         
         {/* Left Section: Huge Date Display & Controls */}
         <div className="flex items-center gap-4 shrink-0 pr-6">
-          <div suppressHydrationWarning className="text-5xl md:text-6xl font-black tracking-tighter text-slate-800 dark:text-white font-mono leading-none">
-            {mounted ? new Date(todayStr + 'T00:00:00').getDate() : ''}
+          <div className="text-5xl md:text-6xl font-black tracking-tighter text-slate-800 dark:text-white font-mono leading-none">
+            {headerDateDay}
           </div>
           <div className="flex flex-col justify-center select-none">
-            <span suppressHydrationWarning className="text-xs uppercase font-extrabold tracking-wider text-blue-500 dark:text-blue-400">
-              {mounted ? new Date(todayStr + 'T00:00:00').toLocaleDateString('default', { weekday: 'long' }) : ''}
+            <span className="text-xs uppercase font-extrabold tracking-wider text-blue-500 dark:text-blue-400">
+              {headerDateWeekday}
             </span>
-            <span suppressHydrationWarning className="text-xs font-semibold text-slate-400 dark:text-zinc-500 mt-0.5">
-              {mounted ? new Date(todayStr + 'T00:00:00').toLocaleDateString('default', { month: 'short', year: 'numeric' }) : ''}
+            <span className="text-xs font-semibold text-slate-400 dark:text-zinc-500 mt-0.5">
+              {headerDateMonthYear}
             </span>
             {/* Marathi Calendar Festivals */}
             {getUpcomingEvents(todayStr, 2).map((event, idx) => {
