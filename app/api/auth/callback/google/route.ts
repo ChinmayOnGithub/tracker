@@ -2,6 +2,24 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { signSession } from '@/lib/session'
 import { cookies } from 'next/headers'
+import fs from 'fs'
+import path from 'path'
+
+function logAuthError(message: string, error: any) {
+  try {
+    const logPath = path.join(process.cwd(), 'scratch', 'auth_errors.log')
+    const logDir = path.dirname(logPath)
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true })
+    }
+    const timestamp = new Date().toISOString()
+    const errorDetails = error instanceof Error ? error.stack : (typeof error === 'object' ? JSON.stringify(error) : String(error))
+    const logLine = `[${timestamp}] ${message}\nDetails: ${errorDetails}\n\n`
+    fs.appendFileSync(logPath, logLine, 'utf8')
+  } catch (e) {
+    console.error('Failed to write auth error to log file:', e)
+  }
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -12,6 +30,7 @@ export async function GET(request: Request) {
 
   if (error || !code) {
     console.error('Google OAuth error callback:', error)
+    logAuthError('Google OAuth callback redirect error', error || 'No authorization code present in search parameters.')
     return NextResponse.redirect(`${siteUrl}/?error=google-auth-failed&details=${encodeURIComponent(error || 'Authorization code missing')}`)
   }
 
@@ -38,6 +57,7 @@ export async function GET(request: Request) {
     if (!tokenResponse.ok) {
       const errText = await tokenResponse.text()
       console.error('Google Token Exchange failed:', errText)
+      logAuthError('Google Token Exchange failed', errText)
       let detailMsg = errText
       try {
         const parsed = JSON.parse(errText)
@@ -167,6 +187,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(siteUrl)
   } catch (err) {
     console.error('Google auth processing error:', err)
-    return NextResponse.redirect(`${siteUrl}/?error=google-callback-exception`)
+    logAuthError('Google auth callback exception', err)
+    return NextResponse.redirect(`${siteUrl}/?error=google-callback-exception&details=${encodeURIComponent(err instanceof Error ? err.message : String(err))}`)
   }
 }
