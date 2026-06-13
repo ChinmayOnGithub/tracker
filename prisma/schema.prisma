@@ -1,0 +1,70 @@
+datasource db {
+  provider  = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Tag {
+  id        String             @id @default(uuid())
+  name      String             @unique
+  color     String?            // Optional color for the tag
+  templates ActivityTemplate[] @relation("TemplateTags")
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+}
+
+model ActivityTemplate {
+  id                  String        @id @default(uuid())
+  name                String
+  category            String        // health, fitness, finance, chores, personal, custom
+  icon                String        // emoji or lucide icon name
+  color               String        // hex or tailwind class name
+  isActive            Boolean       @default(true)
+  notes               String?
+  amount              Float?        // optional amount for bills/subscriptions
+  sortOrder           Int           @default(0)
+  
+  // Recurrence Config (consolidated structure)
+  recurrenceType      String        // daily, weekly, monthly, yearly, custom, milestone, one_time
+  recurrenceInterval  Int?          // number of days (for custom)
+  recurrenceDaysOfWeek String?       // comma-separated indices, e.g. "1,3,5" for Mon, Wed, Fri (0=Sunday, 1=Monday, etc.)
+  recurrenceDayOfMonth Int?          // day of month (1-31)
+  recurrenceMonth     Int?          // month of year (1-12)
+  targetDate          String?       // YYYY-MM-DD (for one_time)
+  remindBeforeDays    Int?          // warning threshold in days before due date
+
+  metadata            Json?         // JSON for template-level configs (e.g. workout rules)
+  tags                Tag[]         @relation("TemplateTags")
+  logs                ActivityLog[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+}
+
+model ActivityLog {
+  id             String           @id @default(uuid())
+  activityId     String
+  activity       ActivityTemplate @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  date           String           // Date-only string in format "YYYY-MM-DD"
+  note           String?
+  status         String           // done, skipped, paid, renewed, reminder, custom
+  amount         Float?           // actual amount recorded (for bills)
+  payload        Json?            // Flexible JSONB for sets, reps, weights, haircut notes, etc.
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([activityId])
+  @@index([date])
+}
+
+model Note {
+  id        String   @id @default(uuid())
+  date      String   // Date-only string in format "YYYY-MM-DD"
+  title     String?
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+}

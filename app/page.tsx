@@ -1,65 +1,87 @@
-import Image from "next/image";
+import { db } from '@/lib/db'
+import { analyzeRecurrence, getTodayDateStr, diffUTCDays } from '@/lib/recurrence'
+import { DashboardClient } from '@/components/DashboardClient'
+import { ActivityTemplate, RecurrenceType } from '@/types'
 
-export default function Home() {
+// Disable caching for this route so that the page always renders with fresh database values
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+export default async function Page() {
+  // 1. Fetch raw data from Postgres DB
+  const [templatesRaw, logsRaw, notesRaw, tagsRaw] = await Promise.all([
+    db.activityTemplate.findMany({
+      include: {
+        tags: true,
+      },
+      orderBy: {
+        sortOrder: 'asc',
+      },
+    }),
+    db.activityLog.findMany({
+      orderBy: {
+        date: 'desc',
+      },
+    }),
+    db.note.findMany({
+      orderBy: {
+        date: 'desc',
+      },
+    }),
+    db.tag.findMany({
+      orderBy: {
+        name: 'asc',
+      },
+    }),
+  ])
+
+  // Map database templates to match our TypeScript interfaces
+  const templates: ActivityTemplate[] = templatesRaw.map(t => ({
+    ...t,
+    recurrenceType: t.recurrenceType as RecurrenceType,
+    metadata: t.metadata,
+  }))
+
+  const logs = logsRaw.map(l => ({
+    ...l,
+    payload: l.payload,
+  }))
+
+  const notes = notesRaw
+
+  const tags = tagsRaw
+
+  // 2. Perform recurrence analysis on the server
+  const todayStr = getTodayDateStr()
+  
+  const analyzedTemplates = templates.map(template => {
+    const templateLogs = logs.filter(log => log.activityId === template.id)
+    const analysis = analyzeRecurrence(template, templateLogs, todayStr)
+    return {
+      template,
+      analysis,
+    }
+  })
+
+  // 3. Filter logs completed in the last 7 days (and not skipped)
+  const recentLogs = logs
+    .filter(log => {
+      const daysDiff = diffUTCDays(todayStr, log.date)
+      return daysDiff >= 0 && daysDiff <= 7 && log.status !== 'skipped'
+    })
+    .sort((a, b) => b.date.localeCompare(a.date))
+
+  // 4. Render client coordinator
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+    <main className="min-h-screen bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-100 antialiased transition-colors duration-200">
+      <DashboardClient
+        templates={templates}
+        logs={logs}
+        notes={notes}
+        tags={tags}
+        analyzedTemplates={analyzedTemplates}
+        recentLogs={recentLogs}
+      />
+    </main>
+  )
 }
