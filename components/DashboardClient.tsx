@@ -41,20 +41,12 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
   const [templateToEdit, setTemplateToEdit] = useState<ActivityTemplate | null>(null)
 
+  const [mounted, setMounted] = useState(false)
+
   // Auth state
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('operations_auth') === 'true'
-    }
-    return false
-  })
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+  const [pinSetup, setPinSetup] = useState<boolean>(false)
   
-  const [pinSetup, setPinSetup] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return !localStorage.getItem('operations_pin')
-    }
-    return false
-  })
   const [enteredPin, setEnteredPin] = useState('')
   const [setupPin, setSetupPin] = useState('')
   const [setupPinConfirm, setSetupPinConfirm] = useState('')
@@ -62,15 +54,26 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   const [shake, setShake] = useState(false)
 
   // Theme state
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window !== 'undefined') {
-      const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
-      if (savedTheme) return savedTheme
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark')
+
+  // Load client-specific states on mount
+  useEffect(() => {
+    setMounted(true)
+    
+    const isAuth = sessionStorage.getItem('operations_auth') === 'true'
+    setIsAuthenticated(isAuth)
+    
+    const hasPin = !!localStorage.getItem('operations_pin')
+    setPinSetup(!hasPin)
+    
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
+    if (savedTheme) {
+      setTheme(savedTheme)
+    } else {
       const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      return systemDark ? 'dark' : 'light'
+      setTheme(systemDark ? 'dark' : 'light')
     }
-    return 'dark'
-  })
+  }, [])
 
   // Wash Hair quick log loading state
   const [isWashingHair, setIsWashingHair] = useState(false)
@@ -391,7 +394,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
             {/* Theme Toggle, Lock & Date */}
             <div className="flex items-center gap-3">
               <span suppressHydrationWarning className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
-                {new Date().toLocaleDateString('default', { weekday: 'long', month: 'short', day: 'numeric' })}
+                {mounted ? new Date().toLocaleDateString('default', { weekday: 'long', month: 'short', day: 'numeric' }) : ''}
               </span>
               <button
                 onClick={() => {
