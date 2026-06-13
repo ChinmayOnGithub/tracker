@@ -183,7 +183,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[9px]">
-              <span className={`px-1.5 py-0.5 rounded-full font-semibold ${getUrgencyBadgeColor(analysis, template.remindBeforeDays)}`}>
+              <span className={`px-1.5 py-0.5 rounded-full font-semibold inline-flex items-center justify-center leading-none ${getUrgencyBadgeColor(analysis, template.remindBeforeDays)}`}>
                 {isCompletedToday ? 'Completed Today ✓' : analysis.statusMessage}
               </span>
               {analysis.daysSinceLast !== null ? (
@@ -387,7 +387,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                             )}
                           </div>
                           <div className="flex flex-wrap items-center gap-2 mt-1">
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${getUrgencyBadgeColor(analysis, template.remindBeforeDays)}`}>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold inline-flex items-center justify-center leading-none ${getUrgencyBadgeColor(analysis, template.remindBeforeDays)}`}>
                               {analysis.statusMessage}
                             </span>
                             {analysis.daysSinceLast !== null ? (
@@ -470,7 +470,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                         <div>
                           <span className="font-semibold text-slate-700 dark:text-zinc-200">{template.name}</span>
                           <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${getUrgencyBadgeColor(analysis, template.remindBeforeDays)}`}>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold inline-flex items-center justify-center leading-none ${getUrgencyBadgeColor(analysis, template.remindBeforeDays)}`}>
                               {analysis.statusMessage}
                             </span>
                             {analysis.daysSinceLast !== null ? (

@@ -761,7 +761,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                               <div>
                                 <h4 className="font-semibold text-slate-800 dark:text-white text-sm">{name}</h4>
                                 <div className="flex flex-wrap gap-2 items-center mt-0.5">
-                                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold ${getStatusColor(log.status)}`}>
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold inline-flex items-center justify-center leading-none ${getStatusColor(log.status)}`}>
                                     {log.status}
                                   </span>
                                   {log.amount !== null && (

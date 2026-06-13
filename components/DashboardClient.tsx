@@ -12,8 +12,9 @@ import { getTodayDateStr } from '@/lib/recurrence'
 import { markComplete } from '@/app/actions/log'
 import { getTemplateColorClasses } from '@/lib/colors'
 import { isPinSetup, registerPin, verifyPinAction } from '@/app/actions/auth'
-import { Layers, Sun, Moon, Droplet, ShowerHead, CalendarDays, Lock } from 'lucide-react'
+import { Layers, Sun, Moon, Droplet, ShowerHead, CalendarDays, Lock, Dumbbell } from 'lucide-react'
 import { getUpcomingEvents } from '@/lib/marathiCalendar'
+import { ExerciseWorkspace } from './ExerciseWorkspace'
 
 interface AnalyzedTemplate {
   template: ActivityTemplate
@@ -58,6 +59,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
 
   // Theme state
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
+  const [showExerciseWorkspace, setShowExerciseWorkspace] = useState(false)
 
   // Load client-specific states on mount
   useEffect(() => {
@@ -444,12 +446,23 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
           {/* Action Buttons */}
           <div className="flex items-center gap-1.5 ml-auto md:ml-4">
             <button
+              onClick={() => setShowExerciseWorkspace(!showExerciseWorkspace)}
+              className={`w-8 h-8 rounded-xl flex items-center justify-center border transition-all cursor-pointer shadow-3xs ${
+                showExerciseWorkspace 
+                  ? 'bg-blue-500 hover:bg-blue-650 text-white border-blue-400' 
+                  : 'bg-slate-50 hover:bg-slate-105 dark:bg-zinc-950 dark:hover:bg-zinc-900 border-slate-205 dark:border-zinc-850 text-slate-550 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white'
+              }`}
+              title="Exercise Workspace & Timers"
+            >
+              <Dumbbell size={13} className={showExerciseWorkspace ? 'animate-bounce-slow' : ''} />
+            </button>
+            <button
               onClick={() => {
                 sessionStorage.removeItem('operations_auth')
                 setIsAuthenticated(false)
                 setEnteredPin('')
               }}
-              className="w-8 h-8 rounded-xl flex items-center justify-center bg-slate-50 hover:bg-slate-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-slate-200 dark:border-zinc-850 text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer shadow-3xs"
+              className="w-8 h-8 rounded-xl flex items-center justify-center bg-slate-50 hover:bg-slate-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-slate-200 dark:border-zinc-850 text-slate-550 hover:text-slate-850 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer shadow-3xs"
               title="Lock Session"
             >
               <Lock size={12} />
@@ -516,36 +529,43 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
 
       </div>
 
-      {/* Two-Column Core Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
-        {/* Left Column (Calendar & Template List) */}
-        <div className="lg:col-span-7 xl:col-span-8 space-y-8">
-          <Calendar
-            logs={logs}
-            templates={templates}
-            notes={notes}
-            onDayClick={handleDayClick}
-          />
+      {/* Core Layout / Exercise Workspace Toggle */}
+      {showExerciseWorkspace ? (
+        <ExerciseWorkspace
+          analyzedTemplates={analyzedTemplates}
+          recentLogs={recentLogs}
+          todayStr={todayStr}
+          onClose={() => setShowExerciseWorkspace(false)}
+        />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left Column (Calendar & Template List) */}
+          <div className="lg:col-span-7 xl:col-span-8 space-y-8">
+            <Calendar
+              logs={logs}
+              templates={templates}
+              notes={notes}
+              onDayClick={handleDayClick}
+            />
 
-          <ActivityManager
-            analyzedTemplates={analyzedTemplates}
-            onAddTemplate={handleAddTemplate}
-            onEditTemplate={handleEditTemplate}
-          />
+            <ActivityManager
+              analyzedTemplates={analyzedTemplates}
+              onAddTemplate={handleAddTemplate}
+              onEditTemplate={handleEditTemplate}
+            />
+          </div>
+
+          {/* Right Column (Due panel and logs feed) */}
+          <div className="lg:col-span-5 xl:col-span-4">
+            <DashboardPanel
+              analyzedTemplates={analyzedTemplates}
+              recentLogs={recentLogs}
+              allTags={tags}
+              onOpenLogger={handleOpenLoggerForTemplate}
+            />
+          </div>
         </div>
-
-        {/* Right Column (Due panel and logs feed) */}
-        <div className="lg:col-span-5 xl:col-span-4">
-          <DashboardPanel
-            analyzedTemplates={analyzedTemplates}
-            recentLogs={recentLogs}
-            allTags={tags}
-            onOpenLogger={handleOpenLoggerForTemplate}
-          />
-        </div>
-
-      </div>
+      )}
 
       {/* Modals Layer */}
       {isDayLogsOpen && (
