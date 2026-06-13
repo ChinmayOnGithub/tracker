@@ -198,7 +198,6 @@ export const ExerciseWorkspace: React.FC<ExerciseWorkspaceProps> = ({
       template.name.toLowerCase().includes('gym') ||
       template.name.toLowerCase().includes('exercise') ||
       template.name.toLowerCase().includes('run') ||
-      template.name.toLowerCase().includes('japa') ||
       template.icon === 'Dumbbell'
   )
 
