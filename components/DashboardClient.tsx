@@ -10,6 +10,7 @@ import { TemplateModal } from './TemplateModal'
 import { Icon } from './Icon'
 import { getTodayDateStr } from '@/lib/recurrence'
 import { markComplete } from '@/app/actions/log'
+import { getTemplateColorClasses } from '@/lib/colors'
 import { isPinSetup, registerPin, verifyPinAction } from '@/app/actions/auth'
 import { Layers, Sun, Moon, Droplet, ShowerHead, CalendarDays, Lock } from 'lucide-react'
 import { getUpcomingEvents } from '@/lib/marathiCalendar'
@@ -296,6 +297,14 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
     setProcessingItems(prev => ({ ...prev, [templateId]: false }))
   }
 
+  // Today's completions (valid logged activities)
+  const todayCompletions = logs.filter(
+    log => log.date === todayStr && log.status !== 'skipped' && log.status !== 'reminder'
+  )
+
+  // Today's standalone note
+  const todayNote = notes.find(note => note.date === todayStr) || null
+
   // Remove unnecessary loading view since auth state is initialized lazily
   if (!isAuthenticated) {
     return (
@@ -404,159 +413,107 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
       
-      {/* Dynamic Operations Briefing Center */}
-      <div className="bg-white dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800/80 rounded-2xl p-5 md:p-6 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-6 transition-all duration-200">
-        <div className="flex-1 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-zinc-500">System Command Centre</span>
-              <h1 className="text-2xl font-black text-slate-900 dark:text-white flex items-center gap-2 tracking-tight mt-0.5">
-                <Layers className="text-slate-600 dark:text-zinc-400" size={24} />
-                OPERATIONS BRIEFING
-              </h1>
-            </div>
-            
-            {/* Theme Toggle, Lock & Date */}
-            <div className="flex items-center gap-3">
-              <span suppressHydrationWarning className="text-xs text-slate-500 dark:text-zinc-400 font-medium">
-                {mounted ? new Date().toLocaleDateString('default', { weekday: 'long', month: 'short', day: 'numeric' }) : ''}
-              </span>
-              <button
-                onClick={() => {
-                  sessionStorage.removeItem('operations_auth')
-                  setIsAuthenticated(false)
-                  setEnteredPin('')
-                }}
-                className="w-8.5 h-8.5 rounded-lg flex items-center justify-center bg-slate-100 hover:bg-slate-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 transition-all cursor-pointer"
-                title="Lock Dashboard Session"
-              >
-                <Lock size={14} />
-              </button>
-              <button
-                onClick={toggleTheme}
-                className="w-8.5 h-8.5 rounded-lg flex items-center justify-center bg-slate-100 hover:bg-slate-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 transition-all cursor-pointer"
-                title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-              >
-                {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-              </button>
-            </div>
+      {/* Today's Overview & Reflection Center */}
+      <div className="bg-white dark:bg-zinc-900/60 border border-slate-205 dark:border-zinc-800/80 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row gap-6 md:divide-x md:divide-slate-200/50 dark:md:divide-zinc-800/80 transition-all duration-200">
+        
+        {/* Left Section: Huge Date Display & Controls */}
+        <div className="flex items-center gap-4 shrink-0 pr-6">
+          <div suppressHydrationWarning className="text-5xl md:text-6xl font-black tracking-tighter text-slate-800 dark:text-white font-mono leading-none">
+            {mounted ? new Date(todayStr + 'T00:00:00').getDate() : ''}
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-            {/* Action Summary & Progress */}
-            <div className="space-y-2 p-3 rounded-xl bg-slate-100/50 dark:bg-zinc-950/40 border border-slate-205 dark:border-zinc-900/60 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-800 dark:text-zinc-200">
-                  {totalTasksDue > 0 ? `⚠️ ${totalTasksDue} actions due` : '✓ Actions clear'}
-                </span>
-                <span className="text-slate-500 dark:text-zinc-400 font-mono font-black">
-                  {todayTotalCount > 0 ? Math.round((todayCompletedCount / todayTotalCount) * 100) : 100}%
-                </span>
-              </div>
-              <div className="w-full h-2 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 dark:bg-blue-450 transition-all duration-500 rounded-full"
-                  style={{ width: `${todayTotalCount > 0 ? (todayCompletedCount / todayTotalCount) * 100 : 100}%` }}
-                />
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-zinc-500">
-                <span>{todayCompletedCount} of {todayTotalCount} completed</span>
-                <span>Streaks: {activeHabitStreaks} habits</span>
-              </div>
-            </div>
-
-            {/* Dynamic Routines & Priorities Strip */}
-            <div className="flex flex-col justify-between p-3 rounded-xl bg-slate-100/50 dark:bg-zinc-950/40 border border-slate-205 dark:border-zinc-900/60 text-xs">
-              <div className="space-y-1 w-full">
-                <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-zinc-200">
-                  <span className="p-1 rounded bg-blue-500/10 text-blue-500 dark:text-blue-400">
-                    <Droplet size={13} className="fill-blue-500/10" />
-                  </span>
-                  Daily Routines & Priorities
+          <div className="flex flex-col justify-center select-none">
+            <span suppressHydrationWarning className="text-xs uppercase font-extrabold tracking-wider text-blue-500 dark:text-blue-400">
+              {mounted ? new Date(todayStr + 'T00:00:00').toLocaleDateString('default', { weekday: 'long' }) : ''}
+            </span>
+            <span suppressHydrationWarning className="text-xs font-semibold text-slate-400 dark:text-zinc-500 mt-0.5">
+              {mounted ? new Date(todayStr + 'T00:00:00').toLocaleDateString('default', { month: 'short', year: 'numeric' }) : ''}
+            </span>
+            {/* Marathi Calendar Festivals */}
+            {getUpcomingEvents(todayStr, 2).map((event, idx) => {
+              const isEventToday = event.date === todayStr
+              if (!isEventToday) return null
+              return (
+                <div key={idx} className="mt-1 flex items-center gap-1 text-[9px] font-black text-orange-600 dark:text-orange-400 animate-pulse">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                  <span>{event.title}</span>
                 </div>
-                
-                <div className="flex items-center gap-2 overflow-x-auto py-1 pr-1.5 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-zinc-800 max-h-16">
-                  {prioritiesList.length === 0 ? (
-                    <div className="text-[10px] text-slate-400 dark:text-zinc-550 italic font-medium py-1">
-                      No high-priority routines remaining today!
-                    </div>
-                  ) : (
-                    prioritiesList
-                      .slice(0, 3) // limit to top 3 to keep it clean
-                      .map(({ template, analysis }) => {
-                        const isDone = analysis.lastCompletedDate === todayStr
-                        const isProcessing = !!processingItems[template.id]
-                        return (
-                          <div
-                            key={template.id}
-                            className={`flex items-center gap-2 p-1.5 bg-white dark:bg-zinc-900 border rounded-lg transition-all shadow-2xs shrink-0 max-w-[170px] ${
-                              isDone ? 'border-green-200 dark:border-green-950/50 bg-green-50/10 dark:bg-green-950/5' : 'border-slate-200 dark:border-zinc-800/80'
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className={`shrink-0 text-[10px] ${isDone ? 'text-green-500' : 'text-slate-400'}`}>
-                                <Icon name={template.icon} size={12} />
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-700 dark:text-zinc-300 truncate" title={template.name}>
-                                {template.name}
-                              </span>
-                            </div>
-                            <button
-                              disabled={isProcessing || isDone}
-                              onClick={() => handleQuickLogComplete(template.id, template.category, template.amount)}
-                              className={`px-2 py-0.5 rounded text-[8px] font-black uppercase transition-all shrink-0 cursor-pointer ${
-                                isDone
-                                  ? 'text-green-600 dark:text-green-400 font-bold bg-green-50 dark:bg-green-950/20'
-                                  : 'bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-950 shadow-2xs'
-                              }`}
-                            >
-                              {isProcessing ? '...' : isDone ? 'Done' : 'Log'}
-                            </button>
-                          </div>
-                        )
-                      })
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Upcoming Marathi Calendar / Panchang Events */}
-            <div className="flex flex-col justify-between p-3 rounded-xl bg-orange-500/5 dark:bg-zinc-950/40 border border-orange-500/10 dark:border-zinc-900/60 text-xs">
-              <div className="space-y-1">
-                <div className="flex items-center gap-1.5 font-semibold text-orange-655 dark:text-orange-400">
-                  <span className="p-1.5 rounded bg-orange-500/10 text-orange-500 dark:text-orange-400">
-                    <CalendarDays size={13} />
-                  </span>
-                  Panchang & Festivals
-                </div>
-                <div className="space-y-1 pt-1">
-                  {getUpcomingEvents(todayStr, 3).map((event, idx) => {
-                    const isEventToday = event.date === todayStr
-                    const formattedEventDate = new Date(event.date + 'T00:00:00').toLocaleDateString('default', {
-                      month: 'short',
-                      day: 'numeric',
-                    })
-                    return (
-                      <div key={idx} className="flex justify-between items-center text-[10px] font-medium leading-tight">
-                        <span className={`truncate max-w-[130px] text-slate-700 dark:text-zinc-300 ${isEventToday ? 'font-black text-orange-600 dark:text-orange-400' : ''}`}>
-                          {event.title}
-                        </span>
-                        <div className="flex items-center gap-1 font-mono text-[9px]">
-                          {isEventToday && (
-                            <span className="bg-orange-500 text-white font-bold text-[7px] px-1 rounded-xs animate-pulse">
-                              TODAY
-                            </span>
-                          )}
-                          <span className="text-slate-400 dark:text-zinc-500">{formattedEventDate}</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
+              )
+            })}
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex items-center gap-1.5 ml-auto md:ml-4">
+            <button
+              onClick={() => {
+                sessionStorage.removeItem('operations_auth')
+                setIsAuthenticated(false)
+                setEnteredPin('')
+              }}
+              className="w-8 h-8 rounded-xl flex items-center justify-center bg-slate-50 hover:bg-slate-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-slate-200 dark:border-zinc-850 text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer shadow-3xs"
+              title="Lock Session"
+            >
+              <Lock size={12} />
+            </button>
+            <button
+              onClick={toggleTheme}
+              className="w-8 h-8 rounded-xl flex items-center justify-center bg-slate-50 hover:bg-slate-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-slate-200 dark:border-zinc-850 text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer shadow-3xs"
+              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+            >
+              {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
+            </button>
           </div>
         </div>
+
+        {/* Middle Section: Completed Today */}
+        <div className="flex-1 md:px-6 space-y-2">
+          <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 dark:text-zinc-500 block">Activities Completed Today</span>
+          
+          <div className="flex flex-wrap gap-1.5 items-center">
+            {todayCompletions.length === 0 ? (
+              <div className="text-xs text-slate-400 dark:text-zinc-500 italic font-medium py-1">
+                No activities logged today yet. Let's make progress!
+              </div>
+            ) : (
+              todayCompletions.map(log => {
+                const template = templates.find(t => t.id === log.activityId)
+                const name = template?.name || 'Unknown'
+                const color = template?.color || 'zinc'
+                const icon = template?.icon || 'CheckSquare'
+                const colorClasses = getTemplateColorClasses(color)
+                
+                return (
+                  <div
+                    key={log.id}
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold shadow-3xs transition-all hover:scale-102 ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}
+                  >
+                    <Icon name={icon} size={11} />
+                    <span>{name}</span>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Right Section: Today's Reflection */}
+        <div className="flex-1 md:pl-6 space-y-2 max-w-md">
+          <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 dark:text-zinc-500 block">Today's Reflection</span>
+          {todayNote ? (
+            <div className="space-y-1">
+              <h4 className="text-xs font-bold text-slate-850 dark:text-white line-clamp-1">
+                {todayNote.title || 'Untitled Reflection'}
+              </h4>
+              <p className="text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
+                {todayNote.content}
+              </p>
+            </div>
+          ) : (
+            <div className="text-xs text-slate-400 dark:text-zinc-500 italic font-medium py-1">
+              No reflection written for today. Click the note icon on the calendar to write!
+            </div>
+          )}
+        </div>
+
       </div>
 
       {/* Two-Column Core Layout */}

@@ -101,19 +101,19 @@ export const Calendar: React.FC<CalendarProps> = ({
   const getTailwindColorClass = (color: string) => {
     switch (color) {
       case 'red':
-        return 'bg-red-500 shadow-xs shadow-red-500'
+        return 'bg-red-500'
       case 'orange':
-        return 'bg-orange-500 shadow-xs shadow-orange-500'
+        return 'bg-orange-500'
       case 'amber':
-        return 'bg-amber-500 shadow-xs shadow-amber-500'
+        return 'bg-amber-500'
       case 'green':
-        return 'bg-green-500 shadow-xs shadow-green-500'
+        return 'bg-green-500'
       case 'blue':
-        return 'bg-blue-500 shadow-xs shadow-blue-500'
+        return 'bg-blue-500'
       case 'purple':
-        return 'bg-purple-500 shadow-xs shadow-purple-500'
+        return 'bg-purple-500'
       case 'pink':
-        return 'bg-pink-500 shadow-xs shadow-pink-500'
+        return 'bg-pink-500'
       case 'zinc':
       default:
         return 'bg-zinc-400 dark:bg-zinc-500'
@@ -242,7 +242,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                   {/* Marathi Calendar Event Indicator */}
                   {marathiEvents.length > 0 && (
                     <span
-                      className="w-1.5 h-1.5 rounded-full bg-orange-500 shadow-xs shadow-orange-500 animate-pulse"
+                      className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"
                       title={marathiEvents.map(e => e.title).join(', ')}
                     />
                   )}
