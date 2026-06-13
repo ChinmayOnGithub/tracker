@@ -3,6 +3,35 @@
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
+import { getLoggedUser } from './auth'
+
+/**
+ * Helper to check if a user is logged in and returns their profile.
+ */
+async function getAuthSession() {
+  const user = await getLoggedUser()
+  if (!user) {
+    throw new Error('Authentication required')
+  }
+  return user
+}
+
+/**
+ * Checks if a template is owned by the current user.
+ */
+async function verifyTemplateOwnership(templateId: string, user: { id: string; username: string }) {
+  const template = await db.activityTemplate.findUnique({
+    where: { id: templateId }
+  })
+  if (!template) {
+    throw new Error('Activity template not found')
+  }
+  const isOwner = template.userId === user.id || (template.userId === null && user.username === 'admin')
+  if (!isOwner) {
+    throw new Error('Unauthorized template access')
+  }
+  return template
+}
 
 export async function createActivityTemplate(data: {
   name: string
@@ -22,10 +51,12 @@ export async function createActivityTemplate(data: {
   metadata?: unknown
 }) {
   try {
+    const user = await getAuthSession()
     const { tagNames = [], ...rest } = data
 
-    // Get the maximum sortOrder to put this at the end
+    // Get the maximum sortOrder for this user to put this at the end
     const maxSortOrder = await db.activityTemplate.aggregate({
+      where: { userId: user.id },
       _max: {
         sortOrder: true,
       },
@@ -37,6 +68,7 @@ export async function createActivityTemplate(data: {
         ...rest,
         metadata: rest.metadata as Prisma.InputJsonValue,
         sortOrder: nextSortOrder,
+        userId: user.id,
         tags: {
           connectOrCreate: tagNames.map(name => {
             const normalized = name.trim().toLowerCase()
@@ -80,6 +112,8 @@ export async function updateActivityTemplate(
   }
 ) {
   try {
+    const user = await getAuthSession()
+    await verifyTemplateOwnership(id, user)
     const { tagNames, ...rest } = data
 
     // If tagNames are provided, reset tags connection
@@ -116,6 +150,9 @@ export async function updateActivityTemplate(
 
 export async function deleteActivityTemplate(id: string) {
   try {
+    const user = await getAuthSession()
+    await verifyTemplateOwnership(id, user)
+
     await db.activityTemplate.delete({
       where: { id },
     })
@@ -130,21 +167,22 @@ export async function deleteActivityTemplate(id: string) {
 
 export async function duplicateActivityTemplate(id: string) {
   try {
-    const original = await db.activityTemplate.findUnique({
-      where: { id },
-      include: { tags: true },
-    })
-
-    if (!original) {
-      throw new Error('Original template not found')
-    }
+    const user = await getAuthSession()
+    const original = await verifyTemplateOwnership(id, user)
 
     const maxSortOrder = await db.activityTemplate.aggregate({
+      where: { userId: user.id },
       _max: {
         sortOrder: true,
       },
     })
     const nextSortOrder = (maxSortOrder._max.sortOrder ?? 0) + 1
+
+    // Fetch tags separately to reconnect them
+    const originalWithTags = await db.activityTemplate.findUnique({
+      where: { id },
+      include: { tags: true }
+    })
 
     await db.activityTemplate.create({
       data: {
@@ -163,8 +201,9 @@ export async function duplicateActivityTemplate(id: string) {
         remindBeforeDays: original.remindBeforeDays,
         metadata: original.metadata ?? undefined,
         sortOrder: nextSortOrder,
+        userId: user.id,
         tags: {
-          connect: original.tags.map(t => ({ id: t.id })),
+          connect: originalWithTags?.tags.map(t => ({ id: t.id })) || [],
         },
       },
     })
@@ -180,6 +219,11 @@ export async function duplicateActivityTemplate(id: string) {
 
 export async function reorderActivityTemplates(orderedIds: string[]) {
   try {
+    const user = await getAuthSession()
+
+    // Verify ownership of all templates being reordered
+    await Promise.all(orderedIds.map(id => verifyTemplateOwnership(id, user)))
+
     // Perform updates in a transaction
     await db.$transaction(
       orderedIds.map((id, index) =>

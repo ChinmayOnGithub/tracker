@@ -2,38 +2,60 @@ import { db } from '@/lib/db'
 import { analyzeRecurrence, getTodayDateStr, diffUTCDays } from '@/lib/recurrence'
 import { DashboardClient } from '@/components/DashboardClient'
 import { ActivityTemplate, RecurrenceType } from '@/types'
+import { getLoggedUser } from '@/app/actions/auth'
 
 // Disable caching for this route so that the page always renders with fresh database values
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default async function Page() {
-  // 1. Fetch raw data from Postgres DB
-  const [templatesRaw, logsRaw, notesRaw, tagsRaw] = await Promise.all([
-    db.activityTemplate.findMany({
-      include: {
-        tags: true,
-      },
-      orderBy: {
-        sortOrder: 'asc',
-      },
-    }),
-    db.activityLog.findMany({
-      orderBy: {
-        date: 'desc',
-      },
-    }),
-    db.note.findMany({
-      orderBy: {
-        date: 'desc',
-      },
-    }),
-    db.tag.findMany({
-      orderBy: {
-        name: 'asc',
-      },
-    }),
-  ])
+  const loggedUser = await getLoggedUser()
+
+  let templatesRaw: any[] = []
+  let logsRaw: any[] = []
+  let notesRaw: any[] = []
+  let tagsRaw: any[] = []
+
+  if (loggedUser) {
+    // Determine filters. If logged in as admin, fetch admin and unassigned legacy data.
+    const userScope = loggedUser.username === 'admin'
+      ? { OR: [{ userId: loggedUser.id }, { userId: null }] }
+      : { userId: loggedUser.id }
+
+    const [tRaw, lRaw, nRaw, tgRaw] = await Promise.all([
+      db.activityTemplate.findMany({
+        where: userScope,
+        include: {
+          tags: true,
+        },
+        orderBy: {
+          sortOrder: 'asc',
+        },
+      }),
+      db.activityLog.findMany({
+        where: userScope,
+        orderBy: {
+          date: 'desc',
+        },
+      }),
+      db.note.findMany({
+        where: userScope,
+        orderBy: {
+          date: 'desc',
+        },
+      }),
+      db.tag.findMany({
+        orderBy: {
+          name: 'asc',
+        },
+      }),
+    ])
+
+    templatesRaw = tRaw
+    logsRaw = lRaw
+    notesRaw = nRaw
+    tagsRaw = tgRaw
+  }
 
   // Map database templates to match our TypeScript interfaces
   const templates: ActivityTemplate[] = templatesRaw.map(t => ({
@@ -48,7 +70,6 @@ export default async function Page() {
   }))
 
   const notes = notesRaw
-
   const tags = tagsRaw
 
   // 2. Perform recurrence analysis on the server
@@ -81,6 +102,8 @@ export default async function Page() {
         tags={tags}
         analyzedTemplates={analyzedTemplates}
         recentLogs={recentLogs}
+        initialAuthenticated={!!loggedUser}
+        currentUser={loggedUser}
       />
     </main>
   )

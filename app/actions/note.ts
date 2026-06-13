@@ -2,6 +2,35 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
+import { getLoggedUser } from './auth'
+
+/**
+ * Helper to check if a user is logged in and returns their profile.
+ */
+async function getAuthSession() {
+  const user = await getLoggedUser()
+  if (!user) {
+    throw new Error('Authentication required')
+  }
+  return user
+}
+
+/**
+ * Checks if a note is owned by the current user.
+ */
+async function verifyNoteOwnership(noteId: string, user: { id: string; username: string }) {
+  const note = await db.note.findUnique({
+    where: { id: noteId }
+  })
+  if (!note) {
+    throw new Error('Note not found')
+  }
+  const isOwner = note.userId === user.id || (note.userId === null && user.username === 'admin')
+  if (!isOwner) {
+    throw new Error('Unauthorized note access')
+  }
+  return note
+}
 
 export async function createNote(
   date: string, // YYYY-MM-DD
@@ -9,11 +38,14 @@ export async function createNote(
   title?: string | null
 ) {
   try {
+    const user = await getAuthSession()
+
     const note = await db.note.create({
       data: {
         date,
         content,
         title: title ?? null,
+        userId: user.id,
       },
     })
 
@@ -32,6 +64,9 @@ export async function updateNote(
   title?: string | null
 ) {
   try {
+    const user = await getAuthSession()
+    await verifyNoteOwnership(id, user)
+
     const note = await db.note.update({
       where: { id },
       data: {
@@ -51,6 +86,9 @@ export async function updateNote(
 
 export async function deleteNote(id: string) {
   try {
+    const user = await getAuthSession()
+    await verifyNoteOwnership(id, user)
+
     await db.note.delete({
       where: { id },
     })

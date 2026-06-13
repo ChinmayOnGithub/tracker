@@ -11,8 +11,8 @@ import { Icon } from './Icon'
 import { getTodayDateStr } from '@/lib/recurrence'
 import { markComplete } from '@/app/actions/log'
 import { getTemplateColorClasses } from '@/lib/colors'
-import { isPinSetup, registerPin, verifyPinAction } from '@/app/actions/auth'
-import { Layers, Sun, Moon, Droplet, ShowerHead, CalendarDays, Lock, Dumbbell } from 'lucide-react'
+import { verifyPinAction, registerUserAction, logoutAction } from '@/app/actions/auth'
+import { Layers, Sun, Moon, Droplet, ShowerHead, CalendarDays, Lock, Dumbbell, LogOut } from 'lucide-react'
 import { getUpcomingEvents } from '@/lib/marathiCalendar'
 import { ExerciseWorkspace } from './ExerciseWorkspace'
 
@@ -28,6 +28,8 @@ interface DashboardClientProps {
   tags: Tag[]
   analyzedTemplates: AnalyzedTemplate[]
   recentLogs: ActivityLog[]
+  initialAuthenticated?: boolean
+  currentUser?: { id: string; username: string } | null
 }
 
 export const DashboardClient: React.FC<DashboardClientProps> = ({
@@ -37,6 +39,8 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   tags,
   analyzedTemplates,
   recentLogs,
+  initialAuthenticated = false,
+  currentUser = null,
 }) => {
   // Modal states
   const [selectedDateStr, setSelectedDateStr] = useState<string>(getTodayDateStr())
@@ -48,12 +52,11 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   const [mounted, setMounted] = useState(false)
 
   // Auth state
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
-  const [pinSetup, setPinSetup] = useState<boolean>(false)
-  
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(initialAuthenticated)
+  const [user, setUser] = useState<{ id: string; username: string } | null>(currentUser)
+  const [usernameInput, setUsernameInput] = useState('')
+  const [isRegisterMode, setIsRegisterMode] = useState(false)
   const [enteredPin, setEnteredPin] = useState('')
-  const [setupPin, setSetupPin] = useState('')
-  const [setupPinConfirm, setSetupPinConfirm] = useState('')
   const [authError, setAuthError] = useState('')
   const [shake, setShake] = useState(false)
 
@@ -64,13 +67,6 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   // Load client-specific states on mount
   useEffect(() => {
     setMounted(true)
-    
-    const isAuth = sessionStorage.getItem('operations_auth') === 'true'
-    setIsAuthenticated(isAuth)
-    
-    isPinSetup().then(setup => {
-      setPinSetup(!setup)
-    })
     
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
     if (savedTheme) {
@@ -99,88 +95,80 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
     localStorage.setItem('theme', nextTheme)
   }
 
-  const handleKeyPress = useCallback((num: string) => {
-    setAuthError('')
-    if (pinSetup) {
-      if (setupPin.length < 4) {
-        setSetupPin(prev => prev + num)
-      } else if (setupPinConfirm.length < 4) {
-        setSetupPinConfirm(prev => prev + num)
-      }
-    } else {
-      if (enteredPin.length < 4) {
-        const nextPin = enteredPin + num
-        setEnteredPin(nextPin)
-        
-        // Auto submit when length hits 4
-        if (nextPin.length === 4) {
-          verifyPinAction(nextPin).then(res => {
-            if (res.success) {
-              sessionStorage.setItem('operations_auth', 'true')
-              setIsAuthenticated(true)
-            } else {
-              // Shake and clear
-              setShake(true)
-              setAuthError('Incorrect PIN code')
-              setTimeout(() => {
-                setShake(false)
-                setEnteredPin('')
-              }, 600)
-            }
-          })
-        }
-      }
-    }
-  }, [pinSetup, setupPin, setupPinConfirm, enteredPin])
-
-  const handleBackspace = useCallback(() => {
-    if (pinSetup) {
-      if (setupPinConfirm.length > 0) {
-        setSetupPinConfirm(prev => prev.slice(0, -1))
-      } else if (setupPin.length > 0) {
-        setSetupPin(prev => prev.slice(0, -1))
-      }
-    } else {
-      setEnteredPin(prev => prev.slice(0, -1))
-    }
-  }, [pinSetup, setupPin, setupPinConfirm])
-
-  const handleClear = useCallback(() => {
-    if (pinSetup) {
-      setSetupPin('')
-      setSetupPinConfirm('')
-    } else {
+  const handleAuthSubmit = useCallback(async (username: string, pin: string) => {
+    if (!username.trim()) {
+      setAuthError('Username is required')
       setEnteredPin('')
+      return
     }
-    setAuthError('')
-  }, [pinSetup])
-
-  const handleSetupSubmit = useCallback(() => {
-    if (setupPin.length !== 4) {
+    if (pin.length !== 4) {
       setAuthError('PIN must be 4 digits')
       return
     }
-    if (setupPin !== setupPinConfirm) {
-      setAuthError('PINs do not match')
-      setSetupPinConfirm('')
-      return
-    }
-    registerPin(setupPin).then(res => {
+
+    if (isRegisterMode) {
+      const res = await registerUserAction(username, pin)
       if (res.success) {
-        sessionStorage.setItem('operations_auth', 'true')
-        setIsAuthenticated(true)
-        setPinSetup(false)
+        window.location.reload()
       } else {
-        setAuthError(res.error || 'Failed to setup PIN')
+        setShake(true)
+        setAuthError(res.error || 'Registration failed')
+        setEnteredPin('')
+        setTimeout(() => setShake(false), 600)
       }
-    })
-  }, [setupPin, setupPinConfirm])
+    } else {
+      const res = await verifyPinAction(username, pin)
+      if (res.success) {
+        window.location.reload()
+      } else {
+        setShake(true)
+        setAuthError(res.error || 'Incorrect username or PIN')
+        setEnteredPin('')
+        setTimeout(() => setShake(false), 600)
+      }
+    }
+  }, [isRegisterMode])
+
+  const handleKeyPress = useCallback((num: string) => {
+    setAuthError('')
+    if (enteredPin.length < 4) {
+      const nextPin = enteredPin + num
+      setEnteredPin(nextPin)
+      
+      // Auto submit during login mode
+      if (nextPin.length === 4 && !isRegisterMode) {
+        handleAuthSubmit(usernameInput, nextPin)
+      }
+    }
+  }, [enteredPin, isRegisterMode, usernameInput, handleAuthSubmit])
+
+  const handleBackspace = useCallback(() => {
+    setEnteredPin(prev => prev.slice(0, -1))
+  }, [])
+
+  const handleClear = useCallback(() => {
+    setEnteredPin('')
+    setAuthError('')
+  }, [])
+
+  const handleLogout = async () => {
+    await logoutAction()
+    window.location.reload()
+  }
 
   // Keyboard entry hook
   useEffect(() => {
     if (isAuthenticated) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // If typing in the username input, don't capture dialpad keys
+      if (document.activeElement?.tagName === 'INPUT') {
+        if (e.key === 'Enter' && enteredPin.length === 4) {
+          handleAuthSubmit(usernameInput, enteredPin)
+        }
+        return
+      }
+
       const key = e.key
       if (key >= '0' && key <= '9') {
         handleKeyPress(key)
@@ -188,16 +176,14 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
         handleBackspace()
       } else if (key === 'Escape' || key === 'Delete') {
         handleClear()
-      } else if (key === 'Enter') {
-        if (pinSetup && setupPin.length === 4 && setupPinConfirm.length === 4) {
-          handleSetupSubmit()
-        }
+      } else if (key === 'Enter' && enteredPin.length === 4) {
+        handleAuthSubmit(usernameInput, enteredPin)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isAuthenticated, pinSetup, setupPin, setupPinConfirm, handleKeyPress, handleBackspace, handleClear, handleSetupSubmit])
+  }, [isAuthenticated, enteredPin, usernameInput, handleKeyPress, handleBackspace, handleClear, handleAuthSubmit])
 
   // Handlers
   const handleDayClick = (dateStr: string) => {
@@ -325,42 +311,68 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
             <div className="p-3 bg-slate-100 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-2xl text-slate-750 dark:text-zinc-300">
               <Layers size={28} />
             </div>
-            <h1 className="text-lg font-black tracking-tight text-slate-900 dark:text-white uppercase">
-              {pinSetup ? 'Setup Command PIN' : 'Authorization Required'}
+            <h1 className="text-lg font-black tracking-tight text-slate-900 dark:text-white uppercase tracking-wider">
+              {isRegisterMode ? 'Create Account' : 'Operations Login'}
             </h1>
             <p className="text-[11px] text-slate-400 dark:text-zinc-500 font-bold max-w-[240px]">
-              {pinSetup 
-                ? 'Create a secure 4-digit PIN to lock your personal operations control centre.' 
-                : 'Enter your 4-digit passcode to unlock dashboard access.'}
+              {isRegisterMode
+                ? 'Choose a unique username and a secure 4-digit PIN.'
+                : 'Enter your credentials to access your control panel.'}
             </p>
           </div>
 
-          <div className="flex gap-4 justify-center py-2">
-            {Array.from({ length: 4 }).map((_, i) => {
-              let active = false
-              if (pinSetup) {
-                active = setupPinConfirm.length > 0 ? i < setupPinConfirm.length : i < setupPin.length
-              } else {
-                active = i < enteredPin.length
-              }
-              return (
+          {/* Sign In vs Register Toggle */}
+          <div className="flex border border-slate-200 dark:border-zinc-850 bg-slate-100 dark:bg-zinc-950 p-1 rounded-xl w-full">
+            <button
+              onClick={() => { setIsRegisterMode(false); setAuthError(''); setEnteredPin(''); }}
+              className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-extrabold rounded-lg transition-all cursor-pointer ${
+                !isRegisterMode
+                  ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-200/60 dark:border-zinc-700 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-400'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => { setIsRegisterMode(true); setAuthError(''); setEnteredPin(''); }}
+              className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-extrabold rounded-lg transition-all cursor-pointer ${
+                isRegisterMode
+                  ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-200/60 dark:border-zinc-700 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-400'
+              }`}
+            >
+              Register
+            </button>
+          </div>
+
+          {/* Username Text Input */}
+          <div className="w-full space-y-1">
+            <label className="block text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Username</label>
+            <input
+              type="text"
+              placeholder="e.g. chinmay"
+              value={usernameInput}
+              onChange={(e) => setUsernameInput(e.target.value)}
+              className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-850 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-700 focus:outline-hidden focus:border-slate-350 dark:focus:border-zinc-700 shadow-3xs"
+            />
+          </div>
+
+          {/* 4 PIN Dots */}
+          <div className="w-full space-y-1">
+            <label className="block text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest text-center">Passcode PIN</label>
+            <div className="flex gap-4 justify-center py-1.5">
+              {Array.from({ length: 4 }).map((_, i) => (
                 <div
                   key={i}
                   className={`w-3.5 h-3.5 rounded-full border transition-all duration-150 ${
-                    active
+                    i < enteredPin.length
                       ? 'bg-blue-500 border-blue-500 scale-110 shadow-xs shadow-blue-500'
                       : 'bg-slate-200 dark:bg-zinc-950 border-slate-300 dark:border-zinc-850'
                   }`}
                 />
-              )
-            })}
-          </div>
-
-          {pinSetup && setupPin.length === 4 && (
-            <div className="text-center text-[10px] text-blue-500 dark:text-blue-450 font-bold uppercase tracking-wider animate-pulse">
-              Confirm your PIN code below
+              ))}
             </div>
-          )}
+          </div>
 
           {authError && (
             <div className="text-xs font-bold text-red-500 dark:text-red-400 text-center animate-pulse">
@@ -368,6 +380,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
             </div>
           )}
 
+          {/* Keypad */}
           <div className="grid grid-cols-3 gap-3.5 w-full max-w-[280px]">
             {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(num => (
               <button
@@ -398,13 +411,14 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
             </button>
           </div>
 
-          {pinSetup && (
+          {/* Registration Submit Button */}
+          {isRegisterMode && (
             <button
-              onClick={handleSetupSubmit}
-              disabled={setupPin.length !== 0 ? (setupPin.length !== 4 || setupPinConfirm.length !== 4) : true}
+              onClick={() => handleAuthSubmit(usernameInput, enteredPin)}
+              disabled={usernameInput.trim().length === 0 || enteredPin.length !== 4}
               className="w-full bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-950 py-3.5 rounded-2xl text-xs font-bold transition-all disabled:opacity-50 cursor-pointer shadow-md"
             >
-              Save PIN & Unlock
+              Register & Log In
             </button>
           )}
         </div>
@@ -456,16 +470,17 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
             >
               <Dumbbell size={13} className={showExerciseWorkspace ? 'animate-bounce-slow' : ''} />
             </button>
+            {user && (
+              <span className="text-[9px] bg-slate-50 border border-slate-200 dark:bg-zinc-950 dark:border-zinc-850 px-2 py-1.5 rounded-xl text-slate-550 dark:text-zinc-400 font-extrabold uppercase select-none tracking-wider hidden sm:inline-block">
+                {user.username}
+              </span>
+            )}
             <button
-              onClick={() => {
-                sessionStorage.removeItem('operations_auth')
-                setIsAuthenticated(false)
-                setEnteredPin('')
-              }}
-              className="w-8 h-8 rounded-xl flex items-center justify-center bg-slate-50 hover:bg-slate-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-slate-200 dark:border-zinc-850 text-slate-550 hover:text-slate-850 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer shadow-3xs"
-              title="Lock Session"
+              onClick={handleLogout}
+              className="w-8 h-8 rounded-xl flex items-center justify-center bg-slate-50 hover:bg-slate-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-slate-200 dark:border-zinc-850 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 transition-all cursor-pointer shadow-3xs"
+              title="Log Out"
             >
-              <Lock size={12} />
+              <LogOut size={12} />
             </button>
             <button
               onClick={toggleTheme}

@@ -26,6 +26,10 @@ model ActivityTemplate {
   amount              Float?        // optional amount for bills/subscriptions
   sortOrder           Int           @default(0)
   
+  // Scoping
+  userId              String?
+  user                User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   // Recurrence Config (consolidated structure)
   recurrenceType      String        // daily, weekly, monthly, yearly, custom, milestone, one_time
   recurrenceInterval  Int?          // number of days (for custom)
@@ -40,6 +44,8 @@ model ActivityTemplate {
   logs                ActivityLog[]
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
+
+  @@index([userId])
 }
 
 model ActivityLog {
@@ -51,11 +57,17 @@ model ActivityLog {
   status         String           // done, skipped, paid, renewed, reminder, custom
   amount         Float?           // actual amount recorded (for bills)
   payload        Json?            // Flexible JSONB for sets, reps, weights, haircut notes, etc.
+  
+  // Scoping
+  userId         String?
+  user           User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
   @@index([activityId])
   @@index([date])
+  @@index([userId])
 }
 
 model Note {
@@ -63,17 +75,26 @@ model Note {
   date      String   // Date-only string in format "YYYY-MM-DD"
   title     String?
   content   String
+  
+  // Scoping
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([date])
+  @@index([userId])
 }
 
 model User {
-  id           String   @id @default(uuid())
-  username     String   @unique @default("admin")
+  id           String             @id @default(uuid())
+  username     String             @unique
   passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  templates    ActivityTemplate[]
+  notes        Note[]
+  logs         ActivityLog[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 }
 
