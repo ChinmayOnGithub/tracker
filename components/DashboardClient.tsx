@@ -7,6 +7,7 @@ import { DashboardPanel } from './DashboardPanel'
 import { ActivityManager } from './ActivityManager'
 import { DayLogsModal } from './DayLogsModal'
 import { TemplateModal } from './TemplateModal'
+import { Icon } from './Icon'
 import { getTodayDateStr } from '@/lib/recurrence'
 import { markComplete } from '@/app/actions/log'
 import { isPinSetup, registerPin, verifyPinAction } from '@/app/actions/auth'
@@ -279,6 +280,22 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
     setIsWashingHair(false)
   }
 
+  // Priorities list sorting incomplete tasks first
+  const prioritiesList = [...todaysTasks].sort((a, b) => {
+    const aDone = a.analysis.lastCompletedDate === todayStr ? 1 : 0
+    const bDone = b.analysis.lastCompletedDate === todayStr ? 1 : 0
+    return aDone - bDone
+  })
+
+  const [processingItems, setProcessingItems] = useState<Record<string, boolean>>({})
+
+  const handleQuickLogComplete = async (templateId: string, category: string, amount: number | null) => {
+    setProcessingItems(prev => ({ ...prev, [templateId]: true }))
+    const status = category === 'finance' ? 'paid' : 'done'
+    await markComplete(templateId, todayStr, status, amount, null)
+    setProcessingItems(prev => ({ ...prev, [templateId]: false }))
+  }
+
   // Remove unnecessary loading view since auth state is initialized lazily
   if (!isAuthenticated) {
     return (
@@ -448,38 +465,60 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
               </div>
             </div>
 
-            {/* Wash Hair / Shampoo Status tracker */}
-            {washHairTemplate ? (
-              <div className="flex items-center justify-between p-3 rounded-xl bg-slate-100/50 dark:bg-zinc-950/40 border border-slate-200/80 dark:border-zinc-900/60 text-xs">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-zinc-200">
-                    <span className="p-1 rounded bg-blue-500/10 text-blue-500 dark:text-blue-400">
-                      <Droplet size={13} className="fill-blue-500/10" />
-                    </span>
-                    Wash Hair Status
-                  </div>
-                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 font-medium">
-                    {washHairDaysStr}
-                  </p>
+            {/* Dynamic Routines & Priorities Strip */}
+            <div className="flex flex-col justify-between p-3 rounded-xl bg-slate-100/50 dark:bg-zinc-950/40 border border-slate-205 dark:border-zinc-900/60 text-xs">
+              <div className="space-y-1 w-full">
+                <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-zinc-200">
+                  <span className="p-1 rounded bg-blue-500/10 text-blue-500 dark:text-blue-400">
+                    <Droplet size={13} className="fill-blue-500/10" />
+                  </span>
+                  Daily Routines & Priorities
                 </div>
-                <button
-                  disabled={isWashingHair}
-                  onClick={handleQuickWashHair}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
-                    washHairOverdue
-                      ? 'bg-red-500 hover:bg-red-600 text-white shadow-xs'
-                      : 'bg-slate-205 hover:bg-slate-300 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-slate-705 dark:text-zinc-300'
-                  }`}
-                >
-                  <ShowerHead size={12} />
-                  {isWashingHair ? 'Saving...' : 'Just Washed'}
-                </button>
+                
+                <div className="flex items-center gap-2 overflow-x-auto py-1 pr-1.5 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-zinc-800 max-h-16">
+                  {prioritiesList.length === 0 ? (
+                    <div className="text-[10px] text-slate-400 dark:text-zinc-550 italic font-medium py-1">
+                      No high-priority routines remaining today!
+                    </div>
+                  ) : (
+                    prioritiesList
+                      .slice(0, 3) // limit to top 3 to keep it clean
+                      .map(({ template, analysis }) => {
+                        const isDone = analysis.lastCompletedDate === todayStr
+                        const isProcessing = !!processingItems[template.id]
+                        return (
+                          <div
+                            key={template.id}
+                            className={`flex items-center gap-2 p-1.5 bg-white dark:bg-zinc-900 border rounded-lg transition-all shadow-2xs shrink-0 max-w-[170px] ${
+                              isDone ? 'border-green-200 dark:border-green-950/50 bg-green-50/10 dark:bg-green-950/5' : 'border-slate-200 dark:border-zinc-800/80'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className={`shrink-0 text-[10px] ${isDone ? 'text-green-500' : 'text-slate-400'}`}>
+                                <Icon name={template.icon} size={12} />
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-700 dark:text-zinc-300 truncate" title={template.name}>
+                                {template.name}
+                              </span>
+                            </div>
+                            <button
+                              disabled={isProcessing || isDone}
+                              onClick={() => handleQuickLogComplete(template.id, template.category, template.amount)}
+                              className={`px-2 py-0.5 rounded text-[8px] font-black uppercase transition-all shrink-0 cursor-pointer ${
+                                isDone
+                                  ? 'text-green-600 dark:text-green-400 font-bold bg-green-50 dark:bg-green-950/20'
+                                  : 'bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-950 shadow-2xs'
+                              }`}
+                            >
+                              {isProcessing ? '...' : isDone ? 'Done' : 'Log'}
+                            </button>
+                          </div>
+                        )
+                      })
+                  )}
+                </div>
               </div>
-            ) : (
-              <div className="p-3 rounded-xl bg-slate-100/30 dark:bg-zinc-950/20 border border-slate-200 dark:border-zinc-900/40 text-xs flex items-center justify-center text-slate-400 dark:text-zinc-500 italic">
-                Wash Hair template not configured.
-              </div>
-            )}
+            </div>
 
             {/* Upcoming Marathi Calendar / Panchang Events */}
             <div className="flex flex-col justify-between p-3 rounded-xl bg-orange-500/5 dark:bg-zinc-950/40 border border-orange-500/10 dark:border-zinc-900/60 text-xs">
