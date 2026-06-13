@@ -5,7 +5,7 @@ import { ActivityTemplate, ActivityLog, Note, WorkoutExercise, WorkoutSet, Worko
 import { createLog, updateLog, deleteLog } from '@/app/actions/log'
 import { createNote, updateNote, deleteNote } from '@/app/actions/note'
 import { Icon } from './Icon'
-import { X, Plus, Trash2, Edit2, Sparkles, BookOpen } from 'lucide-react'
+import { X, Plus, Trash2, Edit2, Sparkles, BookOpen, Search } from 'lucide-react'
 import { getEventsForDate } from '@/lib/marathiCalendar'
 
 interface DayLogsModalProps {
@@ -58,6 +58,26 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   const [measWaist, setMeasWaist] = useState('')
   const [measChest, setMeasChest] = useState('')
   const [measArms, setMeasArms] = useState('')
+
+  // Selector search and tab states
+  const [activitySearch, setActivitySearch] = useState('')
+  const [activityFilterTab, setActivityFilterTab] = useState<'all' | 'daily' | 'weekly' | 'monthly' | 'yearly_other'>('all')
+
+  const filteredTemplates = templates.filter(t => {
+    const query = activitySearch.trim().toLowerCase()
+    if (query !== '') {
+      return t.name.toLowerCase().includes(query) || t.category.toLowerCase().includes(query)
+    }
+    
+    if (activityFilterTab === 'all') return true
+    if (activityFilterTab === 'daily') return t.recurrenceType === 'daily'
+    if (activityFilterTab === 'weekly') return t.recurrenceType === 'weekly'
+    if (activityFilterTab === 'monthly') return t.recurrenceType === 'monthly'
+    if (activityFilterTab === 'yearly_other') {
+      return ['yearly', 'custom', 'milestone', 'one_time'].includes(t.recurrenceType)
+    }
+    return true
+  })
 
   if (!isOpen) return null
 
@@ -319,7 +339,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
             <h2 className="text-base font-semibold text-slate-900 dark:text-white">{formattedDate}</h2>
             <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-0.5">Edit log history and write standalone notes</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-955 dark:text-zinc-400 dark:hover:text-white transition-colors cursor-pointer">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition-colors cursor-pointer">
             <X size={20} />
           </button>
         </div>
@@ -669,7 +689,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                                     placeholder="Set Note"
                                     value={set.note || ''}
                                     onChange={e => handleSetChange(exIdx, setIdx, 'note', e.target.value)}
-                                    className="flex-1 bg-white dark:bg-zinc-955 border border-slate-200 dark:border-zinc-800 rounded px-2 py-0.5 text-slate-900 dark:text-white placeholder-slate-350 dark:placeholder-zinc-700"
+                                    className="flex-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded px-2 py-0.5 text-slate-900 dark:text-white placeholder-slate-350 dark:placeholder-zinc-700"
                                   />
                                   <button
                                     type="button"
@@ -699,7 +719,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                       type="button"
                       disabled={isSavingLog}
                       onClick={handleSaveLog}
-                      className="bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-955 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                      className="bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-950 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
                     >
                       {isSavingLog ? 'Saving...' : 'Save Log'}
                     </button>
@@ -869,41 +889,88 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                 )}
               </div>
 
-              {/* Log Selector Dropdown */}
+              {/* Premium Activity Selector with Search and Tabs */}
               {!editingTemplateId && (
-                <div className="bg-slate-50/50 dark:bg-zinc-950 p-4 border border-slate-200 dark:border-zinc-800 rounded-xl space-y-3">
-                  <div className="text-xs font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
-                    Log Activity for This Day
+                <div className="bg-slate-50/50 dark:bg-zinc-950/60 p-4 border border-slate-200 dark:border-zinc-800 rounded-xl space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="text-xs font-black text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
+                      Log Activity for This Day
+                    </div>
+                    {/* Search Input */}
+                    <div className="relative max-w-xs w-full">
+                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 dark:text-zinc-500" />
+                      <input
+                        type="text"
+                        placeholder="Search templates..."
+                        value={activitySearch}
+                        onChange={e => setActivitySearch(e.target.value)}
+                        className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-600 focus:outline-hidden focus:border-slate-300 dark:focus:border-zinc-700"
+                      />
+                    </div>
                   </div>
-                  
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <select
-                      id="quick-log-select"
-                      className="flex-1 bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:border-slate-350 dark:focus:border-zinc-700 cursor-pointer capitalize"
-                      defaultValue=""
-                      onChange={(e) => {
-                        const val = e.target.value
-                        if (val) {
-                          const temp = templates.find(t => t.id === val)
-                          if (temp) {
-                            handleOpenLogger(temp)
-                          }
-                          e.target.value = "" // reset select
-                        }
-                      }}
-                    >
-                      <option value="" disabled>-- Select activity to log --</option>
-                      {templates.map(t => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} ({t.recurrenceType})
-                        </option>
-                      ))}
-                    </select>
 
-                    <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium flex items-center justify-start">
-                      Select any activity to customize notes, amounts, or log details.
-                    </p>
-                  </div>
+                  {/* Tabs (Hidden when searching since search searches all) */}
+                  {activitySearch.trim() === '' && (
+                    <div className="flex flex-wrap gap-1 border-b border-slate-200/60 dark:border-zinc-900/60 pb-1 text-[11px]">
+                      {(
+                        [
+                          { key: 'all', label: 'All' },
+                          { key: 'daily', label: 'Daily' },
+                          { key: 'weekly', label: 'Weekly' },
+                          { key: 'monthly', label: 'Monthly' },
+                          { key: 'yearly_other', label: 'Yearly/Other' },
+                        ] as const
+                      ).map(tab => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => setActivityFilterTab(tab.key)}
+                          className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                            activityFilterTab === tab.key
+                              ? 'bg-slate-900 dark:bg-zinc-100 text-white dark:text-zinc-950 shadow-xs'
+                              : 'text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Activity Grid */}
+                  {filteredTemplates.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-slate-400 dark:text-zinc-650 italic">
+                      No activities match your criteria.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                      {filteredTemplates.map(t => {
+                        const color = t.color || 'zinc'
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => handleOpenLogger(t)}
+                            className="flex items-center gap-2.5 p-2.5 bg-white hover:bg-slate-100/50 dark:bg-zinc-900 dark:hover:bg-zinc-850/60 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all cursor-pointer text-left hover:-translate-y-0.5 hover:shadow-xs group"
+                          >
+                            <div
+                              className={`w-7 h-7 rounded-lg flex items-center justify-center bg-slate-50 dark:bg-zinc-950 border border-slate-205 dark:border-zinc-850 text-${color}-500 dark:text-${color}-400 group-hover:scale-105 transition-all`}
+                            >
+                              <Icon name={t.icon} size={14} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-[11px] font-bold text-slate-850 dark:text-zinc-200 truncate group-hover:text-slate-950 dark:group-hover:text-white transition-colors">
+                                {t.name}
+                              </div>
+                              <div className="text-[9px] text-slate-400 dark:text-zinc-500 font-medium capitalize truncate">
+                                {t.recurrenceType}
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -946,7 +1013,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                       type="button"
                       onClick={handleSaveNote}
                       disabled={isSavingNote || !noteContent.trim()}
-                      className="bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-955 px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-50 cursor-pointer shadow-xs"
+                      className="bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-950 px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-50 cursor-pointer shadow-xs"
                     >
                       {isSavingNote ? 'Saving...' : 'Save Note'}
                     </button>

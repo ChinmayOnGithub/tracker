@@ -136,7 +136,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     } else if (completedCount === 3) {
       return 'bg-blue-100/60 dark:bg-zinc-800 border border-blue-200/70 dark:border-zinc-700 text-slate-900 dark:text-white hover:bg-blue-200/50 dark:hover:bg-zinc-700/50'
     } else {
-      return 'bg-blue-200/60 dark:bg-zinc-700 border border-blue-300/70 dark:border-zinc-700 text-slate-955 dark:text-white hover:bg-blue-300/50 dark:hover:bg-zinc-700/80 shadow-inner'
+      return 'bg-blue-200/60 dark:bg-zinc-700 border border-blue-300/70 dark:border-zinc-700 text-slate-950 dark:text-white hover:bg-blue-300/50 dark:hover:bg-zinc-700/80 shadow-inner'
     }
   }
 
