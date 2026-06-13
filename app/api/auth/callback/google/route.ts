@@ -12,7 +12,7 @@ export async function GET(request: Request) {
 
   if (error || !code) {
     console.error('Google OAuth error callback:', error)
-    return NextResponse.redirect(`${siteUrl}/?error=google-auth-failed`)
+    return NextResponse.redirect(`${siteUrl}/?error=google-auth-failed&details=${encodeURIComponent(error || 'Authorization code missing')}`)
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID
@@ -38,7 +38,12 @@ export async function GET(request: Request) {
     if (!tokenResponse.ok) {
       const errText = await tokenResponse.text()
       console.error('Google Token Exchange failed:', errText)
-      return NextResponse.redirect(`${siteUrl}/?error=google-token-failed`)
+      let detailMsg = errText
+      try {
+        const parsed = JSON.parse(errText)
+        detailMsg = parsed.error_description || parsed.error || errText
+      } catch (_) {}
+      return NextResponse.redirect(`${siteUrl}/?error=google-token-failed&details=${encodeURIComponent(detailMsg)}`)
     }
 
     const tokens = await tokenResponse.json()

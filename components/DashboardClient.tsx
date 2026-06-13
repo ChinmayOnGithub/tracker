@@ -46,6 +46,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   const router = useRouter()
   const searchParams = useSearchParams()
   const errorParam = searchParams ? searchParams.get('error') : null
+  const detailsParam = searchParams ? searchParams.get('details') : null
   const [showLocalBypass, setShowLocalBypass] = useState(false)
   // Modal states
   const [selectedDateStr, setSelectedDateStr] = useState<string>(getTodayDateStr())
@@ -395,7 +396,14 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
                     </pre>
                   </>
                 ) : (
-                  'Google authorization was unsuccessful or timed out. Please try again.'
+                  <div className="space-y-1">
+                    <div>Google authorization was unsuccessful. Please try again.</div>
+                    {detailsParam && (
+                      <div className="bg-black/10 dark:bg-black/35 font-mono p-1.5 rounded text-[9px] select-all overflow-x-auto mt-1.5">
+                        Details: {detailsParam}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
