@@ -68,3 +68,12 @@ model Note {
 
   @@index([date])
 }
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique @default("admin")
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+

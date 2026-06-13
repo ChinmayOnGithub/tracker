@@ -9,6 +9,7 @@ import { DayLogsModal } from './DayLogsModal'
 import { TemplateModal } from './TemplateModal'
 import { getTodayDateStr } from '@/lib/recurrence'
 import { markComplete } from '@/app/actions/log'
+import { isPinSetup, registerPin, verifyPinAction } from '@/app/actions/auth'
 import { Layers, Sun, Moon, Droplet, ShowerHead, CalendarDays, Lock } from 'lucide-react'
 import { getUpcomingEvents } from '@/lib/marathiCalendar'
 
@@ -63,8 +64,9 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
     const isAuth = sessionStorage.getItem('operations_auth') === 'true'
     setIsAuthenticated(isAuth)
     
-    const hasPin = !!localStorage.getItem('operations_pin')
-    setPinSetup(!hasPin)
+    isPinSetup().then(setup => {
+      setPinSetup(!setup)
+    })
     
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
     if (savedTheme) {
@@ -108,19 +110,20 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
         
         // Auto submit when length hits 4
         if (nextPin.length === 4) {
-          const savedPin = localStorage.getItem('operations_pin')
-          if (nextPin === savedPin) {
-            sessionStorage.setItem('operations_auth', 'true')
-            setIsAuthenticated(true)
-          } else {
-            // Shake and clear
-            setShake(true)
-            setAuthError('Incorrect PIN code')
-            setTimeout(() => {
-              setShake(false)
-              setEnteredPin('')
-            }, 600)
-          }
+          verifyPinAction(nextPin).then(res => {
+            if (res.success) {
+              sessionStorage.setItem('operations_auth', 'true')
+              setIsAuthenticated(true)
+            } else {
+              // Shake and clear
+              setShake(true)
+              setAuthError('Incorrect PIN code')
+              setTimeout(() => {
+                setShake(false)
+                setEnteredPin('')
+              }, 600)
+            }
+          })
         }
       }
     }
@@ -158,10 +161,15 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
       setSetupPinConfirm('')
       return
     }
-    localStorage.setItem('operations_pin', setupPin)
-    sessionStorage.setItem('operations_auth', 'true')
-    setIsAuthenticated(true)
-    setPinSetup(false)
+    registerPin(setupPin).then(res => {
+      if (res.success) {
+        sessionStorage.setItem('operations_auth', 'true')
+        setIsAuthenticated(true)
+        setPinSetup(false)
+      } else {
+        setAuthError(res.error || 'Failed to setup PIN')
+      }
+    })
   }, [setupPin, setupPinConfirm])
 
   // Keyboard entry hook
