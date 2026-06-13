@@ -140,7 +140,7 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                   {(() => {
                     const colorClasses = getTemplateColorClasses(template.color, isTemplateActive)
                     return (
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center bg-white dark:bg-zinc-955 border border-slate-250 dark:border-zinc-900 ${colorClasses.text}`}>
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center border ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}>
                         <Icon name={template.icon} size={18} />
                       </div>
                     )

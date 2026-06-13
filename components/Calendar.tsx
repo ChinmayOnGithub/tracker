@@ -249,12 +249,26 @@ export const Calendar: React.FC<CalendarProps> = ({
 
                   {/* Freeform daily note indicator */}
                   {cellNote && (
-                    <span title={cellNote.title || 'Daily Note'}>
+                    <div 
+                      className="relative group cursor-help z-10" 
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <BookOpen
                         size={11}
-                        className="text-amber-500 dark:text-amber-400 fill-amber-500/10"
+                        className="text-amber-500 dark:text-amber-400 fill-amber-500/10 hover:scale-110 transition-transform"
                       />
-                    </span>
+                      {/* Tooltip Popup */}
+                      <div className="pointer-events-none absolute bottom-full right-0 mb-2 w-56 scale-95 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-150 origin-bottom-right z-50 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-850 p-2.5 rounded-xl shadow-lg text-[10px] text-slate-700 dark:text-zinc-300 text-left">
+                        {cellNote.title && (
+                          <div className="font-bold text-slate-800 dark:text-white mb-1 border-b border-slate-100 dark:border-zinc-800/85 pb-0.5">
+                            {cellNote.title}
+                          </div>
+                        )}
+                        <div className="line-clamp-6 leading-normal font-medium whitespace-pre-line">
+                          {cellNote.content}
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
