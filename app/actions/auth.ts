@@ -36,7 +36,7 @@ export async function getLoggedUser(): Promise<{ id: string; username: string } 
 /**
  * Registers a new user with a unique username and a 4-digit PIN.
  */
-export async function registerUserAction(usernameInput: string, pin: string): Promise<{ success: boolean; error?: string }> {
+export async function registerUserAction(usernameInput: string, pin: string): Promise<{ success: boolean; error?: string; user?: { id: string; username: string } }> {
   try {
     const username = usernameInput.trim().toLowerCase()
     if (!username || username.length < 2) {
@@ -74,7 +74,7 @@ export async function registerUserAction(usernameInput: string, pin: string): Pr
       path: '/'
     })
 
-    return { success: true }
+    return { success: true, user: { id: newUser.id, username: newUser.username } }
   } catch (error) {
     console.error('Registration failed:', error)
     return { success: false, error: 'Database error during registration.' }
@@ -84,7 +84,7 @@ export async function registerUserAction(usernameInput: string, pin: string): Pr
 /**
  * Verifies a PIN code and username against the database, sets session cookie.
  */
-export async function verifyPinAction(usernameInput: string, pin: string): Promise<{ success: boolean; error?: string }> {
+export async function verifyPinAction(usernameInput: string, pin: string): Promise<{ success: boolean; error?: string; user?: { id: string; username: string } }> {
   try {
     const username = usernameInput.trim().toLowerCase()
     if (!username) {
@@ -138,7 +138,7 @@ export async function verifyPinAction(usernameInput: string, pin: string): Promi
       path: '/'
     })
 
-    return { success: true }
+    return { success: true, user: { id: user.id, username: user.username } }
   } catch (error) {
     console.error('Login failed:', error)
     return { success: false, error: 'Database error during login.' }

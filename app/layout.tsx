@@ -25,7 +25,8 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className="h-full antialiased"
+      className="h-full antialiased dark"
+      suppressHydrationWarning
     >
       <head>
         <script

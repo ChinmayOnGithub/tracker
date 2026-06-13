@@ -96,6 +96,7 @@ export default async function Page() {
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-100 antialiased transition-colors duration-200">
       <DashboardClient
+        key={loggedUser?.id || 'guest'}
         templates={templates}
         logs={logs}
         notes={notes}
