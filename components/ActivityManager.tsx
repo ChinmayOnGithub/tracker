@@ -5,6 +5,7 @@ import { ActivityTemplate, RecurrenceAnalysis } from '@/types'
 import { deleteActivityTemplate, duplicateActivityTemplate, updateActivityTemplate, reorderActivityTemplates } from '@/app/actions/template'
 import { Icon } from './Icon'
 import { Plus, ArrowUp, ArrowDown, Edit2, Copy, Check, Trash2, Settings, EyeOff } from 'lucide-react'
+import { getTemplateColorClasses } from '@/lib/colors'
 
 interface ActivityManagerProps {
   analyzedTemplates: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]
@@ -136,13 +137,14 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
               >
                 {/* Details */}
                 <div className="flex items-center gap-3">
-                  <div
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-900 text-${
-                      isTemplateActive ? template.color : 'zinc'
-                    }-550 dark:text-${isTemplateActive ? template.color : 'zinc'}-400`}
-                  >
-                    <Icon name={template.icon} size={18} />
-                  </div>
+                  {(() => {
+                    const colorClasses = getTemplateColorClasses(template.color, isTemplateActive)
+                    return (
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center bg-white dark:bg-zinc-955 border border-slate-250 dark:border-zinc-900 ${colorClasses.text}`}>
+                        <Icon name={template.icon} size={18} />
+                      </div>
+                    )
+                  })()}
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-slate-800 dark:text-white text-sm">

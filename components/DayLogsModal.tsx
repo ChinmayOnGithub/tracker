@@ -7,6 +7,7 @@ import { createNote, updateNote, deleteNote } from '@/app/actions/note'
 import { Icon } from './Icon'
 import { X, Plus, Trash2, Edit2, Sparkles, BookOpen, Search } from 'lucide-react'
 import { getEventsForDate } from '@/lib/marathiCalendar'
+import { getTemplateColorClasses } from '@/lib/colors'
 
 interface DayLogsModalProps {
   isOpen: boolean
@@ -378,7 +379,8 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
             }`}
           >
             <BookOpen size={16} />
-            Daily Note {note ? '✓' : ''}
+            Daily Note
+            {note && <span className="ml-1.5 w-2 h-2 rounded-full bg-green-500 dark:bg-green-400" />}
           </button>
         </div>
 
@@ -743,15 +745,16 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                       const icon = template?.icon || 'CheckSquare'
                       const name = template?.name || 'Deleted Template'
 
+                      const colorClasses = getTemplateColorClasses(color)
                       return (
                         <div
                           key={log.id}
-                          className="bg-white dark:bg-zinc-950 p-4 rounded-xl border border-slate-200 dark:border-zinc-800/60 flex flex-col gap-2 relative shadow-xs"
+                          className="bg-white dark:bg-zinc-950 p-4 rounded-xl border border-slate-205 dark:border-zinc-800/60 flex flex-col gap-2 relative shadow-xs"
                         >
                           <div className="flex justify-between items-start">
                             <div className="flex items-center gap-3">
                               <div
-                                className={`w-8.5 h-8.5 rounded-lg flex items-center justify-center bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-${color}-500 dark:text-${color}-400`}
+                                className={`w-8.5 h-8.5 rounded-lg flex items-center justify-center border ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}
                               >
                                 <Icon name={icon} size={16} />
                               </div>
@@ -945,7 +948,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                   ) : (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pr-1">
                       {filteredTemplates.map(t => {
-                        const color = t.color || 'zinc'
+                        const colorClasses = getTemplateColorClasses(t.color)
                         return (
                           <button
                             key={t.id}
@@ -954,7 +957,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                             className="flex items-center gap-2.5 p-2.5 bg-white hover:bg-slate-100/50 dark:bg-zinc-900 dark:hover:bg-zinc-850/60 border border-slate-200 dark:border-zinc-800 rounded-xl transition-all cursor-pointer text-left hover:-translate-y-0.5 hover:shadow-xs group"
                           >
                             <div
-                              className={`w-7 h-7 rounded-lg flex items-center justify-center bg-slate-50 dark:bg-zinc-950 border border-slate-205 dark:border-zinc-850 text-${color}-500 dark:text-${color}-400 group-hover:scale-105 transition-all`}
+                              className={`w-7 h-7 rounded-lg flex items-center justify-center border group-hover:scale-105 transition-all ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}
                             >
                               <Icon name={t.icon} size={14} />
                             </div>

@@ -6,6 +6,7 @@ import { markComplete, deleteLog } from '@/app/actions/log'
 import { getTodayDateStr, addUTCDays, parseUTCDate, formatUTCDate } from '@/lib/recurrence'
 import { Icon } from './Icon'
 import { Search, Flame, Calendar, RefreshCcw, Check, Sparkles, Scissors, ShieldAlert, X } from 'lucide-react'
+import { getTemplateColorClasses } from '@/lib/colors'
 
 interface AnalyzedTemplate {
   template: ActivityTemplate
@@ -160,13 +161,18 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
         }`}
       >
         <div className="flex items-center gap-3">
-          <div
-            onClick={() => onOpenLogger(template)}
-            className={`w-8.5 h-8.5 rounded-lg flex items-center justify-center bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-850 text-${template.color}-500 dark:text-${template.color}-400 cursor-pointer hover:bg-slate-100 dark:hover:bg-zinc-900 transition-colors`}
-            title="Detailed log options"
-          >
-            <Icon name={template.icon} size={16} />
-          </div>
+          {(() => {
+            const colorClasses = getTemplateColorClasses(template.color, template.isActive)
+            return (
+              <div
+                onClick={() => onOpenLogger(template)}
+                className={`w-8.5 h-8.5 rounded-lg flex items-center justify-center cursor-pointer hover:bg-slate-100 dark:hover:bg-zinc-900 transition-colors border ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}
+                title="Detailed log options"
+              >
+                <Icon name={template.icon} size={16} />
+              </div>
+            )
+          })()}
           <div>
             <div className="flex items-center gap-1.5">
               <span className={`font-semibold text-slate-800 dark:text-zinc-200 ${isCompletedToday ? 'line-through text-slate-400 dark:text-zinc-500' : ''}`}>{template.name}</span>
@@ -359,13 +365,18 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                       className="bg-white dark:bg-zinc-900 p-4 border border-slate-200 dark:border-zinc-800 rounded-xl flex items-center justify-between gap-4 shadow-xs group"
                     >
                       <div className="flex items-center gap-3">
-                        <div
-                          onClick={() => onOpenLogger(template)}
-                          className={`w-9 h-9 rounded-lg flex items-center justify-center bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-850 text-${template.color}-500 dark:text-${template.color}-400 cursor-pointer hover:bg-slate-100 dark:hover:bg-zinc-900 transition-colors`}
-                          title="Detailed log options"
-                        >
-                          <Icon name={template.icon} size={18} />
-                        </div>
+                        {(() => {
+                          const colorClasses = getTemplateColorClasses(template.color, template.isActive)
+                          return (
+                            <div
+                              onClick={() => onOpenLogger(template)}
+                              className={`w-9 h-9 rounded-lg flex items-center justify-center cursor-pointer hover:bg-slate-100 dark:hover:bg-zinc-900 transition-colors border ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}
+                              title="Detailed log options"
+                            >
+                              <Icon name={template.icon} size={18} />
+                            </div>
+                          )
+                        })()}
                         <div>
                           <div className="flex items-center gap-1.5">
                             <span className="font-semibold text-slate-800 dark:text-white">{template.name}</span>
@@ -444,13 +455,18 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                       className="bg-white dark:bg-zinc-900 p-3.5 border border-slate-200 dark:border-zinc-800 rounded-xl flex items-center justify-between gap-4 shadow-xs"
                     >
                       <div className="flex items-center gap-3">
-                        <div
-                          onClick={() => onOpenLogger(template)}
-                          className={`w-8.5 h-8.5 rounded-lg flex items-center justify-center bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-850 text-${template.color}-500 dark:text-${template.color}-400 cursor-pointer hover:bg-slate-100 dark:hover:bg-zinc-900 transition-colors`}
-                          title="Detailed log options"
-                        >
-                          <Icon name={template.icon} size={16} />
-                        </div>
+                        {(() => {
+                          const colorClasses = getTemplateColorClasses(template.color, template.isActive)
+                          return (
+                            <div
+                              onClick={() => onOpenLogger(template)}
+                              className={`w-8.5 h-8.5 rounded-lg flex items-center justify-center cursor-pointer hover:bg-slate-100 dark:hover:bg-zinc-900 transition-colors border ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}
+                              title="Detailed log options"
+                            >
+                              <Icon name={template.icon} size={16} />
+                            </div>
+                          )
+                        })()}
                         <div>
                           <span className="font-semibold text-slate-700 dark:text-zinc-200">{template.name}</span>
                           <div className="flex flex-wrap items-center gap-2 mt-0.5">
@@ -515,9 +531,14 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                 {dueThisMonth.map(({ template, analysis }) => (
                   <div key={template.id} className="flex justify-between items-center py-2 first:pt-0 last:pb-0">
                     <div className="flex items-center gap-2">
-                      <span className={`text-${template.color}-500 dark:text-${template.color}-400`}>
-                        <Icon name={template.icon} size={14} />
-                      </span>
+                      {(() => {
+                        const colorClasses = getTemplateColorClasses(template.color, template.isActive)
+                        return (
+                          <span className={colorClasses.text}>
+                            <Icon name={template.icon} size={14} />
+                          </span>
+                        )
+                      })()}
                       <span className="text-slate-700 dark:text-zinc-300 text-xs font-medium">{template.name}</span>
                     </div>
                     <div className="flex items-center gap-3">
@@ -555,9 +576,14 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                     className="bg-white dark:bg-zinc-900 p-4 border border-slate-200 dark:border-zinc-800 rounded-xl flex flex-col justify-between gap-3 cursor-pointer hover:border-slate-300 dark:hover:border-zinc-700 transition-colors shadow-xs group"
                   >
                     <div className="flex items-start gap-2.5">
-                      <div className={`p-1.5 rounded-lg bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-850 text-${template.color}-500 dark:text-${template.color}-400`}>
-                        <Icon name={template.icon} size={16} />
-                      </div>
+                      {(() => {
+                        const colorClasses = getTemplateColorClasses(template.color, template.isActive)
+                        return (
+                          <div className={`p-1.5 rounded-lg border ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}>
+                            <Icon name={template.icon} size={16} />
+                          </div>
+                        )
+                      })()}
                       <div>
                         <h4 className="font-semibold text-slate-800 dark:text-white text-xs group-hover:text-slate-900 dark:group-hover:text-zinc-200">{template.name}</h4>
                         <p className="text-[10px] text-slate-400 dark:text-zinc-500 mt-0.5">
@@ -583,10 +609,15 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                 {upcomingYearly.map(({ template, analysis }) => (
                   <div key={template.id} className="flex justify-between items-center text-xs">
                     <div>
-                      <div className="font-medium text-slate-700 dark:text-white flex items-center gap-1.5">
-                        <Icon name={template.icon} className={`text-${template.color}-500 dark:text-${template.color}-400`} size={13} />
-                        {template.name}
-                      </div>
+                      {(() => {
+                        const colorClasses = getTemplateColorClasses(template.color, template.isActive)
+                        return (
+                          <div className="font-medium text-slate-700 dark:text-white flex items-center gap-1.5">
+                            <Icon name={template.icon} className={colorClasses.text} size={13} />
+                            {template.name}
+                          </div>
+                        )
+                      })()}
                       <span className={`text-[9px] font-semibold uppercase ${analysis.overdue ? 'text-red-500 dark:text-red-400' : 'text-slate-400 dark:text-zinc-500'}`}>
                         {analysis.statusMessage}
                       </span>
@@ -626,9 +657,14 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                       className="p-3 flex items-center justify-between gap-3 text-xs"
                     >
                       <div className="flex items-center gap-2">
-                        <span className={`text-${color}-500 dark:text-${color}-400 bg-slate-50 dark:bg-zinc-950 p-1.5 border border-slate-100 dark:border-zinc-850 rounded-lg`}>
-                          <Icon name={icon} size={14} />
-                        </span>
+                        {(() => {
+                          const colorClasses = getTemplateColorClasses(color)
+                          return (
+                            <span className={`p-1.5 border rounded-lg ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}>
+                              <Icon name={icon} size={14} />
+                            </span>
+                          )
+                        })()}
                         <div>
                           <div className="font-semibold text-slate-700 dark:text-zinc-200">
                             {template?.name || 'Unknown Activity'}
