@@ -8,6 +8,7 @@ import { Icon } from './Icon'
 import { X, Plus, Trash2, Edit2, Sparkles, BookOpen, Search } from 'lucide-react'
 import { getEventsForDate } from '@/lib/marathiCalendar'
 import { getTemplateColorClasses } from '@/lib/colors'
+import { Input, Textarea, Button } from '@/design-system'
 
 interface DayLogsModalProps {
   isOpen: boolean
@@ -16,6 +17,7 @@ interface DayLogsModalProps {
   templates: ActivityTemplate[]
   logs: ActivityLog[] // All logs for this specific date
   note: Note | null // Standalone note for this date
+  initialTab?: 'activities' | 'notes'
 }
 
 export const DayLogsModal: React.FC<DayLogsModalProps> = ({
@@ -25,9 +27,10 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   templates,
   logs,
   note,
+  initialTab,
 }) => {
   // Tabs: 'activities' or 'notes'
-  const [activeTab, setActiveTab] = useState<'activities' | 'notes'>('activities')
+  const [activeTab, setActiveTab] = useState<'activities' | 'notes'>(initialTab || 'activities')
   
   // Note state - initialized directly from props
   const [noteTitle, setNoteTitle] = useState(note?.title || '')
@@ -38,6 +41,17 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   // Expanded editor for logging a template
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
   const [editingLogId, setEditingLogId] = useState<string | null>(null)
+
+  // Sync state when day changes in side drawer
+  React.useEffect(() => {
+    Promise.resolve().then(() => {
+      setNoteTitle(note?.title || '')
+      setNoteContent(note?.content || '')
+      setIsEditingNote(!note)
+      setEditingTemplateId(null)
+      setEditingLogId(null)
+    })
+  }, [dateStr, note])
   
   // Log form state
   const [logStatus, setLogStatus] = useState('done')
@@ -331,19 +345,31 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-800 rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
-        
+    <div className="fixed inset-0 z-40 overflow-hidden flex justify-end">
+      {/* Backdrop overlay */}
+      <div 
+        className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs transition-opacity duration-300"
+        onClick={onClose}
+      />
+      
+      {/* Drawer content panel sliding from right */}
+      <div className="relative w-full max-w-md bg-[var(--color-bg-surface)] border-l border-[var(--color-border)] dark:border-zinc-850 h-full flex flex-col shadow-2xl z-50 animate-slide-in-right">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-[var(--color-border)] dark:border-zinc-855 flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white">{formattedDate}</h2>
-            <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-0.5">Edit log history and write standalone notes</p>
+            <h3 className="text-[10px] uppercase tracking-wider font-extrabold text-[var(--color-text-muted)]">Day Planner</h3>
+            <p className="text-xs font-bold text-[var(--color-text-main)] mt-0.5">{formattedDate}</p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition-colors cursor-pointer">
-            <X size={20} />
+          <button 
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-slate-105 dark:hover:bg-zinc-850 text-slate-400 dark:text-zinc-550 cursor-pointer"
+          >
+            <X size={16} />
           </button>
         </div>
+
+        {/* Scrollable contents container */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
 
         {/* Panchang Alerts banner */}
         {(() => {
@@ -385,7 +411,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
         </div>
 
         {/* Tab Contents */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="mt-3">
           {activeTab === 'activities' && (
             <div className="space-y-6">
               {/* If builder is open */}
@@ -983,43 +1009,37 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
             <div className="space-y-4">
               {isEditingNote ? (
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-slate-500 dark:text-zinc-400 mb-1.5 font-medium">Note Title (Optional)</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Brainstorming session"
-                      value={noteTitle}
-                      onChange={e => setNoteTitle(e.target.value)}
-                      className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:border-slate-300 dark:focus:border-zinc-700"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-slate-500 dark:text-zinc-400 mb-1.5 font-medium">Content *</label>
-                    <textarea
-                      placeholder="Write your note here..."
-                      value={noteContent}
-                      onChange={e => setNoteContent(e.target.value)}
-                      className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-hidden focus:border-slate-300 dark:focus:border-zinc-700 h-48 resize-y"
-                    />
-                  </div>
+                  <Input
+                    label="Note Title (Optional)"
+                    placeholder="e.g. Brainstorming session"
+                    value={noteTitle}
+                    onChange={e => setNoteTitle(e.target.value)}
+                  />
+                  <Textarea
+                    label="Content *"
+                    placeholder="Write your note here..."
+                    value={noteContent}
+                    onChange={e => setNoteContent(e.target.value)}
+                    rows={8}
+                  />
                   <div className="flex justify-end gap-2">
                     {note && (
-                      <button
+                      <Button
+                        variant="outline"
                         type="button"
                         onClick={() => setIsEditingNote(false)}
-                        className="bg-slate-100 hover:bg-slate-200 dark:bg-zinc-850 dark:hover:bg-zinc-800 text-slate-600 dark:text-zinc-400 px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer"
                       >
                         Cancel
-                      </button>
+                      </Button>
                     )}
-                    <button
+                    <Button
                       type="button"
                       onClick={handleSaveNote}
                       disabled={isSavingNote || !noteContent.trim()}
-                      className="bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-950 px-4 py-2 rounded-lg text-xs font-semibold disabled:opacity-50 cursor-pointer shadow-xs"
+                      isLoading={isSavingNote}
                     >
-                      {isSavingNote ? 'Saving...' : 'Save Note'}
-                    </button>
+                      Save Note
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -1058,5 +1078,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
         </div>
       </div>
     </div>
+  </div>
   )
 }
+

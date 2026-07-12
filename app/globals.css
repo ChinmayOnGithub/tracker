@@ -1,3 +1,4 @@
+@import "../design-system/tokens.css";
 @import "tailwindcss";
 
 @variant dark (&:where(.dark, .dark *));
@@ -15,8 +16,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
 body {
@@ -35,3 +36,39 @@ body {
   animation: shake 0.4s ease-in-out;
 }
 
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out forwards;
+}
+
+/* Non-standard zinc shades as CSS vars for token-consistent theming */
+:root {
+  --zinc-750: #3f3f46; /* between zinc-700 and zinc-800 */
+  --zinc-850: #1f1f23; /* between zinc-800 and zinc-900 */
+}
+
+/* Tailwind-compatible alias utilities */
+.border-zinc-750 { border-color: #3f3f46; }
+.border-zinc-850 { border-color: #1f1f23; }
+.border-zinc-855 { border-color: #1c1c20; }
+.hover\:bg-slate-105:hover { background-color: #f0f4f8; }
+.hover\:bg-slate-205:hover { background-color: #dce3ec; }
+.shadow-3xs { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04); }
+.dark .dark\:border-zinc-555 { border-color: #5a5a61; }
+.dark .dark\:border-zinc-750 { border-color: #3f3f46; }
+.dark .dark\:border-zinc-850 { border-color: #1f1f23; }
+.dark .dark\:text-zinc-555 { color: #6b6b72; }
+.dark .dark\:text-zinc-650 { color: #52525b; }

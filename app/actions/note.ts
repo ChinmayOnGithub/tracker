@@ -84,6 +84,50 @@ export async function updateNote(
   }
 }
 
+/**
+ * Atomically upsert (create or update) the note for a given date.
+ * Also heals any duplicate records created by concurrent client calls.
+ */
+export async function upsertNote(
+  date: string, // YYYY-MM-DD
+  content: string,
+  title?: string | null
+) {
+  try {
+    const user = await getAuthSession()
+
+    const existingNotes = await db.note.findMany({
+      where: { date, userId: user.id },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    let note
+    if (existingNotes.length > 0) {
+      // Update the primary record
+      note = await db.note.update({
+        where: { id: existingNotes[0].id },
+        data: { content, title: title ?? existingNotes[0].title },
+      })
+      // Delete any duplicates created by concurrent saves
+      if (existingNotes.length > 1) {
+        const duplicateIds = existingNotes.slice(1).map(n => n.id)
+        await db.note.deleteMany({ where: { id: { in: duplicateIds } } })
+      }
+    } else {
+      note = await db.note.create({
+        data: { date, content, title: title ?? null, userId: user.id },
+      })
+    }
+
+    revalidatePath('/')
+    return { success: true, note }
+  } catch (error) {
+    console.error('Failed to upsert note:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return { success: false, error: message }
+  }
+}
+
 export async function deleteNote(id: string) {
   try {
     const user = await getAuthSession()

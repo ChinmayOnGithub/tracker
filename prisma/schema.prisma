@@ -1,102 +1,401 @@
 datasource db {
-  provider  = "postgresql"
+  provider = "postgresql"
 }
 
 generator client {
   provider = "prisma-client-js"
 }
 
+// ----------------------------------------------------
+// Enums
+// ----------------------------------------------------
+
+enum LeaveType {
+  CASUAL
+  SICK
+  PTO
+  COMP_OFF
+  HALF_DAY
+  WFH
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum WishlistStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum WishlistCategory {
+  GADGET
+  TRAVEL
+  GOAL
+  EXPERIENCE
+}
+
+enum ActivityType {
+  WORKOUT
+  MEETING
+  REMINDER
+  TASK
+  BILL
+  MEDICINE
+  LEAVE
+  JOURNAL
+  LEARNING
+  PERSONAL
+  CUSTOM
+}
+
+enum CalendarProvider {
+  NONE
+  GOOGLE
+  APPLE
+  OUTLOOK
+}
+
+enum RecurrenceType {
+  daily
+  weekly
+  monthly
+  yearly
+  custom
+  milestone
+  one_time
+}
+
+// ----------------------------------------------------
+// Core User & Auth
+// ----------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  email        String?  @unique
+  googleId     String?  @unique
+  passwordHash String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  activityTemplates ActivityTemplate[]
+  activityLogs      ActivityLog[]
+  notes             Note[]
+  journalEntries    JournalEntry[]
+  leaveAllowances   LeaveAllowance[]
+  leaveRecords      LeaveRecord[]
+  googleCredential  GoogleCredential?
+  linkedEvents      LinkedEventMapping[]
+  weightRecords     WeightRecord[]
+  wishlistItems     WishlistItem[]
+  secureDocuments   SecureDocument[]
+  auditLogs         AuditLog[]
+  attachments       Attachment[]
+  settings          UserSetting[]
+}
+
+model GoogleCredential {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken String // Encrypted at rest
+  expiryDate   DateTime
+  calendarId   String   @default("primary")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// ----------------------------------------------------
+// Config & Settings
+// ----------------------------------------------------
+
+model UserSetting {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module    String // e.g. "DASHBOARD", "JOURNAL"
+  config    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, module])
+}
+
+// ----------------------------------------------------
+// Life Domain Modules
+// ----------------------------------------------------
+
+model LinkedEventMapping {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  googleEventId String    @unique
+  localLogId    String?   @unique
+  lastSyncedAt  DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime? // Soft Delete
+
+  @@index([userId])
+}
+
+model JournalEntry {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  journalDate    DateTime // DateTime mapping
+  content        String
+  mood           String?
+  gratitude      String?
+  reflections    String?
+  lessonsLearned String?
+  tomorrowPlan   String?
+  metadata       Json?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime? // Soft Delete
+  attachments    Attachment[]
+  activityLog    ActivityLog?
+
+  @@unique([userId, journalDate])
+  @@index([userId])
+}
+
+model LeaveAllowance {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  year      Int
+  leaveType LeaveType
+  allowance Float
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([userId, year, leaveType])
+}
+
+model LeaveRecord {
+  id          String       @id @default(uuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leaveType   LeaveType
+  startDate   DateTime
+  endDate     DateTime
+  totalDays   Float
+  status      LeaveStatus  @default(APPROVED)
+  notes       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime? // Soft Delete
+  activityLog ActivityLog?
+
+  @@index([userId])
+}
+
+model WeightRecord {
+  id          String       @id @default(uuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date        DateTime
+  weight      Float
+  notes       String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime? // Soft Delete
+  activityLog ActivityLog?
+
+  @@index([userId])
+  @@index([date])
+}
+
+model WishlistItem {
+  id             String           @id @default(uuid())
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  category       WishlistCategory
+  priority       Priority
+  estimatedPrice Float?
+  status         WishlistStatus   @default(ACTIVE)
+  notes          String?
+  completedDate  DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime? // Soft Delete
+
+  @@index([userId])
+}
+
+model SecureDocument {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  encryptedTitle String
+  encryptedType  String
+  fileKey        String
+  iv             String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime? // Soft Delete
+  attachments    Attachment[]
+
+  @@index([userId])
+}
+
+// ----------------------------------------------------
+// System Integration
+// ----------------------------------------------------
+
+model Attachment {
+  id       String @id @default(uuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName String
+  fileKey  String
+  fileSize Int
+  mimeType String
+
+  journalEntryId String?
+  journalEntry   JournalEntry?   @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  documentId     String?
+  document       SecureDocument? @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entityType  String
+  entityId    String
+  action      String
+  performedBy String
+  oldData     Json?
+  newData     Json?
+  reason      String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
+}
+
+model FeatureFlag {
+  id              String   @id @default(uuid())
+  key             String   @unique
+  enabled         Boolean  @default(false)
+  beta            Boolean  @default(false)
+  mobileSupported Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ----------------------------------------------------
+// Legacy Habit & Workout Modules (Preserved)
+// ----------------------------------------------------
+
 model Tag {
   id        String             @id @default(uuid())
   name      String             @unique
-  color     String?            // Optional color for the tag
+  color     String?
   templates ActivityTemplate[] @relation("TemplateTags")
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 }
 
 model ActivityTemplate {
-  id                  String        @id @default(uuid())
-  name                String
-  category            String        // health, fitness, finance, chores, personal, custom
-  icon                String        // emoji or lucide icon name
-  color               String        // hex or tailwind class name
-  isActive            Boolean       @default(true)
-  notes               String?
-  amount              Float?        // optional amount for bills/subscriptions
-  sortOrder           Int           @default(0)
-  
-  // Scoping
-  userId              String?
-  user                User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Recurrence Config (consolidated structure)
-  recurrenceType      String        // daily, weekly, monthly, yearly, custom, milestone, one_time
-  recurrenceInterval  Int?          // number of days (for custom)
-  recurrenceDaysOfWeek String?       // comma-separated indices, e.g. "1,3,5" for Mon, Wed, Fri (0=Sunday, 1=Monday, etc.)
-  recurrenceDayOfMonth Int?          // day of month (1-31)
-  recurrenceMonth     Int?          // month of year (1-12)
-  targetDate          String?       // YYYY-MM-DD (for one_time)
-  remindBeforeDays    Int?          // warning threshold in days before due date
-
-  metadata            Json?         // JSON for template-level configs (e.g. workout rules)
-  tags                Tag[]         @relation("TemplateTags")
-  logs                ActivityLog[]
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  id                   String           @id @default(uuid())
+  userId               String?
+  user                 User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                 String
+  category             String
+  type                 ActivityType     @default(PERSONAL)
+  priority             Priority         @default(NORMAL)
+  estimatedDuration    Int              @default(0) // in minutes, 0 = untimed
+  energyRequired       String           @default("MEDIUM") // "LOW" | "MEDIUM" | "HIGH"
+  calendarProvider     CalendarProvider @default(NONE)
+  calendarEventId      String?
+  notificationRules    Json?
+  icon                 String
+  color                String
+  isActive             Boolean          @default(true)
+  notes                String?
+  amount               Float?
+  sortOrder            Int              @default(0)
+  recurrenceType       RecurrenceType
+  recurrenceInterval   Int?
+  recurrenceDaysOfWeek String?
+  recurrenceDayOfMonth Int?
+  recurrenceMonth      Int?
+  targetDate           DateTime?
+  remindBeforeDays     Int?
+  metadata             Json?
+  tags                 Tag[]            @relation("TemplateTags")
+  logs                 ActivityLog[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  deletedAt            DateTime?
 
   @@index([userId])
 }
 
 model ActivityLog {
-  id             String           @id @default(uuid())
-  activityId     String
-  activity       ActivityTemplate @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  date           String           // Date-only string in format "YYYY-MM-DD"
-  note           String?
-  status         String           // done, skipped, paid, renewed, reminder, custom
-  amount         Float?           // actual amount recorded (for bills)
-  payload        Json?            // Flexible JSONB for sets, reps, weights, haircut notes, etc.
-  
-  // Scoping
-  userId         String?
-  user           User?            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String           @id @default(uuid())
+  activityId String
+  activity   ActivityTemplate @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  logDate    DateTime
+  note       String?
+  status     String
+  amount     Float?
+  payload    Json?
 
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  weightRecordId String?       @unique
+  weightRecord   WeightRecord? @relation(fields: [weightRecordId], references: [id], onDelete: SetNull)
+  leaveRecordId  String?       @unique
+  leaveRecord    LeaveRecord?  @relation(fields: [leaveRecordId], references: [id], onDelete: SetNull)
+  journalEntryId String?       @unique
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+
+  userId    String?
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@index([activityId])
-  @@index([date])
+  @@index([logDate])
   @@index([userId])
 }
 
 model Note {
-  id        String   @id @default(uuid())
-  date      String   // Date-only string in format "YYYY-MM-DD"
+  id        String    @id @default(uuid())
+  date      String
   title     String?
   content   String
-  
-  // Scoping
   userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@index([date])
   @@index([userId])
 }
-
-model User {
-  id           String             @id @default(uuid())
-  username     String             @unique
-  email        String?            @unique
-  googleId     String?            @unique
-  passwordHash String?
-  templates    ActivityTemplate[]
-  notes        Note[]
-  logs         ActivityLog[]
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-}
-

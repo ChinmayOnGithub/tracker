@@ -404,8 +404,12 @@ async function main() {
 
   console.log(`Inserting ${logs.length} activity logs...`)
   for (const log of logs) {
+    const { date, ...logRest } = log
     await db.activityLog.create({
-      data: log,
+      data: {
+        ...logRest,
+        logDate: new Date(date),
+      },
     })
   }
 

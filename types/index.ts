@@ -15,10 +15,43 @@ export type RecurrenceType =
   | 'milestone'
   | 'one_time'
 
+export type ActivityType =
+  | 'WORKOUT'
+  | 'MEETING'
+  | 'REMINDER'
+  | 'TASK'
+  | 'BILL'
+  | 'MEDICINE'
+  | 'LEAVE'
+  | 'JOURNAL'
+  | 'LEARNING'
+  | 'PERSONAL'
+  | 'CUSTOM'
+
+export type Priority =
+  | 'LOW'
+  | 'MEDIUM'
+  | 'NORMAL'
+  | 'HIGH'
+  | 'CRITICAL'
+
+export type CalendarProvider =
+  | 'NONE'
+  | 'GOOGLE'
+  | 'APPLE'
+  | 'OUTLOOK'
+
 export interface ActivityTemplate {
   id: string
   name: string
   category: string
+  type: ActivityType
+  priority: Priority
+  estimatedDuration: number
+  energyRequired: string
+  calendarProvider: CalendarProvider
+  calendarEventId: string | null
+  notificationRules: unknown | null
   icon: string
   color: string
   isActive: boolean
@@ -45,10 +78,14 @@ export interface ActivityLog {
   id: string
   activityId: string
   date: string // YYYY-MM-DD
+  logDate?: Date // Database Date representation
   note: string | null
   status: string // done, skipped, paid, renewed, reminder, custom
   amount: number | null
   payload: unknown | null // JSON
+  weightRecordId?: string | null
+  leaveRecordId?: string | null
+  journalEntryId?: string | null
   createdAt: Date
   updatedAt: Date
   activity?: ActivityTemplate
@@ -101,4 +138,28 @@ export interface RecurrenceAnalysis {
   monthsSinceLast: number | null
   streak: number
   statusMessage: string
+}
+
+export interface TimelineItem {
+  id: string
+  templateId?: string
+  templateName: string
+  type: ActivityType | string
+  priority: Priority
+  start: Date
+  end: Date
+  isAllDay: boolean
+  location?: string
+  htmlLink?: string
+  completed: boolean
+  logId?: string
+  status?: string
+  notes?: string | null
+  icon?: string | null
+  metadata?: Record<string, unknown>
+}
+
+export interface AnalyzedTemplate {
+  template: ActivityTemplate
+  analysis: RecurrenceAnalysis
 }

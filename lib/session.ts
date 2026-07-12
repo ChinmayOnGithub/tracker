@@ -59,7 +59,7 @@ export function verifySession(token: string | undefined | null): { userId: strin
     }
     
     return { userId: payload.userId, username: payload.username }
-  } catch (e) {
+  } catch {
     return null
   }
 }

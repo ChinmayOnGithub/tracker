@@ -1,16 +1,17 @@
 "use client"
 
-import React, { useState } from 'react'
-import { ActivityTemplate, Tag, RecurrenceType } from '@/types'
+import React, { useState, useEffect } from 'react'
+import { ActivityTemplate, Tag, RecurrenceType, ActivityType, Priority, CalendarProvider } from '@/types'
 import { createActivityTemplate, updateActivityTemplate } from '@/app/actions/template'
-import { ICON_OPTIONS, Icon } from './Icon'
-import { X, Info } from 'lucide-react'
+import { ICON_OPTIONS } from './Icon'
+import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
+import { Modal, Input, Textarea, Select, Button } from '@/design-system'
 
 interface TemplateModalProps {
   isOpen: boolean
   onClose: () => void
   templateToEdit: ActivityTemplate | null
-  allTags: Tag[]
+  allTags?: Tag[]
 }
 
 const COLOR_OPTIONS = [
@@ -19,12 +20,20 @@ const COLOR_OPTIONS = [
   { value: 'orange', bgClass: 'bg-orange-500', borderClass: 'border-orange-500', textClass: 'text-orange-650' },
   { value: 'amber', bgClass: 'bg-amber-500', borderClass: 'border-amber-500', textClass: 'text-amber-650' },
   { value: 'green', bgClass: 'bg-green-500', borderClass: 'border-green-500', textClass: 'text-green-650' },
-  { value: 'blue', bgClass: 'bg-blue-500', borderClass: 'border-blue-500', textClass: 'text-blue-650' },
+  { value: 'blue', bgClass: 'bg-blue-500', borderClass: 'border-blue-500', textClass: 'text-blue-500' },
   { value: 'purple', bgClass: 'bg-purple-500', borderClass: 'border-purple-500', textClass: 'text-purple-650' },
   { value: 'pink', bgClass: 'bg-pink-500', borderClass: 'border-pink-500', textClass: 'text-pink-655' },
 ]
 
-const CATEGORIES = ['fitness', 'health', 'finance', 'chores', 'personal', 'custom']
+const CATEGORIES = [
+  { value: 'personal', label: 'Personal' },
+  { value: 'work', label: 'Work' },
+  { value: 'health', label: 'Health' },
+  { value: 'fitness', label: 'Fitness' },
+  { value: 'finance', label: 'Finance' },
+  { value: 'chores', label: 'Chores' },
+  { value: 'custom', label: 'Custom' },
+]
 
 const WEEKDAYS = [
   { value: 0, label: 'Su' },
@@ -39,51 +48,91 @@ const WEEKDAYS = [
 export const TemplateModal: React.FC<TemplateModalProps> = ({
   isOpen,
   onClose,
-  templateToEdit,
+  templateToEdit
 }) => {
-  const [name, setName] = useState(templateToEdit?.name || '')
-  const [category, setCategory] = useState(templateToEdit?.category || 'personal')
-  const [icon, setIcon] = useState(templateToEdit?.icon || 'CheckSquare')
-  const [color, setColor] = useState(templateToEdit?.color || 'zinc')
-  const [notes, setNotes] = useState(templateToEdit?.notes || '')
-  const [amount, setAmount] = useState(
-    templateToEdit?.amount !== null && templateToEdit?.amount !== undefined
-      ? String(templateToEdit.amount)
-      : ''
-  )
-  
-  // Recurrence configuration
-  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>(
-    templateToEdit?.recurrenceType || 'daily'
-  )
-  const [recurrenceInterval, setRecurrenceInterval] = useState(
-    templateToEdit?.recurrenceInterval ? String(templateToEdit.recurrenceInterval) : '1'
-  )
-  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>(() => {
-    if (templateToEdit?.recurrenceDaysOfWeek) {
-      return templateToEdit.recurrenceDaysOfWeek.split(',').map(Number)
-    }
-    return []
-  })
-  const [recurrenceDayOfMonth, setRecurrenceDayOfMonth] = useState(
-    templateToEdit?.recurrenceDayOfMonth ? String(templateToEdit.recurrenceDayOfMonth) : '15'
-  )
-  const [recurrenceMonth, setRecurrenceMonth] = useState(
-    templateToEdit?.recurrenceMonth ? String(templateToEdit.recurrenceMonth) : '1'
-  )
-  const [targetDate, setTargetDate] = useState(
-    templateToEdit?.targetDate || new Date().toISOString().split('T')[0]
-  )
-  const [remindBeforeDays, setRemindBeforeDays] = useState(
-    templateToEdit?.remindBeforeDays ? String(templateToEdit.remindBeforeDays) : '3'
-  )
-  
-  // Tag fields
-  const [tagsInput, setTagsInput] = useState(
-    templateToEdit?.tags ? templateToEdit.tags.map(t => t.name).join(', ') : ''
-  )
+  // Visible default fields
+  const [name, setName] = useState('')
+  const [category, setCategory] = useState('personal')
+  const [icon, setIcon] = useState('CheckSquare')
+  const [color, setColor] = useState('zinc')
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('daily')
+  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([])
+  const [recurrenceDayOfMonth, setRecurrenceDayOfMonth] = useState('15')
+  const [targetDate, setTargetDate] = useState(new Date().toISOString().split('T')[0])
+  const [isAllDay, setIsAllDay] = useState(true)
+  const [startTime, setStartTime] = useState('09:00')
+
+  // Advanced section
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [priority, setPriority] = useState<Priority>('NORMAL')
+  const [type, setType] = useState<ActivityType>('PERSONAL')
+  const [notes, setNotes] = useState('')
+  const [location, setLocation] = useState('')
+  const [amount, setAmount] = useState('')
+  const [tagsInput, setTagsInput] = useState('')
+  const [estimatedDuration, setEstimatedDuration] = useState('30')
+  const [calendarProvider, setCalendarProvider] = useState<CalendarProvider>('NONE')
+  const [hasReminder, setHasReminder] = useState(false)
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+
+  // Load values on edit trigger
+  useEffect(() => {
+    if (isOpen) {
+      if (templateToEdit) {
+        setName(templateToEdit.name)
+        setCategory(templateToEdit.category)
+        setIcon(templateToEdit.icon)
+        setColor(templateToEdit.color)
+        setRecurrenceType(templateToEdit.recurrenceType)
+        setSelectedWeekdays(templateToEdit.recurrenceDaysOfWeek ? templateToEdit.recurrenceDaysOfWeek.split(',').map(Number) : [])
+        setRecurrenceDayOfMonth(templateToEdit.recurrenceDayOfMonth ? String(templateToEdit.recurrenceDayOfMonth) : '15')
+        setTargetDate(templateToEdit.targetDate || new Date().toISOString().split('T')[0])
+        setPriority(templateToEdit.priority)
+        setType(templateToEdit.type)
+        setNotes(templateToEdit.notes || '')
+        setAmount(templateToEdit.amount !== null ? String(templateToEdit.amount) : '')
+        setTagsInput(templateToEdit.tags ? templateToEdit.tags.map(t => t.name).join(', ') : '')
+        setCalendarProvider(templateToEdit.calendarProvider)
+
+        const meta = typeof templateToEdit.metadata === 'string' 
+          ? JSON.parse(templateToEdit.metadata) 
+          : templateToEdit.metadata || {}
+        setIsAllDay(meta.isAllDay ?? true)
+        setStartTime(meta.startTime ?? '09:00')
+        setLocation(meta.location ?? '')
+        setEstimatedDuration(templateToEdit.estimatedDuration ? String(templateToEdit.estimatedDuration) : '30')
+
+        const rules = typeof templateToEdit.notificationRules === 'string'
+          ? JSON.parse(templateToEdit.notificationRules)
+          : templateToEdit.notificationRules
+        setHasReminder(Array.isArray(rules) && rules.length > 0)
+      } else {
+        setName('')
+        setCategory('personal')
+        setIcon('CheckSquare')
+        setColor('zinc')
+        setRecurrenceType('daily')
+        setSelectedWeekdays([])
+        setRecurrenceDayOfMonth('15')
+        setTargetDate(new Date().toISOString().split('T')[0])
+        setIsAllDay(true)
+        setStartTime('09:00')
+        setPriority('NORMAL')
+        setType('PERSONAL')
+        setNotes('')
+        setLocation('')
+        setAmount('')
+        setTagsInput('')
+        setEstimatedDuration('30')
+        setCalendarProvider('NONE')
+        setHasReminder(false)
+        setShowAdvanced(false)
+      }
+      setErrorMsg('')
+    }
+  }, [isOpen, templateToEdit])
 
   if (!isOpen) return null
 
@@ -93,10 +142,30 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     )
   }
 
+  const getNaturalRecurrenceText = () => {
+    switch (recurrenceType) {
+      case 'daily':
+        return 'Repeats daily'
+      case 'weekly':
+        if (selectedWeekdays.length === 0) return 'Repeats weekly'
+        const days = selectedWeekdays.map(d => {
+          const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+          return names[d]
+        })
+        return `Repeats weekly on ${days.join(', ')}`
+      case 'monthly':
+        return `Repeats monthly on day ${recurrenceDayOfMonth}`
+      case 'one_time':
+        return `Once on ${targetDate}`
+      default:
+        return 'No repeat'
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) {
-      setErrorMsg('Please enter a template name')
+      setErrorMsg('Please specify an activity name')
       return
     }
 
@@ -104,38 +173,46 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     setErrorMsg('')
 
     const parsedAmount = amount.trim() !== '' ? parseFloat(amount) : null
-    const parsedInterval = recurrenceType === 'custom' ? parseInt(recurrenceInterval) || 1 : null
     const parsedDaysOfWeek = recurrenceType === 'weekly' && selectedWeekdays.length > 0
       ? selectedWeekdays.join(',')
       : null
-    const parsedDayOfMonth = ['monthly', 'yearly'].includes(recurrenceType)
+    const parsedDayOfMonth = ['monthly'].includes(recurrenceType)
       ? parseInt(recurrenceDayOfMonth) || 15
       : null
-    const parsedMonth = recurrenceType === 'yearly' ? parseInt(recurrenceMonth) || 1 : null
     const parsedTargetDate = recurrenceType === 'one_time' ? targetDate : null
-    const parsedRemindBefore = remindBeforeDays.trim() !== '' ? parseInt(remindBeforeDays) || 0 : null
 
-    // Split tags by comma and clean them up
     const tagNames = tagsInput
       .split(',')
       .map(t => t.trim())
       .filter(t => t.length > 0)
 
+    const meta = {
+      startTime,
+      isAllDay,
+      location
+    }
+
     const payload = {
       name: name.trim(),
       category,
+      type,
+      priority,
+      estimatedDuration: isAllDay ? 0 : parseInt(estimatedDuration) || 0,
+      calendarProvider,
+      notificationRules: hasReminder ? [{ channel: 'PUSH', offsetMinutes: -15 }] : [],
       icon,
       color,
       notes: notes.trim() || null,
       amount: parsedAmount,
       recurrenceType,
-      recurrenceInterval: parsedInterval,
+      recurrenceInterval: 1,
       recurrenceDaysOfWeek: parsedDaysOfWeek,
       recurrenceDayOfMonth: parsedDayOfMonth,
-      recurrenceMonth: parsedMonth,
+      recurrenceMonth: null,
       targetDate: parsedTargetDate,
-      remindBeforeDays: parsedRemindBefore,
+      remindBeforeDays: null,
       tagNames,
+      metadata: meta,
     }
 
     let result
@@ -145,320 +222,288 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       result = await createActivityTemplate(payload)
     }
 
-    setIsSubmitting(true) // Keep loader visible briefly while Next.js routes update
     if (result.success) {
       setIsSubmitting(false)
       onClose()
     } else {
       setIsSubmitting(false)
-      setErrorMsg(result.error || 'Something went wrong saving the template.')
+      setErrorMsg(result.error || 'Something went wrong saving the activity.')
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-      <div className="relative w-full max-w-xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl shadow-2xl flex flex-col max-h-[90vh]">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-zinc-800">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-            {templateToEdit ? 'Edit Activity Template' : 'Create New Activity Template'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white transition-colors cursor-pointer"
-          >
-            <X size={20} />
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={templateToEdit ? 'Edit Activity' : 'New Activity'}
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {errorMsg && (
+          <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-500 rounded-lg flex items-center gap-2 text-xs font-semibold">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        {/* Name input */}
+        <Input
+          label="Activity Name"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="e.g. Daily Reflection, Workout, Study session"
+          required
+        />
+
+        {/* Category & Icon row */}
+        <div className="grid grid-cols-2 gap-4">
+          <Select
+            label="Category"
+            value={category}
+            onChange={e => setCategory(e.target.value)}
+            options={CATEGORIES}
+          />
+
+          <Select
+            label="Icon Selector"
+            value={icon}
+            onChange={e => setIcon(e.target.value)}
+            options={ICON_OPTIONS.map(i => ({ value: i.name, label: i.label }))}
+          />
         </div>
 
-        {/* Form Content */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5 text-sm text-slate-600 dark:text-zinc-300">
-          {errorMsg && (
-            <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-650 dark:text-red-200 rounded-lg">
-              {errorMsg}
+        {/* Color Tags */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-[var(--color-text-muted)]">Color Tag</label>
+          <div className="flex gap-2 flex-wrap">
+            {COLOR_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setColor(opt.value)}
+                className={`w-6 h-6 rounded-full border transition-all cursor-pointer ${opt.bgClass} ${
+                  color === opt.value
+                    ? 'ring-2 ring-[var(--color-primary)] ring-offset-2 scale-105'
+                    : 'hover:scale-105'
+                }`}
+                title={opt.value}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Time Settings */}
+        <div className="grid grid-cols-2 gap-4 border border-[var(--color-border)] p-3 rounded-[var(--radius-md)] bg-[var(--color-bg-base)]">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="isAllDay"
+              checked={isAllDay}
+              onChange={e => setIsAllDay(e.target.checked)}
+              className="w-4 h-4 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
+            />
+            <label htmlFor="isAllDay" className="text-xs font-semibold text-[var(--color-text-main)] cursor-pointer">
+              Anytime / All Day
+            </label>
+          </div>
+
+          {!isAllDay && (
+            <div className="flex items-center gap-2">
+              <Input
+                type="time"
+                label="Start Time"
+                value={startTime}
+                onChange={e => setStartTime(e.target.value)}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Repeat Recurrence Builder */}
+        <div className="border border-[var(--color-border)] p-3.5 rounded-[var(--radius-md)] space-y-3 bg-[var(--color-bg-base)]">
+          <Select
+            label="Repeat Interval"
+            value={recurrenceType}
+            onChange={e => setRecurrenceType(e.target.value as RecurrenceType)}
+            options={[
+              { value: 'daily', label: 'Daily' },
+              { value: 'weekly', label: 'Weekly' },
+              { value: 'monthly', label: 'Monthly' },
+              { value: 'one_time', label: 'Once (No Repeat)' },
+            ]}
+          />
+
+          {recurrenceType === 'weekly' && (
+            <div className="flex justify-between gap-1 pt-1.5 font-sans">
+              {WEEKDAYS.map(day => {
+                const isSelected = selectedWeekdays.includes(day.value)
+                return (
+                  <button
+                    key={day.value}
+                    type="button"
+                    onClick={() => handleWeekdayToggle(day.value)}
+                    className={`w-7 h-7 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-[var(--color-primary)] text-white font-black'
+                        : 'bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-slate-350'
+                    }`}
+                  >
+                    {day.label}
+                  </button>
+                )
+              })}
             </div>
           )}
 
-          {/* Name & Category */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-slate-500 dark:text-zinc-400 mb-1.5 font-medium">Activity Name *</label>
-              <input
-                type="text"
-                placeholder="e.g. Gym Workout, Haircut"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-650 focus:outline-hidden focus:border-slate-300 dark:focus:border-zinc-700"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-slate-500 dark:text-zinc-400 mb-1.5 font-medium">Category</label>
-              <select
-                value={category}
-                onChange={e => setCategory(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:outline-hidden focus:border-slate-300 dark:focus:border-zinc-700 capitalize cursor-pointer"
-              >
-                {CATEGORIES.map(cat => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {recurrenceType === 'monthly' && (
+            <Input
+              type="number"
+              min="1"
+              max="31"
+              label="Day of Month"
+              value={recurrenceDayOfMonth}
+              onChange={e => setRecurrenceDayOfMonth(e.target.value)}
+            />
+          )}
+
+          {recurrenceType === 'one_time' && (
+            <Input
+              type="date"
+              label="Date"
+              value={targetDate}
+              onChange={e => setTargetDate(e.target.value)}
+            />
+          )}
+
+          <div className="text-[10px] font-bold text-[var(--color-text-muted)] italic pt-0.5">
+            {getNaturalRecurrenceText()}
           </div>
+        </div>
 
-          {/* Icon Picker */}
-          <div>
-            <label className="block text-slate-500 dark:text-zinc-400 mb-2 font-medium">Select Icon</label>
-            <div className="grid grid-cols-5 sm:grid-cols-8 gap-2 bg-slate-50 dark:bg-zinc-950 p-3 rounded-lg border border-slate-200 dark:border-zinc-800 max-h-36 overflow-y-auto">
-              {ICON_OPTIONS.map(opt => (
-                <button
-                  type="button"
-                  key={opt.name}
-                  onClick={() => setIcon(opt.name)}
-                  title={opt.label}
-                  className={`p-2 rounded-md flex justify-center items-center hover:bg-slate-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer ${
-                    icon === opt.name 
-                      ? 'bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-300 dark:border-zinc-700' 
-                      : 'text-slate-455 dark:text-zinc-500'
-                  }`}
-                >
-                  <Icon name={opt.name} size={20} />
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* Collapsible Advanced Section */}
+        <div className="border-t border-[var(--color-border)] pt-3 mt-4">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="w-full flex items-center justify-between py-1 text-slate-400 dark:text-zinc-500 hover:text-[var(--color-text-main)] select-none text-[10px] uppercase tracking-wider font-extrabold cursor-pointer"
+          >
+            <span>Advanced Options</span>
+            {showAdvanced ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          </button>
 
-          {/* Color Picker */}
-          <div>
-            <label className="block text-slate-500 dark:text-zinc-400 mb-2 font-medium">Color Label</label>
-            <div className="flex flex-wrap gap-3">
-              {COLOR_OPTIONS.map(opt => (
-                <button
-                  type="button"
-                  key={opt.value}
-                  onClick={() => setColor(opt.value)}
-                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-transform hover:scale-110 cursor-pointer ${opt.bgClass} ${
-                    color === opt.value ? 'ring-2 ring-slate-400 dark:ring-white ring-offset-2 ring-offset-white dark:ring-offset-zinc-900 scale-105' : ''
-                  }`}
-                  aria-label={opt.value}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Recurrence Selector */}
-          <div className="p-4 bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-slate-500 dark:text-zinc-400 mb-1.5 font-medium">Recurrence Type</label>
-                <select
-                  value={recurrenceType}
-                  onChange={e => setRecurrenceType(e.target.value as RecurrenceType)}
-                  className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:outline-hidden focus:border-slate-350 dark:focus:border-zinc-700 cursor-pointer"
-                >
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="yearly">Yearly</option>
-                  <option value="custom">Custom Interval</option>
-                  <option value="milestone">Milestone (Last-Done Tracking)</option>
-                  <option value="one_time">One-Time Event</option>
-                </select>
-              </div>
-
-              {/* Conditional Recurrence Fields */}
-              {recurrenceType === 'custom' && (
-                <div>
-                  <label className="block text-slate-500 dark:text-zinc-400 mb-1.5 font-medium">Interval (Days)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={recurrenceInterval}
-                    onChange={e => setRecurrenceInterval(e.target.value)}
-                    className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:outline-hidden focus:border-slate-355 dark:focus:border-zinc-700"
-                  />
-                </div>
-              )}
-
-              {recurrenceType === 'monthly' && (
-                <div>
-                  <label className="block text-slate-500 dark:text-zinc-400 mb-1.5 font-medium">Day of Month (1-31)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="31"
-                    value={recurrenceDayOfMonth}
-                    onChange={e => setRecurrenceDayOfMonth(e.target.value)}
-                    className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:outline-hidden focus:border-slate-355 dark:focus:border-zinc-700"
-                  />
-                </div>
-              )}
-
-              {recurrenceType === 'one_time' && (
-                <div>
-                  <label className="block text-slate-500 dark:text-zinc-400 mb-1.5 font-medium">Target Date</label>
-                  <input
-                    type="date"
-                    value={targetDate}
-                    onChange={e => setTargetDate(e.target.value)}
-                    className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:outline-hidden focus:border-slate-355 dark:focus:border-zinc-700"
-                  />
-                </div>
-              )}
-            </div>
-
-            {recurrenceType === 'weekly' && (
-              <div>
-                <label className="block text-slate-500 dark:text-zinc-400 mb-2 font-medium">Select Days of Week (Optional)</label>
-                <div className="flex gap-2">
-                  {WEEKDAYS.map(day => {
-                    const isSelected = selectedWeekdays.includes(day.value)
-                    return (
-                      <button
-                        type="button"
-                        key={day.value}
-                        onClick={() => handleWeekdayToggle(day.value)}
-                        className={`w-9 h-9 rounded-md flex items-center justify-center font-semibold transition-colors cursor-pointer ${
-                          isSelected 
-                            ? 'bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-300 dark:border-zinc-700' 
-                            : 'bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-400 hover:text-slate-800 dark:text-zinc-500 dark:hover:text-white'
-                        }`}
-                      >
-                        {day.label}
-                      </button>
-                    )
-                  })}
-                </div>
-                <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-1.5 font-medium">
-                  If no days are selected, it defaults to weekly from the last completion date.
-                </p>
-              </div>
-            )}
-
-            {recurrenceType === 'yearly' && (
+          {showAdvanced && (
+            <div className="space-y-4 pt-3.5 border-t border-dashed border-[var(--color-border)] mt-2">
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-slate-500 dark:text-zinc-400 mb-1.5 font-medium">Month (1-12)</label>
-                  <select
-                    value={recurrenceMonth}
-                    onChange={e => setRecurrenceMonth(e.target.value)}
-                    className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:outline-hidden focus:border-slate-355 dark:focus:border-zinc-700 cursor-pointer"
-                  >
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                      <option key={m} value={m}>
-                        {new Date(2000, m - 1).toLocaleString('default', { month: 'long' })}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-500 dark:text-zinc-400 mb-1.5 font-medium">Day of Month</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="31"
-                    value={recurrenceDayOfMonth}
-                    onChange={e => setRecurrenceDayOfMonth(e.target.value)}
-                    className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:outline-hidden focus:border-slate-355 dark:focus:border-zinc-700"
-                  />
-                </div>
-              </div>
-            )}
+                <Select
+                  label="Priority Level"
+                  value={priority}
+                  onChange={e => setPriority(e.target.value as Priority)}
+                  options={[
+                    { value: 'LOW', label: 'Low (P3)' },
+                    { value: 'NORMAL', label: 'Normal (P2)' },
+                    { value: 'HIGH', label: 'High (P1)' },
+                    { value: 'CRITICAL', label: 'Critical (P1)' },
+                  ]}
+                />
 
-            {/* Warning Alert Threshold */}
-            {recurrenceType !== 'milestone' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-200 dark:border-zinc-800 pt-3">
-                <div>
-                  <label className="block text-slate-500 dark:text-zinc-400 mb-1.5 font-medium flex items-center gap-1">
-                    Warning Threshold (Days)
-                    <span className="group relative text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-300 cursor-pointer">
-                      <Info size={14} />
-                      <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 text-[10px] text-slate-500 dark:text-zinc-450 p-2 rounded-md w-44 opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-md">
-                        Highlights task in yellow this many days before the due date.
-                      </span>
-                    </span>
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="e.g. 3"
-                    value={remindBeforeDays}
-                    onChange={e => setRemindBeforeDays(e.target.value)}
-                    className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-slate-900 dark:text-white focus:outline-hidden focus:border-slate-355 dark:focus:border-zinc-700"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Amount (Bills/Subscriptions) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-slate-550 dark:text-zinc-400 mb-1.5 font-medium">
-                Amount (Optional)
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-2.5 text-slate-400 dark:text-zinc-600 font-bold">₹</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg pl-7 pr-3 py-2 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-700 focus:outline-hidden focus:border-slate-300 dark:focus:border-zinc-700"
+                <Select
+                  label="Activity Sub-Type"
+                  value={type}
+                  onChange={e => setType(e.target.value as ActivityType)}
+                  options={[
+                    { value: 'PERSONAL', label: 'Personal Task' },
+                    { value: 'WORKOUT', label: 'Workout Session' },
+                    { value: 'MEETING', label: 'Meeting Event' },
+                    { value: 'BILL', label: 'Financial Bill' },
+                    { value: 'MEDICINE', label: 'Medicine Intake' },
+                    { value: 'LEAVE', label: 'Leave Holiday' },
+                    { value: 'JOURNAL', label: 'Journal Log' },
+                    { value: 'LEARNING', label: 'Study Learning' },
+                    { value: 'REMINDER', label: 'Custom Alert' },
+                  ]}
                 />
               </div>
-              <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-1 font-medium">For bills, sub payments, domain renewals, etc.</p>
-            </div>
-            <div>
-              <label className="block text-slate-550 dark:text-zinc-400 mb-1.5 font-medium">
-                Tags (Comma Separated)
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. finance, sub, daily, health"
+
+              {!isAllDay && (
+                <Input
+                  type="number"
+                  label="Duration (Minutes)"
+                  value={estimatedDuration}
+                  onChange={e => setEstimatedDuration(e.target.value)}
+                />
+              )}
+
+              <Input
+                label="Location / Meeting URL"
+                value={location}
+                onChange={e => setLocation(e.target.value)}
+                placeholder="e.g. Zoom Link, Local Gym, Office"
+              />
+
+              <Input
+                label="Tags (Comma Separated)"
                 value={tagsInput}
                 onChange={e => setTagsInput(e.target.value)}
-                className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-700 focus:outline-hidden focus:border-slate-300 dark:focus:border-zinc-700"
+                placeholder="e.g. gym, wellness, finance"
+              />
+
+              <Input
+                type="number"
+                label="Billing Amount (₹)"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="e.g. 500"
+              />
+
+              <div className="grid grid-cols-2 gap-4 border border-[var(--color-border)] p-3 rounded-[var(--radius-md)] bg-[var(--color-bg-base)]">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="hasReminder"
+                    checked={hasReminder}
+                    onChange={e => setHasReminder(e.target.checked)}
+                    className="w-4 h-4 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
+                  />
+                  <label htmlFor="hasReminder" className="text-xs font-semibold text-[var(--color-text-main)] cursor-pointer">
+                    Enable Reminders
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="googleSync"
+                    checked={calendarProvider === 'GOOGLE'}
+                    onChange={e => setCalendarProvider(e.target.checked ? 'GOOGLE' : 'NONE')}
+                    className="w-4 h-4 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
+                  />
+                  <label htmlFor="googleSync" className="text-xs font-semibold text-[var(--color-text-main)] cursor-pointer">
+                    Sync to Google Calendar
+                  </label>
+                </div>
+              </div>
+
+              <Textarea
+                label="Notes / Instructions"
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Write bullet points or reference notes..."
               />
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Notes */}
-          <div>
-            <label className="block text-slate-550 dark:text-zinc-400 mb-1.5 font-medium">Notes / Instructions</label>
-            <textarea
-              placeholder="Provide context, details, or steps for this activity..."
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-700 focus:outline-hidden focus:border-slate-300 dark:focus:border-zinc-700 h-20 resize-y"
-            />
-          </div>
-
-          {/* Footer Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-zinc-800">
-            <button
-              type="button"
-              onClick={onClose}
-              className="bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-600 dark:text-zinc-355 font-medium px-4 py-2 rounded-lg transition-colors cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-950 font-semibold px-5 py-2 rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-xs"
-            >
-              {isSubmitting ? 'Saving...' : templateToEdit ? 'Save Changes' : 'Create Activity'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {/* Footer buttons */}
+        <div className="flex items-center justify-end gap-2 border-t border-[var(--color-border)] pt-4 mt-4">
+          <Button variant="outline" type="button" onClick={onClose} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit" isLoading={isSubmitting}>
+            Save Activity
+          </Button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 

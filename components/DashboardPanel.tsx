@@ -241,7 +241,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
   return (
     <div className="space-y-6 text-sm">
       
-      <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/85 rounded-2xl p-4 space-y-3 shadow-xs">
+      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-4 space-y-3 shadow-sm">
         <div className="relative">
           <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-zinc-500" size={16} />
           <input
@@ -249,7 +249,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
             placeholder="Search activities..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-hidden focus:border-slate-300 dark:focus:border-zinc-700"
+            className="w-full bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-xl pl-9 pr-3 py-2 text-xs text-[var(--color-text-main)] placeholder-[var(--color-text-muted)] focus:outline-hidden focus:border-[var(--color-primary)]"
           />
         </div>
         
@@ -257,7 +257,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
           <select
             value={selectedCategory}
             onChange={e => setSelectedCategory(e.target.value)}
-            className="bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-zinc-300 focus:outline-hidden focus:border-slate-300 dark:focus:border-zinc-700 capitalize cursor-pointer"
+            className="bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-[var(--color-text-muted)] focus:outline-hidden focus:border-[var(--color-primary)] capitalize cursor-pointer font-semibold"
           >
             <option value="all">All Categories</option>
             {uniqueCategories.map(cat => (
@@ -270,7 +270,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
           <select
             value={selectedTag}
             onChange={e => setSelectedTag(e.target.value)}
-            className="bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-lg px-2.5 py-1.5 text-slate-700 dark:text-zinc-300 focus:outline-hidden focus:border-slate-300 dark:focus:border-zinc-700 capitalize cursor-pointer"
+            className="bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-[var(--color-text-muted)] focus:outline-hidden focus:border-[var(--color-primary)] capitalize cursor-pointer font-semibold"
           >
             <option value="all">All Tags</option>
             {allTags.map(tag => (
@@ -287,7 +287,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                 setSelectedCategory('all')
                 setSelectedTag('all')
               }}
-              className="text-[11px] text-slate-500 hover:text-slate-900 dark:text-zinc-500 dark:hover:text-white flex items-center gap-1 ml-auto font-medium transition-colors cursor-pointer"
+              className="text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] flex items-center gap-1 ml-auto font-medium transition-colors cursor-pointer"
             >
               <X size={12} /> Clear Filters
             </button>
@@ -295,7 +295,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
         </div>
       </div>
 
-      <div className="flex border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/60 p-1 rounded-xl gap-1">
+      <div className="flex border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-1 rounded-xl gap-1">
         {(['due', 'daily', 'weekly', 'monthly', 'yearly'] as const).map(tab => {
           const isActive = activeTab === tab
           let label = ''
@@ -334,7 +334,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
             >
               <span>{label}</span>
               {count > 0 && (
-                <span className={`text-[9px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-blue-500 text-white font-black' : 'bg-slate-200 dark:bg-zinc-950 text-slate-600 dark:text-zinc-400 font-bold'}`}>
+                <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-blue-500 text-white font-black' : 'bg-slate-200 dark:bg-zinc-950 text-slate-600 dark:text-zinc-400 font-bold'}`}>
                   {count}
                 </span>
               )}
@@ -735,3 +735,4 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
     </div>
   )
 }
+

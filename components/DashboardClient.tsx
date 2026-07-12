@@ -8,14 +8,21 @@ import { DashboardPanel } from './DashboardPanel'
 import { ActivityManager } from './ActivityManager'
 import { DayLogsModal } from './DayLogsModal'
 import { TemplateModal } from './TemplateModal'
-import { Icon } from './Icon'
 import { getTodayDateStr } from '@/lib/recurrence'
-import { markComplete } from '@/app/actions/log'
-import { getTemplateColorClasses } from '@/lib/colors'
 import { verifyPinAction, registerUserAction, logoutAction } from '@/app/actions/auth'
-import { Layers, Sun, Moon, Droplet, ShowerHead, CalendarDays, Lock, Dumbbell, LogOut } from 'lucide-react'
-import { getUpcomingEvents } from '@/lib/marathiCalendar'
+import { Layers, Sun, Moon, ShieldAlert } from 'lucide-react'
 import { ExerciseWorkspace } from './ExerciseWorkspace'
+import { DashboardShell } from '@/modules/core/dashboard'
+import { SettingsPanel } from './SettingsPanel'
+import { TodayDashboard } from './TodayDashboard'
+import { getAgendaAction } from '@/modules/sync/google-calendar/actions'
+import { markComplete } from '@/app/actions/log'
+import { ParsedCalendarEvent } from '@/modules/sync/google-calendar/services/GoogleCalendarService'
+import { CommandPalette } from './CommandPalette'
+import { Modal } from '@/design-system'
+import { JournalPanel } from './JournalPanel'
+import { LeavePanel } from './LeavePanel'
+import { WeightPanel } from './WeightPanel'
 
 interface AnalyzedTemplate {
   template: ActivityTemplate
@@ -29,6 +36,19 @@ interface DashboardClientProps {
   tags: Tag[]
   analyzedTemplates: AnalyzedTemplate[]
   recentLogs: ActivityLog[]
+  journalEntries: {
+    id: string; journalDate: string; content: string; mood: string | null
+    gratitude: string | null; reflections: string | null
+    lessonsLearned: string | null; tomorrowPlan: string | null
+    createdAt: string; updatedAt: string; deletedAt: string | null
+  }[]
+  leaveRecords: {
+    id: string; leaveType: string; startDate: string; endDate: string
+    totalDays: number; status: string; notes: string | null; createdAt: string
+  }[]
+  leaveAllowances: { leaveType: string; allowance: number }[]
+  weightRecords: { id: string; date: string; weight: number; notes: string | null }[]
+  currentYear: number
   initialAuthenticated?: boolean
   currentUser?: { id: string; username: string } | null
 }
@@ -40,6 +60,11 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   tags,
   analyzedTemplates,
   recentLogs,
+  journalEntries,
+  leaveRecords,
+  leaveAllowances,
+  weightRecords,
+  currentYear,
   initialAuthenticated = false,
   currentUser = null,
 }) => {
@@ -54,6 +79,22 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
   const [templateToEdit, setTemplateToEdit] = useState<ActivityTemplate | null>(null)
+  
+  // Command Palette & Placeholder dialog state
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
+  const [placeholderDialog, setPlaceholderDialog] = useState<{ isOpen: boolean; title: string; message: string } | null>(null)
+
+  // Listen to Ctrl + K globally
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setIsCommandPaletteOpen(prev => !prev)
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [])
 
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(initialAuthenticated)
@@ -69,20 +110,132 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   // Theme state
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
   const [showExerciseWorkspace, setShowExerciseWorkspace] = useState(false)
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const tab = params.get('tab')
+      if (tab) return tab
+    }
+    return 'today'
+  })
+
+  const changeTab = useCallback((tabId: string) => {
+    setActiveTab(tabId)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('tab', tabId)
+      window.history.pushState({}, '', url.toString())
+    }
+  }, [])
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search)
+      const tab = params.get('tab')
+      if (tab) {
+        setActiveTab(tab)
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  // Calendar states lifted for centralized data sharing
+  const [calendarData, setCalendarData] = useState<{
+    connected: boolean
+    agenda: {
+      today: ParsedCalendarEvent[]
+      tomorrow: ParsedCalendarEvent[]
+      upcoming: ParsedCalendarEvent[]
+    } | null
+    error: string | null
+    loading: boolean
+  }>({
+    connected: false,
+    agenda: null,
+    error: null,
+    loading: true
+  })
+  const [dayLogsModalTab, setDayLogsModalTab] = useState<'activities' | 'notes'>('activities')
+
+  const fetchCalendar = useCallback(async (force = false) => {
+    if (!user) {
+      setCalendarData({ connected: false, agenda: null, error: null, loading: false })
+      return
+    }
+    setCalendarData(prev => ({ ...prev, loading: !force, error: null }))
+    try {
+      const todayStr = getTodayDateStr()
+      const res = (await getAgendaAction(todayStr, force)) as {
+        success: boolean
+        connected?: boolean
+        agenda?: {
+          today: ParsedCalendarEvent[]
+          tomorrow: ParsedCalendarEvent[]
+          upcoming: ParsedCalendarEvent[]
+        }
+        error?: string
+      }
+      if (res.success && res.connected && res.agenda) {
+        setCalendarData({
+          connected: res.connected,
+          agenda: res.agenda,
+          error: null,
+          loading: false
+        })
+      } else {
+        setCalendarData(prev => ({
+          ...prev,
+          error: res.error || "Failed to fetch calendar",
+          loading: false
+        }))
+      }
+    } catch (err: unknown) {
+      setCalendarData(prev => ({
+        ...prev,
+        error: err instanceof Error ? err.message : "An unexpected error occurred",
+        loading: false
+      }))
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchCalendar(false)
+    }
+  }, [isAuthenticated, fetchCalendar])
+
+  const handleMarkHabitComplete = async (template: ActivityTemplate) => {
+    const todayStr = getTodayDateStr()
+    const status = template.category === 'finance' ? 'paid' : 'done'
+    const amount = template.amount
+    
+    await markComplete(template.id, todayStr, status, amount, null)
+    
+    // Workflow Redirection
+    if (template.type === 'JOURNAL') {
+      changeTab('journal')
+    } else if (template.type === 'LEAVE') {
+      changeTab('leave')
+    } else if (template.type === 'PERSONAL' && (template.name.toLowerCase().includes('weight') || template.category === 'health')) {
+      changeTab('weight')
+    }
+
+    router.refresh()
+  }
 
   // Load client-specific states on mount
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
     if (savedTheme) {
-      setTheme(savedTheme)
+      setTimeout(() => setTheme(savedTheme), 0)
     } else {
       const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      setTheme(systemDark ? 'dark' : 'light')
+      setTimeout(() => setTheme(systemDark ? 'dark' : 'light'), 0)
     }
   }, [])
 
-  // Wash Hair quick log loading state
-  const [isWashingHair, setIsWashingHair] = useState(false)
+
 
   // Sync theme with document class
   useEffect(() => {
@@ -238,96 +391,6 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
 
   const todayStr = getTodayDateStr()
 
-  // Pre-calculate date details statically to avoid server-client hydration mismatch or loading delay
-  const [yearNum, monthNum, dayNum] = todayStr.split('-').map(Number)
-  const parsedDate = new Date(yearNum, monthNum - 1, dayNum)
-  const headerDateDay = parsedDate.getDate()
-  const headerDateWeekday = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][parsedDate.getDay()]
-  const headerDateMonthYear = `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parsedDate.getMonth()]} ${yearNum}`
-
-  // Calculate stats for today's briefing
-  const totalTasksDue = analyzedTemplates.filter(
-    item =>
-      item.template.isActive &&
-      item.template.recurrenceType !== 'milestone' &&
-      item.analysis.nextDueDate &&
-      item.analysis.nextDueDate <= todayStr
-  ).length
-
-  const activeHabitStreaks = analyzedTemplates.filter(
-    item => item.template.isActive && item.analysis.streak > 0
-  ).length
-
-  // Todays tasks due OR completed today to show daily progress
-  const todaysTasks = analyzedTemplates.filter(
-    item =>
-      item.template.isActive &&
-      item.template.recurrenceType !== 'milestone' &&
-      ((item.analysis.nextDueDate && item.analysis.nextDueDate <= todayStr) ||
-       (item.analysis.lastCompletedDate === todayStr))
-  )
-
-  const todayTotalCount = todaysTasks.length
-  const todayCompletedCount = todaysTasks.filter(
-    item => item.analysis.lastCompletedDate === todayStr
-  ).length
-
-  // Wash Hair tracking details
-  const washHairTemplate = templates.find(
-    t => t.name.toLowerCase() === 'wash hair' || t.name.toLowerCase() === 'shampoo'
-  )
-
-  const washHairItem = washHairTemplate
-    ? analyzedTemplates.find(item => item.template.id === washHairTemplate.id)
-    : null
-
-  const washHairDaysSince = washHairItem?.analysis.daysSinceLast ?? null
-  const washHairOverdue = washHairDaysSince === null || washHairDaysSince >= 3
-
-  let washHairDaysStr = ''
-  if (washHairDaysSince === null) {
-    washHairDaysStr = 'Never logged hair wash'
-  } else if (washHairDaysSince === 0) {
-    washHairDaysStr = 'Washed today! Clean & fresh'
-  } else if (washHairDaysSince === 1) {
-    washHairDaysStr = 'Washed yesterday'
-  } else {
-    washHairDaysStr = `${washHairDaysSince} days since last wash`
-  }
-
-  const handleQuickWashHair = async () => {
-    if (!washHairTemplate) return
-    setIsWashingHair(true)
-    await markComplete(washHairTemplate.id, todayStr)
-    setIsWashingHair(false)
-  }
-
-  // Priorities list sorting incomplete tasks first
-  const prioritiesList = [...todaysTasks].sort((a, b) => {
-    const aDone = a.analysis.lastCompletedDate === todayStr ? 1 : 0
-    const bDone = b.analysis.lastCompletedDate === todayStr ? 1 : 0
-    return aDone - bDone
-  })
-
-  const [processingItems, setProcessingItems] = useState<Record<string, boolean>>({})
-
-  const handleQuickLogComplete = async (templateId: string, category: string, amount: number | null) => {
-    setProcessingItems(prev => ({ ...prev, [templateId]: true }))
-    const status = category === 'finance' ? 'paid' : 'done'
-    await markComplete(templateId, todayStr, status, amount, null)
-    setProcessingItems(prev => ({ ...prev, [templateId]: false }))
-  }
-
-  // Today's completions (valid logged activities)
-  const todayCompletions = logs.filter(
-    log => log.date === todayStr && log.status !== 'skipped' && log.status !== 'reminder'
-  )
-
-  // Today's standalone note
-  const todayNote = notes.find(note => note.date === todayStr) || null
-
-  // Remove unnecessary loading view since auth state is initialized lazily
-  // Remove unnecessary loading view since auth state is initialized lazily
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950 p-4 transition-colors duration-300 relative overflow-hidden">
@@ -369,7 +432,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
               Operations Login
             </h1>
             <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-bold max-w-[240px] leading-relaxed">
-              Access your personal control panel, metrics, habits, and exercise workspace.
+              Access your personal control panel, metrics, activity schedules, and exercise workspace.
             </p>
           </div>
 
@@ -402,9 +465,9 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
                   <>
                     Please add the following credentials to your <code className="font-mono bg-red-500/15 px-1 py-0.5 rounded text-red-700 dark:text-red-300">.env</code> file:
                     <pre className="mt-1.5 p-1.5 bg-black/5 dark:bg-black/35 rounded font-mono text-[9px] text-slate-600 dark:text-zinc-400 select-all overflow-x-auto border border-slate-200/50 dark:border-zinc-800/40">
-                      GOOGLE_CLIENT_ID="..."{"\n"}
-                      GOOGLE_CLIENT_SECRET="..."{"\n"}
-                      NEXT_PUBLIC_SITE_URL="http://localhost:3000"
+                      GOOGLE_CLIENT_ID=&quot;...&quot;{"\n"}
+                      GOOGLE_CLIENT_SECRET=&quot;...&quot;{"\n"}
+                      NEXT_PUBLIC_SITE_URL=&quot;http://localhost:3000&quot;
                     </pre>
                   </>
                 ) : (
@@ -584,125 +647,97 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
     )
   }
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
-      
-      {/* Today's Overview & Reflection Center */}
-      <div className="bg-white dark:bg-zinc-900/60 border border-slate-205 dark:border-zinc-800/80 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row gap-6 md:divide-x md:divide-slate-200/50 dark:md:divide-zinc-800/80 transition-all duration-200">
-        
-        {/* Left Section: Huge Date Display & Controls */}
-        <div className="flex items-center gap-4 shrink-0 pr-6">
-          <div className="text-5xl md:text-6xl font-black tracking-tighter text-slate-800 dark:text-white font-mono leading-none">
-            {headerDateDay}
-          </div>
-          <div className="flex flex-col justify-center select-none">
-            <span className="text-xs uppercase font-extrabold tracking-wider text-blue-500 dark:text-blue-400">
-              {headerDateWeekday}
-            </span>
-            <span className="text-xs font-semibold text-slate-400 dark:text-zinc-500 mt-0.5">
-              {headerDateMonthYear}
-            </span>
-            {/* Marathi Calendar Festivals */}
-            {getUpcomingEvents(todayStr, 2).map((event, idx) => {
-              const isEventToday = event.date === todayStr
-              if (!isEventToday) return null
-              return (
-                <div key={idx} className="mt-1 flex items-center gap-1 text-[9px] font-black text-orange-600 dark:text-orange-400 animate-pulse">
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
-                  <span>{event.title}</span>
-                </div>
-              )
-            })}
-          </div>
-          
-          {/* Action Buttons */}
-          <div className="flex items-center gap-1.5 ml-auto md:ml-4">
-            <button
-              onClick={() => setShowExerciseWorkspace(!showExerciseWorkspace)}
-              className={`w-8 h-8 rounded-xl flex items-center justify-center border transition-all cursor-pointer shadow-3xs ${
-                showExerciseWorkspace 
-                  ? 'bg-blue-500 hover:bg-blue-650 text-white border-blue-400' 
-                  : 'bg-slate-50 hover:bg-slate-105 dark:bg-zinc-950 dark:hover:bg-zinc-900 border-slate-205 dark:border-zinc-850 text-slate-550 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white'
-              }`}
-              title="Exercise Workspace & Timers"
-            >
-              <Dumbbell size={13} className={showExerciseWorkspace ? 'animate-bounce-slow' : ''} />
-            </button>
-            {user && (
-              <span className="text-[9px] bg-slate-50 border border-slate-200 dark:bg-zinc-950 dark:border-zinc-850 px-2 py-1.5 rounded-xl text-slate-550 dark:text-zinc-400 font-extrabold uppercase select-none tracking-wider hidden sm:inline-block">
-                {user.username}
-              </span>
-            )}
-            <button
-              onClick={handleLogout}
-              className="w-8 h-8 rounded-xl flex items-center justify-center bg-slate-50 hover:bg-slate-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-slate-200 dark:border-zinc-850 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 transition-all cursor-pointer shadow-3xs"
-              title="Log Out"
-            >
-              <LogOut size={12} />
-            </button>
-            <button
-              onClick={toggleTheme}
-              className="w-8 h-8 rounded-xl flex items-center justify-center bg-slate-50 hover:bg-slate-100 dark:bg-zinc-950 dark:hover:bg-zinc-900 border border-slate-200 dark:border-zinc-850 text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer shadow-3xs"
-              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-            >
-              {theme === 'dark' ? <Sun size={13} /> : <Moon size={13} />}
-            </button>
-          </div>
-        </div>
-
-        {/* Middle Section: Completed Today */}
-        <div className="flex-1 md:px-6 space-y-2">
-          <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 dark:text-zinc-500 block">Activities Completed Today</span>
-          
-          <div className="flex flex-wrap gap-1.5 items-center">
-            {todayCompletions.length === 0 ? (
-              <div className="text-xs text-slate-400 dark:text-zinc-500 italic font-medium py-1">
-                No activities logged today yet. Let's make progress!
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'today':
+        return (
+          <TodayDashboard
+            analyzedTemplates={analyzedTemplates}
+            logs={logs}
+            notes={notes}
+            todayStr={todayStr}
+            calendarData={calendarData}
+            onRefetchCalendar={fetchCalendar}
+            onOpenCreateActivity={() => {
+              setTemplateToEdit(null)
+              setIsTemplateModalOpen(true)
+            }}
+            onMarkHabitComplete={handleMarkHabitComplete}
+            onEditTemplate={(template) => {
+              setTemplateToEdit(template)
+              setIsTemplateModalOpen(true)
+            }}
+          />
+        )
+      case 'calendar':
+        return (
+          <Calendar
+            logs={logs}
+            templates={templates}
+            notes={notes}
+            calendarData={calendarData}
+            todayStr={todayStr}
+            analyzedTemplates={analyzedTemplates}
+            onDayClick={handleDayClick}
+          />
+        )
+      case 'activities':
+        return (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between">
+              <h1 className="text-xl font-black text-[var(--color-text-main)] font-sans">Activity Schedules & Templates</h1>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              <div className="lg:col-span-7 xl:col-span-8 space-y-8">
+                <ActivityManager
+                  analyzedTemplates={analyzedTemplates}
+                  onAddTemplate={handleAddTemplate}
+                  onEditTemplate={handleEditTemplate}
+                />
               </div>
-            ) : (
-              todayCompletions.map(log => {
-                const template = templates.find(t => t.id === log.activityId)
-                const name = template?.name || 'Unknown'
-                const color = template?.color || 'zinc'
-                const icon = template?.icon || 'CheckSquare'
-                const colorClasses = getTemplateColorClasses(color)
-                
-                return (
-                  <div
-                    key={log.id}
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-bold shadow-3xs transition-all hover:scale-102 ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}
-                  >
-                    <Icon name={icon} size={11} />
-                    <span>{name}</span>
-                  </div>
-                )
-              })
-            )}
+              <div className="lg:col-span-5 xl:col-span-4">
+                <DashboardPanel
+                  analyzedTemplates={analyzedTemplates}
+                  recentLogs={recentLogs}
+                  allTags={tags}
+                  onOpenLogger={handleOpenLoggerForTemplate}
+                />
+              </div>
+            </div>
           </div>
-        </div>
+        )
+      case 'journal':
+        return <JournalPanel initialEntries={journalEntries as Parameters<typeof JournalPanel>[0]['initialEntries']} />
+      case 'leave':
+        return (
+          <LeavePanel
+            leaveRecords={leaveRecords as Parameters<typeof LeavePanel>[0]['leaveRecords']}
+            leaveAllowances={leaveAllowances as Parameters<typeof LeavePanel>[0]['leaveAllowances']}
+            currentYear={currentYear}
+          />
+        )
+      case 'weight':
+        return <WeightPanel initialRecords={weightRecords} />
+      case 'settings':
+        return <SettingsPanel />
+      default:
+        return (
+          <div className="text-center py-12 text-sm text-[var(--color-text-muted)] italic bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-xs">
+            This module ({activeTab}) will be implemented in subsequent roadmap phases.
+          </div>
+        )
+    }
+  }
 
-        {/* Right Section: Today's Reflection */}
-        <div className="flex-1 md:pl-6 space-y-2 max-w-md">
-          <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 dark:text-zinc-500 block">Today's Reflection</span>
-          {todayNote ? (
-            <div className="space-y-1">
-              <h4 className="text-xs font-bold text-slate-850 dark:text-white line-clamp-1">
-                {todayNote.title || 'Untitled Reflection'}
-              </h4>
-              <p className="text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-2 leading-relaxed">
-                {todayNote.content}
-              </p>
-            </div>
-          ) : (
-            <div className="text-xs text-slate-400 dark:text-zinc-500 italic font-medium py-1">
-              No reflection written for today. Click the note icon on the calendar to write!
-            </div>
-          )}
-        </div>
-
-      </div>
-
-      {/* Core Layout / Exercise Workspace Toggle */}
+  return (
+    <DashboardShell
+      activeTab={activeTab}
+      onTabChange={changeTab}
+      user={user}
+      onLogout={handleLogout}
+      theme={theme}
+      onToggleTheme={toggleTheme}
+    >
       {showExerciseWorkspace ? (
         <ExerciseWorkspace
           analyzedTemplates={analyzedTemplates}
@@ -711,33 +746,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
           onClose={() => setShowExerciseWorkspace(false)}
         />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column (Calendar & Template List) */}
-          <div className="lg:col-span-7 xl:col-span-8 space-y-8">
-            <Calendar
-              logs={logs}
-              templates={templates}
-              notes={notes}
-              onDayClick={handleDayClick}
-            />
-
-            <ActivityManager
-              analyzedTemplates={analyzedTemplates}
-              onAddTemplate={handleAddTemplate}
-              onEditTemplate={handleEditTemplate}
-            />
-          </div>
-
-          {/* Right Column (Due panel and logs feed) */}
-          <div className="lg:col-span-5 xl:col-span-4">
-            <DashboardPanel
-              analyzedTemplates={analyzedTemplates}
-              recentLogs={recentLogs}
-              allTags={tags}
-              onOpenLogger={handleOpenLoggerForTemplate}
-            />
-          </div>
-        </div>
+        renderContent()
       )}
 
       {/* Modals Layer */}
@@ -747,11 +756,14 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
           isOpen={isDayLogsOpen}
           onClose={() => setIsDayLogsOpen(false)}
           dateStr={selectedDateStr}
-          templates={templates.filter(t => t.isActive)} // Only log active templates
+          templates={templates.filter(t => t.isActive)}
           logs={selectedDayLogs}
           note={selectedDayNote}
+          initialTab={dayLogsModalTab}
         />
       )}
+
+
 
       {isTemplateModalOpen && (
         <TemplateModal
@@ -762,7 +774,49 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
         />
       )}
 
-    </div>
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNewActivity={() => {
+          setTemplateToEdit(null)
+          setIsTemplateModalOpen(true)
+        }}
+        onNavigate={(tabId) => {
+          changeTab(tabId)
+        }}
+        onShowPlaceholder={(title, message) => {
+          setPlaceholderDialog({ isOpen: true, title, message })
+        }}
+      />
+
+      {placeholderDialog && (
+        <Modal
+          isOpen={placeholderDialog.isOpen}
+          onClose={() => setPlaceholderDialog(null)}
+          title={placeholderDialog.title}
+          size="sm"
+        >
+          <div className="space-y-4 text-xs font-medium">
+            <div className="flex items-center gap-2 text-amber-500 font-bold text-sm">
+              <ShieldAlert className="w-5 h-5 shrink-0" />
+              <span>Module Decoupled Alert</span>
+            </div>
+            <p className="text-[var(--color-text-muted)] leading-relaxed">
+              {placeholderDialog.message}
+            </p>
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setPlaceholderDialog(null)}
+                className="px-4 py-1.5 bg-[var(--color-text-main)] hover:opacity-90 text-[var(--color-bg-surface)] rounded-lg text-xs font-bold cursor-pointer transition-opacity"
+              >
+                Understood
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </DashboardShell>
   )
 }
+
 

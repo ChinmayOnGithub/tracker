@@ -1,9 +1,10 @@
 "use server"
 
 import { db } from '@/lib/db'
-import { Prisma } from '@prisma/client'
+import { Prisma, RecurrenceType, ActivityType, Priority, CalendarProvider } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { getLoggedUser } from './auth'
+import { eventBus, EVENTS } from '@/lib/events'
 
 /**
  * Helper to check if a user is logged in and returns their profile.
@@ -36,6 +37,13 @@ async function verifyTemplateOwnership(templateId: string, user: { id: string; u
 export async function createActivityTemplate(data: {
   name: string
   category: string
+  type?: ActivityType
+  priority?: Priority
+  estimatedDuration?: number
+  energyRequired?: string
+  calendarProvider?: CalendarProvider
+  calendarEventId?: string | null
+  notificationRules?: unknown
   icon: string
   color: string
   notes?: string | null
@@ -63,10 +71,14 @@ export async function createActivityTemplate(data: {
     })
     const nextSortOrder = (maxSortOrder._max.sortOrder ?? 0) + 1
 
-    await db.activityTemplate.create({
+    const { recurrenceType, ...templateRest } = rest
+
+    const created = await db.activityTemplate.create({
       data: {
-        ...rest,
-        metadata: rest.metadata as Prisma.InputJsonValue,
+        ...templateRest,
+        recurrenceType: recurrenceType as RecurrenceType,
+        metadata: templateRest.metadata as Prisma.InputJsonValue,
+        notificationRules: templateRest.notificationRules as Prisma.InputJsonValue,
         sortOrder: nextSortOrder,
         userId: user.id,
         tags: {
@@ -80,6 +92,8 @@ export async function createActivityTemplate(data: {
         },
       },
     })
+
+    eventBus.publish(EVENTS.ACTIVITY_CREATED, { template: created, userId: user.id })
 
     revalidatePath('/')
     return { success: true }
@@ -95,6 +109,13 @@ export async function updateActivityTemplate(
   data: {
     name?: string
     category?: string
+    type?: ActivityType
+    priority?: Priority
+    estimatedDuration?: number
+    energyRequired?: string
+    calendarProvider?: CalendarProvider
+    calendarEventId?: string | null
+    notificationRules?: unknown
     icon?: string
     color?: string
     isActive?: boolean
@@ -130,14 +151,20 @@ export async function updateActivityTemplate(
         }
       : undefined
 
-    await db.activityTemplate.update({
+    const { recurrenceType, ...templateRest } = rest
+
+    const updated = await db.activityTemplate.update({
       where: { id },
       data: {
-        ...rest,
-        metadata: rest.metadata !== undefined ? (rest.metadata as Prisma.InputJsonValue) : undefined,
+        ...templateRest,
+        ...(recurrenceType !== undefined && { recurrenceType: recurrenceType as RecurrenceType }),
+        metadata: templateRest.metadata !== undefined ? (templateRest.metadata as Prisma.InputJsonValue) : undefined,
+        notificationRules: templateRest.notificationRules !== undefined ? (templateRest.notificationRules as Prisma.InputJsonValue) : undefined,
         ...(tagsUpdate && { tags: tagsUpdate }),
       },
     })
+
+    eventBus.publish(EVENTS.ACTIVITY_UPDATED, { template: updated, userId: user.id })
 
     revalidatePath('/')
     return { success: true }
@@ -153,9 +180,12 @@ export async function deleteActivityTemplate(id: string) {
     const user = await getAuthSession()
     await verifyTemplateOwnership(id, user)
 
-    await db.activityTemplate.delete({
+    const deleted = await db.activityTemplate.delete({
       where: { id },
     })
+
+    eventBus.publish(EVENTS.ACTIVITY_DELETED, { calendarEventId: deleted.calendarEventId, userId: user.id })
+
     revalidatePath('/')
     return { success: true }
   } catch (error) {

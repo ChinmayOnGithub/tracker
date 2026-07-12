@@ -1,5 +1,4 @@
 import { PrismaClient } from '@prisma/client'
-import { PrismaLibSql } from '@prisma/adapter-libsql'
 
 // ==========================================
 // OPTION A: LOCAL SQLITE (Default for testing)

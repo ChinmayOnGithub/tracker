@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from 'react'
-import { ActivityTemplate, ActivityLog, Note, RecurrenceAnalysis } from '@/types'
+import { ActivityTemplate, ActivityLog, RecurrenceAnalysis } from '@/types'
 import { markComplete } from '@/app/actions/log'
 import { Icon } from './Icon'
 import { getTemplateColorClasses } from '@/lib/colors'
@@ -11,20 +11,12 @@ import {
   Pause,
   RotateCcw,
   Flag,
-  Timer,
-  Plus,
-  Trash2,
   History,
-  Sparkles,
   ChevronLeft,
   Volume2,
   VolumeX,
-  PlusCircle,
   Check,
-  CheckSquare,
-  Award,
-  ChevronRight,
-  TrendingUp
+  CheckSquare
 } from 'lucide-react'
 
 interface AnalyzedTemplate {
@@ -52,9 +44,9 @@ export const ExerciseWorkspace: React.FC<ExerciseWorkspaceProps> = ({
   const playBeep = (type: 'tick' | 'alarm') => {
     if (!soundEnabled) return
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext
-      if (!AudioContext) return
-      const ctx = new AudioContext()
+      const AudioCtx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof window.AudioContext }).webkitAudioContext
+      if (!AudioCtx) return
+      const ctx = new AudioCtx()
       
       if (type === 'tick') {
         const osc = ctx.createOscillator()
@@ -93,7 +85,6 @@ export const ExerciseWorkspace: React.FC<ExerciseWorkspaceProps> = ({
   const [swTime, setSwTime] = useState(0) // in centiseconds (10ms)
   const [swLaps, setSwLaps] = useState<number[]>([])
   const swIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const swStartOffsetRef = useRef<number>(0)
 
   useEffect(() => {
     if (swRunning) {
@@ -109,6 +100,7 @@ export const ExerciseWorkspace: React.FC<ExerciseWorkspaceProps> = ({
     return () => {
       if (swIntervalRef.current) clearInterval(swIntervalRef.current)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [swRunning])
 
   const formatStopwatch = (cs: number) => {
@@ -165,6 +157,7 @@ export const ExerciseWorkspace: React.FC<ExerciseWorkspaceProps> = ({
     return () => {
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timerRunning, timerLeft])
 
   const startTimer = (seconds: number) => {
@@ -471,7 +464,7 @@ export const ExerciseWorkspace: React.FC<ExerciseWorkspaceProps> = ({
 
         {fitnessTemplates.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-400 dark:text-zinc-500 italic">
-            No active fitness templates found. Mark templates with the "fitness" category to view them here.
+            No active fitness templates found. Mark templates with the &quot;fitness&quot; category to view them here.
           </div>
         ) : (
           <div className="space-y-4">
@@ -613,3 +606,4 @@ export const ExerciseWorkspace: React.FC<ExerciseWorkspaceProps> = ({
     </div>
   )
 }
+

@@ -65,7 +65,7 @@ export async function createLog(data: {
     const log = await db.activityLog.create({
       data: {
         activityId: data.activityId,
-        date: data.date,
+        logDate: new Date(data.date),
         status: data.status,
         note: data.note ?? null,
         amount: data.amount ?? null,
@@ -147,7 +147,7 @@ export async function markComplete(
     const existing = await db.activityLog.findFirst({
       where: {
         activityId: templateId,
-        date,
+        logDate: new Date(date),
         status,
         userId: user.id,
       },
@@ -160,7 +160,7 @@ export async function markComplete(
     const log = await db.activityLog.create({
       data: {
         activityId: templateId,
-        date,
+        logDate: new Date(date),
         status,
         amount: amount ?? null,
         payload: payload as Prisma.InputJsonValue,

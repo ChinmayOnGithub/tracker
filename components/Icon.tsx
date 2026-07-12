@@ -74,3 +74,4 @@ export const Icon: React.FC<IconProps> = ({ name, className = '', size = 20 }) =
   const LucideIcon = iconSet[name] || Icons.CheckSquare
   return <LucideIcon className={className} size={size} />
 }
+
