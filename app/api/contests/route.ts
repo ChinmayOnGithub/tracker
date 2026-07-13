@@ -9,6 +9,14 @@ export interface Contest {
   url: string
 }
 
+interface CodeforcesContest {
+  id: number
+  name: string
+  phase: string
+  startTimeSeconds: number
+  durationSeconds: number
+}
+
 // --- Codeforces ---
 async function fetchCodeforcesContests(): Promise<Contest[]> {
   try {
@@ -18,11 +26,11 @@ async function fetchCodeforcesContests(): Promise<Contest[]> {
     if (!res.ok) return []
     const data = await res.json()
     if (data.status !== 'OK') return []
-    return (data.result as any[])
-      .filter((c: any) => c.phase === 'BEFORE')
-      .sort((a: any, b: any) => a.startTimeSeconds - b.startTimeSeconds)
+    return (data.result as CodeforcesContest[])
+      .filter((c) => c.phase === 'BEFORE')
+      .sort((a, b) => a.startTimeSeconds - b.startTimeSeconds)
       .slice(0, 3)
-      .map((c: any) => ({
+      .map((c) => ({
         id: String(c.id),
         platform: 'codeforces',
         name: c.name,
@@ -33,6 +41,13 @@ async function fetchCodeforcesContests(): Promise<Contest[]> {
   } catch {
     return []
   }
+}
+
+interface LeetCodeContest {
+  title: string
+  titleSlug: string
+  startTime: number
+  duration: number
 }
 
 // --- LeetCode ---
@@ -61,11 +76,11 @@ async function fetchLeetCodeContests(): Promise<Contest[]> {
     })
     if (!res.ok) return []
     const data = await res.json()
-    const contests = data?.data?.topTwoContests ?? []
+    const contests = (data?.data?.topTwoContests ?? []) as LeetCodeContest[]
     const now = Date.now() / 1000
     return contests
-      .filter((c: any) => c.startTime > now)
-      .map((c: any) => ({
+      .filter((c) => c.startTime > now)
+      .map((c) => ({
         id: c.titleSlug,
         platform: 'leetcode',
         name: c.title,

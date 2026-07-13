@@ -1,6 +1,6 @@
 import { db } from '../db'
 import { eventBus } from '../events'
-import { getTodayDateStr } from '../recurrence'
+import { Prisma } from '@prisma/client'
 
 export class ActivityService {
   /**
@@ -13,7 +13,7 @@ export class ActivityService {
     status: string // done, skipped, paid, etc.
     note?: string | null
     amount?: number | null
-    payload?: any
+    payload?: unknown
     weightRecordId?: string | null
     leaveRecordId?: string | null
     journalEntryId?: string | null
@@ -39,7 +39,7 @@ export class ActivityService {
           status,
           note: note !== undefined ? note : existing.note,
           amount: amount !== undefined ? amount : existing.amount,
-          payload: payload !== undefined ? payload : existing.payload,
+          payload: payload !== undefined ? (payload as Prisma.InputJsonValue) : (existing.payload as Prisma.InputJsonValue),
           weightRecordId: weightRecordId !== undefined ? weightRecordId : existing.weightRecordId,
           leaveRecordId: leaveRecordId !== undefined ? leaveRecordId : existing.leaveRecordId,
           journalEntryId: journalEntryId !== undefined ? journalEntryId : existing.journalEntryId
@@ -54,7 +54,7 @@ export class ActivityService {
           status,
           note: note ?? null,
           amount: amount ?? null,
-          payload: payload ?? null,
+          payload: payload !== undefined ? (payload as Prisma.InputJsonValue) : Prisma.DbNull,
           weightRecordId: weightRecordId ?? null,
           leaveRecordId: leaveRecordId ?? null,
           journalEntryId: journalEntryId ?? null

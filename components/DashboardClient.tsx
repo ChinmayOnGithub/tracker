@@ -156,7 +156,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
     error: null,
     loading: true
   })
-  const [dayLogsModalTab, setDayLogsModalTab] = useState<'activities' | 'notes'>('activities')
+  const [dayLogsModalTab, _setDayLogsModalTab] = useState<'activities' | 'notes'>('activities')
 
   const fetchCalendar = useCallback(async (force = false) => {
     if (!user) {

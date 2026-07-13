@@ -43,10 +43,11 @@ export function verifySession(token: string | undefined | null): { userId: strin
   hmac.update(payloadStr)
   const expectedSignature = hmac.digest('base64url')
   
-  // Protect against timing attacks
-  const signatureBuffer = Buffer.from(signature)
-  const expectedBuffer = Buffer.from(expectedSignature)
-  if (signatureBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)) {
+  // Protect against timing attacks by hashing both signatures to 32-byte fixed-length digests
+  const sigHash = crypto.createHash('sha256').update(signature).digest()
+  const expHash = crypto.createHash('sha256').update(expectedSignature).digest()
+  
+  if (!crypto.timingSafeEqual(sigHash, expHash)) {
     return null
   }
   

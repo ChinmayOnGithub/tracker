@@ -26,6 +26,13 @@ body {
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
 }
 
+/* Global Interactive Transitions for Premium feel */
+a, button, input, select, textarea {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
@@ -54,6 +61,16 @@ body {
   animation: fadeIn 0.2s ease-out forwards;
 }
 
+@keyframes checkPop {
+  0% { transform: scale(0.5); opacity: 0; }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-check-pop {
+  animation: checkPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
 /* Non-standard zinc shades as CSS vars for token-consistent theming */
 :root {
   --zinc-750: #3f3f46; /* between zinc-700 and zinc-800 */
@@ -72,3 +89,25 @@ body {
 .dark .dark\:border-zinc-850 { border-color: #1f1f23; }
 .dark .dark\:text-zinc-555 { color: #6b6b72; }
 .dark .dark\:text-zinc-650 { color: #52525b; }
+
+/* Custom macOS-style Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5); /* slate-400 with opacity */
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.8); /* slate-500 with opacity */
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(82, 82, 91, 0.5); /* zinc-600 with opacity */
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(113, 113, 122, 0.8); /* zinc-500 with opacity */
+}

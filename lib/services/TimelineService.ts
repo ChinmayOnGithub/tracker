@@ -1,6 +1,6 @@
 import { db } from '../db'
-import { analyzeRecurrence, getTodayDateStr } from '../recurrence'
-import { ActivityTemplate, ActivityLog, TimelineItem } from '@/types'
+import { analyzeRecurrence } from '../recurrence'
+import { ActivityTemplate, ActivityLog, TimelineItem, RecurrenceType, Priority } from '@/types'
 import { ParsedCalendarEvent } from '../providers'
 
 export class TimelineService {
@@ -37,7 +37,7 @@ export class TimelineService {
 
     const templates = templatesRaw.map(t => ({
       ...t,
-      recurrenceType: t.recurrenceType as any,
+      recurrenceType: t.recurrenceType as RecurrenceType,
       targetDate: t.targetDate ? t.targetDate.toISOString().split('T')[0] : null,
       metadata: t.metadata
     }))
@@ -74,23 +74,35 @@ export class TimelineService {
       })
     }
 
+    // Pre-fetch all historical logs for the user to resolve the N+1 query loop
+    const allLogsList = await db.activityLog.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { logDate: 'desc' }
+    })
+
+    const logsByActivityId: Record<string, typeof allLogsList> = {}
+    for (const logItem of allLogsList) {
+      if (!logsByActivityId[logItem.activityId]) {
+        logsByActivityId[logItem.activityId] = []
+      }
+      logsByActivityId[logItem.activityId].push(logItem)
+    }
+
     // 3. Process local due activities based on recurrence analysis
     for (const template of templates) {
-      // Analyze recurrence using all historical logs for this template
-      const allTemplateLogs = await db.activityLog.findMany({
-        where: { userId, activityId: template.id, deletedAt: null }
-      }).then(list => list.map(l => ({
+      const templateLogsRaw = logsByActivityId[template.id] || []
+      const allTemplateLogs = templateLogsRaw.map(l => ({
         ...l,
         date: l.logDate.toISOString().split('T')[0]
-      })))
+      }))
 
-      const analysis = analyzeRecurrence(template as any, allTemplateLogs as any, todayStr)
+      const analysis = analyzeRecurrence(template as unknown as ActivityTemplate, allTemplateLogs as unknown as ActivityLog[], todayStr)
       const isDue = analysis.nextDueDate && analysis.nextDueDate <= todayStr
 
       if (!isDue) continue
 
       const log = logs.find(l => l.activityId === template.id)
-      const meta = (template.metadata || {}) as Record<string, any>
+      const meta = (template.metadata || {}) as Record<string, unknown>
       const isAllDay = (meta.isAllDay ?? (template.type !== 'MEETING')) as boolean
       const startTime = (meta.startTime ?? '09:00') as string
       const location = (meta.location ?? undefined) as string | undefined
@@ -109,7 +121,7 @@ export class TimelineService {
         templateId: template.id,
         templateName: template.name,
         type: template.type,
-        priority: template.priority as any,
+        priority: template.priority as Priority,
         start,
         end,
         isAllDay,

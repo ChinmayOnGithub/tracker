@@ -65,7 +65,7 @@ export async function createLog(data: {
     const log = await db.activityLog.create({
       data: {
         activityId: data.activityId,
-        logDate: new Date(data.date),
+        logDate: new Date(`${data.date}T12:00:00.000Z`),
         status: data.status,
         note: data.note ?? null,
         amount: data.amount ?? null,
@@ -118,10 +118,32 @@ export async function updateLog(
 export async function deleteLog(id: string) {
   try {
     const user = await getAuthSession()
-    await verifyLogOwnership(id, user)
+    const log = await verifyLogOwnership(id, user)
 
-    await db.activityLog.delete({
+    // Cascade soft deletions to linked sub-records
+    if (log.weightRecordId) {
+      await db.weightRecord.update({
+        where: { id: log.weightRecordId },
+        data: { deletedAt: new Date() }
+      })
+    }
+    if (log.leaveRecordId) {
+      await db.leaveRecord.update({
+        where: { id: log.leaveRecordId },
+        data: { deletedAt: new Date() }
+      })
+    }
+    if (log.journalEntryId) {
+      await db.journalEntry.update({
+        where: { id: log.journalEntryId },
+        data: { deletedAt: new Date() }
+      })
+    }
+
+    // Soft-delete the log entry instead of hard-deleting
+    await db.activityLog.update({
       where: { id },
+      data: { deletedAt: new Date() }
     })
 
     revalidatePath('/')
@@ -147,7 +169,7 @@ export async function markComplete(
     const existing = await db.activityLog.findFirst({
       where: {
         activityId: templateId,
-        logDate: new Date(date),
+        logDate: new Date(`${date}T12:00:00.000Z`),
         status,
         userId: user.id,
       },
@@ -160,7 +182,7 @@ export async function markComplete(
     const log = await db.activityLog.create({
       data: {
         activityId: templateId,
-        logDate: new Date(date),
+        logDate: new Date(`${date}T12:00:00.000Z`),
         status,
         amount: amount ?? null,
         payload: payload as Prisma.InputJsonValue,

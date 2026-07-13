@@ -28,9 +28,7 @@ export default async function Page() {
           orderBy: { logDate: 'desc' },
         }),
         db.note.findMany({
-          where: loggedUser.username === 'admin'
-            ? { OR: [{ userId: loggedUser.id }, { userId: null }] }
-            : { userId: loggedUser.id },
+          where: { userId: loggedUser.id },
           orderBy: { date: 'desc' },
         }),
         db.tag.findMany({ orderBy: { name: 'asc' } }),
@@ -62,7 +60,7 @@ export default async function Page() {
           where: {
             userId: loggedUser.id,
             deletedAt: null,
-            date: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) },
+            date: { gte: new Date(new Date().getTime() - 90 * 24 * 60 * 60 * 1000) },
           },
           orderBy: { date: 'asc' },
         }),

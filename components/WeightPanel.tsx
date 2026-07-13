@@ -68,7 +68,7 @@ function Sparkline({ data, width = 600, height = 160 }: SparklineProps) {
   const range = maxW - minW || 1
 
   // 7-day rolling average calculation
-  const rollingAvg = data.map((d, i) => {
+  const rollingAvg = data.map((_d, i) => {
     const startIdx = Math.max(0, i - 6)
     const slice = data.slice(startIdx, i + 1)
     const avg = slice.reduce((sum, item) => sum + item.weight, 0) / slice.length
@@ -132,7 +132,7 @@ function Sparkline({ data, width = 600, height = 160 }: SparklineProps) {
                 x={padLeft - 8}
                 y={y + 3}
                 textAnchor="end"
-                className="text-[9px] font-mono fill-[var(--color-text-muted)]"
+                className="text-[9px] font-mono fill-[var(--color-text-muted)] tabular-nums"
               >
                 {val.toFixed(1)}
               </text>
@@ -450,7 +450,7 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-[var(--color-text-main)]">Weight Tracker</h1>
+          <h1 className="text-xl font-black text-[var(--color-text-main)] tracking-tight">Weight Tracker</h1>
           <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
             {records.length} log{records.length !== 1 ? 's' : ''} recorded
           </p>

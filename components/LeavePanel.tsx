@@ -141,7 +141,7 @@ function BalanceCard({
       </div>
       <div>
         <div className="flex items-end gap-1 flex-wrap">
-          <span className="text-2xl font-black text-[var(--color-text-main)]">{remaining}</span>
+          <span className="text-2xl font-black text-[var(--color-text-main)] tabular-nums">{remaining}</span>
           <span className="text-xs text-[var(--color-text-muted)] mb-0.5">/</span>
           {isEditing ? (
             <input
@@ -152,13 +152,13 @@ function BalanceCard({
               onChange={e => setEditValue(e.target.value)}
               onBlur={handleSave}
               onKeyDown={handleKeyDown}
-              className="w-12 text-xs font-bold border border-[var(--color-border)] rounded-md px-1.5 py-0.5 bg-[var(--color-bg-base)] text-[var(--color-text-main)] focus:outline-hidden focus:border-[var(--color-primary)]"
+              className="w-14 text-xs font-bold border border-blue-500/50 rounded-md px-1.5 py-0.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30 tabular-nums -mx-1"
               autoFocus
             />
           ) : (
             <span
               onClick={() => setIsEditing(true)}
-              className="text-xs text-[var(--color-text-muted)] mb-0.5 hover:text-[var(--color-primary)] hover:underline cursor-pointer font-bold border-b border-dashed border-[var(--color-border)] px-1"
+              className="text-xs text-[var(--color-text-muted)] mb-0.5 hover:text-blue-500 cursor-pointer font-bold border-b border-dashed border-transparent hover:border-blue-500/50 px-1.5 py-0.5 -mx-1 transition-colors tabular-nums rounded-md hover:bg-blue-500/5"
               title="Click to edit allowance"
             >
               {allowance} days
@@ -329,7 +329,7 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-[var(--color-text-main)]">Time Off</h1>
+          <h1 className="text-xl font-black text-[var(--color-text-main)] tracking-tight">Time Off</h1>
           <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{currentYear} leave tracker</p>
         </div>
         <CalendarX className="w-6 h-6 text-[var(--color-text-muted)]" />

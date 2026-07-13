@@ -1,5 +1,5 @@
 import { db } from '../db'
-import { getTodayDateStr, parseUTCDate, diffUTCDays } from '../recurrence'
+import { getTodayDateStr, diffUTCDays } from '../recurrence'
 import { LeaveType } from '@prisma/client'
 
 export class InsightsService {

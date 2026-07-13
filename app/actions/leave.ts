@@ -82,7 +82,7 @@ export async function createLeaveRequest(data: {
     const curr = new Date(start)
     while (curr <= end) {
       dates.push(curr.toISOString().split('T')[0])
-      curr.setDate(curr.getDate() + 1)
+      curr.setUTCDate(curr.getUTCDate() + 1)
     }
 
     const template = await ActivityService.getOrCreateDefaultTemplate(
@@ -124,6 +124,21 @@ export async function updateLeaveStatus(id: string, status: LeaveStatus) {
       where: { id },
       data: { status },
     })
+
+    if (status === LeaveStatus.REJECTED) {
+      // Soft-delete corresponding logs
+      await db.activityLog.updateMany({
+        where: { leaveRecordId: id },
+        data: { deletedAt: new Date() }
+      })
+    } else if (status === LeaveStatus.APPROVED) {
+      // Restore corresponding logs if they were soft-deleted
+      await db.activityLog.updateMany({
+        where: { leaveRecordId: id },
+        data: { deletedAt: null }
+      })
+    }
+
     revalidatePath('/')
     return { success: true, record: updated }
   } catch (error) {

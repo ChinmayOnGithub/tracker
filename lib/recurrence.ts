@@ -173,7 +173,9 @@ export function analyzeRecurrence(
       if (lastCompletedDate) {
         nextDueDate = null // Completed
       } else {
-        nextDueDate = template.targetDate || todayStr
+        nextDueDate = template.targetDate 
+          ? formatUTCDate((template.targetDate as unknown) instanceof Date ? (template.targetDate as unknown as Date) : new Date(template.targetDate))
+          : todayStr
       }
       break
     }
@@ -191,15 +193,20 @@ export function analyzeRecurrence(
 
   // Calculate daily streak
   if (template.recurrenceType === 'daily' && completionLogs.length > 0) {
+    // De-duplicate logs by date in-memory
+    const uniqueLogs = completionLogs.filter(
+      (log, index, self) => self.findIndex(l => l.date === log.date) === index
+    )
+
     // Check if the most recent log is today or yesterday
-    const newestLogDate = completionLogs[0].date
+    const newestLogDate = uniqueLogs[0].date
     if (newestLogDate === todayStr || newestLogDate === addUTCDays(todayStr, -1)) {
       streak = 1
       let currentDateStr = newestLogDate
       // Keep checking backwards day by day
-      for (let i = 1; i < completionLogs.length; i++) {
+      for (let i = 1; i < uniqueLogs.length; i++) {
         const prevDateStr = addUTCDays(currentDateStr, -1)
-        if (completionLogs[i].date === prevDateStr) {
+        if (uniqueLogs[i].date === prevDateStr) {
           streak++
           currentDateStr = prevDateStr
         } else {

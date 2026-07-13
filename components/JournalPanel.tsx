@@ -1,11 +1,11 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { upsertJournalEntry, listJournalEntries, deleteJournalEntry } from '@/app/actions/journal'
+import { upsertJournalEntry, deleteJournalEntry } from '@/app/actions/journal'
 import {
-  BookOpen, Plus, Trash2, Heart, Lightbulb, Sunrise, Smile, ChevronDown, ChevronUp, Search, Calendar
+  BookOpen, Plus, Trash2, Heart, Lightbulb, Sunrise, Smile, Search, ChevronDown
 } from 'lucide-react'
-import { Input, Textarea, Button, Card } from '@/design-system'
+import { Button } from '@/design-system'
 
 interface JournalEntry {
   id: string
@@ -84,8 +84,13 @@ function AutosaveTextarea({ label, icon, value: initialValue, placeholder, field
   const isSavingRef = useRef(false)
   const pendingRef = useRef<string | null>(null)
 
-  useEffect(() => { setValue(initialValue) }, [initialValue])
+  const [prevInitialValue, setPrevInitialValue] = useState(initialValue)
+  if (initialValue !== prevInitialValue) {
+    setValue(initialValue)
+    setPrevInitialValue(initialValue)
+  }
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const save = useCallback(async (v: string) => {
     if (v === initialValue) return
     if (isSavingRef.current) { pendingRef.current = v; return }
@@ -149,19 +154,17 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   const isSavingRef = useRef(false)
   const pendingRef = useRef<string | null>(null)
 
-  // Sync editor when active date changes
-  useEffect(() => {
-    if (activeEntry) {
-      setContent(activeEntry.content)
-      setMood(activeEntry.mood)
-    } else {
-      setContent('')
-      setMood(null)
-    }
+  const [prevActiveDate, setPrevActiveDate] = useState(activeDate)
+  const [prevActiveEntryId, setPrevActiveEntryId] = useState(activeEntry?.id)
+  if (activeDate !== prevActiveDate || activeEntry?.id !== prevActiveEntryId) {
+    setContent(activeEntry?.content || '')
+    setMood(activeEntry?.mood || null)
     setContentStatus('idle')
-  }, [activeDate, activeEntry])
+    setPrevActiveDate(activeDate)
+    setPrevActiveEntryId(activeEntry?.id)
+  }
 
-  // Save content callback
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const saveContent = useCallback(async (v: string) => {
     if (isSavingRef.current) { pendingRef.current = v; return }
     isSavingRef.current = true
@@ -312,7 +315,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
             const dateStr = toYMD(entry.journalDate)
             const isActive = activeDate === dateStr
             const moodObj = MOOD_OPTIONS.find(m => m.value === entry.mood)
-            const preview = (entry.content || 'Empty entry').slice(0, 45)
+            const preview = entry.content || 'Empty entry'
 
             return (
               <div
@@ -331,7 +334,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                       {shortDate(entry.journalDate)}
                     </span>
                   </div>
-                  <p className="text-[9px] text-[var(--color-text-muted)] truncate mt-1">
+                  <p className="text-[9px] text-[var(--color-text-muted)] line-clamp-2 mt-1.5 leading-relaxed">
                     {preview}
                   </p>
                 </div>
@@ -355,7 +358,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
       </aside>
 
       {/* RIGHT WORKSPACE: Apple Notes centered writing canvas */}
-      <main className="flex-1 flex flex-col gap-5 px-2">
+      <main className="flex-1 flex flex-col gap-5 px-4 w-full max-w-3xl mx-auto">
         
         {/* Editor Top Info Bar */}
         <div className="flex items-center justify-between border-b border-[var(--color-border)]/40 pb-3">

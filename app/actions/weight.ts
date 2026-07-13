@@ -81,7 +81,8 @@ export async function getWeightHistory(days = 90) {
   try {
     const user = await getAuthSession()
     const since = new Date()
-    since.setDate(since.getDate() - days)
+    since.setUTCHours(0, 0, 0, 0)
+    since.setUTCDate(since.getUTCDate() - days)
 
     const records = await db.weightRecord.findMany({
       where: {
@@ -110,6 +111,13 @@ export async function deleteWeightRecord(id: string) {
     if (!record || record.userId !== user.id) throw new Error('Unauthorized')
 
     await db.weightRecord.update({ where: { id }, data: { deletedAt: new Date() } })
+    
+    // Soft-delete corresponding activity logs
+    await db.activityLog.updateMany({
+      where: { weightRecordId: id },
+      data: { deletedAt: new Date() }
+    })
+
     revalidatePath('/')
     return { success: true }
   } catch (error) {

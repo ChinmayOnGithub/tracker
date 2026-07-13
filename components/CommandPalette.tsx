@@ -163,13 +163,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-xs">
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 bg-slate-900/40 dark:bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
       {/* Backdrop Close Click */}
       <div className="fixed inset-0 cursor-default" onClick={onClose} />
       
       {/* Main Command Input Box */}
       <div 
-        className="w-full max-w-lg bg-[var(--color-bg-surface)] border border-[var(--color-border)] dark:border-zinc-850 rounded-xl shadow-2xl overflow-hidden flex flex-col relative max-h-[360px] animate-fade-in"
+        className="w-full max-w-lg bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl shadow-2xl overflow-hidden flex flex-col relative max-h-[360px] animate-in fade-in zoom-in-[0.98] slide-in-from-top-4 duration-300 ease-out"
         onKeyDown={handleListKeyDown}
       >
         <div className="flex items-center gap-3 px-4 border-b border-[var(--color-border)] dark:border-zinc-855 h-12 shrink-0">

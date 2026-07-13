@@ -4,12 +4,12 @@
   /* Light Mode Palette */
   --color-bg-base: #f8fafc;        /* Slate-50 */
   --color-bg-surface: #ffffff;
-  --color-border: #e2e8f0;            /* Slate-200 */
+  --color-border: rgba(0, 0, 0, 0.08); /* Soft transparent border */
   --color-text-main: #0f172a;         /* Slate-900 */
   --color-text-muted: #64748b;        /* Slate-500 */
   --color-primary: #6366f1;           /* Indigo-500 */
   --color-primary-hover: #4f46e5;     /* Indigo-600 */
-  --color-accent: #f1f5f9;            /* Slate-100 */
+  --color-accent: rgba(0, 0, 0, 0.04); /* Soft highlight */
 
   /* Semantic Colors - Color by meaning, not category */
   --color-external: #3b82f6;          /* Blue-500 for external calendar events */
@@ -56,12 +56,12 @@
   /* Dark Mode Palette */
   --color-bg-base: #09090b;        /* Zinc-950 */
   --color-bg-surface: #18181b;     /* Zinc-900 */
-  --color-border: #27272a;          /* Zinc-800 */
+  --color-border: rgba(255, 255, 255, 0.1); /* Soft transparent border instead of flat gray */
   --color-text-main: #f4f4f5;       /* Zinc-100 */
   --color-text-muted: #a1a1aa;      /* Zinc-400 */
   --color-primary: #818cf8;         /* Indigo-400 */
   --color-primary-hover: #6366f1;   /* Indigo-500 */
-  --color-accent: #27272a;          /* Zinc-800 */
+  --color-accent: rgba(255, 255, 255, 0.05); /* Soft highlight */
 
   /* Semantic Colors - Dark Mode */
   --color-external: #60a5fa;          /* Blue-400 */

@@ -46,9 +46,58 @@ interface AccessTokenCacheEntry {
   expiresAt: number // Timestamp in ms
 }
 
-// In-memory caching maps
-const calendarCache = new Map<string, CacheEntry>()
-const accessTokenCache = new Map<string, AccessTokenCacheEntry>()
+class SizeBoundedMap<K, V> {
+  private map = new Map<K, V>()
+  private keysList: K[] = []
+  constructor(private maxEntries: number) {}
+
+  get(key: K): V | undefined {
+    return this.map.get(key)
+  }
+
+  set(key: K, value: V): this {
+    if (!this.map.has(key)) {
+      this.keysList.push(key)
+      if (this.keysList.length > this.maxEntries) {
+        const oldestKey = this.keysList.shift()
+        if (oldestKey !== undefined) {
+          this.map.delete(oldestKey)
+        }
+      }
+    }
+    this.map.set(key, value)
+    return this
+  }
+
+  has(key: K): boolean {
+    return this.map.has(key)
+  }
+
+  delete(key: K): boolean {
+    const idx = this.keysList.indexOf(key)
+    if (idx !== -1) {
+      this.keysList.splice(idx, 1)
+    }
+    return this.map.delete(key)
+  }
+
+  get size(): number {
+    return this.map.size
+  }
+
+  keys() {
+    return this.map.keys()
+  }
+
+  entries() {
+    return this.map.entries()
+  }
+}
+
+// In-memory caching maps (size-bounded to prevent memory leaks in production)
+const calendarCache = new SizeBoundedMap<string, CacheEntry>(1000)
+const accessTokenCache = new SizeBoundedMap<string, AccessTokenCacheEntry>(500)
+const refreshPromises = new Map<string, Promise<string>>()
 
 /**
  * Exponential backoff helper for network requests.
@@ -126,81 +175,99 @@ export class GoogleCalendarService {
       return cachedToken.token
     }
 
-    logger.debug('GoogleCalendarService', 'Refreshing access token', { userId })
-
-    const refreshToken = await GoogleCredentialService.getRefreshToken(userId)
-    if (!refreshToken) {
-      throw new GoogleApiError('Google Calendar integration credentials missing', 401)
+    // Check if there is already an active refresh promise for this user
+    let refreshPromise = refreshPromises.get(userId)
+    if (refreshPromise) {
+      logger.debug('GoogleCalendarService', 'Awaiting existing token refresh promise', { userId })
+      return refreshPromise
     }
 
-    const clientId = env.GOOGLE_CLIENT_ID
-    const clientSecret = env.GOOGLE_CLIENT_SECRET
-
-    const tokenResponse = await fetchWithRetry(GOOGLE_OAUTH.TOKEN_URI, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token',
-      }),
-    })
-
-    if (!tokenResponse.ok) {
-      const errText = await tokenResponse.text()
-      logger.error('GoogleCalendarService', 'Token refresh failed', {
-        userId,
-        status: tokenResponse.status,
-        error: errText.substring(0, 500)
-      })
-
-      // Detect revoked access — auto-disconnect stale credentials
-      let errorCode = ''
+    // Create a new refresh promise
+    refreshPromise = (async () => {
       try {
-        const parsed = JSON.parse(errText)
-        errorCode = parsed.error || ''
-      } catch { /* ignore */ }
+        logger.debug('GoogleCalendarService', 'Refreshing access token', { userId })
 
-      if (errorCode === 'invalid_grant') {
-        logger.warn('GoogleCalendarService', 'Refresh token has been revoked or is invalid — auto-disconnecting', { userId })
-        await GoogleCredentialService.disconnect(userId)
-        throw new GoogleApiError('Google access has been revoked. Please reconnect your account in Settings.', 401)
+        const refreshToken = await GoogleCredentialService.getRefreshToken(userId)
+        if (!refreshToken) {
+          throw new GoogleApiError('Google Calendar integration credentials missing', 401)
+        }
+
+        const clientId = env.GOOGLE_CLIENT_ID
+        const clientSecret = env.GOOGLE_CLIENT_SECRET
+
+        const tokenResponse = await fetchWithRetry(GOOGLE_OAUTH.TOKEN_URI, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token',
+          }),
+        })
+
+        if (!tokenResponse.ok) {
+          const errText = await tokenResponse.text()
+          logger.error('GoogleCalendarService', 'Token refresh failed', {
+            userId,
+            status: tokenResponse.status,
+            error: errText.substring(0, 500)
+          })
+
+          // Detect revoked access — auto-disconnect stale credentials
+          let errorCode = ''
+          try {
+            const parsed = JSON.parse(errText)
+            errorCode = parsed.error || ''
+          } catch { /* ignore */ }
+
+          if (errorCode === 'invalid_grant') {
+            logger.warn('GoogleCalendarService', 'Refresh token has been revoked or is invalid — auto-disconnecting', { userId })
+            await GoogleCredentialService.disconnect(userId)
+            throw new GoogleApiError('Google access has been revoked. Please reconnect your account in Settings.', 401)
+          }
+
+          throw new GoogleApiError(`Failed to refresh Google access token: ${errText}`, tokenResponse.status)
+        }
+
+        const data = await tokenResponse.json()
+        const accessToken = data.access_token
+        const expiresInSeconds = data.expires_in ?? 3600
+
+        if (!accessToken) {
+          logger.error('GoogleCalendarService', 'Token refresh response missing access_token', { userId })
+          throw new GoogleApiError('Google token refresh response did not contain an access token')
+        }
+
+        // Handle Google's optional refresh token rotation
+        if (data.refresh_token) {
+          logger.info('GoogleCalendarService', 'Google issued a new refresh token — updating stored credential', { userId })
+          await GoogleCredentialService.saveCredentials(userId, data.refresh_token)
+        }
+
+        // Store in-memory access token cache
+        accessTokenCache.set(userId, {
+          token: accessToken,
+          expiresAt: Date.now() + expiresInSeconds * 1000
+        })
+
+        logger.info('GoogleCalendarService', 'Access token refreshed successfully', {
+          userId,
+          expiresInSeconds,
+          tokenLength: accessToken.length
+        })
+
+        return accessToken
+      } finally {
+        // Clean up from the promise map when done
+        refreshPromises.delete(userId)
       }
+    })()
 
-      throw new GoogleApiError(`Failed to refresh Google access token: ${errText}`, tokenResponse.status)
-    }
-
-    const data = await tokenResponse.json()
-    const accessToken = data.access_token
-    const expiresInSeconds = data.expires_in ?? 3600
-
-    if (!accessToken) {
-      logger.error('GoogleCalendarService', 'Token refresh response missing access_token', { userId })
-      throw new GoogleApiError('Google token refresh response did not contain an access token')
-    }
-
-    // Handle Google's optional refresh token rotation
-    if (data.refresh_token) {
-      logger.info('GoogleCalendarService', 'Google issued a new refresh token — updating stored credential', { userId })
-      await GoogleCredentialService.saveCredentials(userId, data.refresh_token)
-    }
-
-    // Store in-memory access token cache
-    accessTokenCache.set(userId, {
-      token: accessToken,
-      expiresAt: Date.now() + expiresInSeconds * 1000
-    })
-
-    logger.info('GoogleCalendarService', 'Access token refreshed successfully', {
-      userId,
-      expiresInSeconds,
-      tokenLength: accessToken.length
-    })
-
-    return accessToken
+    refreshPromises.set(userId, refreshPromise)
+    return refreshPromise
   }
 
   /**
@@ -235,7 +302,12 @@ export class GoogleCalendarService {
     try {
       const accessToken = await this.getAccessToken(userId)
 
-      const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events')
+      const credential = await db.googleCredential.findUnique({
+        where: { userId }
+      })
+      const calendarId = credential?.calendarId || 'primary'
+
+      const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`)
       url.searchParams.set('timeMin', timeMin.toISOString())
       url.searchParams.set('timeMax', timeMax.toISOString())
       url.searchParams.set('singleEvents', 'true') // Expand recurring events

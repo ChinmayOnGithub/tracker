@@ -7,10 +7,14 @@ import { GOOGLE_OAUTH } from '@/lib/constants'
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm'
 const KEY_SALT = 'tracker-google-oauth-encryption-salt-2026'
 
-// Derive a static 256-bit key from the environment variable
+let cachedKey: Buffer | null = null
+
+// Derive a static 256-bit key from the environment variable (cached in-memory)
 function getEncryptionKey(): Buffer {
+  if (cachedKey) return cachedKey
   const secret = env.GOOGLE_OAUTH_ENCRYPTION_KEY
-  return crypto.pbkdf2Sync(secret, KEY_SALT, 100000, 32, 'sha256')
+  cachedKey = crypto.pbkdf2Sync(secret, KEY_SALT, 100000, 32, 'sha256')
+  return cachedKey
 }
 
 export class GoogleCredentialService {

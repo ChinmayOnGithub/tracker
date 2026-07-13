@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { Skeleton, EmptyState, Button } from '@/design-system'
 import {
   Calendar, Clock, MapPin, ExternalLink, Link as LinkIcon,
-  Check, Plus, ChevronDown, ChevronRight, Edit2, XCircle, ArrowRightCircle, RefreshCw
+  Check, Plus, ChevronDown, ChevronRight, Edit2, XCircle, ArrowRightCircle, RefreshCw, Sparkles
 } from 'lucide-react'
 import { ActivityTemplate, ActivityLog, Note, RecurrenceAnalysis, TimelineItem } from '@/types'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
@@ -72,6 +72,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   const isSavingRef = React.useRef(false)
   const pendingSaveRef = React.useRef<string | null>(null)
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const saveReflection = useCallback(async (contentToSave: string = reflection) => {
     if (contentToSave.trim() === '') return
     if (isSavingRef.current) { pendingSaveRef.current = contentToSave; return }
@@ -94,7 +95,13 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     return () => clearInterval(timer)
   }, [])
 
-  useEffect(() => { setReflection(todayNote?.content || '') }, [todayStr, todayNote?.content])
+  const [prevTodayStr, setPrevTodayStr] = useState(todayStr)
+  const [prevTodayNoteContent, setPrevTodayNoteContent] = useState(todayNote?.content)
+  if (todayStr !== prevTodayStr || todayNote?.content !== prevTodayNoteContent) {
+    setReflection(todayNote?.content || '')
+    setPrevTodayStr(todayStr)
+    setPrevTodayNoteContent(todayNote?.content)
+  }
 
   useEffect(() => {
     const dbValue = todayNote?.content || ''
@@ -160,11 +167,19 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   }
 
   const getContextSubtitle = () => {
+    // 1. Coding Contests Context (highest priority for developer user)
+    const activeContest = upcomingEvents.find(e => e.templateName.toLowerCase().includes('codeforces') || e.templateName.toLowerCase().includes('leetcode'))
+    if (activeContest) {
+      const diffMins = Math.round((new Date(activeContest.start!).getTime() - currentTime.getTime()) / 60000)
+      if (diffMins > 0 && diffMins <= 240) return `🔥 Next ${activeContest.templateName.split(' ')[0]} in ${Math.floor(diffMins/60)}h ${diffMins%60}m`
+    }
+
+    // 2. Overdue or Standard Context
     if (activeOverdue.length > 0) return `${activeOverdue.length} overdue ${activeOverdue.length === 1 ? 'activity' : 'activities'} need attention`
     const activeMeeting = activeEvents.find(e => e.type === 'MEETING')
     if (activeMeeting) return `Now: ${activeMeeting.templateName} is active`
     if (nextEvent) {
-      const diffMins = Math.round((new Date(nextEvent.start).getTime() - currentTime.getTime()) / 60000)
+      const diffMins = Math.round((new Date(nextEvent.start!).getTime() - currentTime.getTime()) / 60000)
       if (diffMins > 0 && diffMins <= 120) return `Next: ${nextEvent.templateName} in ${diffMins} min`
     }
     return 'Nothing scheduled for the next 2 hours'
@@ -250,8 +265,14 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         semanticType: 'external'
       }
     }
+
+    const matchedTemplate = occurrence.templateId
+      ? analyzedTemplates.find(t => t.template.id === occurrence.templateId)
+      : null
+    const template = matchedTemplate?.template
+    const analysis = matchedTemplate?.analysis
     
-    if (occurrence.analysis?.overdue) {
+    if (analysis?.overdue) {
       return {
         iconBg: 'bg-[var(--color-overdue)]/10 border-[var(--color-overdue)]/20 text-[var(--color-overdue)]',
         textColor: 'text-[var(--color-overdue)]',
@@ -267,7 +288,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
       }
     }
     
-    if (occurrence.category === 'PERSONAL' || occurrence.templateId?.includes('personal')) {
+    if (template?.category === 'PERSONAL' || occurrence.templateId?.includes('personal')) {
       return {
         iconBg: 'bg-[var(--color-personal)]/10 border-[var(--color-personal)]/20 text-[var(--color-personal)]',
         textColor: 'text-[var(--color-personal)]',
@@ -356,7 +377,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     return (
       <div
         key={occurrence.id}
-        className={`flex items-center gap-3 px-3 py-3 border rounded-[var(--card-radius)] transition-[var(--card-transition)] group ${getCardBgClass(occurrence)}`}
+        className={`flex items-center gap-3 px-3 py-3 border rounded-[var(--card-radius)] transition-all duration-200 ease-in-out hover:translate-x-1 hover:shadow-sm group ${getCardBgClass(occurrence)}`}
       >
         {/* ── Checkbox / complete button (minimum 44px) ── */}
         <div className="shrink-0 w-11 h-11 flex items-center justify-center">
@@ -366,7 +387,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               title="Undo completion"
               className="w-11 h-11 rounded-lg bg-[var(--color-completed)] border border-[var(--color-completed)] text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer hover:bg-[var(--color-completed)]/90"
             >
-              <Check className="w-4 h-4" />
+              <Check className="w-4 h-4 animate-check-pop" />
             </button>
           ) : occurrence.templateId ? (
             <button
@@ -422,6 +443,13 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             {isTimed && startTimeLabel && (
               <span className={`shrink-0 text-[11px] font-mono font-bold px-2 py-1 rounded-[var(--radius-sm)] border ${semantic.textColor} bg-current/5 border-current/20`}>
                 {startTimeLabel}
+                {estimatedDuration ? ` (${estimatedDuration}m)` : (occurrence.end && occurrence.start ? ` (${Math.round((new Date(occurrence.end).getTime() - new Date(occurrence.start).getTime()) / 60000)}m)` : '')}
+              </span>
+            )}
+            {/* Streak indicator */}
+            {streak > 1 && !occurrence.completed && occurrence.status !== 'skipped' && (
+              <span className="shrink-0 flex items-center gap-1 text-[10px] font-extrabold text-orange-500 bg-orange-500/10 px-2 py-1 rounded-[var(--radius-sm)] border border-orange-500/20" title={`${streak} day streak!`}>
+                🔥 {streak}
               </span>
             )}
             {/* Priority badge with semantic colors */}
@@ -435,17 +463,6 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
           {/* Meta row - only essential information */}
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             {/* Remove category badge - it's duplicate information */}
-            {estimatedDuration != null && estimatedDuration > 0 && (
-              <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-muted)]">
-                <Clock className="w-3 h-3 shrink-0" />{estimatedDuration}m
-              </span>
-            )}
-            {isTimed && occurrence.end && occurrence.start && !estimatedDuration && (
-              <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--color-text-muted)]">
-                <Clock className="w-3 h-3 shrink-0" />
-                {Math.round((new Date(occurrence.end).getTime() - new Date(occurrence.start).getTime()) / 60000)}m
-              </span>
-            )}
             {streak > 1 && (
               <span className="text-[11px] font-black text-[var(--color-warning)]">🔥 {streak}</span>
             )}
@@ -538,14 +555,18 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     <div className="w-full">
 
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] pb-4 mb-5">
+      <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] pb-3 mb-4">
         <div>
           <h1 className="text-xl font-black text-[var(--color-text-main)] tracking-tight">Today</h1>
-          <p className="text-xs text-[var(--color-text-muted)] font-medium mt-0.5">
-            {todayLongDate}
-            <span className="mx-2 opacity-25">•</span>
-            {getContextSubtitle()}
-          </p>
+          <div className="flex items-center gap-3 mt-1.5">
+            <p className="text-sm text-[var(--color-text-muted)] font-medium">
+              {todayLongDate}
+            </p>
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20 text-indigo-500 dark:text-indigo-400 text-[11px] font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(99,102,241,0.1)]">
+              <Sparkles className="w-3.5 h-3.5" />
+              {getContextSubtitle()}
+            </div>
+          </div>
         </div>
         <Button onClick={onOpenCreateActivity} size="sm" icon={<Plus className="w-3.5 h-3.5" />}>
           New Activity

@@ -241,7 +241,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
   return (
     <div className="space-y-6 text-sm">
       
-      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-4 space-y-3 shadow-sm">
+      <div className="bg-[var(--color-bg-surface)] bg-gradient-to-br from-[var(--color-bg-surface)] to-transparent border border-[var(--color-border)]/80 rounded-[var(--radius-lg)] p-5 space-y-4 shadow-sm">
         <div className="relative">
           <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-zinc-500" size={16} />
           <input

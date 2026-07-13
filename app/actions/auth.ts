@@ -56,50 +56,53 @@ export async function registerUserAction(usernameInput: string, pin: string): Pr
     }
 
     const passwordHash = hashPin(pin, username)
-    const newUser = await db.user.create({
-      data: {
-        username,
-        passwordHash,
-      }
-    })
-
-    // Create 3 default starter activities for new users
-    await db.activityTemplate.createMany({
-      data: [
-        {
-          userId: newUser.id,
-          name: 'Reading Book',
-          category: 'personal',
-          icon: 'BookOpen',
-          color: 'green',
-          recurrenceType: 'daily',
-          sortOrder: 1,
-          notes: 'Read at least 15 pages',
-        },
-        {
-          userId: newUser.id,
-          name: 'Wash Hairs',
-          category: 'personal',
-          icon: 'ShowerHead',
-          color: 'blue',
-          recurrenceType: 'custom',
-          recurrenceInterval: 3,
-          sortOrder: 2,
-          notes: 'Wash and condition hair',
-        },
-        {
-          userId: newUser.id,
-          name: 'Netflix Subscription',
-          category: 'finance',
-          icon: 'Tv',
-          color: 'red',
-          recurrenceType: 'monthly',
-          recurrenceDayOfMonth: 15,
-          amount: 199.00,
-          sortOrder: 3,
-          notes: 'Monthly standard stream plan',
+    const newUser = await db.$transaction(async (tx) => {
+      const u = await tx.user.create({
+        data: {
+          username,
+          passwordHash,
         }
-      ]
+      })
+
+      // Create 3 default starter activities for new users
+      await tx.activityTemplate.createMany({
+        data: [
+          {
+            userId: u.id,
+            name: 'Reading Book',
+            category: 'personal',
+            icon: 'BookOpen',
+            color: 'green',
+            recurrenceType: 'daily',
+            sortOrder: 1,
+            notes: 'Read at least 15 pages',
+          },
+          {
+            userId: u.id,
+            name: 'Wash Hairs',
+            category: 'personal',
+            icon: 'ShowerHead',
+            color: 'blue',
+            recurrenceType: 'custom',
+            recurrenceInterval: 3,
+            sortOrder: 2,
+            notes: 'Wash and condition hair',
+          },
+          {
+            userId: u.id,
+            name: 'Netflix Subscription',
+            category: 'finance',
+            icon: 'Tv',
+            color: 'red',
+            recurrenceType: 'monthly',
+            recurrenceDayOfMonth: 15,
+            amount: 199.00,
+            sortOrder: 3,
+            notes: 'Monthly standard stream plan',
+          }
+        ]
+      })
+      return u
     })
 
     // Set signed cookie

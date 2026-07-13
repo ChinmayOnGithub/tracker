@@ -432,9 +432,22 @@ async function main() {
     },
   ]
 
+  let user = await db.user.findFirst()
+  if (!user) {
+    user = await db.user.create({
+      data: {
+        username: 'admin',
+        passwordHash: 'dummy-hash'
+      }
+    })
+  }
+
   for (const note of notesMock) {
     await db.note.create({
-      data: note,
+      data: {
+        ...note,
+        userId: user.id
+      },
     })
   }
 

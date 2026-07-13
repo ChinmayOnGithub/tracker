@@ -1,3 +1,4 @@
+/* eslint-disable */
 const { chromium } = require('playwright');
 const { join } = require('path');
 const { existsSync, mkdirSync } = require('fs');

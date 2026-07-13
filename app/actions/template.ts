@@ -180,8 +180,12 @@ export async function deleteActivityTemplate(id: string) {
     const user = await getAuthSession()
     await verifyTemplateOwnership(id, user)
 
-    const deleted = await db.activityTemplate.delete({
+    const deleted = await db.activityTemplate.update({
       where: { id },
+      data: {
+        deletedAt: new Date(),
+        isActive: false
+      }
     })
 
     eventBus.publish(EVENTS.ACTIVITY_DELETED, { calendarEventId: deleted.calendarEventId, userId: user.id })

@@ -51,13 +51,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     }
     return 'agenda'
   })
-  const [startOfWeekPref, setStartOfWeekPref] = useState<'sunday' | 'monday'>(() => {
-    if (typeof window !== 'undefined') {
-      const val = localStorage.getItem('calendar_start_of_week')
-      if (val === 'sunday' || val === 'monday') return val
-    }
-    return 'sunday'
-  })
+  const startOfWeekPref = typeof window !== 'undefined' && localStorage.getItem('calendar_start_of_week') === 'monday' ? 'monday' : 'sunday'
   
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth() // 0-indexed
@@ -228,8 +222,8 @@ export const Calendar: React.FC<CalendarProps> = ({
       {/* Calendar Header with toggles */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-zinc-850 pb-3">
         <div>
-          <h2 className="text-lg font-black text-[var(--color-text-main)] flex items-center gap-1.5 leading-none">
-            {monthName} <span className="text-[var(--color-text-muted)] font-bold">{year}</span>
+          <h2 className="text-xl font-black tracking-tight text-[var(--color-text-main)] flex items-center gap-1.5 leading-none">
+            {monthName} <span className="text-[var(--color-text-muted)]">{year}</span>
           </h2>
           <p className="text-[10px] text-[var(--color-text-muted)] mt-1 font-bold">
             {view === 'month' ? 'Click days to schedule activities' : view === 'week' ? 'Weekly schedule overview' : '14-day chronological agenda'}
@@ -403,7 +397,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       {/* ---------------------------------------------------- */}
       {view === 'week' && (
         <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
-          {weekDaysList.map((day, idx) => {
+          {weekDaysList.map((day) => {
             const dateStr = day.toISOString().split('T')[0]
             const isToday = dateStr === todayStr
             const dayName = WEEKDAYS[day.getDay()]

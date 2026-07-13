@@ -1,3 +1,5 @@
+export {}
+
 async function main() {
   console.log('Fetching http://localhost:3000/ ...')
   try {

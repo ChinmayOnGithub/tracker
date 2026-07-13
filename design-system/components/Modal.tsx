@@ -35,20 +35,20 @@ export const Modal: React.FC<ModalProps> = ({
 
   const sizes = {
     sm: 'max-w-md',
-    md: 'max-w-lg',
-    lg: 'max-w-2xl'
+    md: 'w-[90vw] max-w-xl',
+    lg: 'w-[90vw] max-w-3xl'
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Overlay Background */}
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
+        className="fixed inset-0 bg-slate-900/40 dark:bg-black/70 backdrop-blur-md animate-in fade-in duration-300"
         onClick={onClose}
       />
 
       {/* Modal Dialog Container */}
-      <div className={`relative w-full ${sizes[size]} bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-xl flex flex-col max-h-[90vh] overflow-hidden transition-all duration-300 scale-100 z-10 animate-in fade-in zoom-in-95 duration-200`}>
+      <div className={`relative w-full ${sizes[size]} bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden z-10 animate-in fade-in zoom-in-[0.98] slide-in-from-bottom-4 duration-300 ease-out`}>
         {/* Modal Header */}
         <div className="px-5 py-4 border-b border-[var(--color-border)] flex items-center justify-between gap-4">
           <h3 className="text-base font-semibold text-[var(--color-text-main)]">

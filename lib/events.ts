@@ -122,7 +122,16 @@ async function syncActivityToCalendar(template: ActivityTemplate, userId: string
       targetDateStr = new Date(template.targetDate).toISOString().split('T')[0]
     }
 
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    const settings = await db.userSetting.findUnique({
+      where: {
+        userId_module: {
+          userId,
+          module: 'GENERAL'
+        }
+      }
+    })
+    const config = (settings?.config || {}) as Record<string, unknown>
+    const timeZone = (config.timezone || 'UTC') as string
     let startPayload: { date?: string; dateTime?: string; timeZone?: string } = {}
     let endPayload: { date?: string; dateTime?: string; timeZone?: string } = {}
 
@@ -130,12 +139,14 @@ async function syncActivityToCalendar(template: ActivityTemplate, userId: string
       startPayload = { date: targetDateStr }
       endPayload = { date: targetDateStr }
     } else {
-      const startISO = new Date(`${targetDateStr}T${startTime}:00`).toISOString()
+      const localStartStr = `${targetDateStr}T${startTime}:00`
       const durationMs = (template.estimatedDuration || 60) * 60 * 1000
-      const endISO = new Date(new Date(startISO).getTime() + durationMs).toISOString()
+      const utcStart = new Date(`${targetDateStr}T${startTime}:00Z`)
+      const utcEnd = new Date(utcStart.getTime() + durationMs)
+      const localEndStr = utcEnd.toISOString().replace('Z', '').substring(0, 19)
       
-      startPayload = { dateTime: startISO, timeZone }
-      endPayload = { dateTime: endISO, timeZone }
+      startPayload = { dateTime: localStartStr, timeZone }
+      endPayload = { dateTime: localEndStr, timeZone }
     }
 
     // Recurrence mapping rules
@@ -162,7 +173,33 @@ async function syncActivityToCalendar(template: ActivityTemplate, userId: string
 
     if (template.calendarEventId) {
       logger.info('EventBus', 'Updating calendar event via provider', { templateId: template.id, traceId })
-      await provider.updateEvent(userId, template.calendarEventId, eventInput)
+      try {
+        await provider.updateEvent(userId, template.calendarEventId, eventInput)
+      } catch (err) {
+        const statusCode = (err as { statusCode?: number }).statusCode
+        if (statusCode === 404 || statusCode === 410) {
+          logger.warn('EventBus', 'Calendar event not found on provider (likely deleted externally) - clearing calendarEventId and re-creating', {
+            templateId: template.id,
+            calendarEventId: template.calendarEventId,
+            traceId
+          })
+          await db.activityTemplate.update({
+            where: { id: template.id },
+            data: { calendarEventId: null }
+          })
+          
+          logger.info('EventBus', 'Re-creating deleted calendar event via provider', { templateId: template.id, traceId })
+          const created = await provider.createEvent(userId, eventInput)
+          if (created && created.id) {
+            await db.activityTemplate.update({
+              where: { id: template.id },
+              data: { calendarEventId: created.id }
+            })
+          }
+        } else {
+          throw err
+        }
+      }
     } else {
       logger.info('EventBus', 'Creating calendar event via provider', { templateId: template.id, traceId })
       const created = await provider.createEvent(userId, eventInput)

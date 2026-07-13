@@ -16,21 +16,21 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   className = ''
 }) => {
   return (
-    <div className={`flex flex-col items-center justify-center text-center p-8 bg-[var(--color-bg-surface)] border border-dashed border-[var(--color-border)] rounded-[var(--radius-lg)] gap-4 ${className}`}>
+    <div className={`flex flex-col items-center justify-center text-center p-10 bg-gradient-to-b from-[var(--color-bg-surface)] to-transparent border border-dashed border-[var(--color-border)]/60 rounded-[var(--radius-lg)] gap-5 transition-colors hover:border-[var(--color-border)] ${className}`}>
       {icon && (
-        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-[var(--color-accent)] text-[var(--color-text-muted)]">
+        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-[var(--color-bg-base)] border border-[var(--color-border)] text-[var(--color-text-muted)] shadow-sm">
           {icon}
         </div>
       )}
-      <div className="flex flex-col gap-1 max-w-sm">
-        <h4 className="text-sm font-semibold text-[var(--color-text-main)]">
+      <div className="flex flex-col gap-1.5 max-w-sm">
+        <h4 className="text-base font-bold tracking-tight text-[var(--color-text-main)]">
           {title}
         </h4>
-        <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
+        <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed font-medium">
           {description}
         </p>
       </div>
-      {action && <div className="mt-1">{action}</div>}
+      {action && <div className="mt-2">{action}</div>}
     </div>
   )
 }

@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { chromium } from 'playwright'
 import { join } from 'path'
 import { existsSync, mkdirSync } from 'fs'

@@ -21,17 +21,17 @@ export const Button: React.FC<ButtonProps> = ({
   
   // Map variant styling using design tokens
   const variants = {
-    primary: 'bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] active:scale-[0.98]',
-    secondary: 'bg-[var(--color-accent)] text-[var(--color-text-main)] hover:opacity-90 active:scale-[0.98]',
-    outline: 'border border-[var(--color-border)] bg-transparent text-[var(--color-text-main)] hover:bg-[var(--color-accent)] active:scale-[0.98]',
-    danger: 'bg-rose-600 text-white hover:bg-rose-700 active:scale-[0.98]'
+    primary: 'bg-[var(--color-primary)] text-white shadow-[0_2px_8px_rgba(99,102,241,0.25)] hover:shadow-[0_4px_12px_rgba(99,102,241,0.4)] hover:bg-[var(--color-primary-hover)] active:scale-[0.97]',
+    secondary: 'bg-[var(--color-accent)] text-[var(--color-text-main)] shadow-sm hover:shadow-md hover:bg-[var(--color-accent)]/80 active:scale-[0.97]',
+    outline: 'border border-[var(--color-border)] bg-[var(--color-bg-base)] text-[var(--color-text-main)] shadow-sm hover:shadow hover:bg-[var(--color-accent)] active:scale-[0.97]',
+    danger: 'bg-rose-600 text-white shadow-[0_2px_8px_rgba(225,29,72,0.25)] hover:shadow-[0_4px_12px_rgba(225,29,72,0.4)] hover:bg-rose-500 active:scale-[0.97]'
   }
 
   // Spacing grid sizing
   const sizes = {
-    sm: 'px-3 py-1.5 text-xs rounded-[var(--radius-sm)] gap-1.5',
-    md: 'px-4 py-2 text-sm rounded-[var(--radius-md)] gap-2',
-    lg: 'px-6 py-3 text-base rounded-[var(--radius-lg)] gap-2.5'
+    sm: 'px-3 py-1.5 text-xs rounded-[var(--radius-sm)] gap-2',
+    md: 'px-4 py-2 text-sm rounded-[var(--radius-md)] gap-2.5',
+    lg: 'px-6 py-3 text-base rounded-[var(--radius-lg)] gap-3'
   }
 
   return (

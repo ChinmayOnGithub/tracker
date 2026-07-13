@@ -3,11 +3,15 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { TimelineItem } from '@/types'
 
+interface NotificationRule {
+  offsetMinutes?: number
+}
+
 interface TestAnalyzedTemplate {
   template: {
     id: string
     name: string
-    notificationRules?: any
+    notificationRules?: unknown
   }
 }
 
@@ -52,9 +56,9 @@ export function useActivityNotifications(
     const rawRules = match.template.notificationRules
     if (!rawRules) return
 
-    let rules: any[] = []
+    let rules: NotificationRule[] = []
     try {
-      rules = typeof rawRules === 'string' ? JSON.parse(rawRules) : rawRules
+      rules = typeof rawRules === 'string' ? JSON.parse(rawRules) : (rawRules as NotificationRule[])
     } catch (e) {
       console.error('Failed to parse notification rules', e)
     }
@@ -105,10 +109,11 @@ export function useActivityNotifications(
       scheduleNotification(item)
     })
 
+    const currentTimers = timersRef.current
     // Cleanup timers on unmount or updates
     return () => {
-      timersRef.current.forEach(timer => clearTimeout(timer))
-      timersRef.current.clear()
+      currentTimers.forEach(timer => clearTimeout(timer))
+      currentTimers.clear()
     }
   }, [timeline, scheduleNotification, enabled])
 

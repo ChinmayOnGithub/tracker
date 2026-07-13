@@ -82,17 +82,17 @@ export async function getAgendaAction(todayStr: string, forceRefresh = false) {
       return { success: true as const, connected: false, agenda: null }
     }
 
-    const timeMin = parseUTCDate(todayStr)
-    // Query range of 8 days to catch today, tomorrow, and upcoming week
-    const timeMax = new Date(timeMin.getTime() + 8 * 24 * 60 * 60 * 1000)
+    // Expand query range by 1 day in each direction to account for timezone offsets
+    const queryMin = new Date(parseUTCDate(todayStr).getTime() - 24 * 60 * 60 * 1000)
+    const queryMax = new Date(parseUTCDate(todayStr).getTime() + 9 * 24 * 60 * 60 * 1000)
 
-    const events = await ProviderService.getEvents(user.id, 'GOOGLE', timeMin, timeMax, forceRefresh)
+    const events = await ProviderService.getEvents(user.id, 'GOOGLE', queryMin, queryMax, forceRefresh)
 
     const todayEvents = []
     const tomorrowEvents = []
     const upcomingEvents = []
 
-    const tomorrowDate = new Date(timeMin.getTime() + 24 * 60 * 60 * 1000)
+    const tomorrowDate = new Date(parseUTCDate(todayStr).getTime() + 24 * 60 * 60 * 1000)
     const tomorrowStr = tomorrowDate.toISOString().split('T')[0]
 
     for (const event of events) {
@@ -101,7 +101,7 @@ export async function getAgendaAction(todayStr: string, forceRefresh = false) {
         todayEvents.push(event)
       } else if (startStr === tomorrowStr) {
         tomorrowEvents.push(event)
-      } else {
+      } else if (startStr > tomorrowStr) {
         upcomingEvents.push(event)
       }
     }

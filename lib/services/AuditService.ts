@@ -1,4 +1,5 @@
 import { db } from '../db'
+import { Prisma } from '@prisma/client'
 
 export class AuditService {
   /**
@@ -10,8 +11,8 @@ export class AuditService {
     entityId: string
     action: string
     performedBy: string
-    oldData?: any
-    newData?: any
+    oldData?: unknown
+    newData?: unknown
     reason?: string | null
     ipAddress?: string | null
     userAgent?: string | null
@@ -25,8 +26,8 @@ export class AuditService {
         entityId,
         action,
         performedBy,
-        oldData: oldData ?? null,
-        newData: newData ?? null,
+        oldData: oldData !== undefined ? (oldData as Prisma.InputJsonValue) : Prisma.DbNull,
+        newData: newData !== undefined ? (newData as Prisma.InputJsonValue) : Prisma.DbNull,
         reason: reason ?? null,
         ipAddress: ipAddress ?? null,
         userAgent: userAgent ?? null

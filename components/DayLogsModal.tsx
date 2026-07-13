@@ -353,7 +353,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
       />
       
       {/* Drawer content panel sliding from right */}
-      <div className="relative w-full max-w-md bg-[var(--color-bg-surface)] border-l border-[var(--color-border)] dark:border-zinc-850 h-full flex flex-col shadow-2xl z-50 animate-slide-in-right">
+      <div className="relative w-[90vw] max-w-2xl bg-[var(--color-bg-surface)] border-l border-[var(--color-border)] dark:border-zinc-850 h-full flex flex-col shadow-2xl z-50 animate-slide-in-right">
         {/* Header */}
         <div className="px-5 py-4 border-b border-[var(--color-border)] dark:border-zinc-855 flex items-center justify-between shrink-0">
           <div>

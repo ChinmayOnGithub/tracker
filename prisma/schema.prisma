@@ -390,12 +390,13 @@ model Note {
   date      String
   title     String?
   content   String
-  userId    String?
-  user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
+  @@unique([userId, date])
   @@index([date])
   @@index([userId])
 }

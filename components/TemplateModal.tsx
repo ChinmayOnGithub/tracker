@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { ActivityTemplate, Tag, RecurrenceType, ActivityType, Priority, CalendarProvider } from '@/types'
 import { createActivityTemplate, updateActivityTemplate } from '@/app/actions/template'
 import { ICON_OPTIONS } from './Icon'
@@ -77,8 +77,11 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
-  // Load values on edit trigger
-  useEffect(() => {
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen)
+  const [prevTemplateToEdit, setPrevTemplateToEdit] = useState(templateToEdit)
+  if (isOpen !== prevIsOpen || templateToEdit !== prevTemplateToEdit) {
+    setPrevIsOpen(isOpen)
+    setPrevTemplateToEdit(templateToEdit)
     if (isOpen) {
       if (templateToEdit) {
         setName(templateToEdit.name)
@@ -132,7 +135,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       }
       setErrorMsg('')
     }
-  }, [isOpen, templateToEdit])
+  }
 
   if (!isOpen) return null
 
@@ -236,7 +239,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={templateToEdit ? 'Edit Activity' : 'New Activity'}
-      size="md"
+      size="lg"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {errorMsg && (
@@ -246,7 +249,13 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           </div>
         )}
 
-        {/* Name input */}
+        {/* Basic Details Section */}
+        <div className="space-y-4 pb-2">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)]/40 pb-1.5">
+            Basic Details
+          </h4>
+
+          {/* Name input */}
         <Input
           label="Activity Name"
           value={name}
@@ -319,8 +328,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           )}
         </div>
 
+        </div>
+
         {/* Repeat Recurrence Builder */}
-        <div className="border border-[var(--color-border)] p-3.5 rounded-[var(--radius-md)] space-y-3 bg-[var(--color-bg-base)]">
+        <div className="space-y-3 pt-2">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)]/40 pb-1.5">
+            Schedule & Recurrence
+          </h4>
+          <div className="border border-[var(--color-border)] p-3.5 rounded-[var(--radius-md)] space-y-3 bg-[var(--color-bg-base)]">
           <Select
             label="Repeat Interval"
             value={recurrenceType}
@@ -379,7 +394,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
             {getNaturalRecurrenceText()}
           </div>
         </div>
-
+        </div>
         {/* Collapsible Advanced Section */}
         <div className="border-t border-[var(--color-border)] pt-3 mt-4">
           <button

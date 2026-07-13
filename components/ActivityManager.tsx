@@ -209,16 +209,17 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
 
           {/* Bulk Action Bar overlay */}
           {selectedIds.length > 0 && (
-            <div className="absolute inset-0 bg-[var(--color-bg-base)] dark:bg-zinc-950 flex items-center justify-between z-10 animate-in fade-in duration-150">
-              <span className="text-xs font-bold text-[var(--color-text-main)]">
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[var(--color-bg-surface)] border border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)] backdrop-blur-xl rounded-full px-6 py-3 flex items-center gap-8 z-50 animate-in slide-in-from-bottom-8 duration-300 ease-out">
+              <span className="text-sm font-bold text-[var(--color-text-main)] whitespace-nowrap">
                 {selectedIds.length} item(s) selected
               </span>
-              <div className="flex gap-2">
+              <div className="flex gap-3">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleBulkArchive(!showArchived)}
                   disabled={isProcessing !== null}
+                  className="rounded-full"
                 >
                   {showArchived ? 'Restore' : 'Archive'}
                 </Button>
@@ -227,6 +228,7 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                   size="sm"
                   onClick={handleBulkDelete}
                   disabled={isProcessing !== null}
+                  className="rounded-full"
                 >
                   Delete
                 </Button>
@@ -234,6 +236,7 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                   variant="outline"
                   size="sm"
                   onClick={() => setSelectedIds([])}
+                  className="rounded-full"
                 >
                   Cancel
                 </Button>

@@ -24,13 +24,23 @@ export async function POST(request: Request) {
     // 1. Process local logs sent by mobile app
     if (localChanges?.logs && Array.isArray(localChanges.logs)) {
       for (const log of localChanges.logs) {
+        // Enforce ownership: Verify if this log is owned by another user before updating
+        const existing = await db.activityLog.findUnique({ where: { id: log.id } })
+        if (existing && existing.userId !== userId) {
+          console.warn(`[MobileSync] Unauthorized activity log update attempt on ID: ${log.id} by user: ${userId}`)
+          continue
+        }
+
+        // Standardize log dates to UTC noon
+        const logDate = new Date(`${log.date}T12:00:00.000Z`)
+
         // Upsert log in Postgres
         await db.activityLog.upsert({
           where: { id: log.id },
           create: {
             id: log.id,
             activityId: log.activityId,
-            logDate: new Date(log.date),
+            logDate,
             status: log.status,
             note: log.note || null,
             amount: log.amount !== undefined ? log.amount : null,
@@ -50,6 +60,13 @@ export async function POST(request: Request) {
     // 2. Process local notes sent by mobile app
     if (localChanges?.notes && Array.isArray(localChanges.notes)) {
       for (const note of localChanges.notes) {
+        // Enforce ownership
+        const existing = await db.note.findUnique({ where: { id: note.id } })
+        if (existing && existing.userId !== userId) {
+          console.warn(`[MobileSync] Unauthorized note update attempt on ID: ${note.id} by user: ${userId}`)
+          continue
+        }
+
         await db.note.upsert({
           where: { id: note.id },
           create: {
@@ -70,6 +87,13 @@ export async function POST(request: Request) {
     // 3. Process local templates sent by mobile app
     if (localChanges?.templates && Array.isArray(localChanges.templates)) {
       for (const t of localChanges.templates) {
+        // Enforce ownership
+        const existing = await db.activityTemplate.findUnique({ where: { id: t.id } })
+        if (existing && existing.userId !== userId) {
+          console.warn(`[MobileSync] Unauthorized template update attempt on ID: ${t.id} by user: ${userId}`)
+          continue
+        }
+
         await db.activityTemplate.upsert({
           where: { id: t.id },
           create: {
@@ -110,6 +134,26 @@ export async function POST(request: Request) {
           }
         })
       }
+    }
+
+    // 4. Process deletions sent by mobile app
+    if (localChanges?.deletedLogs && Array.isArray(localChanges.deletedLogs)) {
+      await db.activityLog.updateMany({
+        where: { id: { in: localChanges.deletedLogs }, userId },
+        data: { deletedAt: new Date() }
+      })
+    }
+    if (localChanges?.deletedNotes && Array.isArray(localChanges.deletedNotes)) {
+      await db.note.updateMany({
+        where: { id: { in: localChanges.deletedNotes }, userId },
+        data: { deletedAt: new Date() }
+      })
+    }
+    if (localChanges?.deletedTemplates && Array.isArray(localChanges.deletedTemplates)) {
+      await db.activityTemplate.updateMany({
+        where: { id: { in: localChanges.deletedTemplates }, userId },
+        data: { deletedAt: new Date() }
+      })
     }
 
     // Determine filter criteria (pull updates since last synced)
