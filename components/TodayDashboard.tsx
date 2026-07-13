@@ -304,10 +304,19 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     }
   }
 
-  // Unified card background - neutral surface with semantic colors on icons only
   const getCardBgClass = (occurrence: TimelineItem): string => {
+    const semantic = getSemanticColor(occurrence)
+    let bg = 'bg-[var(--color-bg-surface)]'
+    
+    // Apply very subtle background tints to give depth and separation
+    if (semantic.semanticType === 'completed') bg = 'bg-[var(--color-completed)]/5 dark:bg-[var(--color-completed)]/10'
+    else if (semantic.semanticType === 'warning') bg = 'bg-[var(--color-warning)]/5 dark:bg-[var(--color-warning)]/10'
+    else if (semantic.semanticType === 'overdue') bg = 'bg-[var(--color-overdue)]/5 dark:bg-[var(--color-overdue)]/10'
+    else if (semantic.semanticType === 'personal') bg = 'bg-[var(--color-personal)]/5 dark:bg-[var(--color-personal)]/10'
+    else if (semantic.semanticType === 'external') bg = 'bg-[var(--color-external)]/5 dark:bg-[var(--color-external)]/10'
+
     const baseClass = [
-      'bg-[var(--color-bg-surface)]',
+      bg,
       'border-[var(--color-border)]',
       'hover:border-[var(--color-primary)]/30',
       'hover:shadow-[var(--card-hover-shadow)]',
@@ -399,7 +408,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                   ? 'border-[var(--color-completed)]/40 bg-[var(--color-completed)]/10 animate-pulse'
                   : occurrence.status === 'skipped'
                     ? 'border-[var(--color-border)] text-[var(--color-text-muted)] bg-[var(--color-bg-base)]'
-                    : `border-current ${semantic.textColor} text-transparent hover:text-current hover:bg-current/5`
+                    : `border-slate-300 dark:border-zinc-700 text-transparent hover:border-current hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10`
               }`}
             >
               {isCompleting

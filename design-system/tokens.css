@@ -1,15 +1,15 @@
 /* design-system/tokens.css */
 
 :root {
-  /* Light Mode Palette */
-  --color-bg-base: #f8fafc;        /* Slate-50 */
+  /* Light Mode Palette (Apple HIG inspired depth) */
+  --color-bg-base: #f2f2f7;        /* System Grouped Background */
   --color-bg-surface: #ffffff;
-  --color-border: rgba(0, 0, 0, 0.08); /* Soft transparent border */
-  --color-text-main: #0f172a;         /* Slate-900 */
-  --color-text-muted: #64748b;        /* Slate-500 */
-  --color-primary: #6366f1;           /* Indigo-500 */
-  --color-primary-hover: #4f46e5;     /* Indigo-600 */
-  --color-accent: rgba(0, 0, 0, 0.04); /* Soft highlight */
+  --color-border: rgba(0, 0, 0, 0.1); /* Slightly visible iOS-like border */
+  --color-text-main: #000000;         /* Pure black for high contrast */
+  --color-text-muted: #8e8e93;        /* System gray */
+  --color-primary: #007aff;           /* iOS Blue */
+  --color-primary-hover: #0056b3;     
+  --color-accent: rgba(0, 0, 0, 0.05); /* Soft highlight */
 
   /* Semantic Colors - Color by meaning, not category */
   --color-external: #3b82f6;          /* Blue-500 for external calendar events */
