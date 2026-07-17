@@ -41,6 +41,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   onToggleTheme
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isMoreOpen, setIsMoreOpen] = useState(false)
 
   const navItems: NavigationItem[] = [
     { id: 'today', label: 'Today', icon: LayoutDashboard },
@@ -53,10 +54,24 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     { id: 'settings', label: 'Settings', icon: Settings },
   ]
 
+  const bottomNavItems = [
+    { id: 'today', label: 'Today', icon: LayoutDashboard },
+    { id: 'calendar', label: 'Calendar', icon: CalendarDays },
+    { id: 'journal', label: 'Journal', icon: BookOpen },
+    { id: 'weight', label: 'Weight', icon: Scale },
+  ]
+
+  const moreNavItems = [
+    { id: 'activities', label: 'Activities', icon: CheckSquare },
+    { id: 'leave', label: 'Time Off', icon: CalendarX },
+    { id: 'documents', label: 'Secure Vault', icon: FileText },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ]
+
   const currentItem = navItems.find(item => item.id === activeTab)
 
   return (
-    <div className="flex h-screen bg-[var(--color-bg-base)] overflow-hidden font-sans">
+    <div className="flex h-screen bg-[var(--color-bg-base)] overflow-hidden font-sans relative">
       {/* Mobile Sidebar Back-drop Overlay */}
       {isSidebarOpen && (
         <div
@@ -143,7 +158,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Navigation Header */}
-        <header className="h-14 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] flex items-center justify-between px-6 z-30">
+        <header className="h-14 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] flex items-center justify-between px-4 lg:px-6 z-30 shrink-0">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setIsSidebarOpen(true)}
@@ -155,19 +170,118 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               {currentItem?.label || 'Dashboard'}
             </h1>
           </div>
-          {/* Header Action Portal (can be extended) */}
-          <div className="flex items-center gap-3 text-xs text-[var(--color-text-muted)]">
-            <span>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</span>
+          {/* Header Action Date Info */}
+          <div className="flex items-center gap-3 text-[11px] font-semibold text-[var(--color-text-muted)]">
+            <span>{new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
           </div>
         </header>
 
         {/* Dashboard Workspace */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6 pb-24 lg:pb-6">
           <div className="max-w-7xl mx-auto w-full">
             {children}
           </div>
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <div className="fixed bottom-0 inset-x-0 bg-[var(--color-bg-surface)] border-t border-[var(--color-border)] h-16 flex items-center justify-around px-2 z-40 lg:hidden pb-safe shadow-lg">
+        {bottomNavItems.map(item => {
+          const IconComponent = item.icon
+          const isActive = activeTab === item.id
+
+          return (
+            <button
+              key={item.id}
+              onClick={() => {
+                onTabChange(item.id)
+                setIsMoreOpen(false)
+              }}
+              className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${
+                isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'
+              }`}
+            >
+              <IconComponent className="w-4.5 h-4.5" />
+              <span className="text-[9px] font-bold tracking-tight">{item.label}</span>
+            </button>
+          )
+        })}
+        <button
+          onClick={() => setIsMoreOpen(true)}
+          className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${
+            isMoreOpen || moreNavItems.some(n => n.id === activeTab) ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'
+          }`}
+        >
+          <Menu className="w-4.5 h-4.5" />
+          <span className="text-[9px] font-bold tracking-tight">More</span>
+        </button>
+      </div>
+
+      {/* Mobile "More" Bottom Sheet Menu */}
+      {isMoreOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex flex-col justify-end">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setIsMoreOpen(false)}
+          />
+          {/* Bottom Sheet Panel */}
+          <div className="relative bg-[var(--color-bg-surface)] border-t border-[var(--color-border)] rounded-t-3xl p-5 pb-8 space-y-4 shadow-2xl z-10 animate-fade-in-up max-h-[70vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-2 border-b border-[var(--color-border)]/50">
+              <h3 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-muted)]">More Modules</h3>
+              <button onClick={() => setIsMoreOpen(false)} className="text-slate-400 dark:text-zinc-500 p-1 cursor-pointer">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              {moreNavItems.map(item => {
+                const IconComponent = item.icon
+                const isActive = activeTab === item.id
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      onTabChange(item.id)
+                      setIsMoreOpen(false)
+                    }}
+                    className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)] text-[var(--color-primary)] font-bold'
+                        : 'bg-slate-50 dark:bg-zinc-900 border-[var(--color-border)] text-[var(--color-text-main)] hover:bg-[var(--color-accent)]'
+                    }`}
+                  >
+                    <IconComponent className="w-4.5 h-4.5" />
+                    <span className="text-xs font-semibold">{item.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+            
+            <div className="pt-4 border-t border-[var(--color-border)] flex flex-col gap-3">
+              {user && (
+                <div className="flex items-center justify-between px-2 text-xs font-semibold text-[var(--color-text-muted)]">
+                  <span>Logged in as: {user.username}</span>
+                  <button onClick={onToggleTheme} className="p-1.5 rounded-lg bg-slate-100 dark:bg-zinc-900 cursor-pointer">
+                    {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-blue-500" />}
+                  </button>
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  setIsMoreOpen(false)
+                  onLogout()
+                }}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 text-xs font-black uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
+

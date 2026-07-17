@@ -348,7 +348,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
     <div className="fixed inset-0 z-40 overflow-hidden flex justify-end">
       {/* Backdrop overlay */}
       <div 
-        className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-xs transition-opacity duration-300"
+        className="fixed inset-0 bg-slate-900/40 dark:bg-black/70 backdrop-blur-md transition-opacity duration-300"
         onClick={onClose}
       />
       
@@ -368,50 +368,52 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
           </button>
         </div>
 
+        {/* Tabs */}
+        <div className="px-5 py-2.5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-950/20 flex justify-center shrink-0">
+          <div className="flex bg-slate-100 dark:bg-zinc-900/60 p-0.5 rounded-[9px] shadow-inner w-full max-w-xs">
+            <button
+              onClick={() => setActiveTab('activities')}
+              className={`flex-1 py-1 text-center font-bold rounded-md transition-all duration-200 flex justify-center items-center gap-1.5 text-xs cursor-pointer ${
+                activeTab === 'activities'
+                  ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.1)] font-extrabold'
+                  : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300'
+              }`}
+            >
+              <Sparkles size={14} />
+              Activities ({logs.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('notes')}
+              className={`flex-1 py-1 text-center font-bold rounded-md transition-all duration-200 flex justify-center items-center gap-1.5 text-xs cursor-pointer ${
+                activeTab === 'notes'
+                  ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.1)] font-extrabold'
+                  : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300'
+              }`}
+            >
+              <BookOpen size={14} />
+              Daily Note
+              {note && <span className="w-1.5 h-1.5 rounded-full bg-green-500 dark:bg-green-400" />}
+            </button>
+          </div>
+        </div>
+
         {/* Scrollable contents container */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
 
-        {/* Panchang Alerts banner */}
-        {(() => {
-          const events = getEventsForDate(dateStr)
-          if (events.length === 0) return null
-          return (
-            <div className="mx-6 mt-4 p-3 bg-orange-500/10 border border-orange-500/30 text-orange-655 dark:text-orange-400 rounded-xl flex items-center gap-2 text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
-              <span>Marathi Calendar: {events.map(e => e.title).join(', ')}</span>
-            </div>
-          )
-        })()}
+          {/* Panchang Alerts banner */}
+          {(() => {
+            const events = getEventsForDate(dateStr)
+            if (events.length === 0) return null
+            return (
+              <div className="p-3 bg-orange-500/10 border border-orange-500/30 text-orange-655 dark:text-orange-400 rounded-xl flex items-center gap-2 text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                <span>Marathi Calendar: {events.map(e => e.title).join(', ')}</span>
+              </div>
+            )
+          })()}
 
-        {/* Tabs */}
-        <div className="flex border-b border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-950/40">
-          <button
-            onClick={() => setActiveTab('activities')}
-            className={`flex-1 py-3 text-center font-semibold transition-colors flex justify-center items-center gap-1.5 border-b-2 text-sm cursor-pointer ${
-              activeTab === 'activities'
-                ? 'text-slate-900 dark:text-white border-slate-900 dark:border-white'
-                : 'text-slate-400 border-transparent hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-300'
-            }`}
-          >
-            <Sparkles size={16} />
-            Activities ({logs.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('notes')}
-            className={`flex-1 py-3 text-center font-semibold transition-colors flex justify-center items-center gap-1.5 border-b-2 text-sm cursor-pointer ${
-              activeTab === 'notes'
-                ? 'text-slate-900 dark:text-white border-slate-900 dark:border-white'
-                : 'text-slate-400 border-transparent hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-300'
-            }`}
-          >
-            <BookOpen size={16} />
-            Daily Note
-            {note && <span className="ml-1.5 w-2 h-2 rounded-full bg-green-500 dark:bg-green-400" />}
-          </button>
-        </div>
-
-        {/* Tab Contents */}
-        <div className="mt-3">
+          {/* Tab Contents */}
+          <div className="mt-3">
           {activeTab === 'activities' && (
             <div className="space-y-6">
               {/* If builder is open */}
@@ -940,7 +942,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
 
                   {/* Tabs (Hidden when searching since search searches all) */}
                   {activitySearch.trim() === '' && (
-                    <div className="flex flex-wrap gap-1 border-b border-slate-200/60 dark:border-zinc-900/60 pb-1 text-[11px]">
+                    <div className="flex bg-slate-100 dark:bg-zinc-900/50 p-0.5 rounded-[9px] shadow-inner text-[10px]">
                       {(
                         [
                           { key: 'all', label: 'All' },
@@ -954,10 +956,10 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                           key={tab.key}
                           type="button"
                           onClick={() => setActivityFilterTab(tab.key)}
-                          className={`px-3 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                          className={`flex-1 py-1 text-center font-bold rounded-md transition-all duration-200 cursor-pointer ${
                             activityFilterTab === tab.key
-                              ? 'bg-slate-900 dark:bg-zinc-100 text-white dark:text-zinc-950 shadow-xs'
-                              : 'text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-300'
+                              ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                              : 'text-slate-500 dark:text-zinc-550 hover:text-slate-700 dark:hover:text-zinc-300'
                           }`}
                         >
                           {tab.label}

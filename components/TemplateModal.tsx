@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import { ActivityTemplate, Tag, RecurrenceType, ActivityType, Priority, CalendarProvider } from '@/types'
 import { createActivityTemplate, updateActivityTemplate } from '@/app/actions/template'
-import { ICON_OPTIONS } from './Icon'
+import { ICON_OPTIONS, Icon } from './Icon'
 import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
 import { Modal, Input, Textarea, Select, Button } from '@/design-system'
 
@@ -50,91 +50,126 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   onClose,
   templateToEdit
 }) => {
-  // Visible default fields
-  const [name, setName] = useState('')
-  const [category, setCategory] = useState('personal')
-  const [icon, setIcon] = useState('CheckSquare')
-  const [color, setColor] = useState('zinc')
-  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>('daily')
-  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([])
-  const [recurrenceDayOfMonth, setRecurrenceDayOfMonth] = useState('15')
-  const [targetDate, setTargetDate] = useState(new Date().toISOString().split('T')[0])
-  const [isAllDay, setIsAllDay] = useState(true)
-  const [startTime, setStartTime] = useState('09:00')
+  // Derive default fields from templateToEdit on mount
+  const [name, setName] = useState(templateToEdit?.name || '')
+  const [category, setCategory] = useState(templateToEdit?.category || 'personal')
+  const [icon, setIcon] = useState(templateToEdit?.icon || 'CheckSquare')
+  const [color, setColor] = useState(templateToEdit?.color || 'zinc')
+  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>(templateToEdit?.recurrenceType || 'daily')
+  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>(() => 
+    templateToEdit?.recurrenceDaysOfWeek ? templateToEdit.recurrenceDaysOfWeek.split(',').map(Number) : []
+  )
+  const [recurrenceDayOfMonth, setRecurrenceDayOfMonth] = useState(() => 
+    templateToEdit?.recurrenceDayOfMonth ? String(templateToEdit.recurrenceDayOfMonth) : '15'
+  )
+  const [targetDate, setTargetDate] = useState(() => 
+    templateToEdit?.targetDate ? templateToEdit.targetDate.split('T')[0] : new Date().toISOString().split('T')[0]
+  )
+  const [isAllDay, setIsAllDay] = useState(() => {
+    if (!templateToEdit) return true
+    const meta = typeof templateToEdit.metadata === 'string' 
+      ? JSON.parse(templateToEdit.metadata) 
+      : templateToEdit.metadata || {}
+    return meta.isAllDay ?? true
+  })
+  const [startTime, setStartTime] = useState(() => {
+    if (!templateToEdit) return '09:00'
+    const meta = typeof templateToEdit.metadata === 'string' 
+      ? JSON.parse(templateToEdit.metadata) 
+      : templateToEdit.metadata || {}
+    return meta.startTime ?? '09:00'
+  })
 
   // Advanced section
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [priority, setPriority] = useState<Priority>('NORMAL')
-  const [type, setType] = useState<ActivityType>('PERSONAL')
-  const [notes, setNotes] = useState('')
-  const [location, setLocation] = useState('')
-  const [amount, setAmount] = useState('')
-  const [tagsInput, setTagsInput] = useState('')
-  const [estimatedDuration, setEstimatedDuration] = useState('30')
-  const [calendarProvider, setCalendarProvider] = useState<CalendarProvider>('NONE')
-  const [hasReminder, setHasReminder] = useState(false)
+  const [priority, setPriority] = useState<Priority>(templateToEdit?.priority || 'NORMAL')
+  const [type, setType] = useState<ActivityType>(templateToEdit?.type || 'PERSONAL')
+  const [notes, setNotes] = useState(templateToEdit?.notes || '')
+  const [location, setLocation] = useState(() => {
+    if (!templateToEdit) return ''
+    const meta = typeof templateToEdit.metadata === 'string' 
+      ? JSON.parse(templateToEdit.metadata) 
+      : templateToEdit.metadata || {}
+    return meta.location ?? ''
+  })
+  const [amount, setAmount] = useState(() => 
+    templateToEdit?.amount !== null && templateToEdit?.amount !== undefined ? String(templateToEdit.amount) : ''
+  )
+  const [tagsInput, setTagsInput] = useState(() => 
+    templateToEdit?.tags ? templateToEdit.tags.map(t => t.name).join(', ') : ''
+  )
+  const [estimatedDuration, setEstimatedDuration] = useState(() => 
+    templateToEdit?.estimatedDuration ? String(templateToEdit.estimatedDuration) : '30'
+  )
+  const [calendarProvider, setCalendarProvider] = useState<CalendarProvider>(templateToEdit?.calendarProvider || 'NONE')
+  const [hasReminder, setHasReminder] = useState(() => {
+    if (!templateToEdit) return false
+    const rules = typeof templateToEdit.notificationRules === 'string'
+      ? JSON.parse(templateToEdit.notificationRules)
+      : templateToEdit.notificationRules
+    return Array.isArray(rules) && rules.length > 0
+  })
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [iconSearch, setIconSearch] = useState('')
 
-  const [prevIsOpen, setPrevIsOpen] = useState(isOpen)
+  // Also support resetting state if props change without unmounting (rare but safe)
   const [prevTemplateToEdit, setPrevTemplateToEdit] = useState(templateToEdit)
-  if (isOpen !== prevIsOpen || templateToEdit !== prevTemplateToEdit) {
-    setPrevIsOpen(isOpen)
+  if (templateToEdit !== prevTemplateToEdit) {
     setPrevTemplateToEdit(templateToEdit)
-    if (isOpen) {
-      if (templateToEdit) {
-        setName(templateToEdit.name)
-        setCategory(templateToEdit.category)
-        setIcon(templateToEdit.icon)
-        setColor(templateToEdit.color)
-        setRecurrenceType(templateToEdit.recurrenceType)
-        setSelectedWeekdays(templateToEdit.recurrenceDaysOfWeek ? templateToEdit.recurrenceDaysOfWeek.split(',').map(Number) : [])
-        setRecurrenceDayOfMonth(templateToEdit.recurrenceDayOfMonth ? String(templateToEdit.recurrenceDayOfMonth) : '15')
-        setTargetDate(templateToEdit.targetDate || new Date().toISOString().split('T')[0])
-        setPriority(templateToEdit.priority)
-        setType(templateToEdit.type)
-        setNotes(templateToEdit.notes || '')
-        setAmount(templateToEdit.amount !== null ? String(templateToEdit.amount) : '')
-        setTagsInput(templateToEdit.tags ? templateToEdit.tags.map(t => t.name).join(', ') : '')
-        setCalendarProvider(templateToEdit.calendarProvider)
+    if (templateToEdit) {
+      setName(templateToEdit.name)
+      setCategory(templateToEdit.category)
+      setIcon(templateToEdit.icon)
+      setColor(templateToEdit.color)
+      setRecurrenceType(templateToEdit.recurrenceType)
+      setSelectedWeekdays(templateToEdit.recurrenceDaysOfWeek ? templateToEdit.recurrenceDaysOfWeek.split(',').map(Number) : [])
+      setRecurrenceDayOfMonth(templateToEdit.recurrenceDayOfMonth ? String(templateToEdit.recurrenceDayOfMonth) : '15')
+      setTargetDate(templateToEdit.targetDate ? templateToEdit.targetDate.split('T')[0] : new Date().toISOString().split('T')[0])
+      setPriority(templateToEdit.priority)
+      setType(templateToEdit.type)
+      setNotes(templateToEdit.notes || '')
+      setAmount(templateToEdit.amount !== null && templateToEdit.amount !== undefined ? String(templateToEdit.amount) : '')
+      setTagsInput(templateToEdit.tags ? templateToEdit.tags.map(t => t.name).join(', ') : '')
+      setCalendarProvider(templateToEdit.calendarProvider)
 
-        const meta = typeof templateToEdit.metadata === 'string' 
-          ? JSON.parse(templateToEdit.metadata) 
-          : templateToEdit.metadata || {}
-        setIsAllDay(meta.isAllDay ?? true)
-        setStartTime(meta.startTime ?? '09:00')
-        setLocation(meta.location ?? '')
-        setEstimatedDuration(templateToEdit.estimatedDuration ? String(templateToEdit.estimatedDuration) : '30')
+      const meta = typeof templateToEdit.metadata === 'string' 
+        ? JSON.parse(templateToEdit.metadata) 
+        : templateToEdit.metadata || {}
+      setIsAllDay(meta.isAllDay ?? true)
+      setStartTime(meta.startTime ?? '09:00')
+      setLocation(meta.location ?? '')
+      setEstimatedDuration(templateToEdit.estimatedDuration ? String(templateToEdit.estimatedDuration) : '30')
 
-        const rules = typeof templateToEdit.notificationRules === 'string'
-          ? JSON.parse(templateToEdit.notificationRules)
-          : templateToEdit.notificationRules
-        setHasReminder(Array.isArray(rules) && rules.length > 0)
-      } else {
-        setName('')
-        setCategory('personal')
-        setIcon('CheckSquare')
-        setColor('zinc')
-        setRecurrenceType('daily')
-        setSelectedWeekdays([])
-        setRecurrenceDayOfMonth('15')
-        setTargetDate(new Date().toISOString().split('T')[0])
-        setIsAllDay(true)
-        setStartTime('09:00')
-        setPriority('NORMAL')
-        setType('PERSONAL')
-        setNotes('')
-        setLocation('')
-        setAmount('')
-        setTagsInput('')
-        setEstimatedDuration('30')
-        setCalendarProvider('NONE')
-        setHasReminder(false)
-        setShowAdvanced(false)
-      }
-      setErrorMsg('')
+      const rules = typeof templateToEdit.notificationRules === 'string'
+        ? JSON.parse(templateToEdit.notificationRules)
+        : templateToEdit.notificationRules
+      setHasReminder(Array.isArray(rules) && rules.length > 0)
+    } else {
+      setName('')
+      setCategory('personal')
+      setIcon('CheckSquare')
+      setColor('zinc')
+      setRecurrenceType('daily')
+      setSelectedWeekdays([])
+      setRecurrenceDayOfMonth('15')
+      setTargetDate(new Date().toISOString().split('T')[0])
+      setIsAllDay(true)
+      setStartTime('09:00')
+      setPriority('NORMAL')
+      setType('PERSONAL')
+      setNotes('')
+      setLocation('')
+      setAmount('')
+      setTagsInput('')
+      setEstimatedDuration('30')
+      setCalendarProvider('NONE')
+      setHasReminder(false)
+      setShowAdvanced(false)
     }
+    setErrorMsg('')
+    setIconSearch('')
   }
 
   if (!isOpen) return null
@@ -182,7 +217,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     const parsedDayOfMonth = ['monthly'].includes(recurrenceType)
       ? parseInt(recurrenceDayOfMonth) || 15
       : null
-    const parsedTargetDate = recurrenceType === 'one_time' ? targetDate : null
+    const parsedTargetDate = recurrenceType === 'one_time' && targetDate ? `${targetDate}T00:00:00.000Z` : null
 
     const tagNames = tagsInput
       .split(',')
@@ -234,6 +269,11 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     }
   }
 
+  const filteredIcons = ICON_OPTIONS.filter(opt =>
+    opt.label.toLowerCase().includes(iconSearch.toLowerCase()) ||
+    opt.name.toLowerCase().includes(iconSearch.toLowerCase())
+  )
+
   return (
     <Modal
       isOpen={isOpen}
@@ -264,21 +304,49 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           required
         />
 
-        {/* Category & Icon row */}
-        <div className="grid grid-cols-2 gap-4">
-          <Select
-            label="Category"
-            value={category}
-            onChange={e => setCategory(e.target.value)}
-            options={CATEGORIES}
-          />
+        {/* Category */}
+        <Select
+          label="Category"
+          value={category}
+          onChange={e => setCategory(e.target.value)}
+          options={CATEGORIES}
+        />
 
-          <Select
-            label="Icon Selector"
-            value={icon}
-            onChange={e => setIcon(e.target.value)}
-            options={ICON_OPTIONS.map(i => ({ value: i.name, label: i.label }))}
-          />
+        {/* Icon Selector — Notion-style visual grid with Search */}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-[var(--color-text-muted)]">Icon</label>
+            <input
+              type="text"
+              placeholder="Search icons..."
+              value={iconSearch}
+              onChange={e => setIconSearch(e.target.value)}
+              className="text-xs px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-base)] focus:outline-hidden focus:ring-1 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] w-44"
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto pr-1 grid grid-cols-6 sm:grid-cols-8 gap-2 border border-[var(--color-border)]/50 p-2 rounded-xl bg-slate-50/50 dark:bg-zinc-900/30">
+            {filteredIcons.map(opt => (
+              <button
+                key={opt.name}
+                type="button"
+                onClick={() => setIcon(opt.name)}
+                className={`flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                  icon === opt.name
+                    ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)] text-[var(--color-primary)] shadow-xs ring-1 ring-[var(--color-primary)]/30'
+                    : 'bg-[var(--color-bg-surface)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-accent)] hover:text-[var(--color-text-main)] hover:border-slate-300 dark:hover:border-zinc-700'
+                }`}
+                title={opt.label}
+              >
+                <Icon name={opt.name} size={18} />
+                <span className="text-[8px] font-bold leading-none truncate w-full text-center">{opt.label.split('/')[0]}</span>
+              </button>
+            ))}
+            {filteredIcons.length === 0 && (
+              <div className="col-span-full py-6 text-center text-xs text-[var(--color-text-muted)] font-medium">
+                No matching icons found.
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Color Tags */}
@@ -408,36 +476,23 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
           {showAdvanced && (
             <div className="space-y-4 pt-3.5 border-t border-dashed border-[var(--color-border)] mt-2">
-              <div className="grid grid-cols-2 gap-4">
-                <Select
-                  label="Priority Level"
-                  value={priority}
-                  onChange={e => setPriority(e.target.value as Priority)}
-                  options={[
-                    { value: 'LOW', label: 'Low (P3)' },
-                    { value: 'NORMAL', label: 'Normal (P2)' },
-                    { value: 'HIGH', label: 'High (P1)' },
-                    { value: 'CRITICAL', label: 'Critical (P1)' },
-                  ]}
-                />
+              <Select
+                label="Activity Sub-Type"
+                value={type}
+                onChange={e => setType(e.target.value as ActivityType)}
+                options={[
+                  { value: 'PERSONAL', label: 'Personal Task' },
+                  { value: 'WORKOUT', label: 'Workout Session' },
+                  { value: 'MEETING', label: 'Meeting Event' },
+                  { value: 'BILL', label: 'Financial Bill' },
+                  { value: 'MEDICINE', label: 'Medicine Intake' },
+                  { value: 'LEAVE', label: 'Leave Holiday' },
+                  { value: 'JOURNAL', label: 'Journal Log' },
+                  { value: 'LEARNING', label: 'Study Learning' },
+                  { value: 'REMINDER', label: 'Custom Alert' },
+                ]}
+              />
 
-                <Select
-                  label="Activity Sub-Type"
-                  value={type}
-                  onChange={e => setType(e.target.value as ActivityType)}
-                  options={[
-                    { value: 'PERSONAL', label: 'Personal Task' },
-                    { value: 'WORKOUT', label: 'Workout Session' },
-                    { value: 'MEETING', label: 'Meeting Event' },
-                    { value: 'BILL', label: 'Financial Bill' },
-                    { value: 'MEDICINE', label: 'Medicine Intake' },
-                    { value: 'LEAVE', label: 'Leave Holiday' },
-                    { value: 'JOURNAL', label: 'Journal Log' },
-                    { value: 'LEARNING', label: 'Study Learning' },
-                    { value: 'REMINDER', label: 'Custom Alert' },
-                  ]}
-                />
-              </div>
 
               {!isAllDay && (
                 <Input

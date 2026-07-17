@@ -1,6 +1,7 @@
 "use server"
 
 import { db } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { getLoggedUser } from './auth'
 
@@ -10,6 +11,11 @@ async function getAuthSession() {
   const user = await getLoggedUser()
   if (!user) throw new Error('Authentication required')
   return user
+}
+
+/** Converts any JSON-like value or null to the type Prisma requires for nullable JSON columns. */
+function toJsonField(v: unknown): Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue {
+  return v == null ? Prisma.JsonNull : (v as Prisma.InputJsonValue)
 }
 
 /**
@@ -25,6 +31,7 @@ export async function upsertJournalEntry(
     reflections?: string | null
     lessonsLearned?: string | null
     tomorrowPlan?: string | null
+    metadata?: Record<string, unknown> | null
   }
 ) {
   try {
@@ -47,6 +54,9 @@ export async function upsertJournalEntry(
           reflections: fields.reflections !== undefined ? fields.reflections : existing.reflections,
           lessonsLearned: fields.lessonsLearned !== undefined ? fields.lessonsLearned : existing.lessonsLearned,
           tomorrowPlan: fields.tomorrowPlan !== undefined ? fields.tomorrowPlan : existing.tomorrowPlan,
+          metadata: toJsonField(
+            fields.metadata !== undefined ? fields.metadata : existing.metadata
+          ),
         },
       })
     } else {
@@ -60,6 +70,7 @@ export async function upsertJournalEntry(
           reflections: fields.reflections ?? null,
           lessonsLearned: fields.lessonsLearned ?? null,
           tomorrowPlan: fields.tomorrowPlan ?? null,
+          metadata: toJsonField(fields.metadata ?? null),
         },
       })
     }
@@ -74,13 +85,17 @@ export async function upsertJournalEntry(
       'amber'
     )
 
+    const cleanNoteText = fields.content 
+      ? fields.content.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() 
+      : ''
+
     await ActivityService.logActivity({
       userId: user.id,
       templateId: template.id,
       date,
       status: 'done',
       journalEntryId: entry.id,
-      note: fields.content ? (fields.content.substring(0, 100) + '...') : ''
+      note: cleanNoteText ? (cleanNoteText.substring(0, 100) + '...') : ''
     })
 
     revalidatePath('/')

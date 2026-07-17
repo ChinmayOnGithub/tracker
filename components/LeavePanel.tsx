@@ -408,10 +408,12 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
                     value={record.status}
                     onChange={e => handleStatusChange(record.id, e.target.value as LeaveStatus)}
                     disabled={isPending}
-                    className={`text-[10px] font-bold bg-transparent border-0 focus:outline-hidden cursor-pointer ${sc.cls} disabled:opacity-50`}
+                    className={`text-[10px] font-bold bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1 focus:outline-hidden cursor-pointer ${sc.cls} disabled:opacity-50`}
                   >
                     {(['APPROVED', 'PENDING', 'REJECTED'] as LeaveStatus[]).map(s => (
-                      <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
+                      <option key={s} value={s} className="bg-[var(--color-bg-surface)] text-[var(--color-text-main)]">
+                        {STATUS_CONFIG[s].label}
+                      </option>
                     ))}
                   </select>
 

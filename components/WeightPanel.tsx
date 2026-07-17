@@ -486,15 +486,15 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
               </span>
             </div>
             {/* Period selector */}
-            <div className="flex items-center gap-1 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg p-0.5 self-start">
+            <div className="flex bg-slate-100 dark:bg-zinc-900/60 p-0.5 rounded-[9px] shadow-inner text-[10px] self-start">
               {(['30D', '60D', '90D', 'All'] as const).map(p => (
                 <button
                   key={p}
                   onClick={() => setPeriod(p)}
-                  className={`px-2 py-0.5 rounded-md text-[10px] font-black cursor-pointer transition-all ${
+                  className={`px-2.5 py-1 text-center font-bold rounded-md transition-all duration-200 cursor-pointer ${
                     period === p
-                      ? 'bg-[var(--color-primary)] text-white'
-                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                      ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                      : 'text-slate-500 dark:text-zinc-550 hover:text-slate-700 dark:hover:text-zinc-300'
                   }`}
                 >
                   {p}

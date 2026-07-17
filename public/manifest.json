@@ -1,0 +1,19 @@
+{
+  "name": "Operations Tracker",
+  "short_name": "Tracker",
+  "description": "Personal Operations and Productivity Dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

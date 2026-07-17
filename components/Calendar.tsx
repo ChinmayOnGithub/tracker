@@ -36,7 +36,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export const Calendar: React.FC<CalendarProps> = ({
   logs,
-  templates,
+  templates: _templates,
   notes,
   calendarData,
   todayStr = '',
@@ -117,14 +117,7 @@ export const Calendar: React.FC<CalendarProps> = ({
   const notesByDate = new Map<string, Note>()
   notes.forEach(n => notesByDate.set(n.date.split('T')[0], n))
 
-  const getTailwindColorClass = (color: string) => {
-    switch (color) {
-      case 'red': return 'bg-rose-500'; case 'green': return 'bg-emerald-500'; case 'blue': return 'bg-blue-500'
-      case 'yellow': return 'bg-yellow-500'; case 'orange': return 'bg-orange-500'; case 'purple': return 'bg-purple-500'
-      case 'teal': return 'bg-teal-500'; case 'indigo': return 'bg-indigo-500'; case 'cyan': return 'bg-cyan-500'
-      default: return 'bg-slate-400'
-    }
-  }
+
 
   // Week & Agenda prep
   const startOfWeek = new Date(currentDate)

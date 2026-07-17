@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { upsertJournalEntry, deleteJournalEntry } from '@/app/actions/journal'
 import {
-  BookOpen, Trash2, Heart, Lightbulb, Sunrise, Smile, Search, ChevronDown, CheckCircle2, Cloud, CloudOff, Loader2, Edit3, PlusCircle
+  Trash2, Search, CheckCircle2, CloudOff, Loader2, Edit3, PlusCircle,
+  Bold, Italic, Underline, Code, List, Heading1, Heading2, Highlighter, Quote, Undo2, Redo2, Eraser, Image as ImageIcon, X
 } from 'lucide-react'
-import { Button } from '@/design-system'
 
 interface JournalEntry {
   id: string
@@ -16,17 +16,11 @@ interface JournalEntry {
   reflections: string | null
   lessonsLearned: string | null
   tomorrowPlan: string | null
+  metadata?: Record<string, unknown> | null
   createdAt: Date | string
   updatedAt: Date | string
 }
 
-const MOOD_OPTIONS = [
-  { emoji: '🤩', label: 'Amazing', value: 'amazing' },
-  { emoji: '😊', label: 'Good', value: 'good' },
-  { emoji: '😐', label: 'Neutral', value: 'neutral' },
-  { emoji: '😔', label: 'Low', value: 'low' },
-  { emoji: '😤', label: 'Frustrated', value: 'frustrated' },
-]
 
 function formatJournalDate(d: Date | string) {
   const date = typeof d === 'string' ? new Date(d) : d
@@ -47,6 +41,26 @@ function toYMD(d: Date | string) {
   const day = String(date.getUTCDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
+function markdownToHtml(text: string): string {
+  if (!text) return ''
+  if (/<[a-z][\s\S]*>/i.test(text)) {
+    return text
+  }
+  let html = text
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/\*([^*]+)\*/g, '<i>$1</i>')
+    .replace(/_([^_]+)_/g, '<i>$1</i>')
+    .replace(/==([^=]+)==/g, '<mark style="background-color: #fef08a; color: #000000;">$1</mark>')
+    .replace(/~~([^~]+)~~/g, '<strike>$1</strike>')
+    .replace(/^#\s+(.+)$/gm, '<h1>$1</h1>')
+    .replace(/^##\s+(.+)$/gm, '<h2>$1</h2>')
+    .replace(/^>\s+(.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/^-\s+(.+)$/gm, '<ul><li>$1</li></ul>')
+  
+  html = html.replace(/<\/ul>\s*<ul>/g, '')
+  html = html.replace(/\n/g, '<br>')
+  return html
+}
 
 function todayYMD() {
   const d = new Date()
@@ -64,71 +78,6 @@ function SyncStatus({ status }: { status: 'idle' | 'saving' | 'saved' | 'error' 
   )
 }
 
-interface AutosaveTextareaProps {
-  label: string
-  icon: React.ReactNode
-  value: string
-  placeholder: string
-  field: string
-  date: string
-  onSaved: (field: string, value: string) => void
-}
-
-function AutosaveTextarea({ label, icon, value: initialValue, placeholder, field, date, onSaved }: AutosaveTextareaProps) {
-  const [value, setValue] = useState(initialValue)
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const isSavingRef = useRef(false)
-  const pendingRef = useRef<string | null>(null)
-  const [prevInitialValue, setPrevInitialValue] = useState(initialValue)
-
-  if (initialValue !== prevInitialValue) {
-    setValue(initialValue)
-    setPrevInitialValue(initialValue)
-  }
-
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
-  const save = useCallback(async (v: string) => {
-    if (v === initialValue) return
-    if (isSavingRef.current) { pendingRef.current = v; return }
-    isSavingRef.current = true
-    setStatus('saving')
-    try {
-      const res = await upsertJournalEntry(date, { [field]: v })
-      if (res.success) { setStatus('saved'); onSaved(field, v) }
-      else setStatus('error')
-    } catch { setStatus('error') }
-    finally {
-      isSavingRef.current = false
-      if (pendingRef.current !== null) {
-        const next = pendingRef.current; pendingRef.current = null; save(next)
-      }
-    }
-  }, [date, field, initialValue, onSaved])
-
-  useEffect(() => {
-    if (value === initialValue) return
-    const t = setTimeout(() => save(value), 1500)
-    return () => clearTimeout(t)
-  }, [value, initialValue, save])
-
-  return (
-    <div className="flex flex-col gap-2 bg-slate-50/50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-xl p-4 transition-all hover:bg-slate-50 dark:hover:bg-zinc-900 group">
-      <div className="flex items-center justify-between">
-        <label className="flex items-center gap-1.5 text-xs font-bold tracking-wide text-slate-500 dark:text-zinc-400">
-          <span className="text-slate-400 dark:text-zinc-500 group-hover:text-[var(--color-primary)] transition-colors">{icon}</span> {label}
-        </label>
-        <SyncStatus status={status} />
-      </div>
-      <textarea
-        value={value}
-        onChange={e => { setValue(e.target.value); setStatus('saving') }}
-        onBlur={() => save(value)}
-        placeholder={placeholder}
-        className="w-full bg-transparent text-[13px] text-[var(--color-text-main)] placeholder-slate-400 dark:placeholder-zinc-600 focus:outline-hidden resize-none leading-relaxed min-h-[60px]"
-      />
-    </div>
-  )
-}
 
 interface JournalPanelProps {
   initialEntries: JournalEntry[]
@@ -139,22 +88,302 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   const [entries, setEntries] = useState<JournalEntry[]>(initialEntries)
   const [activeDate, setActiveDate] = useState<string>(today)
   const [search, setSearch] = useState('')
-  const [showAdvanced, setShowAdvanced] = useState(false)
-
   // Editor states for active date
   const activeEntry = entries.find(e => toYMD(e.journalDate) === activeDate) || null
-  const [content, setContent] = useState(activeEntry?.content || '')
-  const [mood, setMood] = useState(activeEntry?.mood || null)
+  const [content, setContent] = useState(markdownToHtml(activeEntry?.content || ''))
   const [contentStatus, setContentStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
   const isSavingRef = useRef(false)
   const pendingRef = useRef<string | null>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
+
+  const execCmd = (cmd: string, val: string = '') => {
+    // If it's a block formatting command, check if we should toggle it off
+    if (cmd === 'formatBlock' && typeof window !== 'undefined') {
+      const selection = window.getSelection()
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0)
+        let parentNode: Node | null = range.commonAncestorContainer
+        
+        let activeBlockTag: string | null = null
+        while (parentNode && parentNode !== editorRef.current) {
+          if (parentNode.nodeType === Node.ELEMENT_NODE) {
+            const tagName = (parentNode as Element).tagName.toLowerCase()
+            if (['h1', 'h2', 'blockquote', 'pre'].includes(tagName)) {
+              activeBlockTag = tagName
+              break
+            }
+          }
+          parentNode = parentNode.parentNode
+        }
+
+        const targetTag = val.replace(/[<>]/g, '').toLowerCase()
+        if (activeBlockTag === targetTag) {
+          // If already inside the target block, toggle back to normal paragraph block
+          document.execCommand('formatBlock', false, '<p>')
+          if (editorRef.current) {
+            const html = editorRef.current.innerHTML
+            setContent(html)
+            setContentStatus('saving')
+          }
+          return
+        }
+      }
+    }
+
+    // Standardize background highlight commands for cross-browser support
+    const command = cmd === 'hiliteColor' && typeof window !== 'undefined' && !/Chrome|Safari/.test(navigator.userAgent) 
+      ? 'backColor' 
+      : cmd
+    document.execCommand(command, false, val)
+    if (editorRef.current) {
+      const html = editorRef.current.innerHTML
+      setContent(html)
+      setContentStatus('saving')
+    }
+  }
+
+  const clearFormatting = () => {
+    if (typeof window === 'undefined') return
+    document.execCommand('removeFormat')
+    document.execCommand('formatBlock', false, '<p>')
+    if (editorRef.current) {
+      const html = editorRef.current.innerHTML
+      setContent(html)
+      setContentStatus('saving')
+    }
+  }
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  interface AttachedImage {
+    name: string
+    data: string
+  }
+
+  const getMetadataImages = (entry: JournalEntry | null): AttachedImage[] => {
+    if (!entry || !entry.metadata) return []
+    try {
+      const meta = typeof entry.metadata === 'string' ? JSON.parse(entry.metadata) : entry.metadata
+      if (Array.isArray(meta.images)) {
+        return meta.images.map((item: unknown) => {
+          if (typeof item === 'string') {
+            return { name: `image.png`, data: item }
+          }
+          const obj = item as { name?: string; data?: string }
+          return { name: obj?.name || `image.png`, data: obj?.data || '' }
+        })
+      }
+      return []
+    } catch {
+      return []
+    }
+  }
+
+  const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(getMetadataImages(activeEntry))
+  const [mentionMenu, setMentionMenu] = useState<{ open: boolean; x: number; y: number } | null>(null)
+  const savedRangeRef = useRef<Range | null>(null)
+  const [activeMentionIndex, setActiveMentionIndex] = useState(0)
+
+  const saveMetadata = async (imgs: AttachedImage[]) => {
+    try {
+      setContentStatus('saving')
+      const res = await upsertJournalEntry(activeDate, { metadata: { images: imgs } })
+      if (res.success && res.entry) {
+        setContentStatus('saved')
+        setEntries(prev => {
+          const idx = prev.findIndex(e => toYMD(e.journalDate) === activeDate)
+          if (idx >= 0) {
+            const copy = [...prev]
+            copy[idx] = { ...copy[idx], metadata: { images: imgs }, id: res.entry.id }
+            return copy
+          }
+          return prev
+        })
+      } else {
+        setContentStatus('error')
+      }
+    } catch {
+      setContentStatus('error')
+    }
+  }
+
+  const insertImageHTML = (src: string, name?: string) => {
+    if (editorRef.current) {
+      editorRef.current.focus()
+      const imgName = name || `Image ${attachedImages.length + 1}`
+      const imgHtml = `<img src="${src}" alt="${imgName}" class="max-w-full my-4 rounded-lg border border-slate-200 dark:border-zinc-800 shadow-sm transition-transform hover:scale-[1.01]" style="max-height: 380px; object-fit: contain; display: block;" />`
+      document.execCommand('insertHTML', false, imgHtml)
+      
+      const html = editorRef.current.innerHTML
+      setContent(html)
+      setContentStatus('saving')
+
+      setAttachedImages(prev => {
+        if (prev.some(item => item.data === src)) return prev
+        const updated = [...prev, { name: imgName, data: src }]
+        saveMetadata(updated)
+        return updated
+      })
+    }
+  }
+
+  const deleteImageFromGallery = (src: string) => {
+    const updated = attachedImages.filter(img => img.data !== src)
+    setAttachedImages(updated)
+    saveMetadata(updated)
+  }
+
+  const insertExistingImage = (src: string, name?: string) => {
+    insertImageHTML(src, name)
+  }
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        e.preventDefault()
+        const file = items[i].getAsFile()
+        if (file) {
+          const reader = new FileReader()
+          reader.onload = (event) => {
+            const base64 = event.target?.result as string
+            const name = file.name || `Pasted image - ${new Date().toLocaleTimeString()}.png`
+            insertImageHTML(base64, name)
+          }
+          reader.readAsDataURL(file)
+        }
+      }
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    const files = e.dataTransfer.files
+    if (files && files.length > 0) {
+      for (let i = 0; i < files.length; i++) {
+        if (files[i].type.startsWith('image/')) {
+          e.preventDefault()
+          const file = files[i]
+          const reader = new FileReader()
+          reader.onload = (event) => {
+            const base64 = event.target?.result as string
+            insertImageHTML(base64, file.name)
+          }
+          reader.readAsDataURL(file)
+        }
+      }
+    }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (files) {
+      Array.from(files).forEach(file => {
+        const reader = new FileReader()
+        reader.onload = (event) => {
+          const base64 = event.target?.result as string
+          insertImageHTML(base64, file.name)
+        }
+        reader.readAsDataURL(file)
+      })
+    }
+    e.target.value = ''
+  }
+
+  const handleKeyUp = (_e: React.KeyboardEvent<HTMLDivElement>) => {
+    const selection = window.getSelection()
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0)
+      const textContent = range.startContainer.textContent || ''
+      const offset = range.startOffset
+      
+      const char = textContent.slice(offset - 1, offset)
+      if (char === '@') {
+        savedRangeRef.current = range.cloneRange()
+        const rect = range.getBoundingClientRect()
+        setMentionMenu({
+          open: true,
+          x: rect.left,
+          y: rect.bottom + 8
+        })
+        setActiveMentionIndex(0)
+      } else if (!textContent.includes('@')) {
+        setMentionMenu(null)
+        savedRangeRef.current = null
+      }
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (mentionMenu && mentionMenu.open) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setActiveMentionIndex(prev => (prev + 1) % attachedImages.length)
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActiveMentionIndex(prev => (prev - 1 + attachedImages.length) % attachedImages.length)
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        if (attachedImages[activeMentionIndex]) {
+          insertFromMention(attachedImages[activeMentionIndex].data, attachedImages[activeMentionIndex].name)
+        }
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        setMentionMenu(null)
+      }
+    }
+  }
+
+  const insertFromMention = (src: string, name?: string) => {
+    setMentionMenu(null)
+    const selection = window.getSelection()
+    if (selection && savedRangeRef.current) {
+      selection.removeAllRanges()
+      selection.addRange(savedRangeRef.current)
+      
+      const range = savedRangeRef.current
+      const node = range.startContainer
+      const offset = range.startOffset
+      
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent || ''
+        if (text.slice(offset - 1, offset) === '@') {
+          node.textContent = text.slice(0, offset - 1) + text.slice(offset)
+          range.setStart(node, offset - 1)
+          range.setEnd(node, offset - 1)
+        }
+      }
+      
+      if (editorRef.current) {
+        editorRef.current.focus()
+      }
+      
+      insertImageHTML(src, name)
+      savedRangeRef.current = null
+    }
+  }
+
+  const [zoomImage, setZoomImage] = useState<string | null>(null)
+
+  // Sync editor innerHTML when switching journal entry dates
+  useEffect(() => {
+    if (editorRef.current) {
+      const dbValue = markdownToHtml(activeEntry?.content || '')
+      if (editorRef.current.innerHTML !== dbValue) {
+        editorRef.current.innerHTML = dbValue
+      }
+    }
+  }, [activeDate, activeEntry?.content])
+
   const [prevActiveDate, setPrevActiveDate] = useState(activeDate)
   const [prevActiveEntryId, setPrevActiveEntryId] = useState(activeEntry?.id)
 
   if (activeDate !== prevActiveDate || activeEntry?.id !== prevActiveEntryId) {
-    setContent(activeEntry?.content || '')
-    setMood(activeEntry?.mood || null)
+    setContent(markdownToHtml(activeEntry?.content || ''))
+    setAttachedImages(getMetadataImages(activeEntry))
+    setMentionMenu(null)
     setContentStatus('idle')
     setPrevActiveDate(activeDate)
     setPrevActiveEntryId(activeEntry?.id)
@@ -180,7 +409,8 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
             id: res.entry.id,
             journalDate: activeDate + 'T12:00:00Z',
             content: v, mood: null, gratitude: null, reflections: null, lessonsLearned: null, tomorrowPlan: null,
-            createdAt: new Date(), updatedAt: new Date()
+            createdAt: new Date(), updatedAt: new Date(),
+            metadata: null
           }, ...prev]
         })
       } else {
@@ -204,39 +434,6 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     return () => clearTimeout(t)
   }, [content, activeEntry?.content, saveContent])
 
-  const saveMood = async (m: string) => {
-    setMood(m)
-    const res = await upsertJournalEntry(activeDate, { mood: m })
-    if (res.success && res.entry) {
-      setEntries(prev => {
-        const idx = prev.findIndex(e => toYMD(e.journalDate) === activeDate)
-        if (idx >= 0) {
-          const copy = [...prev]
-          copy[idx] = { ...copy[idx], mood: m, id: res.entry.id }
-          return copy
-        }
-        return [{
-          id: res.entry.id,
-          journalDate: activeDate + 'T12:00:00Z',
-          content: '', mood: m, gratitude: null, reflections: null, lessonsLearned: null, tomorrowPlan: null,
-          createdAt: new Date(), updatedAt: new Date()
-        }, ...prev]
-      })
-    }
-  }
-
-  const handleFieldSaved = (field: string, value: string) => {
-    setEntries(prev => {
-      const idx = prev.findIndex(e => toYMD(e.journalDate) === activeDate)
-      if (idx >= 0) {
-        const copy = [...prev]
-        copy[idx] = { ...copy[idx], [field]: value }
-        return copy
-      }
-      return prev
-    })
-  }
-
   const handleDelete = async (id: string, dateStr: string) => {
     if (confirm('Are you sure you want to delete this journal entry?')) {
       await deleteJournalEntry(id)
@@ -256,7 +453,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   })
 
   return (
-    <div className="flex h-full min-h-[70vh] bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-2xl overflow-hidden shadow-xs">
+    <div className="flex h-full min-h-[70vh] bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg overflow-hidden shadow-xs">
       
       {/* ── LEFT SIDEBAR: History ── */}
       <aside className="w-72 shrink-0 flex flex-col bg-slate-50/50 dark:bg-zinc-900/40 border-r border-slate-200 dark:border-zinc-800">
@@ -279,7 +476,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search journal..."
-              className="w-full bg-slate-200/50 dark:bg-zinc-800/80 border-none pl-9 pr-4 py-2 rounded-xl text-sm placeholder-slate-500 dark:placeholder-zinc-500 focus:outline-hidden focus:ring-2 focus:ring-[var(--color-primary)]/30 font-medium transition-all"
+              className="w-full bg-slate-200/50 dark:bg-zinc-800/80 border-none pl-9 pr-4 py-2 rounded-lg text-sm placeholder-slate-500 dark:placeholder-zinc-500 focus:outline-hidden focus:ring-2 focus:ring-[var(--color-primary)]/30 font-medium transition-all"
             />
           </div>
         </div>
@@ -288,14 +485,21 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
           {filtered.map(entry => {
             const dateStr = toYMD(entry.journalDate)
             const isActive = activeDate === dateStr
-            const moodObj = MOOD_OPTIONS.find(m => m.value === entry.mood)
-            const preview = entry.content || 'No text written.'
+            const cleanPreview = (entry.content || '')
+              .replace(/<[^>]*>/g, '')
+              .replace(/\*\*([^*]+)\*\*/g, '$1')
+              .replace(/\*([^*]+)\*/g, '$1')
+              .replace(/_([^_]+)_/g, '$1')
+              .replace(/==([^=]+)==/g, '$1')
+              .replace(/&nbsp;/g, ' ')
+              .trim()
+            const preview = cleanPreview || 'No text written.'
 
             return (
               <div
                 key={entry.id}
                 onClick={() => setActiveDate(dateStr)}
-                className={`group relative flex flex-col gap-1 px-3 py-3 rounded-xl cursor-pointer transition-all ${
+                className={`group relative flex flex-col gap-1 px-3 py-3 rounded-lg cursor-pointer transition-all ${
                   isActive
                     ? 'bg-[var(--color-primary)] text-white shadow-sm'
                     : 'text-[var(--color-text-main)] hover:bg-slate-200/50 dark:hover:bg-zinc-800/60'
@@ -305,7 +509,6 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                   <span className={`text-[13px] font-bold ${isActive ? 'text-white' : 'text-[var(--color-text-main)]'}`}>
                     {shortDate(entry.journalDate)}
                   </span>
-                  {moodObj && <span className="text-xs opacity-90">{moodObj.emoji}</span>}
                 </div>
                 <p className={`text-xs line-clamp-2 leading-relaxed ${isActive ? 'text-white/80' : 'text-[var(--color-text-muted)]'}`}>
                   {preview}
@@ -331,9 +534,9 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
       </aside>
 
       {/* ── RIGHT WORKSPACE: Canvas ── */}
-      <main className="flex-1 flex flex-col bg-white dark:bg-[#09090b] relative">
-        <div className="flex-1 overflow-y-auto px-8 md:px-16 lg:px-24 py-12 pb-24">
-          
+      <main className="flex-1 flex flex-col xl:flex-row bg-white dark:bg-[#09090b] relative overflow-hidden">
+        {/* Editor Writing Area */}
+        <div className="flex-1 overflow-y-auto px-6 md:px-12 py-10 pb-24 border-r border-slate-100 dark:border-zinc-900/60">
           <div className="max-w-3xl mx-auto w-full flex flex-col gap-6">
             
             <div className="flex items-center justify-between">
@@ -343,86 +546,301 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
               <SyncStatus status={contentStatus} />
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              {MOOD_OPTIONS.map(m => (
-                <button
-                  key={m.value}
-                  type="button"
-                  onClick={() => saveMood(m.value)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all transform active:scale-95 cursor-pointer ${
-                    mood === m.value
-                      ? 'bg-[var(--color-text-main)] text-[var(--color-bg-base)] shadow-sm'
-                      : 'bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-zinc-400 hover:bg-slate-200 dark:hover:bg-zinc-800 hover:text-[var(--color-text-main)]'
-                  }`}
-                >
-                  <span className="text-sm">{m.emoji}</span>
-                  <span>{m.label}</span>
-                </button>
-              ))}
-            </div>
-
-            <textarea
-              value={content}
-              onChange={e => { setContent(e.target.value); setContentStatus('saving') }}
-              onBlur={() => saveContent(content)}
-              placeholder="Start writing..."
-              className="w-full mt-4 bg-transparent text-base text-[var(--color-text-main)] placeholder-slate-300 dark:placeholder-zinc-700 focus:outline-hidden leading-[1.8] resize-none font-medium min-h-[300px]"
-            />
-
-            <div className="mt-8 pt-8 border-t border-slate-100 dark:border-zinc-900">
+            {/* Rich Formatting Toolbar */}
+            <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-50 dark:bg-zinc-900/50 border border-slate-205/65 dark:border-zinc-800/80 rounded-lg max-w-max">
               <button
                 type="button"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="flex items-center gap-2 text-sm font-bold text-slate-400 dark:text-zinc-500 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
+                onMouseDown={e => { e.preventDefault(); execCmd('undo') }}
+                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
+                title="Undo (Ctrl+Z)"
               >
-                <span className="bg-slate-100 dark:bg-zinc-900 p-1 rounded-md"><PlusCircle size={14} /></span>
-                Structured Prompts
+                <Undo2 size={13} />
               </button>
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); execCmd('redo') }}
+                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
+                title="Redo (Ctrl+Y)"
+              >
+                <Redo2 size={13} />
+              </button>
+              <div className="w-px h-3.5 bg-slate-200 dark:bg-zinc-800 mx-1" />
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); execCmd('bold') }}
+                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
+                title="Bold (Ctrl+B)"
+              >
+                <Bold size={13} />
+              </button>
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); execCmd('italic') }}
+                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
+                title="Italic (Ctrl+I)"
+              >
+                <Italic size={13} />
+              </button>
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); execCmd('underline') }}
+                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
+                title="Underline (Ctrl+U)"
+              >
+                <Underline size={13} />
+              </button>
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); execCmd('hiliteColor', '#fef08a') }}
+                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
+                title="Highlight text"
+              >
+                <Highlighter size={13} />
+              </button>
+              <div className="w-px h-3.5 bg-slate-200 dark:bg-zinc-800 mx-1" />
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<h1>') }}
+                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
+                title="Heading 1"
+              >
+                <Heading1 size={13} />
+              </button>
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<h2>') }}
+                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
+                title="Heading 2"
+              >
+                <Heading2 size={13} />
+              </button>
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); execCmd('insertUnorderedList') }}
+                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
+                title="Bullet List"
+              >
+                <List size={13} />
+              </button>
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<blockquote>') }}
+                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
+                title="Blockquote"
+              >
+                <Quote size={13} />
+              </button>
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<pre>') }}
+                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
+                title="Code Block"
+              >
+                <Code size={13} />
+              </button>
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); fileInputRef.current?.click() }}
+                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
+                title="Attach Image"
+              >
+                <ImageIcon size={13} />
+              </button>
+              <div className="w-px h-3.5 bg-slate-200 dark:bg-zinc-800 mx-1" />
+              <button
+                type="button"
+                onMouseDown={e => { e.preventDefault(); clearFormatting() }}
+                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-rose-500 transition-colors cursor-pointer"
+                title="Clear all formatting"
+              >
+                <Eraser size={13} />
+              </button>
+            </div>
 
-              {showAdvanced && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                  <AutosaveTextarea
-                    label="Gratitude"
-                    icon={<Heart size={14} />}
-                    value={activeEntry?.gratitude ?? ''}
-                    placeholder="I am grateful for..."
-                    field="gratitude"
-                    date={activeDate}
-                    onSaved={handleFieldSaved}
-                  />
-                  <AutosaveTextarea
-                    label="Insights & Reflections"
-                    icon={<BookOpen size={14} />}
-                    value={activeEntry?.reflections ?? ''}
-                    placeholder="What did I notice today?"
-                    field="reflections"
-                    date={activeDate}
-                    onSaved={handleFieldSaved}
-                  />
-                  <AutosaveTextarea
-                    label="Lessons Learned"
-                    icon={<Lightbulb size={14} />}
-                    value={activeEntry?.lessonsLearned ?? ''}
-                    placeholder="What did I learn?"
-                    field="lessonsLearned"
-                    date={activeDate}
-                    onSaved={handleFieldSaved}
-                  />
-                  <AutosaveTextarea
-                    label="Tomorrow's Plan"
-                    icon={<Sunrise size={14} />}
-                    value={activeEntry?.tomorrowPlan ?? ''}
-                    placeholder="Tomorrow, I will..."
-                    field="tomorrowPlan"
-                    date={activeDate}
-                    onSaved={handleFieldSaved}
-                  />
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+              multiple
+            />
+
+            <div
+              ref={editorRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={e => {
+                const html = e.currentTarget.innerHTML
+                setContent(html)
+                setContentStatus('saving')
+              }}
+              onPaste={handlePaste}
+              onDrop={handleDrop}
+              onKeyUp={handleKeyUp}
+              onKeyDown={handleKeyDown}
+              spellCheck="false"
+              autoCapitalize="off"
+              autoCorrect="off"
+              {...{ placeholder: "Start writing what you are thinking..." }}
+              className="w-full mt-4 bg-transparent text-[17px] text-[var(--color-text-main)] placeholder-slate-350 dark:placeholder-zinc-700 focus:outline-hidden leading-[1.85] resize-none font-serif min-h-[350px] border-0 p-0 outline-hidden contenteditable-editor"
+              style={{ minHeight: '350px' }}
+            />
+
+            {/* Mention Menu / Image Insert Popover (Fixed positioning right below caret) */}
+            {mentionMenu && (
+              <div 
+                className="fixed z-50 bg-white dark:bg-zinc-900 border border-slate-205/65 dark:border-zinc-800 rounded-lg p-1.5 shadow-xl animate-fade-in w-64 max-h-48 overflow-y-auto space-y-0.5"
+                style={{
+                  top: `${mentionMenu.y}px`,
+                  left: `${mentionMenu.x}px`,
+                }}
+              >
+                {attachedImages.length > 0 ? (
+                  <div className="flex flex-col">
+                    {attachedImages.map((img, idx) => {
+                      const isActive = idx === activeMentionIndex
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onMouseDown={e => { e.preventDefault(); insertFromMention(img.data, img.name) }}
+                          className={`w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                            isActive 
+                              ? 'bg-blue-500 text-white dark:bg-blue-600' 
+                              : 'text-slate-700 dark:text-zinc-350 hover:bg-slate-100 dark:hover:bg-zinc-800'
+                          }`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={img.data} alt={img.name} className="w-5 h-5 rounded-md object-cover border border-slate-200 dark:border-zinc-705" />
+                          <span className="truncate flex-1">{img.name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-slate-450 dark:text-zinc-500 font-bold p-2 leading-normal">No memories available. Paste or drag a photo into the editor first to add it to your memories list.</p>
+                )}
+              </div>
+            )}
+
+            {/* Memories Section (Mobile & Tablet Layout) */}
+            <div className="xl:hidden mt-8 pt-8 border-t border-slate-100 dark:border-zinc-900/60">
+              <h3 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-muted)] mb-3">Memories</h3>
+              {attachedImages.length > 0 ? (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                  {attachedImages.map((img, idx) => (
+                    <div
+                      key={idx}
+                      className="group relative aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-zinc-800/80 shadow-3xs"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={img.data}
+                        alt={img.name}
+                        className="w-full h-full object-cover cursor-pointer"
+                        onClick={() => setZoomImage(img.data)}
+                      />
+                      <div className="absolute inset-x-0 bottom-0 bg-black/70 py-1 px-2 flex items-center justify-around opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => insertExistingImage(img.data, img.name)}
+                          className="text-white hover:text-blue-400 p-1 cursor-pointer"
+                          title="Insert into text"
+                        >
+                          <PlusCircle size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteImageFromGallery(img.data)}
+                          className="text-white hover:text-rose-500 p-1 cursor-pointer"
+                          title="Delete from memories"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
+              ) : (
+                <p className="text-[11px] font-semibold text-slate-400 dark:text-zinc-500">No images attached to this entry.</p>
               )}
             </div>
 
           </div>
         </div>
+
+        {/* Memories Gallery Panel (Desktop Sidebar Layout) */}
+        <aside className="w-85 shrink-0 bg-slate-50/15 dark:bg-zinc-950/10 p-6 overflow-y-auto hidden xl:block">
+          <div className="flex flex-col gap-5">
+            <div>
+              <h3 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-muted)]">Memories</h3>
+              <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-bold mt-1">Images in this entry</p>
+            </div>
+
+            {attachedImages.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3">
+                {attachedImages.map((img, idx) => (
+                  <div
+                    key={idx}
+                    className="group relative aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-zinc-800/80 shadow-3xs hover:border-[var(--color-primary)] transition-all bg-slate-100 dark:bg-zinc-900"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={img.data}
+                      alt={img.name}
+                      className="w-full h-full object-cover cursor-pointer"
+                      onClick={() => setZoomImage(img.data)}
+                    />
+                    <div className="absolute inset-x-0 bottom-0 bg-black/75 py-1.5 px-2 flex items-center justify-around opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => insertExistingImage(img.data, img.name)}
+                        className="text-white hover:text-blue-400 p-1 cursor-pointer"
+                        title="Insert into text"
+                      >
+                        <PlusCircle size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteImageFromGallery(img.data)}
+                        className="text-white hover:text-rose-500 p-1 cursor-pointer"
+                        title="Delete from memories"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 px-4 rounded-lg border-2 border-dashed border-slate-200 dark:border-zinc-800/80">
+                <span className="text-[11px] font-semibold text-slate-400 dark:text-zinc-500">No images attached. Paste, drop, or select photos to save memories.</span>
+              </div>
+            )}
+          </div>
+        </aside>
+
+        {/* Lightbox Zoom Modal */}
+        {zoomImage && (
+          <div 
+            className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"
+            onClick={() => setZoomImage(null)}
+          >
+            <button 
+              onClick={() => setZoomImage(null)}
+              className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img 
+              src={zoomImage} 
+              alt="Zoomed Memory" 
+              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" 
+            />
+          </div>
+        )}
       </main>
 
     </div>
