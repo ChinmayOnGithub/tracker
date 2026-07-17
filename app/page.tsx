@@ -12,7 +12,7 @@ export default async function Page() {
   const loggedUser = await getLoggedUser()
   const currentYear = new Date().getFullYear()
 
-  const [templatesRaw, logsRaw, notesRaw, tagsRaw, journalEntriesRaw, leaveRecordsRaw, leaveAllowancesRaw, weightRecordsRaw] = loggedUser
+  const [templatesRaw, logsRaw, notesRaw, tagsRaw, journalEntriesRaw, leaveRecordsRaw, leaveAllowancesRaw, weightRecordsRaw, linkCollectionsRaw] = loggedUser
     ? await Promise.all([
         db.activityTemplate.findMany({
           where: loggedUser.username === 'admin'
@@ -64,8 +64,16 @@ export default async function Page() {
           },
           orderBy: { date: 'asc' },
         }),
+        // Link collections
+        db.linkCollection.findMany({
+          where: { userId: loggedUser.id, deletedAt: null },
+          include: {
+            links: { where: { deletedAt: null }, orderBy: { sortOrder: 'asc' } },
+          },
+          orderBy: { sortOrder: 'asc' },
+        }),
       ])
-    : [[], [], [], [], [], [], [], []]
+    : [[], [], [], [], [], [], [], [], []]
 
   const templates: ActivityTemplate[] = templatesRaw.map(t => ({
     ...t,
@@ -128,7 +136,27 @@ export default async function Page() {
     deletedAt: r.deletedAt?.toISOString() ?? null,
   }))
 
-  // 7. Render client coordinator
+  // 7. Serialize link collections
+  const linkCollections = (linkCollectionsRaw || []).map(c => ({
+    id: c.id,
+    name: c.name,
+    color: c.color,
+    sortOrder: c.sortOrder,
+    links: (c.links || []).map(l => ({
+      id: l.id,
+      collectionId: l.collectionId,
+      url: l.url,
+      title: l.title,
+      description: l.description,
+      favicon: l.favicon,
+      thumbnail: l.thumbnail,
+      sortOrder: l.sortOrder,
+      createdAt: l.createdAt.toISOString(),
+      updatedAt: l.updatedAt.toISOString(),
+    })),
+  }))
+
+  // 8. Render client coordinator
   return (
     <main className="min-h-screen bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-100 antialiased transition-colors duration-200">
       <DashboardClient
@@ -143,6 +171,7 @@ export default async function Page() {
         leaveRecords={leaveRecords}
         leaveAllowances={leaveAllowancesRaw}
         weightRecords={weightRecords}
+        linkCollections={linkCollections}
         currentYear={currentYear}
         initialAuthenticated={!!loggedUser}
         currentUser={loggedUser}

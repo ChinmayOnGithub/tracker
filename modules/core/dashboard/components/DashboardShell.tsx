@@ -12,7 +12,8 @@ import {
   LogOut,
   Sun,
   Moon,
-  Scale
+  Scale,
+  Link2
 } from 'lucide-react'
 
 export interface NavigationItem {
@@ -50,6 +51,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     { id: 'journal', label: 'Journal', icon: BookOpen },
     { id: 'leave', label: 'Time Off', icon: CalendarX },
     { id: 'weight', label: 'Weight', icon: Scale },
+    { id: 'links', label: 'Link Library', icon: Link2 },
     { id: 'documents', label: 'Secure Vault', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
   ]
@@ -64,6 +66,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   const moreNavItems = [
     { id: 'activities', label: 'Activities', icon: CheckSquare },
     { id: 'leave', label: 'Time Off', icon: CalendarX },
+    { id: 'links', label: 'Link Library', icon: Link2 },
     { id: 'documents', label: 'Secure Vault', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
   ]

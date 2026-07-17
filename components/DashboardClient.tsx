@@ -23,6 +23,7 @@ import { Modal } from '@/design-system'
 import { JournalPanel } from './JournalPanel'
 import { LeavePanel } from './LeavePanel'
 import { WeightPanel } from './WeightPanel'
+import { LinkLibraryPanel } from './LinkLibraryPanel'
 
 interface AnalyzedTemplate {
   template: ActivityTemplate
@@ -48,6 +49,24 @@ interface DashboardClientProps {
   }[]
   leaveAllowances: { leaveType: string; allowance: number }[]
   weightRecords: { id: string; date: string; weight: number; notes: string | null }[]
+  linkCollections: {
+    id: string
+    name: string
+    color: string
+    sortOrder: number
+    links: {
+      id: string
+      collectionId: string
+      url: string
+      title: string
+      description: string | null
+      favicon: string | null
+      thumbnail: string | null
+      sortOrder: number
+      createdAt: string
+      updatedAt: string
+    }[]
+  }[]
   currentYear: number
   initialAuthenticated?: boolean
   currentUser?: { id: string; username: string } | null
@@ -64,6 +83,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   leaveRecords,
   leaveAllowances,
   weightRecords,
+  linkCollections,
   currentYear,
   initialAuthenticated = false,
   currentUser = null,
@@ -720,6 +740,8 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
         return <WeightPanel initialRecords={weightRecords} />
       case 'settings':
         return <SettingsPanel />
+      case 'links':
+        return <LinkLibraryPanel initialCollections={linkCollections} />
       default:
         return (
           <div className="text-center py-12 text-sm text-[var(--color-text-muted)] italic bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-xs">

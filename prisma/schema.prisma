@@ -105,6 +105,7 @@ model User {
   auditLogs         AuditLog[]
   attachments       Attachment[]
   settings          UserSetting[]
+  linkCollections   LinkCollection[]
 }
 
 model GoogleCredential {
@@ -400,3 +401,41 @@ model Note {
   @@index([date])
   @@index([userId])
 }
+
+// ----------------------------------------------------
+// Link Library Module
+// ----------------------------------------------------
+
+model LinkCollection {
+  id        String      @id @default(uuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  color     String      @default("#6366f1")
+  sortOrder Int         @default(0)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  deletedAt DateTime?
+
+  links     SavedLink[]
+
+  @@index([userId])
+}
+
+model SavedLink {
+  id           String         @id @default(uuid())
+  collectionId String
+  collection   LinkCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  url          String
+  title        String
+  description  String?
+  favicon      String?
+  thumbnail    String?
+  sortOrder    Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  deletedAt    DateTime?
+
+  @@index([collectionId])
+}
+
