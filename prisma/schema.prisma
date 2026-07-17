@@ -242,19 +242,26 @@ model WishlistItem {
 }
 
 model SecureDocument {
-  id             String       @id @default(uuid())
+  id             String           @id @default(uuid())
   userId         String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  encryptedTitle String
-  encryptedType  String
-  fileKey        String
-  iv             String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  deletedAt      DateTime? // Soft Delete
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  encryptedTitle String           // AES-256-GCM encrypted original name
+  encryptedType  String?          // Encrypted MIME type (null for folders)
+  fileKey        String?          // UUID filename on disk (null for folders)
+  iv             String?          // Hex 12-byte IV (null for folders)
+  tag            String?          // Hex 16-byte GCM auth tag (null for folders)
+  fileSize       Int?             // Original size in bytes (null for folders)
+  isFolder       Boolean          @default(false)
+  parentId       String?
+  parent         SecureDocument?  @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children       SecureDocument[] @relation("FolderHierarchy")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime?        // Soft Delete
   attachments    Attachment[]
 
   @@index([userId])
+  @@index([parentId])
 }
 
 // ----------------------------------------------------

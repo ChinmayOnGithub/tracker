@@ -24,6 +24,7 @@ import { JournalPanel } from './JournalPanel'
 import { LeavePanel } from './LeavePanel'
 import { WeightPanel } from './WeightPanel'
 import { LinkLibraryPanel } from './LinkLibraryPanel'
+import { VaultPanel } from './VaultPanel'
 
 interface AnalyzedTemplate {
   template: ActivityTemplate
@@ -751,6 +752,8 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
         return <SettingsPanel />
       case 'links':
         return <LinkLibraryPanel initialCollections={linkCollections} />
+      case 'documents':
+        return <VaultPanel />
       default:
         return (
           <div className="text-center py-12 text-sm text-[var(--color-text-muted)] italic bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-xs">
