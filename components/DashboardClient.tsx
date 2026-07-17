@@ -53,6 +53,7 @@ interface DashboardClientProps {
     id: string
     name: string
     color: string
+    icon: string | null
     sortOrder: number
     links: {
       id: string
@@ -62,6 +63,14 @@ interface DashboardClientProps {
       description: string | null
       favicon: string | null
       thumbnail: string | null
+      accentColor: string | null
+      notes: string | null
+      isPinned: boolean
+      isPrivate: boolean
+      isArchived: boolean
+      openCount: number
+      lastOpenedAt: string | null
+      tags: { id: string; name: string; color: string }[]
       sortOrder: number
       createdAt: string
       updatedAt: string

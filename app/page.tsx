@@ -68,7 +68,11 @@ export default async function Page() {
         db.linkCollection.findMany({
           where: { userId: loggedUser.id, deletedAt: null },
           include: {
-            links: { where: { deletedAt: null }, orderBy: { sortOrder: 'asc' } },
+            links: { 
+              where: { deletedAt: null }, 
+              include: { tags: true },
+              orderBy: { sortOrder: 'asc' } 
+            },
           },
           orderBy: { sortOrder: 'asc' },
         }),
@@ -141,6 +145,7 @@ export default async function Page() {
     id: c.id,
     name: c.name,
     color: c.color,
+    icon: c.icon,
     sortOrder: c.sortOrder,
     links: (c.links || []).map(l => ({
       id: l.id,
@@ -150,6 +155,18 @@ export default async function Page() {
       description: l.description,
       favicon: l.favicon,
       thumbnail: l.thumbnail,
+      accentColor: l.accentColor,
+      notes: l.notes,
+      isPinned: l.isPinned,
+      isPrivate: l.isPrivate,
+      isArchived: l.isArchived,
+      openCount: l.openCount,
+      lastOpenedAt: l.lastOpenedAt ? l.lastOpenedAt.toISOString() : null,
+      tags: (l.tags || []).map(t => ({
+        id: t.id,
+        name: t.name,
+        color: t.color,
+      })),
       sortOrder: l.sortOrder,
       createdAt: l.createdAt.toISOString(),
       updatedAt: l.updatedAt.toISOString(),

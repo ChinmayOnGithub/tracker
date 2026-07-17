@@ -106,6 +106,7 @@ model User {
   attachments       Attachment[]
   settings          UserSetting[]
   linkCollections   LinkCollection[]
+  linkTags          LinkTag[]
 }
 
 model GoogleCredential {
@@ -407,17 +408,18 @@ model Note {
 // ----------------------------------------------------
 
 model LinkCollection {
-  id        String      @id @default(uuid())
+  id        String    @id @default(uuid())
   userId    String
-  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
-  color     String      @default("#6366f1")
-  sortOrder Int         @default(0)
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  color     String    @default("#6366f1")
+  icon      String? // E.g. "📚", "💼", "🎥"
+  sortOrder Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  links     SavedLink[]
+  links SavedLink[]
 
   @@index([userId])
 }
@@ -432,6 +434,14 @@ model SavedLink {
   favicon      String?
   thumbnail    String?
   sortOrder    Int            @default(0)
+  isPinned     Boolean        @default(false)
+  isPrivate    Boolean        @default(false)
+  isArchived   Boolean        @default(false)
+  notes        String?
+  openCount    Int            @default(0)
+  lastOpenedAt DateTime?
+  accentColor  String?
+  tags         LinkTag[]      @relation("SavedLinkTags")
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   deletedAt    DateTime?
@@ -439,3 +449,16 @@ model SavedLink {
   @@index([collectionId])
 }
 
+model LinkTag {
+  id        String      @id @default(uuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  color     String      @default("#6366f1")
+  links     SavedLink[] @relation("SavedLinkTags")
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId])
+}
