@@ -7,6 +7,7 @@ import { getTodayDateStr, addUTCDays, parseUTCDate, formatUTCDate } from '@/lib/
 import { Icon } from './Icon'
 import { Search, Flame, Calendar, RefreshCcw, Check, Sparkles, Scissors, ShieldAlert, X } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
+import { Card, Input, Select } from '@/design-system'
 
 interface AnalyzedTemplate {
   template: ActivityTemplate
@@ -154,9 +155,10 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
     const calendarUrl = getGoogleCalendarUrl(template, eventDate)
 
     return (
-      <div
+      <Card
         key={template.id}
-        className={`bg-white dark:bg-zinc-900 p-3.5 border border-slate-200 dark:border-zinc-800 rounded-xl flex items-center justify-between gap-4 shadow-xs transition-all duration-200 ${
+        compact
+        className={`flex-row items-center justify-between gap-4 transition-all duration-200 ${
           isCompletedToday ? 'opacity-60 bg-slate-50/50 dark:bg-zinc-900/10' : ''
         }`}
       >
@@ -234,51 +236,45 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
             )}
           </button>
         </div>
-      </div>
+      </Card>
     )
   }
 
   return (
     <div className="space-y-6 text-sm">
       
-      <div className="bg-[var(--color-bg-surface)] bg-gradient-to-br from-[var(--color-bg-surface)] to-transparent border border-[var(--color-border)]/80 rounded-[var(--radius-lg)] p-5 space-y-4 shadow-sm">
-        <div className="relative">
-          <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-zinc-500" size={16} />
-          <input
+      <Card className="p-5 space-y-4 bg-gradient-to-br from-[var(--color-bg-surface)] to-transparent">
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-[13px] text-slate-400 dark:text-zinc-500" size={16} />
+          <Input
             type="text"
             placeholder="Search activities..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-xl pl-9 pr-3 py-2 text-xs text-[var(--color-text-main)] placeholder-[var(--color-text-muted)] focus:outline-hidden focus:border-[var(--color-primary)]"
+            className="pl-9 text-xs"
           />
         </div>
         
         <div className="flex flex-wrap gap-2 text-xs">
-          <select
+          <Select
             value={selectedCategory}
             onChange={e => setSelectedCategory(e.target.value)}
-            className="bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-[var(--color-text-muted)] focus:outline-hidden focus:border-[var(--color-primary)] capitalize cursor-pointer font-semibold"
-          >
-            <option value="all">All Categories</option>
-            {uniqueCategories.map(cat => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
+            className="text-xs py-1.5 px-2.5 max-w-[150px]"
+            options={[
+              { value: 'all', label: 'All Categories' },
+              ...uniqueCategories.map(cat => ({ value: cat, label: cat.toUpperCase() }))
+            ]}
+          />
 
-          <select
+          <Select
             value={selectedTag}
             onChange={e => setSelectedTag(e.target.value)}
-            className="bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 text-[var(--color-text-muted)] focus:outline-hidden focus:border-[var(--color-primary)] capitalize cursor-pointer font-semibold"
-          >
-            <option value="all">All Tags</option>
-            {allTags.map(tag => (
-              <option key={tag.id} value={tag.name}>
-                #{tag.name}
-              </option>
-            ))}
-          </select>
+            className="text-xs py-1.5 px-2.5 max-w-[150px]"
+            options={[
+              { value: 'all', label: 'All Tags' },
+              ...allTags.map(tag => ({ value: tag.name, label: `#${tag.name}` }))
+            ]}
+          />
           
           {(selectedCategory !== 'all' || selectedTag !== 'all' || searchTerm !== '') && (
             <button
@@ -293,7 +289,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
             </button>
           )}
         </div>
-      </div>
+      </Card>
 
       <div className="flex border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-1 rounded-xl gap-1">
         {(['due', 'daily', 'weekly', 'monthly', 'yearly'] as const).map(tab => {

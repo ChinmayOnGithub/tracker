@@ -28,7 +28,7 @@ export default async function Page() {
           orderBy: { logDate: 'desc' },
         }),
         db.note.findMany({
-          where: { userId: loggedUser.id },
+          where: { userId: loggedUser.id, deletedAt: null },
           orderBy: { date: 'desc' },
         }),
         db.tag.findMany({ orderBy: { name: 'asc' } }),

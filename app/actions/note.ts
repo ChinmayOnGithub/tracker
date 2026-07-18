@@ -97,7 +97,7 @@ export async function upsertNote(
     const user = await getAuthSession()
 
     const existingNotes = await db.note.findMany({
-      where: { date, userId: user.id },
+      where: { date, userId: user.id, deletedAt: null },
       orderBy: { createdAt: 'asc' },
     })
 
@@ -111,7 +111,10 @@ export async function upsertNote(
       // Delete any duplicates created by concurrent saves
       if (existingNotes.length > 1) {
         const duplicateIds = existingNotes.slice(1).map(n => n.id)
-        await db.note.deleteMany({ where: { id: { in: duplicateIds } } })
+        await db.note.updateMany({
+          where: { id: { in: duplicateIds } },
+          data: { deletedAt: new Date() }
+        })
       }
     } else {
       note = await db.note.create({
@@ -133,8 +136,9 @@ export async function deleteNote(id: string) {
     const user = await getAuthSession()
     await verifyNoteOwnership(id, user)
 
-    await db.note.delete({
+    await db.note.update({
       where: { id },
+      data: { deletedAt: new Date() }
     })
 
     revalidatePath('/')

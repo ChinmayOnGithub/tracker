@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Skeleton, EmptyState, Button } from '@/design-system'
+import { Skeleton, EmptyState, Button, Card } from '@/design-system'
 import {
   Calendar, Clock, MapPin, ExternalLink, Link as LinkIcon,
   Check, Plus, ChevronDown, ChevronRight, Edit2, XCircle, ArrowRightCircle, RefreshCw, Sparkles
@@ -661,7 +661,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         <div className="space-y-4 xl:sticky xl:top-4">
 
           {/* Day at a Glance - Reduced visual weight */}
-          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)]/60 rounded-[var(--card-radius)] p-4 opacity-90">
+          <Card className="opacity-90">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)] mb-3">
               Day at a Glance
             </p>
@@ -694,14 +694,14 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                 ))}
               </div>
             </div>
-          </div>
+          </Card>
 
           {/* Contests */}
           <ContestsWidget />
 
           {/* Streaks - Reduced visual weight */}
           {topStreaks.length > 0 && (
-            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)]/60 rounded-[var(--card-radius)] overflow-hidden opacity-90">
+            <Card className="overflow-hidden opacity-90 p-0">
               <div className="px-3 py-2 border-b border-[var(--color-border)]/40 flex items-center gap-2">
                 <span className="text-sm opacity-75">🔥</span>
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Active Streaks</span>
@@ -719,12 +719,12 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                   )
                 })}
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Tomorrow preview - Better hierarchy */}
           {tomorrowEvents.length > 0 && (
-            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)]/60 rounded-[var(--card-radius)] overflow-hidden opacity-90">
+            <Card className="overflow-hidden opacity-90 p-0">
               <div className="px-3 py-2 border-b border-[var(--color-border)]/40 flex items-center gap-2">
                 <Calendar className="w-3.5 h-3.5 text-[var(--color-external)]" />
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">Tomorrow</span>
@@ -744,11 +744,11 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Daily Reflection - Apple Notes style */}
-          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)]/40 rounded-[var(--card-radius)] overflow-hidden opacity-90">
+          <Card className="overflow-hidden opacity-90 p-0">
             <div className="px-3 py-2 border-b border-[var(--color-border)]/30 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Edit2 className="w-3.5 h-3.5 text-[var(--color-personal)]" />
@@ -793,7 +793,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                 />
               </div>
             )}
-          </div>
+          </Card>
 
         </div>
       </div>

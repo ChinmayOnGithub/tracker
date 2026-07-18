@@ -31,6 +31,10 @@ export interface EncryptedText {
  * Encrypts a plain text string using AES-256-GCM.
  */
 export function encryptText(plainText: string): EncryptedText {
+  if (!plainText || typeof plainText !== 'string') {
+    throw new Error('Invalid input: plainText must be a non-empty string')
+  }
+
   const iv = crypto.randomBytes(IV_LENGTH)
   const key = getVaultKey()
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv)
@@ -50,17 +54,39 @@ export function encryptText(plainText: string): EncryptedText {
  * Decrypts an AES-256-GCM encrypted text string.
  */
 export function decryptText(encrypted: string, ivHex: string, tagHex: string): string {
-  const iv = Buffer.from(ivHex, 'hex')
-  const tag = Buffer.from(tagHex, 'hex')
+  if (!encrypted || !ivHex || !tagHex) {
+    throw new Error('Invalid decryption parameters: missing encrypted data, IV, or tag')
+  }
+  
+  let iv: Buffer
+  let tag: Buffer
+  
+  try {
+    iv = Buffer.from(ivHex, 'hex')
+    tag = Buffer.from(tagHex, 'hex')
+  } catch (error) {
+    throw new Error('Invalid hex encoding in IV or tag')
+  }
+  
+  if (iv.length !== IV_LENGTH) {
+    throw new Error(`Invalid IV length: expected ${IV_LENGTH} bytes, got ${iv.length}`)
+  }
+  if (tag.length !== TAG_LENGTH) {
+    throw new Error(`Invalid tag length: expected ${TAG_LENGTH} bytes, got ${tag.length}`)
+  }
+
   const key = getVaultKey()
 
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv)
   decipher.setAuthTag(tag)
 
-  let decrypted = decipher.update(encrypted, 'hex', 'utf8')
-  decrypted += decipher.final('utf8')
-
-  return decrypted
+  try {
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8')
+    decrypted += decipher.final('utf8')
+    return decrypted
+  } catch (error) {
+    throw new Error('Decryption failed: data may be corrupted or tampered with')
+  }
 }
 
 // ─── Buffer Encryption (file contents) ────────────────────────────────────────
@@ -76,6 +102,13 @@ export interface EncryptedBuffer {
  * Returns the encrypted buffer along with the IV and auth tag needed for decryption.
  */
 export function encryptBuffer(buffer: Buffer): EncryptedBuffer {
+  if (!buffer || !Buffer.isBuffer(buffer)) {
+    throw new Error('Invalid input: buffer must be a valid Buffer')
+  }
+  if (buffer.length === 0) {
+    throw new Error('Invalid input: buffer cannot be empty')
+  }
+
   const iv = crypto.randomBytes(IV_LENGTH)
   const key = getVaultKey()
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv)
@@ -98,17 +131,43 @@ export function encryptBuffer(buffer: Buffer): EncryptedBuffer {
  * Requires the original IV and auth tag used during encryption.
  */
 export function decryptBuffer(encryptedBuffer: Buffer, ivHex: string, tagHex: string): Buffer {
-  const iv = Buffer.from(ivHex, 'hex')
-  const tag = Buffer.from(tagHex, 'hex')
+  if (!encryptedBuffer || !Buffer.isBuffer(encryptedBuffer)) {
+    throw new Error('Invalid encrypted buffer')
+  }
+  if (!ivHex || !tagHex) {
+    throw new Error('Invalid decryption parameters: missing IV or tag')
+  }
+
+  let iv: Buffer
+  let tag: Buffer
+  
+  try {
+    iv = Buffer.from(ivHex, 'hex')
+    tag = Buffer.from(tagHex, 'hex')
+  } catch (error) {
+    throw new Error('Invalid hex encoding in IV or tag')
+  }
+  
+  if (iv.length !== IV_LENGTH) {
+    throw new Error(`Invalid IV length: expected ${IV_LENGTH} bytes, got ${iv.length}`)
+  }
+  if (tag.length !== TAG_LENGTH) {
+    throw new Error(`Invalid tag length: expected ${TAG_LENGTH} bytes, got ${tag.length}`)
+  }
+
   const key = getVaultKey()
 
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv)
   decipher.setAuthTag(tag)
 
-  return Buffer.concat([
-    decipher.update(encryptedBuffer),
-    decipher.final(),
-  ])
+  try {
+    return Buffer.concat([
+      decipher.update(encryptedBuffer),
+      decipher.final(),
+    ])
+  } catch (error) {
+    throw new Error('Decryption failed: file may be corrupted or tampered with')
+  }
 }
 
 // ─── Title-only encryption (compact format for folder/file names) ─────────────
@@ -126,11 +185,17 @@ export function encryptTitle(title: string): string {
  * Decrypts a colon-separated encrypted title string.
  */
 export function decryptTitle(encryptedTitle: string): string {
+  if (!encryptedTitle || typeof encryptedTitle !== 'string') {
+    throw new Error('Invalid encrypted title: empty or non-string value')
+  }
   const parts = encryptedTitle.split(':')
   if (parts.length !== 3) {
     throw new Error('Invalid encrypted title format. Expected iv:data:tag')
   }
   const [iv, encrypted, tag] = parts
+  if (!iv || !encrypted || !tag) {
+    throw new Error('Invalid encrypted title: missing components')
+  }
   return decryptText(encrypted, iv, tag)
 }
 

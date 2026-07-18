@@ -34,38 +34,36 @@ import {
   getVaultStats,
 } from '@/app/actions/vault'
 import type { VaultItem, VaultBreadcrumb } from '@/app/actions/vault'
+import { Modal, Input, Button, Card } from '@/design-system'
 
-// ─── File Type Helpers ────────────────────────────────────────────────────────
+// ─── File Type Helpers (use mimeGroup from DB — no decryption needed) ─────────
 
-function getFileIcon(mimeType: string | null, isFolder: boolean) {
+function getFileIcon(mimeGroup: string | null, isFolder: boolean) {
   if (isFolder) return Folder
-
-  if (!mimeType) return File
-
-  if (mimeType.startsWith('image/')) return FileImage
-  if (mimeType.startsWith('video/') || mimeType.startsWith('audio/')) return FileVideo
-  if (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('tar') || mimeType.includes('7z') || mimeType.includes('gzip') || mimeType.includes('compress')) return FileArchive
-  if (mimeType.includes('pdf') || mimeType.includes('document') || mimeType.includes('msword') || mimeType.includes('text/plain')) return FileText
-  if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType.includes('csv')) return FileSpreadsheet
-  if (mimeType.includes('javascript') || mimeType.includes('json') || mimeType.includes('xml') || mimeType.includes('html') || mimeType.includes('css') || mimeType.includes('typescript') || mimeType.includes('python') || mimeType.includes('java')) return FileCode
-
-  return File
+  switch (mimeGroup) {
+    case 'IMAGE': return FileImage
+    case 'VIDEO': return FileVideo
+    case 'ARCHIVE': return FileArchive
+    case 'PDF': return FileText
+    case 'TEXT': return FileText
+    case 'SPREADSHEET': return FileSpreadsheet
+    case 'CODE': return FileCode
+    default: return File
+  }
 }
 
-function getFileColor(mimeType: string | null, isFolder: boolean): string {
+function getFileColor(mimeGroup: string | null, isFolder: boolean): string {
   if (isFolder) return 'text-amber-500'
-  if (!mimeType) return 'text-[var(--color-text-muted)]'
-
-  if (mimeType.startsWith('image/')) return 'text-pink-500'
-  if (mimeType.startsWith('video/')) return 'text-purple-500'
-  if (mimeType.startsWith('audio/')) return 'text-violet-500'
-  if (mimeType.includes('pdf')) return 'text-red-500'
-  if (mimeType.includes('zip') || mimeType.includes('rar') || mimeType.includes('tar')) return 'text-orange-500'
-  if (mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType.includes('csv')) return 'text-emerald-500'
-  if (mimeType.includes('document') || mimeType.includes('msword') || mimeType.includes('text/plain')) return 'text-blue-500'
-  if (mimeType.includes('javascript') || mimeType.includes('json') || mimeType.includes('xml') || mimeType.includes('html')) return 'text-cyan-500'
-
-  return 'text-[var(--color-text-muted)]'
+  switch (mimeGroup) {
+    case 'IMAGE': return 'text-pink-500'
+    case 'VIDEO': return 'text-purple-500'
+    case 'PDF': return 'text-red-500'
+    case 'ARCHIVE': return 'text-orange-500'
+    case 'SPREADSHEET': return 'text-emerald-500'
+    case 'TEXT': return 'text-blue-500'
+    case 'CODE': return 'text-cyan-500'
+    default: return 'text-[var(--color-text-muted)]'
+  }
 }
 
 function formatFileSize(bytes: number | null): string {
@@ -130,34 +128,31 @@ export function VaultPanel() {
   // ─── Data Fetching ────────────────────────────────────────────────
 
   const fetchItems = useCallback(async () => {
-    setLoading(true)
-    setErrorMessage(null)
+    setLoading(true);
+    setErrorMessage(null);
     try {
       const [itemsResult, breadcrumbsResult, statsResult] = await Promise.all([
         listVaultItems(currentFolderId),
         getVaultBreadcrumbs(currentFolderId),
         getVaultStats(),
-      ])
+      ]);
       if (itemsResult.success) {
-        setItems(itemsResult.items)
+        setItems(itemsResult.items);
       } else {
-        setErrorMessage(itemsResult.error || 'Failed to load items')
+        setErrorMessage(itemsResult.error || 'Failed to load items');
       }
-      if (breadcrumbsResult.success) setBreadcrumbs(breadcrumbsResult.breadcrumbs)
-      if (statsResult.success) setStats(statsResult.stats)
+      if (breadcrumbsResult.success) setBreadcrumbs(breadcrumbsResult.breadcrumbs);
+      if (statsResult.success) setStats(statsResult.stats);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to retrieve vault data')
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to retrieve vault data');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [currentFolderId])
+  }, [currentFolderId]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchItems()
-    }, 0)
-    return () => clearTimeout(timer)
-  }, [fetchItems])
+    fetchItems();
+  }, [fetchItems]);
 
   // ─── Navigation ───────────────────────────────────────────────────
 
@@ -182,9 +177,22 @@ export function VaultPanel() {
     setUploading(true)
     setErrorMessage(null)
     let completed = 0
+    const errors: string[] = []
 
     for (const file of fileArray) {
       setUploadProgress(`Uploading ${file.name} (${completed + 1}/${fileArray.length})`)
+      
+      // Client-side validation
+      if (file.size === 0) {
+        errors.push(`${file.name}: File is empty`)
+        continue
+      }
+      
+      if (file.size > 50 * 1024 * 1024) {
+        errors.push(`${file.name}: File too large (max 50MB)`)
+        continue
+      }
+
       const formData = new FormData()
       formData.append('file', file)
       if (currentFolderId) formData.append('parentId', currentFolderId)
@@ -196,19 +204,26 @@ export function VaultPanel() {
         })
         const result = await response.json()
         if (!response.ok) {
-          setErrorMessage(result.error || `Failed to upload ${file.name}`)
-          break
+          errors.push(`${file.name}: ${result.error || 'Upload failed'}`)
+          continue
         }
+        completed++
       } catch (error) {
-        setErrorMessage(error instanceof Error ? error.message : `Network error uploading ${file.name}`)
-        break
+        errors.push(`${file.name}: ${error instanceof Error ? error.message : 'Network error'}`)
+        continue
       }
-      completed++
     }
 
     setUploading(false)
     setUploadProgress(null)
-    fetchItems()
+    
+    if (errors.length > 0) {
+      setErrorMessage(`${errors.length} file(s) failed: ${errors[0]}${errors.length > 1 ? ` (and ${errors.length - 1} more)` : ''}`)
+    }
+    
+    if (completed > 0) {
+      fetchItems()
+    }
   }, [currentFolderId, fetchItems])
 
   const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -323,12 +338,22 @@ export function VaultPanel() {
   const handleDownload = useCallback((item: VaultItem) => {
     if (item.isFolder) return
     setErrorMessage(null)
-    const link = document.createElement('a')
-    link.href = `/api/vault/download/${item.id}`
-    link.download = item.name
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    
+    try {
+      const link = document.createElement('a')
+      link.href = `/api/vault/download/${item.id}`
+      link.download = item.name
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      
+      // Cleanup after a short delay to ensure download starts
+      setTimeout(() => {
+        document.body.removeChild(link)
+      }, 100)
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to initiate download')
+    }
   }, [])
 
   // ─── Filter & Sort ────────────────────────────────────────────────
@@ -540,8 +565,8 @@ export function VaultPanel() {
         /* ─── File Grid ────────────────────────────────────────────── */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
           {filteredItems.map(item => {
-            const IconComponent = getFileIcon(item.mimeType, item.isFolder)
-            const iconColor = getFileColor(item.mimeType, item.isFolder)
+            const IconComponent = getFileIcon(item.mimeGroup, item.isFolder)
+            const iconColor = getFileColor(item.mimeGroup, item.isFolder)
 
             return (
               <div
@@ -613,110 +638,128 @@ export function VaultPanel() {
       )}
 
       {/* ─── New Folder Modal ──────────────────────────────────────── */}
-      {showNewFolder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowNewFolder(false)}>
-          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-5 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-black text-[var(--color-text-main)] mb-4">New Folder</h3>
-            <input
-              type="text"
-              placeholder="Folder name"
-              value={newFolderName}
-              onChange={e => setNewFolderName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleCreateFolder() }}
-              autoFocus
-              className="w-full px-3 py-2 text-xs bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-[var(--radius-sm)] text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)]/50 focus:outline-none focus:border-[var(--color-primary)] transition-colors mb-4"
-            />
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setShowNewFolder(false)}
-                className="px-3 py-1.5 text-xs font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] rounded-[var(--radius-sm)] transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateFolder}
-                disabled={!newFolderName.trim() || actionLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[var(--color-primary)] rounded-[var(--radius-sm)] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
-              >
-                {actionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                Create
-              </button>
-            </div>
+      <Modal
+        isOpen={showNewFolder}
+        onClose={() => setShowNewFolder(false)}
+        title="New Folder"
+        size="sm"
+      >
+        <div className="space-y-4 pt-1">
+          <Input
+            type="text"
+            placeholder="Folder name"
+            value={newFolderName}
+            onChange={e => setNewFolderName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleCreateFolder() }}
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowNewFolder(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleCreateFolder}
+              disabled={!newFolderName.trim()}
+              isLoading={actionLoading}
+              icon={<Check className="w-3.5 h-3.5" />}
+            >
+              Create
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* ─── Rename Modal ──────────────────────────────────────────── */}
-      {renamingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setRenamingItem(null)}>
-          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-5 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-sm font-black text-[var(--color-text-main)] mb-1">Rename</h3>
-            <p className="text-[10px] text-[var(--color-text-muted)] mb-4">Rename &ldquo;{renamingItem.name}&rdquo;</p>
-            <input
+      <Modal
+        isOpen={!!renamingItem}
+        onClose={() => setRenamingItem(null)}
+        title="Rename"
+        size="sm"
+      >
+        {renamingItem && (
+          <div className="space-y-4 pt-1">
+            <p className="text-[10px] text-[var(--color-text-muted)] mb-2">Rename &ldquo;{renamingItem.name}&rdquo;</p>
+            <Input
               type="text"
               value={renameValue}
               onChange={e => setRenameValue(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleRename() }}
               autoFocus
-              className="w-full px-3 py-2 text-xs bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-[var(--radius-sm)] text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)] transition-colors mb-4"
             />
             <div className="flex justify-end gap-2">
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setRenamingItem(null)}
-                className="px-3 py-1.5 text-xs font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] rounded-[var(--radius-sm)] transition-colors cursor-pointer"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleRename}
-                disabled={!renameValue.trim() || actionLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[var(--color-primary)] rounded-[var(--radius-sm)] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
+                disabled={!renameValue.trim()}
+                isLoading={actionLoading}
+                icon={<Check className="w-3.5 h-3.5" />}
               >
-                {actionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                 Rename
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* ─── Delete Confirmation Modal ─────────────────────────────── */}
-      {deletingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setDeletingItem(null)}>
-          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-5 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-[var(--radius-sm)] bg-rose-500/10 flex items-center justify-center">
+      <Modal
+        isOpen={!!deletingItem}
+        onClose={() => setDeletingItem(null)}
+        title={`Delete ${deletingItem?.isFolder ? 'Folder' : 'File'}`}
+        size="sm"
+      >
+        {deletingItem && (
+          <div className="space-y-4 pt-1">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-[var(--radius-sm)] bg-rose-500/10 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-4 h-4 text-rose-500" />
               </div>
-              <h3 className="text-sm font-black text-[var(--color-text-main)]">Delete {deletingItem.isFolder ? 'Folder' : 'File'}</h3>
+              <div>
+                <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
+                  Are you sure you want to permanently delete <span className="font-bold text-[var(--color-text-main)]">&ldquo;{deletingItem.name}&rdquo;</span>?
+                </p>
+                {deletingItem.isFolder && (
+                  <p className="text-[10px] text-rose-500 font-semibold mt-2">
+                    All files and subfolders inside will also be deleted.
+                  </p>
+                )}
+              </div>
             </div>
-            <p className="text-xs text-[var(--color-text-muted)] mb-1 leading-relaxed">
-              Are you sure you want to permanently delete <span className="font-bold text-[var(--color-text-main)]">&ldquo;{deletingItem.name}&rdquo;</span>?
-            </p>
-            {deletingItem.isFolder && (
-              <p className="text-[10px] text-rose-500 font-semibold mb-4">
-                All files and subfolders inside will also be deleted.
-              </p>
-            )}
             <div className="flex justify-end gap-2 mt-4">
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setDeletingItem(null)}
-                className="px-3 py-1.5 text-xs font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] rounded-[var(--radius-sm)] transition-colors cursor-pointer"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
                 onClick={handleDelete}
-                disabled={actionLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-rose-500 rounded-[var(--radius-sm)] hover:bg-rose-600 transition-colors cursor-pointer disabled:opacity-50"
+                isLoading={actionLoading}
+                icon={<Trash2 className="w-3.5 h-3.5" />}
               >
-                {actionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
                 Delete
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   )
 }

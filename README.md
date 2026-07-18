@@ -1,4 +1,4 @@
-# Tracker OS – Personal Life Operating System
+# Tracker – Personal Life Operating System
 
 Tracker is a production-grade, personal operating system built to manage daily life, routines, habits, fitness, scheduling, and personal records in one unified interface.
 
@@ -14,7 +14,7 @@ Tracker conforms to a **Domain-Driven modular boundary design**:
   * `sync/`: Sync channels (e.g. Google Calendar integration).
   * `life/`: Domain managers (e.g. Habits, Workout).
 
-All major design parameters are documented in [docs/architecture.md](file:///d:/github_projeccts/tracker/docs/architecture.md).
+All major design parameters are documented in the [System Architecture handbook](file:///d:/github_projeccts/tracker/docs/02-architecture/System Architecture.md).
 
 ---
 
@@ -70,4 +70,4 @@ Open `http://localhost:3000` to view the dashboard.
 * **Build Project**: `bun run build`
 
 Unit tests are automatically executed and must pass on every production build run.
-For more details, see [docs/testing.md](file:///d:/github_projeccts/tracker/docs/testing.md).
+For more details, see [docs/05-engineering/Testing.md](file:///d:/github_projeccts/tracker/docs/05-engineering/Testing.md).

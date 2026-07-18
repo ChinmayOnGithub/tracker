@@ -1,3 +1,10 @@
+const dbUrl = process.env.DATABASE_URL || ''
+if (dbUrl.includes('supabase.com') || dbUrl.includes('pooler.supabase.com') || process.env.NODE_ENV === 'production') {
+  console.error('CRITICAL SAFETY BLOCK: Database seeding is blocked on production/Supabase instances to prevent data loss.')
+  process.exit(1)
+}
+process.env.ALLOW_UNSAFE_DB_OPERATIONS = 'true'
+
 import { db } from '../lib/db'
 
 async function main() {

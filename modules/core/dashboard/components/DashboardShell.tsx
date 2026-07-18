@@ -96,7 +96,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               T
             </div>
             <span className="text-sm font-extrabold text-[var(--color-text-main)] tracking-tight">
-              Tracker OS
+              Tracker
             </span>
           </div>
           <button

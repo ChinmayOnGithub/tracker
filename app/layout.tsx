@@ -15,9 +15,13 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Operations Tracker",
+  title: "Tracker",
   description: "Track monthly, weekly, daily, and yearly activities, subscriptions, habits, and workouts in one place.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -47,16 +51,29 @@ export default function RootLayout({
         <Script id="register-sw" strategy="afterInteractive">
           {`
             if ('serviceWorker' in navigator) {
-              window.addEventListener('load', function() {
-                navigator.serviceWorker.register('/sw.js').then(
-                  function(reg) {
-                    console.log('SW registered:', reg.scope);
-                  },
-                  function(err) {
-                    console.log('SW registration failed:', err);
+              if (window.location.hostname === 'localhost') {
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                  for (let registration of registrations) {
+                    registration.unregister().then(function(success) {
+                      if (success) {
+                        console.log('Unregistered active service worker on localhost to prevent HMR issues.');
+                        window.location.reload();
+                      }
+                    });
                   }
-                );
-              });
+                });
+              } else {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').then(
+                    function(reg) {
+                      console.log('SW registered:', reg.scope);
+                    },
+                    function(err) {
+                      console.log('SW registration failed:', err);
+                    }
+                  );
+                });
+              }
             }
           `}
         </Script>

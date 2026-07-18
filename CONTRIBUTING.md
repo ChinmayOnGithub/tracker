@@ -1,4 +1,4 @@
-# Tracker OS – Contributing & Code Quality Standards
+# Tracker – Contributing & Code Quality Standards
 
 This document establishes the code quality checklists, commit message conventions, and repository standards for all contributors.
 
@@ -15,7 +15,7 @@ This document establishes the code quality checklists, commit message convention
 
 ## 2. Commit Message Conventions
 
-Tracker OS conforms to the **Conventional Commits** specification:
+Tracker conforms to the **Conventional Commits** specification:
 
 * `feat`: A new user-facing product feature.
 * `fix`: A bug resolution.

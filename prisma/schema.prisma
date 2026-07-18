@@ -242,26 +242,36 @@ model WishlistItem {
 }
 
 model SecureDocument {
-  id             String           @id @default(uuid())
-  userId         String
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  encryptedTitle String           // AES-256-GCM encrypted original name
-  encryptedType  String?          // Encrypted MIME type (null for folders)
-  fileKey        String?          // UUID filename on disk (null for folders)
-  iv             String?          // Hex 12-byte IV (null for folders)
-  tag            String?          // Hex 16-byte GCM auth tag (null for folders)
-  fileSize       Int?             // Original size in bytes (null for folders)
-  isFolder       Boolean          @default(false)
-  parentId       String?
-  parent         SecureDocument?  @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children       SecureDocument[] @relation("FolderHierarchy")
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  deletedAt      DateTime?        // Soft Delete
-  attachments    Attachment[]
+  id                String           @id @default(uuid())
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  encryptedTitle    String           // AES-256-GCM encrypted display name (e.g. "Passport.pdf")
+  searchName        String           // Normalized plaintext lowercase token (e.g. "passport pdf")
+  encryptedType     String?          // Encrypted MIME type (null for folders)
+  mimeGroup         String?          // Plaintext MIME group: PDF, IMAGE, VIDEO, TEXT, CODE, ARCHIVE, OTHER
+  extension         String?          // Plaintext extension: pdf, png, zip, etc.
+  storageKey        String?          // UUID file pointer on disk/cloud (null for folders)
+  storageProvider   String           @default("local")
+  iv                String?          // Hex 12-byte IV (null for folders)
+  tag               String?          // Hex 16-byte GCM auth tag (null for folders)
+  fileSize          Int?             // Original size in bytes (null for folders)
+  sha256            String?          // File checksum (null for folders)
+  metadata          Json?            // Arbitrary document properties (expiry, issuer)
+  isFolder          Boolean          @default(false)
+  isFavorite        Boolean          @default(false)
+  encryptionVersion Int              @default(1)
+  parentId          String?
+  parent            SecureDocument?  @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children          SecureDocument[] @relation("FolderHierarchy")
+  lastAccessedAt    DateTime?
+  accessCount       Int              @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?        // Soft Delete
+  attachments       Attachment[]
 
-  @@index([userId])
-  @@index([parentId])
+  @@index([userId, parentId])
+  @@index([userId, isFavorite])
 }
 
 // ----------------------------------------------------
