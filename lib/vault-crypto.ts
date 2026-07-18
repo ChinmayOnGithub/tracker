@@ -64,7 +64,7 @@ export function decryptText(encrypted: string, ivHex: string, tagHex: string): s
   try {
     iv = Buffer.from(ivHex, 'hex')
     tag = Buffer.from(tagHex, 'hex')
-  } catch (error) {
+  } catch {
     throw new Error('Invalid hex encoding in IV or tag')
   }
   
@@ -84,7 +84,7 @@ export function decryptText(encrypted: string, ivHex: string, tagHex: string): s
     let decrypted = decipher.update(encrypted, 'hex', 'utf8')
     decrypted += decipher.final('utf8')
     return decrypted
-  } catch (error) {
+  } catch {
     throw new Error('Decryption failed: data may be corrupted or tampered with')
   }
 }
@@ -144,7 +144,7 @@ export function decryptBuffer(encryptedBuffer: Buffer, ivHex: string, tagHex: st
   try {
     iv = Buffer.from(ivHex, 'hex')
     tag = Buffer.from(tagHex, 'hex')
-  } catch (error) {
+  } catch {
     throw new Error('Invalid hex encoding in IV or tag')
   }
   
@@ -165,7 +165,7 @@ export function decryptBuffer(encryptedBuffer: Buffer, ivHex: string, tagHex: st
       decipher.update(encryptedBuffer),
       decipher.final(),
     ])
-  } catch (error) {
+  } catch {
     throw new Error('Decryption failed: file may be corrupted or tampered with')
   }
 }

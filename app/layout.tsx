@@ -53,14 +53,15 @@ export default function RootLayout({
             if ('serviceWorker' in navigator) {
               if (window.location.hostname === 'localhost') {
                 navigator.serviceWorker.getRegistrations().then(function(registrations) {
-                  for (let registration of registrations) {
-                    registration.unregister().then(function(success) {
-                      if (success) {
-                        console.log('Unregistered active service worker on localhost to prevent HMR issues.');
-                        window.location.reload();
-                      }
+                  if (registrations.length === 0) return;
+                  if (sessionStorage.getItem('sw-cleanup')) return;
+                  sessionStorage.setItem('sw-cleanup', '1');
+                  Promise.all(registrations.map(function(r) { return r.unregister(); }))
+                    .then(function() {
+                      console.log('Unregistered all service workers on localhost.');
+                      sessionStorage.removeItem('sw-cleanup');
+                      window.location.reload();
                     });
-                  }
                 });
               } else {
                 window.addEventListener('load', function() {

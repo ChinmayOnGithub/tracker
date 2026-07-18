@@ -532,20 +532,7 @@ export async function batchDeleteVaultItems(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function collectAllDescendantIds(parentId: string, userId: string): Promise<string[]> {
-  const ids: string[] = []
-  const children = await db.secureDocument.findMany({
-    where: { parentId, userId, deletedAt: null },
-    select: { id: true, isFolder: true },
-  })
-  for (const child of children) {
-    ids.push(child.id)
-    if (child.isFolder) {
-      ids.push(...await collectAllDescendantIds(child.id, userId))
-    }
-  }
-  return ids
-}
+
 
 async function fetchBreadcrumbNode(docId: string, userId: string) {
   return db.secureDocument.findFirst({

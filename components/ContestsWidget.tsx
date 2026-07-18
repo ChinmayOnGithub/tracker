@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { ExternalLink, Code2, Trophy, Clock, Loader2 } from 'lucide-react'
+import { Card } from '@/design-system'
 
 interface Contest {
   id: string
@@ -96,16 +97,16 @@ export function ContestsWidget() {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 py-3 px-3 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl">
+      <Card compact className="flex-row items-center gap-2">
         <Loader2 className="w-3.5 h-3.5 text-[var(--color-text-muted)] animate-spin" />
         <span className="text-[10px] text-[var(--color-text-muted)] font-medium">Loading upcoming contests…</span>
-      </div>
+      </Card>
     )
   }
 
   if (error || contests.length === 0) {
     return (
-      <div className="py-3 px-3 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl">
+      <Card compact>
         <div className="flex items-center gap-2 mb-2">
           <Trophy className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
           <span className="text-[10px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">Upcoming Contests</span>
@@ -113,12 +114,12 @@ export function ContestsWidget() {
         <p className="text-[10px] text-[var(--color-text-muted)] italic">
           {error ? 'Could not load contests. Check your connection.' : 'No upcoming contests found.'}
         </p>
-      </div>
+      </Card>
     )
   }
 
   return (
-    <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">
+    <Card className="overflow-hidden p-0">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--color-border)]">
         <div className="flex items-center gap-1.5">
@@ -190,7 +191,7 @@ export function ContestsWidget() {
           )
         })}
       </div>
-    </div>
+    </Card>
   )
 }
 

@@ -144,6 +144,10 @@ export async function verifyPinAction(usernameInput: string, pin: string): Promi
       return { success: false, error: 'Incorrect username or PIN.' }
     }
 
+    if (!user.passwordHash) {
+      return { success: false, error: 'You need to login with Google as passcode login is not setup for you.' }
+    }
+
     const passwordHash = hashPin(pin, username)
     let isMatch = user.passwordHash === passwordHash
 
@@ -211,5 +215,71 @@ export async function isPinSetup(): Promise<boolean> {
   } catch (error) {
     console.error('Failed to check user counts:', error)
     return false
+  }
+}
+
+/**
+ * Gets the current user's profile details.
+ */
+export async function getUserProfileAction(): Promise<{ success: boolean; user?: { id: string; username: string; email: string | null; hasPasscode: boolean } }> {
+  try {
+    const loggedUser = await getLoggedUser()
+    if (!loggedUser) return { success: false }
+    const user = await db.user.findUnique({
+      where: { id: loggedUser.id },
+      select: { id: true, username: true, email: true, passwordHash: true }
+    })
+    if (!user) return { success: false }
+
+    // Auto-align username for chinmaydpatil09@gmail.com as requested
+    if (user.email === 'chinmaydpatil09@gmail.com' && user.username !== 'chinmaydpatil09') {
+      const existing = await db.user.findUnique({ where: { username: 'chinmaydpatil09' } })
+      if (!existing) {
+        await db.user.update({
+          where: { id: user.id },
+          data: { username: 'chinmaydpatil09' }
+        })
+        user.username = 'chinmaydpatil09'
+      }
+    }
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        hasPasscode: !!user.passwordHash
+      }
+    }
+  } catch (error) {
+    console.error('Failed to get user profile:', error)
+    return { success: false }
+  }
+}
+
+/**
+ * Sets or removes the current user's passcode/PIN.
+ */
+export async function setPasscodeAction(pin: string | null): Promise<{ success: boolean; error?: string }> {
+  try {
+    const loggedUser = await getLoggedUser()
+    if (!loggedUser) return { success: false, error: 'Unauthorized' }
+
+    if (pin !== null && (pin.length !== 4 || !/^\d+$/.test(pin))) {
+      return { success: false, error: 'PIN must be exactly 4 digits.' }
+    }
+
+    const passwordHash = pin ? hashPin(pin, loggedUser.username) : null
+
+    await db.user.update({
+      where: { id: loggedUser.id },
+      data: { passwordHash }
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to update passcode:', error)
+    return { success: false, error: 'Database error while setting passcode.' }
   }
 }

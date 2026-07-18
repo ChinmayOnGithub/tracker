@@ -348,17 +348,18 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
             </h3>
             
             {dueToday.length === 0 ? (
-              <div className="p-4 bg-white dark:bg-zinc-900/40 border border-slate-200 dark:border-zinc-800 rounded-xl text-center text-slate-400 dark:text-zinc-600 text-xs italic shadow-xs">
+              <Card compact className="text-center text-slate-400 dark:text-zinc-600 text-xs italic">
                 All caught up for today!
-              </div>
+              </Card>
             ) : (
               <div className="space-y-2.5">
                 {dueToday.map(({ template, analysis }) => {
                   const calendarUrl = getGoogleCalendarUrl(template, analysis.nextDueDate || todayStr)
                   return (
-                    <div
+                    <Card
                       key={template.id}
-                      className="bg-white dark:bg-zinc-900 p-4 border border-slate-200 dark:border-zinc-800 rounded-xl flex items-center justify-between gap-4 shadow-xs group"
+                      compact
+                      className="flex-row items-center justify-between gap-4 group"
                     >
                       <div className="flex items-center gap-3">
                         {(() => {
@@ -428,7 +429,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                           )}
                         </button>
                       </div>
-                    </div>
+                    </Card>
                   )
                 })}
               </div>
@@ -446,9 +447,10 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                 {dueThisWeek.map(({ template, analysis }) => {
                   const calendarUrl = getGoogleCalendarUrl(template, analysis.nextDueDate || todayStr)
                   return (
-                    <div
+                    <Card
                       key={template.id}
-                      className="bg-white dark:bg-zinc-900 p-3.5 border border-slate-200 dark:border-zinc-800 rounded-xl flex items-center justify-between gap-4 shadow-xs"
+                      compact
+                      className="flex-row items-center justify-between gap-4"
                     >
                       <div className="flex items-center gap-3">
                         {(() => {
@@ -511,7 +513,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                           )}
                         </button>
                       </div>
-                    </div>
+                    </Card>
                   )
                 })}
               </div>
@@ -523,7 +525,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
               <h3 className="text-xs font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
                 Due Later This Month ({dueThisMonth.length})
               </h3>
-              <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-3 rounded-xl divide-y divide-slate-100 dark:divide-zinc-800 shadow-xs">
+              <Card compact className="divide-y divide-slate-100 dark:divide-zinc-800">
                 {dueThisMonth.map(({ template, analysis }) => (
                   <div key={template.id} className="flex justify-between items-center py-2 first:pt-0 last:pb-0">
                     <div className="flex items-center gap-2">
@@ -549,7 +551,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                     </div>
                   </div>
                 ))}
-              </div>
+              </Card>
             </div>
           )}
 
@@ -560,16 +562,18 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
             </h3>
 
             {milestones.length === 0 ? (
-              <div className="p-4 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-center text-slate-400 dark:text-zinc-600 text-xs italic shadow-xs">
+              <Card compact className="text-center text-slate-400 dark:text-zinc-600 text-xs italic">
                 No milestones configured.
-              </div>
+              </Card>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {milestones.map(({ template, analysis }) => (
-                  <div
+                  <Card
                     key={template.id}
+                    interactive
+                    compact
                     onClick={() => onOpenLogger(template)}
-                    className="bg-white dark:bg-zinc-900 p-4 border border-slate-200 dark:border-zinc-800 rounded-xl flex flex-col justify-between gap-3 cursor-pointer hover:border-slate-300 dark:hover:border-zinc-700 transition-colors shadow-xs group"
+                    className="justify-between gap-3 group"
                   >
                     <div className="flex items-start gap-2.5">
                       {(() => {
@@ -590,7 +594,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                     <div className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 font-mono">
                       {analysis.statusMessage}
                     </div>
-                  </div>
+                  </Card>
                 ))}
               </div>
             )}
@@ -601,7 +605,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
               <h3 className="text-xs font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wider flex items-center gap-1">
                 <RefreshCcw size={12} className="text-orange-500 dark:text-orange-400" /> Upcoming Yearly Renewals
               </h3>
-              <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-4 rounded-xl space-y-3 shadow-xs">
+              <Card compact className="space-y-3">
                 {upcomingYearly.map(({ template, analysis }) => (
                   <div key={template.id} className="flex justify-between items-center text-xs">
                     <div>
@@ -626,7 +630,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                     </div>
                   </div>
                 ))}
-              </div>
+              </Card>
             </div>
           )}
 
@@ -637,11 +641,11 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
             </h3>
             
             {recentLogs.length === 0 ? (
-              <div className="p-4 bg-white dark:bg-zinc-900/40 border border-slate-100 dark:border-zinc-800 rounded-xl text-center text-slate-400 dark:text-zinc-600 text-xs italic shadow-xs">
+              <Card compact className="text-center text-slate-400 dark:text-zinc-600 text-xs italic">
                 No recent activity.
-              </div>
+              </Card>
             ) : (
-              <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl divide-y divide-slate-100 dark:divide-zinc-800 max-h-60 overflow-y-auto pr-1 shadow-xs">
+              <Card className="p-0 divide-y divide-slate-100 dark:divide-zinc-800 max-h-60 overflow-y-auto">
                 {recentLogs.map(log => {
                   const template = analyzedTemplates.find(t => t.template.id === log.activityId)?.template
                   const color = template?.color || 'zinc'
@@ -689,7 +693,7 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
                     </div>
                   )
                 })}
-              </div>
+              </Card>
             )}
           </div>
         </div>
@@ -713,9 +717,9 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
 
             if (list.length === 0) {
               return (
-                <div className="p-4 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-center text-slate-400 dark:text-zinc-600 text-xs italic">
+                <Card compact className="text-center text-slate-400 dark:text-zinc-600 text-xs italic">
                   No {activeTab} activities found.
-                </div>
+                </Card>
               )
             }
 

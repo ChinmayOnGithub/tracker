@@ -34,7 +34,7 @@ import {
   getVaultStats,
 } from '@/app/actions/vault'
 import type { VaultItem, VaultBreadcrumb } from '@/app/actions/vault'
-import { Modal, Input, Button, Card } from '@/design-system'
+import { Modal, Input, Button } from '@/design-system'
 
 // ─── File Type Helpers (use mimeGroup from DB — no decryption needed) ─────────
 
@@ -151,7 +151,10 @@ export function VaultPanel() {
   }, [currentFolderId]);
 
   useEffect(() => {
-    fetchItems();
+    const timer = setTimeout(() => {
+      fetchItems()
+    }, 0)
+    return () => clearTimeout(timer)
   }, [fetchItems]);
 
   // ─── Navigation ───────────────────────────────────────────────────

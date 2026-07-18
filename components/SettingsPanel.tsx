@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardBody, Button, Skeleton, Select } from '@/design-system'
-import { Calendar, CheckCircle2, AlertCircle, RefreshCw, Settings2, Database, Shield } from 'lucide-react'
+import { Card, CardHeader, CardBody, Button, Skeleton, Select, Input } from '@/design-system'
+import { Calendar, CheckCircle2, AlertCircle, RefreshCw, Settings2, Database, Shield, Lock, Key } from 'lucide-react'
 import { checkGoogleConnection, disconnectGoogleAccount } from '@/modules/sync/google-calendar/actions'
+import { getUserProfileAction, setPasscodeAction } from '@/app/actions/auth'
 
 export const SettingsPanel: React.FC = () => {
   const [loading, setLoading] = useState(true)
@@ -9,6 +10,60 @@ export const SettingsPanel: React.FC = () => {
   const [lastSync, setLastSync] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
+
+  // Passcode settings states
+  const [profileLoading, setProfileLoading] = useState(true)
+  const [userProfile, setUserProfile] = useState<{ username: string; email: string | null; hasPasscode: boolean } | null>(null)
+  const [pinInput, setPinInput] = useState('')
+  const [passcodeError, setPasscodeError] = useState<string | null>(null)
+  const [passcodeSuccess, setPasscodeSuccess] = useState<string | null>(null)
+  const [passcodeActionLoading, setPasscodeActionLoading] = useState(false)
+
+  const fetchProfile = useCallback(async () => {
+    setProfileLoading(true)
+    const res = await getUserProfileAction()
+    if (res.success && res.user) {
+      setUserProfile(res.user)
+    }
+    setProfileLoading(false)
+  }, [])
+
+  const handleSetPasscode = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPasscodeError(null)
+    setPasscodeSuccess(null)
+    if (pinInput.length !== 4 || !/^\d+$/.test(pinInput)) {
+      setPasscodeError('PIN must be exactly 4 digits.')
+      return
+    }
+    setPasscodeActionLoading(true)
+    const res = await setPasscodeAction(pinInput)
+    if (res.success) {
+      setPasscodeSuccess('Passcode login configured successfully!')
+      setPinInput('')
+      await fetchProfile()
+    } else {
+      setPasscodeError(res.error || 'Failed to update passcode.')
+    }
+    setPasscodeActionLoading(false)
+  }
+
+  const handleDisablePasscode = async () => {
+    if (!confirm('Are you sure you want to disable passcode login? You will need to login using Google.')) {
+      return
+    }
+    setPasscodeError(null)
+    setPasscodeSuccess(null)
+    setPasscodeActionLoading(true)
+    const res = await setPasscodeAction(null)
+    if (res.success) {
+      setPasscodeSuccess('Passcode login disabled successfully.')
+      await fetchProfile()
+    } else {
+      setPasscodeError(res.error || 'Failed to disable passcode.')
+    }
+    setPasscodeActionLoading(false)
+  }
 
   // Local preferences states
   const [defaultView, setDefaultView] = useState<'month' | 'week' | 'agenda'>(() => {
@@ -80,10 +135,14 @@ export const SettingsPanel: React.FC = () => {
       setLoading(false)
     }
     load()
+    const timer = setTimeout(() => {
+      fetchProfile()
+    }, 0)
     return () => {
       active = false
+      clearTimeout(timer)
     }
-  }, [])
+  }, [fetchProfile])
 
   const handleConnect = () => {
     window.location.href = '/api/auth/google'
@@ -236,6 +295,110 @@ export const SettingsPanel: React.FC = () => {
                 </button>
               </div>
             </div>
+          </CardBody>
+        </Card>
+
+        {/* Passcode & Login Security Card */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Lock className="w-4.5 h-4.5 text-[var(--color-primary)]" />
+              <span className="text-xs font-black text-[var(--color-text-main)] uppercase tracking-wider">
+                Passcode & Login Security
+              </span>
+            </div>
+          </CardHeader>
+          <CardBody className="space-y-4">
+            {profileLoading ? (
+              <div className="space-y-3 py-2">
+                <Skeleton variant="text" className="h-4 w-3/4" />
+                <Skeleton variant="text" className="h-4 w-1/2" />
+              </div>
+            ) : userProfile ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3 text-xs text-[var(--color-text-muted)]">
+                  <div>
+                    <span className="font-bold text-[var(--color-text-muted)] uppercase tracking-wider text-[10px]">Username:</span>
+                    <div className="font-extrabold text-[var(--color-text-main)] text-sm font-mono mt-0.5">{userProfile.username}</div>
+                  </div>
+                  <div>
+                    <span className="font-bold text-[var(--color-text-muted)] uppercase tracking-wider text-[10px]">Email:</span>
+                    <div className="font-semibold text-[var(--color-text-main)] mt-0.5">{userProfile.email || 'Not connected'}</div>
+                  </div>
+                  <div>
+                    <span className="font-bold text-[var(--color-text-muted)] uppercase tracking-wider text-[10px]">Passcode Login Status:</span>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className={`w-2.5 h-2.5 rounded-full ${userProfile.hasPasscode ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                      <span className={`font-bold uppercase tracking-wider text-[10px] ${userProfile.hasPasscode ? 'text-emerald-500' : 'text-amber-500'}`}>
+                        {userProfile.hasPasscode ? 'Enabled' : 'Disabled'}
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-[var(--color-text-muted)] mt-4">
+                    Passcode login allows you to access Tracker using your username (<span className="font-mono text-[var(--color-text-main)]">{userProfile.username}</span>) and a 4-digit PIN, so you don&apos;t need to log in with Google every time.
+                  </p>
+                </div>
+
+                <div className="space-y-4 p-4 bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-800/80 rounded-2xl">
+                  <h4 className="text-xs font-bold text-[var(--color-text-main)] uppercase tracking-wider flex items-center gap-1.5">
+                    <Key className="w-4 h-4 text-[var(--color-primary)]" />
+                    {userProfile.hasPasscode ? 'Update or Disable PIN' : 'Configure PIN'}
+                  </h4>
+
+                  <form onSubmit={handleSetPasscode} className="space-y-3">
+                    <Input
+                      type="password"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={4}
+                      placeholder="Enter 4-digit PIN"
+                      value={pinInput}
+                      onChange={e => {
+                        setPasscodeError(null)
+                        setPasscodeSuccess(null)
+                        setPinInput(e.target.value.replace(/\D/g, ''))
+                      }}
+                      className="font-mono text-center tracking-[1em]"
+                    />
+
+                    {passcodeError && (
+                      <div className="text-[11px] text-rose-500 font-medium">{passcodeError}</div>
+                    )}
+                    {passcodeSuccess && (
+                      <div className="text-[11px] text-emerald-500 font-medium">{passcodeSuccess}</div>
+                    )}
+
+                    <div className="flex items-center gap-2 pt-1.5">
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="sm"
+                        disabled={pinInput.length !== 4 || passcodeActionLoading}
+                        isLoading={passcodeActionLoading}
+                      >
+                        {userProfile.hasPasscode ? 'Change PIN' : 'Enable Passcode'}
+                      </Button>
+                      
+                      {userProfile.hasPasscode && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={passcodeActionLoading}
+                          onClick={handleDisablePasscode}
+                        >
+                          Disable Passcode
+                        </Button>
+                      )}
+                    </div>
+                  </form>
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-[var(--color-text-muted)] italic">
+                Could not load profile. Please refresh settings.
+              </div>
+            )}
           </CardBody>
         </Card>
 

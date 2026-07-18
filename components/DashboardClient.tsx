@@ -102,7 +102,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   const searchParams = useSearchParams()
   const errorParam = searchParams ? searchParams.get('error') : null
   const detailsParam = searchParams ? searchParams.get('details') : null
-  const [showLocalBypass, setShowLocalBypass] = useState(false)
+
   // Modal states
   const [selectedDateStr, setSelectedDateStr] = useState<string>(getTodayDateStr())
   const [isDayLogsOpen, setIsDayLogsOpen] = useState(false)
@@ -514,26 +514,17 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
             </div>
           )}
 
-          {/* Toggle Developer Local Bypass */}
-          <div className="w-full pt-4 border-t border-slate-100 dark:border-zinc-850/60 flex flex-col items-center">
-            <button
-              onClick={() => {
-                setShowLocalBypass(!showLocalBypass)
-                setAuthError('')
-                setEnteredPin('')
-              }}
-              className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 hover:text-blue-500 dark:text-zinc-500 dark:hover:text-blue-400 uppercase tracking-widest cursor-pointer transition-colors duration-200 select-none"
-            >
-              <span>{showLocalBypass ? 'Hide Local PIN Login' : 'Developer / Local PIN Bypass'}</span>
-              <span className={`transition-transform duration-350 text-[8px] ${showLocalBypass ? 'rotate-180' : ''}`}>
-                ▼
-              </span>
-            </button>
+          {/* Or Passcode Login Divider */}
+          <div className="relative w-full flex items-center justify-center my-1 select-none">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-150 dark:border-zinc-800/80" />
+            </div>
+            <span className="relative px-3 bg-white dark:bg-zinc-900 text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest leading-none">
+              or access via passcode
+            </span>
           </div>
 
-          {/* Collapsible Local Username/PIN Form */}
-          {showLocalBypass && (
-            <div className="w-full space-y-4 pt-2 border-t border-dashed border-slate-150 dark:border-zinc-800/80 animate-fade-in">
+          <div className="w-full space-y-4 pt-1">
               {/* Sign In vs Register Toggle */}
               <div className="flex border border-slate-200/60 dark:border-zinc-800/80 bg-slate-50 dark:bg-zinc-950/80 p-1 rounded-xl w-full relative shadow-inner">
                 <button
@@ -671,7 +662,6 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
                 </button>
               )}
             </div>
-          )}
         </div>
       </div>
     )
