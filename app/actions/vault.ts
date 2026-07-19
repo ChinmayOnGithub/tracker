@@ -86,7 +86,8 @@ export interface VaultCursor {
 export async function listVaultItems(
   parentId: string | null = null,
   cursor?: VaultCursor,
-  limit: number = DEFAULT_PAGE_SIZE
+  limit: number = DEFAULT_PAGE_SIZE,
+  recursiveFiles: boolean = false
 ): Promise<{
   success: boolean
   items: VaultItem[]
@@ -98,7 +99,7 @@ export async function listVaultItems(
     const take = Math.min(Math.max(1, limit), MAX_PAGE_SIZE) + 1 // fetch one extra to detect next page
 
     // Validate parentId if provided
-    if (parentId) {
+    if (parentId && !recursiveFiles) {
       const parent = await db.secureDocument.findFirst({
         where: { id: parentId, userId: user.id, isFolder: true, deletedAt: null },
         select: { id: true },
@@ -111,7 +112,7 @@ export async function listVaultItems(
     const documents = await db.secureDocument.findMany({
       where: {
         userId: user.id,
-        parentId,
+        ...(recursiveFiles ? {} : { parentId }),
         deletedAt: null,
         // Cursor-based pagination
         ...(cursor ? {

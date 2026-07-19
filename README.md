@@ -63,7 +63,20 @@ Open `http://localhost:3000` to view the dashboard.
 
 ---
 
-## 3. Development Commands
+## 3. Activity vs Task Logic
+
+The application models tasks and habits based on the following business rules:
+
+1. **Activities (Habits)**: Created as recurring templates (`ActivityTemplate`). Evaluated automatically on any given day (e.g. today) to generate daily timeline occurrences.
+2. **Tasks (Occurrences)**: Every evaluated daily activity template translates to a trackable todo **Task** on the dashboard. Users can also add individual, one-off tasks manually.
+3. **Cycling Checklist States**: Clicks on any task checkbox cycle its state directly in the database:
+   - Non-Daily Activities: `Cleared (Active)` ➔ `Done` ➔ `Canceled (Skipped)` ➔ `Postponed` ➔ `Cleared`
+   - Daily Activities: `Cleared (Active)` ➔ `Done` ➔ `Canceled (Skipped)` ➔ `Cleared` (postpone is disabled for daily items to avoid redundancy).
+4. **Postpone Next-Day Scheduling**: Marking a task postponed schedules it to automatically move and appear on the next day's timeline. Performing any other action (Done/Canceled) clears the postponed schedule, reverting the task to its standard recurrence rule.
+
+---
+
+## 4. Development Commands
 
 * **Compile Check**: `bunx tsc --noEmit`
 * **Run Unit Tests**: `bun test`

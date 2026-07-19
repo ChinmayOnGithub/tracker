@@ -255,8 +255,20 @@ export async function reorderActivityTemplates(orderedIds: string[]) {
   try {
     const user = await getAuthSession()
 
-    // Verify ownership of all templates being reordered
-    await Promise.all(orderedIds.map(id => verifyTemplateOwnership(id, user)))
+    // Verify ownership of all templates being reordered in a single bulk count query
+    const validCount = await db.activityTemplate.count({
+      where: {
+        id: { in: orderedIds },
+        OR: [
+          { userId: user.id },
+          ...(user.username === 'admin' ? [{ userId: null }] : [])
+        ]
+      }
+    })
+
+    if (validCount !== orderedIds.length) {
+      throw new Error('Unauthorized template access or template not found')
+    }
 
     // Perform updates in a transaction
     await db.$transaction(

@@ -2,13 +2,16 @@
 
 import React, { useState } from 'react'
 import { ActivityTemplate, ActivityLog, Note, WorkoutExercise, WorkoutSet, WorkoutPayload, RunningPayload, MeasurementsPayload } from '@/types'
-import { createLog, updateLog, deleteLog } from '@/app/actions/log'
+import { createLog, updateLog, deleteLog, markComplete } from '@/app/actions/log'
 import { createNote, updateNote, deleteNote } from '@/app/actions/note'
 import { Icon } from './Icon'
-import { X, Plus, Trash2, Edit2, Sparkles, BookOpen, Search } from 'lucide-react'
+import { X, Plus, Trash2, Edit2, Sparkles, BookOpen, Search, Check, ArrowRightCircle } from 'lucide-react'
 import { getEventsForDate } from '@/lib/marathiCalendar'
 import { getTemplateColorClasses } from '@/lib/colors'
 import { Input, Textarea, Button } from '@/design-system'
+import { useRouter } from 'next/navigation'
+import { analyzeRecurrence } from '@/lib/recurrence'
+import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
 
 interface DayLogsModalProps {
   isOpen: boolean
@@ -18,6 +21,7 @@ interface DayLogsModalProps {
   logs: ActivityLog[] // All logs for this specific date
   note: Note | null // Standalone note for this date
   initialTab?: 'activities' | 'notes'
+  allLogs: ActivityLog[] // All history logs
 }
 
 export const DayLogsModal: React.FC<DayLogsModalProps> = ({
@@ -28,7 +32,296 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   logs,
   note,
   initialTab,
+  allLogs,
 }) => {
+  const router = useRouter()
+
+  // Re-analyze recurrence for the selected dateStr
+  const analyzedTemplatesForDate = React.useMemo(() => {
+    return templates.map(template => {
+      const templateLogs = allLogs.filter(log => log.activityId === template.id)
+      const analysis = analyzeRecurrence(template, templateLogs, dateStr)
+      return { template, analysis }
+    })
+  }, [templates, allLogs, dateStr])
+
+  // Generate timeline occurrences for that dateStr
+  const timelineForDate = React.useMemo(() => {
+    return generateTimeline(analyzedTemplatesForDate, logs, dateStr, [])
+  }, [analyzedTemplatesForDate, logs, dateStr])
+
+  // Sort them: timed first, then anytime
+  const orderedItemsForDate = React.useMemo(() => {
+    const timed = timelineForDate.filter(o => !o.isAllDay).sort((a, b) => {
+      const aTime = a.start ? new Date(a.start).getTime() : 0
+      const bTime = b.start ? new Date(b.start).getTime() : 0
+      return aTime - bTime
+    })
+    const anytime = timelineForDate.filter(o => o.isAllDay).sort((a, b) => {
+      const tA = templates.find(t => t.id === a.templateId)
+      const tB = templates.find(t => t.id === b.templateId)
+      return (tA?.sortOrder ?? 0) - (tB?.sortOrder ?? 0)
+    })
+    return [...timed, ...anytime]
+  }, [timelineForDate])
+
+  const handleCycleStatusForDate = async (occurrence: any) => {
+    if (!occurrence.templateId) return
+    const matched = templates.find(t => t.id === occurrence.templateId)
+    if (!matched) return
+
+    const isCanceled = occurrence.status === 'skipped'
+    const isPostponed = occurrence.status === 'postponed'
+    const isDone = occurrence.completed && !isCanceled && !isPostponed
+
+    try {
+      if (!occurrence.completed && !isCanceled && !isPostponed) {
+        // Cleared -> Done
+        const status = matched.category === 'finance' ? 'paid' : 'done'
+        const amount = matched.amount
+        await markComplete(occurrence.templateId, dateStr, status, amount ?? null, null)
+      } else if (isDone) {
+        // Done -> Canceled
+        if (occurrence.logId) {
+          await updateLog(occurrence.logId, { status: 'skipped' })
+        } else {
+          await markComplete(occurrence.templateId, dateStr, 'skipped')
+        }
+      } else if (isCanceled) {
+        // Canceled -> Postponed (or Cleared if daily)
+        const isDaily = matched.recurrenceType === 'daily'
+        if (isDaily) {
+          if (occurrence.logId) {
+            await deleteLog(occurrence.logId)
+          }
+        } else {
+          if (occurrence.logId) {
+            await updateLog(occurrence.logId, { status: 'postponed' })
+          } else {
+            await markComplete(occurrence.templateId, dateStr, 'postponed')
+          }
+        }
+      } else if (isPostponed) {
+        // Postponed -> Cleared
+        if (occurrence.logId) {
+          await deleteLog(occurrence.logId)
+        }
+      }
+      router.refresh()
+    } catch (err) {
+      console.error('Failed to cycle task status:', err)
+    }
+  }
+
+  const renderTimelineItemCard = (occurrence: any) => {
+    const isCanceled = occurrence.status === 'skipped'
+    const isPostponed = occurrence.status === 'postponed'
+    const isDone = occurrence.completed && !isCanceled && !isPostponed
+
+    // Status border color strip
+    let statusIndicatorColor = 'bg-slate-200 dark:bg-zinc-800'
+    if (isDone) {
+      statusIndicatorColor = 'bg-[var(--color-completed)]'
+    } else if (isCanceled) {
+      statusIndicatorColor = 'bg-[var(--color-overdue)]'
+    } else if (isPostponed) {
+      statusIndicatorColor = 'bg-[var(--color-external)]'
+    }
+
+    const template = templates.find(t => t.id === occurrence.templateId)
+    const color = template?.color || 'zinc'
+    const icon = template?.icon || 'CheckSquare'
+    const name = template?.name || occurrence.templateName || 'Deleted Activity'
+    const colorClasses = getTemplateColorClasses(color)
+
+    // Find the associated log
+    const log = occurrence.logId ? logs.find(l => l.id === occurrence.logId) : null
+
+    return (
+      <div
+        key={occurrence.id}
+        className="relative flex flex-col gap-1.5 px-3.5 py-2.5 group text-left select-none bg-white dark:bg-zinc-950"
+      >
+        <div className={`absolute left-0 top-0 bottom-0 w-1 ${statusIndicatorColor}`} />
+
+        <div className="flex justify-between items-center pl-1">
+          <div className="flex items-center gap-3">
+            {/* Custom Cycling Checkbox */}
+            <button 
+              type="button"
+              onClick={() => handleCycleStatusForDate(occurrence)}
+              className="shrink-0 w-6 h-6 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-90"
+            >
+              <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-300 shadow-xs ${
+                isDone ? 'bg-[var(--color-completed)] border-[var(--color-completed)] text-white' :
+                isCanceled ? 'bg-[var(--color-overdue)] border-[var(--color-overdue)] text-white' :
+                isPostponed ? 'bg-[var(--color-external)] border-[var(--color-external)] text-white' :
+                'bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 hover:border-[var(--color-primary)]'
+              }`}>
+                {isDone ? (
+                  <Check className="w-3 h-3 text-white" />
+                ) : isCanceled ? (
+                  <span className="text-[9px] font-black leading-none">✕</span>
+                ) : isPostponed ? (
+                  <ArrowRightCircle className="w-3.5 h-3.5" />
+                ) : null}
+              </div>
+            </button>
+
+            {/* Icon */}
+            <div
+              className={`w-8.5 h-8.5 rounded-lg flex items-center justify-center border ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}
+            >
+              <Icon name={icon} size={16} />
+            </div>
+
+            <div>
+              <h4 className={`font-semibold text-sm ${
+                isDone || isCanceled
+                  ? 'line-through text-slate-400 dark:text-zinc-550'
+                  : 'text-slate-800 dark:text-white'
+              }`}>
+                {name}
+              </h4>
+              <div className="flex flex-wrap gap-2 items-center mt-0.5">
+                <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold inline-flex items-center justify-center leading-none ${getStatusColor(occurrence.status || 'cleared')}`}>
+                  {occurrence.status || 'cleared'}
+                </span>
+                {occurrence.amount !== null && occurrence.amount !== undefined && (
+                  <span className="text-[10px] text-green-600 dark:text-green-400 font-semibold font-mono">
+                    ₹{occurrence.amount.toFixed(2)}
+                  </span>
+                )}
+                {log?.amount !== null && log?.amount !== undefined && log?.amount !== occurrence.amount && (
+                  <span className="text-[10px] text-green-600 dark:text-green-400 font-semibold font-mono">
+                    ₹{log.amount.toFixed(2)}
+                  </span>
+                )}
+                {log?.note && (
+                  <span className="text-[10px] text-slate-500 dark:text-zinc-400 italic">
+                    &ldquo;{log.note}&rdquo;
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Edit/Delete Actions if logged */}
+          {log && (
+            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleOpenLogger(template!, log)}
+                className="text-slate-400 hover:text-slate-900 dark:text-zinc-500 dark:hover:text-zinc-300 cursor-pointer"
+                title="Edit log details"
+              >
+                <Edit2 size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteLog(log.id)}
+                className="text-slate-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-450 cursor-pointer"
+                title="Delete completion"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Run summary */}
+        {log && (() => {
+          const runPayload = log.payload as RunningPayload | null
+          const hasRunData = runPayload && (runPayload.distance !== undefined || runPayload.duration !== undefined)
+          if (!hasRunData) return null
+          return (
+            <div className="pl-10 border-l border-blue-400 dark:border-blue-800/80 space-y-1 mt-1 text-xs text-slate-600 dark:text-zinc-350">
+              <div className="flex flex-wrap items-center gap-3">
+                {runPayload.distance !== undefined && (
+                  <span className="font-medium">
+                    🏃 Distance: <strong className="text-slate-800 dark:text-white font-mono">{runPayload.distance} km</strong>
+                  </span>
+                )}
+                {runPayload.duration !== undefined && (
+                  <span className="font-medium">
+                    ⏱ Duration: <strong className="text-slate-800 dark:text-white font-mono">{runPayload.duration} mins</strong>
+                  </span>
+                )}
+                {runPayload.energy && (
+                  <span className="font-medium">
+                    ⚡ Feeling: <strong className="text-slate-800 dark:text-white">{runPayload.energy}</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Measurements summary */}
+        {log && (() => {
+          const measPayload = log.payload as MeasurementsPayload | null
+          const hasMeasData = measPayload && (measPayload.weight !== undefined || measPayload.waist !== undefined)
+          if (!hasMeasData) return null
+          return (
+            <div className="pl-10 border-l border-purple-400 dark:border-purple-800/80 space-y-1 mt-1 text-xs text-slate-600 dark:text-zinc-350">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                {measPayload.weight !== undefined && (
+                  <span className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-1.5 rounded-lg flex flex-col">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-400">Weight</span>
+                    <strong className="text-slate-800 dark:text-white font-mono text-xs">{measPayload.weight} kg</strong>
+                  </span>
+                )}
+                {measPayload.waist !== undefined && (
+                  <span className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-1.5 rounded-lg flex flex-col">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-400">Waist</span>
+                    <strong className="text-slate-800 dark:text-white font-mono text-xs">{measPayload.waist} in</strong>
+                  </span>
+                )}
+                {measPayload.chest !== undefined && (
+                  <span className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-1.5 rounded-lg flex flex-col">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-400">Chest</span>
+                    <strong className="text-slate-800 dark:text-white font-mono text-xs">{measPayload.chest} in</strong>
+                  </span>
+                )}
+                {measPayload.arms !== undefined && (
+                  <span className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-1.5 rounded-lg flex flex-col">
+                    <span className="text-[9px] uppercase tracking-wider text-slate-400">Arms</span>
+                    <strong className="text-slate-800 dark:text-white font-mono text-xs">{measPayload.arms} in</strong>
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Workout summary */}
+        {log && (() => {
+          const workoutPayload = log.payload as WorkoutPayload | null
+          return workoutPayload?.exercises && (
+            <div className="pl-10 border-l border-slate-200 dark:border-zinc-800 space-y-1.5 mt-1">
+              {workoutPayload.exercises.map((ex, idx) => (
+                <div key={idx} className="text-xs">
+                  <span className="font-semibold text-slate-600 dark:text-zinc-300">{ex.name}</span>
+                  {ex.note && <span className="text-[10px] text-slate-450 dark:text-zinc-500 italic ml-1">({ex.note})</span>}
+                  <div className="flex flex-wrap gap-1.5 mt-0.5">
+                    {ex.sets.map((set, sIdx) => (
+                      <span
+                        key={sIdx}
+                        className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 px-1.5 py-0.5 rounded text-[9px] text-slate-600 dark:text-zinc-400 font-mono"
+                      >
+                        S{sIdx + 1}: {set.reps}r {set.weight ? `@ ${set.weight}kg` : ''}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
+      </div>
+    )
+  }
+
   // Tabs: 'activities' or 'notes'
   const [activeTab, setActiveTab] = useState<'activities' | 'notes'>(initialTab || 'activities')
   
@@ -753,169 +1046,23 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                     >
                       {isSavingLog ? 'Saving...' : 'Save Log'}
                     </button>
-                  </div>
                 </div>
-              )}              {/* Logged Activities List */}
-              <div className="space-y-4">
-                <div className="text-xs font-semibold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">
-                  Logged Activities ({logs.length})
+              </div>
+            )}
+
+              {/* Timeline Tasks List for that day */}
+              <div className="space-y-3">
+                <div className="text-[10px] uppercase tracking-widest font-extrabold text-slate-400 dark:text-zinc-550">
+                  Timeline Tasks ({orderedItemsForDate.length})
                 </div>
 
-                {logs.length === 0 ? (
+                {orderedItemsForDate.length === 0 ? (
                   <div className="p-6 bg-slate-50 dark:bg-zinc-950/40 border border-dashed border-slate-200 dark:border-zinc-800 rounded-xl text-center text-slate-400 dark:text-zinc-500 text-xs italic">
-                    No activities completed on this day.
+                    No tasks scheduled or logged for this day.
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {logs.map(log => {
-                      const template = templates.find(t => t.id === log.activityId)
-                      const color = template?.color || 'zinc'
-                      const icon = template?.icon || 'CheckSquare'
-                      const name = template?.name || 'Deleted Template'
-
-                      const colorClasses = getTemplateColorClasses(color)
-                      return (
-                        <div
-                          key={log.id}
-                          className="bg-white dark:bg-zinc-950 p-4 rounded-xl border border-slate-205 dark:border-zinc-800/60 flex flex-col gap-2 relative shadow-xs"
-                        >
-                          <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`w-8.5 h-8.5 rounded-lg flex items-center justify-center border ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}
-                              >
-                                <Icon name={icon} size={16} />
-                              </div>
-                              <div>
-                                <h4 className="font-semibold text-slate-800 dark:text-white text-sm">{name}</h4>
-                                <div className="flex flex-wrap gap-2 items-center mt-0.5">
-                                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-semibold inline-flex items-center justify-center leading-none ${getStatusColor(log.status)}`}>
-                                    {log.status}
-                                  </span>
-                                  {log.amount !== null && (
-                                    <span className="text-[10px] text-green-600 dark:text-green-400 font-semibold font-mono">
-                                      ₹{log.amount.toFixed(2)}
-                                    </span>
-                                  )}
-                                  {log.note && (
-                                    <span className="text-[10px] text-slate-500 dark:text-zinc-400 italic">
-                                      &ldquo;{log.note}&rdquo;
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleOpenLogger(template!, log)}
-                                className="text-slate-400 hover:text-slate-900 dark:text-zinc-500 dark:hover:text-zinc-300 cursor-pointer"
-                                title="Edit log details"
-                              >
-                                <Edit2 size={13} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteLog(log.id)}
-                                className="text-slate-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 cursor-pointer"
-                                title="Delete completion"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Run summary */}
-                          {(() => {
-                            const runPayload = log.payload as RunningPayload | null
-                            const hasRunData = runPayload && (runPayload.distance !== undefined || runPayload.duration !== undefined)
-                            if (!hasRunData) return null
-                            return (
-                              <div className="pl-2 border-l border-blue-400 dark:border-blue-800/80 space-y-1 mt-1 text-xs text-slate-600 dark:text-zinc-350">
-                                <div className="flex flex-wrap items-center gap-3">
-                                  {runPayload.distance !== undefined && (
-                                    <span className="font-medium">
-                                      🏃 Distance: <strong className="text-slate-800 dark:text-white font-mono">{runPayload.distance} km</strong>
-                                    </span>
-                                  )}
-                                  {runPayload.duration !== undefined && (
-                                    <span className="font-medium">
-                                      ⏱ Duration: <strong className="text-slate-800 dark:text-white font-mono">{runPayload.duration} mins</strong>
-                                    </span>
-                                  )}
-                                  {runPayload.energy && (
-                                    <span className="font-medium">
-                                      ⚡ Feeling: <strong className="text-slate-800 dark:text-white">{runPayload.energy}</strong>
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })()}
-
-                          {/* Measurements summary */}
-                          {(() => {
-                            const measPayload = log.payload as MeasurementsPayload | null
-                            const hasMeasData = measPayload && (measPayload.weight !== undefined || measPayload.waist !== undefined)
-                            if (!hasMeasData) return null
-                            return (
-                              <div className="pl-2 border-l border-purple-400 dark:border-purple-800/80 space-y-1 mt-1 text-xs text-slate-600 dark:text-zinc-350">
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
-                                  {measPayload.weight !== undefined && (
-                                    <span className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-1.5 rounded-lg flex flex-col">
-                                      <span className="text-[9px] uppercase tracking-wider text-slate-400">Weight</span>
-                                      <strong className="text-slate-800 dark:text-white font-mono text-xs">{measPayload.weight} kg</strong>
-                                    </span>
-                                  )}
-                                  {measPayload.waist !== undefined && (
-                                    <span className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-1.5 rounded-lg flex flex-col">
-                                      <span className="text-[9px] uppercase tracking-wider text-slate-400">Waist</span>
-                                      <strong className="text-slate-800 dark:text-white font-mono text-xs">{measPayload.waist} in</strong>
-                                    </span>
-                                  )}
-                                  {measPayload.chest !== undefined && (
-                                    <span className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-1.5 rounded-lg flex flex-col">
-                                      <span className="text-[9px] uppercase tracking-wider text-slate-400">Chest</span>
-                                      <strong className="text-slate-800 dark:text-white font-mono text-xs">{measPayload.chest} in</strong>
-                                    </span>
-                                  )}
-                                  {measPayload.arms !== undefined && (
-                                    <span className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-1.5 rounded-lg flex flex-col">
-                                      <span className="text-[9px] uppercase tracking-wider text-slate-400">Arms</span>
-                                      <strong className="text-slate-800 dark:text-white font-mono text-xs">{measPayload.arms} in</strong>
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })()}
-
-                          {/* Workout summary */}
-                          {(() => {
-                            const workoutPayload = log.payload as WorkoutPayload | null
-                            return workoutPayload?.exercises && (
-                              <div className="pl-2 border-l border-slate-200 dark:border-zinc-800 space-y-1.5 mt-1">
-                                {workoutPayload.exercises.map((ex, idx) => (
-                                  <div key={idx} className="text-xs">
-                                    <span className="font-semibold text-slate-600 dark:text-zinc-300">{ex.name}</span>
-                                    {ex.note && <span className="text-[10px] text-slate-450 dark:text-zinc-500 italic ml-1">({ex.note})</span>}
-                                    <div className="flex flex-wrap gap-1.5 mt-0.5">
-                                      {ex.sets.map((set, sIdx) => (
-                                        <span
-                                          key={sIdx}
-                                          className="bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 px-1.5 py-0.5 rounded text-[9px] text-slate-600 dark:text-zinc-400 font-mono"
-                                        >
-                                          S{sIdx + 1}: {set.reps}r {set.weight ? `@ ${set.weight}kg` : ''}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )
-                          })()}
-                        </div>
-                      )
-                    })}
+                  <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-md divide-y divide-[var(--color-border)]/40 overflow-hidden shadow-xs">
+                    {orderedItemsForDate.map(o => renderTimelineItemCard(o))}
                   </div>
                 )}
               </div>

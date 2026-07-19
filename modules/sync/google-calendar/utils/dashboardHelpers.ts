@@ -200,7 +200,7 @@ export function generateTimeline(
     
     // Check if event is finished
     const now = new Date()
-    const isFinished = !isAllDay && end < now
+    const isFinished = end < now
     
     occurrences.push({
       id: `google_${event.id}`,
@@ -219,7 +219,13 @@ export function generateTimeline(
   }
 
   // 2. Process local due activities (Habits, Workouts, Bills, etc.)
-  const dueTemplates = getDueHabits(analyzedTemplates, todayStr)
+  const dueTemplates = analyzedTemplates.filter(({ template, analysis }) => {
+    if (!template.isActive) return false
+    if (template.recurrenceType === 'milestone' || template.recurrenceType === 'yearly') return false
+    const hasLogToday = logs.some(l => l.activityId === template.id && l.date === todayStr)
+    return (analysis.nextDueDate && analysis.nextDueDate <= todayStr) || hasLogToday
+  })
+  
   for (const { template } of dueTemplates) {
     const log = logs.find(l => 
       l.activityId === template.id && 

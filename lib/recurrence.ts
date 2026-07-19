@@ -57,9 +57,28 @@ export function analyzeRecurrence(
   logs: ActivityLog[],
   todayStr: string = getTodayDateStr()
 ): RecurrenceAnalysis {
-  // Filter for completion logs (exclude 'skipped' and 'reminder')
+  // Sort all logs newest first to find the latest state
+  const sortedLogs = [...logs].sort((a, b) => b.date.localeCompare(a.date))
+  const latestLog = sortedLogs.length > 0 ? sortedLogs[0] : null
+
+  // If the latest state was postponed, it is due on the next day
+  if (latestLog && latestLog.status === 'postponed') {
+    const nextDueDate = addUTCDays(latestLog.date, 1)
+    const daysSinceLast = diffUTCDays(todayStr, latestLog.date)
+    return {
+      lastCompletedDate: null,
+      nextDueDate,
+      overdue: nextDueDate <= todayStr,
+      daysSinceLast,
+      monthsSinceLast: null,
+      streak: 0,
+      statusMessage: 'Postponed'
+    }
+  }
+
+  // Filter for completion logs (exclude 'skipped', 'postponed', and 'reminder')
   const completionLogs = logs
-    .filter(log => log.status !== 'skipped' && log.status !== 'reminder')
+    .filter(log => log.status !== 'skipped' && log.status !== 'postponed' && log.status !== 'reminder')
     .sort((a, b) => b.date.localeCompare(a.date)) // descending order (newest first)
 
   const lastCompletedDate = completionLogs.length > 0 ? completionLogs[0].date : null

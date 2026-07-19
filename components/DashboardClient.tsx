@@ -140,14 +140,15 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
   // Theme state
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
   const [showExerciseWorkspace, setShowExerciseWorkspace] = useState(false)
-  const [activeTab, setActiveTab] = useState<string>(() => {
+  const [activeTab, setActiveTab] = useState<string>('today')
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
       const tab = params.get('tab')
-      if (tab) return tab
+      if (tab) setActiveTab(tab)
     }
-    return 'today'
-  })
+  }, [])
 
   const changeTab = useCallback((tabId: string) => {
     setActiveTab(tabId)
@@ -687,6 +688,11 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
               setTemplateToEdit(template)
               setIsTemplateModalOpen(true)
             }}
+            journalEntries={journalEntries}
+            leaveRecords={leaveRecords}
+            leaveAllowances={leaveAllowances}
+            weightRecords={weightRecords}
+            onTabChange={changeTab}
           />
         )
       case 'calendar':
@@ -784,6 +790,7 @@ export const DashboardClient: React.FC<DashboardClientProps> = ({
           logs={selectedDayLogs}
           note={selectedDayNote}
           initialTab={dayLogsModalTab}
+          allLogs={logs}
         />
       )}
 

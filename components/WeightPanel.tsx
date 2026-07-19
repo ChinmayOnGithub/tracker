@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { logWeight, deleteWeightRecord } from '@/app/actions/weight'
 import { Scale, TrendingDown, TrendingUp, Minus, Trash2, Plus } from 'lucide-react'
 import { Input, Button, Card } from '@/design-system'
@@ -43,13 +43,13 @@ function toYMD(d: Date | string) {
 // ---------------------------------------------------------------------------
 // Premium SVG Chart (no external dependencies)
 // ---------------------------------------------------------------------------
-interface SparklineProps {
+export interface SparklineProps {
   data: { date: string; weight: number }[]
   width?: number
   height?: number
 }
 
-function Sparkline({ data, width = 600, height = 160 }: SparklineProps) {
+export function Sparkline({ data, width = 600, height = 160 }: SparklineProps) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
   
   if (data.length < 2) return null
@@ -311,15 +311,23 @@ interface LogFormProps {
 function LogForm({ todayRecord, onLogged }: LogFormProps) {
   const [weight, setWeight] = useState(todayRecord ? String(todayRecord.weight) : '')
   const [notes, setNotes] = useState(todayRecord?.notes ?? '')
+  const [logDate, setLogDate] = useState(todayYMD())
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    if (todayRecord && logDate === todayYMD()) {
+      setWeight(String(todayRecord.weight))
+      setNotes(todayRecord.notes ?? '')
+    }
+  }, [todayRecord, logDate])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const w = parseFloat(weight)
     if (isNaN(w) || w <= 0) return
     setSaving(true)
-    const res = await logWeight(todayYMD(), w, notes || null)
+    const res = await logWeight(logDate, w, notes || null)
     if (res.success && res.record) {
       onLogged(res.record as WeightRecord)
       setSaved(true)
@@ -332,50 +340,60 @@ function LogForm({ todayRecord, onLogged }: LogFormProps) {
     <form onSubmit={handleSubmit}>
       <Card className="p-5 space-y-4">
         <h2 className="text-xs font-black uppercase tracking-widest text-[var(--color-text-muted)]">
-          {todayRecord ? '✏️ Update' : '⚖️ Log'} Today&apos;s Weight
+          ⚖️ Log Weight Record
         </h2>
 
-        <div className="flex items-center gap-3">
-          {/* Weight input */}
-          <div className="flex-1 relative">
-            <Input
-              type="number"
-              step="0.1"
-              min="20"
-              max="500"
-              value={weight}
-              onChange={e => setWeight(e.target.value)}
-              placeholder="e.g. 72.5"
-              required
-              className="pr-10 text-lg font-black"
-            />
-            <span className="absolute right-3 bottom-2.5 text-xs font-bold text-[var(--color-text-muted)]">kg</span>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Input
+            type="date"
+            label="Record Date"
+            value={logDate}
+            onChange={e => setLogDate(e.target.value)}
+            required
+          />
+          <div className="flex items-end gap-2">
+            <div className="flex-1 relative">
+              <Input
+                type="number"
+                step="0.1"
+                min="20"
+                max="500"
+                label="Weight (kg)"
+                value={weight}
+                onChange={e => setWeight(e.target.value)}
+                placeholder="e.g. 72.5"
+                required
+                className="pr-10 text-lg font-black"
+              />
+              <span className="absolute right-3 bottom-2.5 text-xs font-bold text-[var(--color-text-muted)]">kg</span>
+            </div>
 
-          {/* Increment / Decrement */}
-          <div className="flex flex-col gap-1 pt-5">
-            <button
-              type="button"
-              onClick={() => setWeight(w => (parseFloat(w || '0') + 0.1).toFixed(1))}
-              className="w-7 h-7 flex items-center justify-center rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setWeight(w => Math.max(0, parseFloat(w || '0') - 0.1).toFixed(1))}
-              className="w-7 h-7 flex items-center justify-center rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
-            >
-              <Minus className="w-3.5 h-3.5" />
-            </button>
+            {/* Increment / Decrement */}
+            <div className="flex gap-1 pb-1">
+              <button
+                type="button"
+                onClick={() => setWeight(w => (parseFloat(w || '0') + 0.1).toFixed(1))}
+                className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setWeight(w => Math.max(0, parseFloat(w || '0') - 0.1).toFixed(1))}
+                className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] text-[var(--color-text-muted)] hover:text(--color-primary) transition-colors cursor-pointer"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
 
         <Input
           type="text"
+          label="Notes (Optional)"
           value={notes}
           onChange={e => setNotes(e.target.value)}
-          placeholder="Notes (optional — e.g. post-workout)"
+          placeholder="e.g. Morning weight, post-workout"
         />
 
         <Button
@@ -384,7 +402,7 @@ function LogForm({ todayRecord, onLogged }: LogFormProps) {
           isLoading={saving}
           className="w-full"
         >
-          {saved ? '✓ Saved!' : todayRecord ? 'Update Weight' : 'Log Weight'}
+          {saved ? '✓ Saved!' : 'Save Weight Record'}
         </Button>
       </Card>
     </form>
@@ -397,7 +415,21 @@ function LogForm({ todayRecord, onLogged }: LogFormProps) {
 export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
   const [records, setRecords] = useState<WeightRecord[]>(initialRecords)
   const [period, setPeriod] = useState<'30D' | '60D' | '90D' | 'All'>('30D')
+  const [heightCm, setHeightCm] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('tracker-user-height')
+      return saved ? Number(saved) : 175
+    }
+    return 175
+  })
   const today = todayYMD()
+
+  const handleHeightChange = (val: number) => {
+    setHeightCm(val)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('tracker-user-height', String(val))
+    }
+  }
 
   const todayRecord = records.find(r => toYMD(r.date) === today) ?? null
 
@@ -420,15 +452,14 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
   const highest = weights.length ? Math.max(...weights) : null
   const avg = weights.length ? weights.reduce((a, b) => a + b, 0) / weights.length : null
 
-  // BMI calculation (constant height 175cm = 1.75m)
-  const heightM = 1.75
+  // BMI calculation
+  const heightM = heightCm / 100
   const bmi = current ? current / (heightM * heightM) : null
   const bmiCategory = !bmi ? ''
     : bmi < 18.5 ? 'Underweight'
     : bmi < 25.0 ? 'Healthy'
     : bmi < 30.0 ? 'Overweight'
     : 'Obese'
-
 
   const handleLogged = useCallback((record: WeightRecord) => {
     setRecords(prev => {
@@ -448,23 +479,38 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[var(--color-border)] pb-4">
         <div>
           <h1 className="text-xl font-black text-[var(--color-text-main)] tracking-tight">Weight Tracker</h1>
           <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
             {records.length} log{records.length !== 1 ? 's' : ''} recorded
           </p>
         </div>
-        <Scale className="w-6 h-6 text-[var(--color-text-muted)]" />
+
+        {/* Height Settings */}
+        <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-text-muted)]">
+          <span>Height:</span>
+          <div className="relative">
+            <input
+              type="number"
+              min="100"
+              max="250"
+              value={heightCm}
+              onChange={e => handleHeightChange(Number(e.target.value) || 175)}
+              className="w-16 px-2 py-1 text-center font-black border border-[var(--color-border)] rounded-md bg-[var(--color-bg-base)] text-[var(--color-text-main)] focus:border-[var(--color-primary)] focus:outline-hidden"
+            />
+            <span className="absolute right-2 top-1.5 text-[10px] text-[var(--color-text-muted)] pointer-events-none">cm</span>
+          </div>
+        </div>
       </div>
 
       {/* Stats Row */}
       {current !== null && (
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <StatsPill label="Current" value={`${current.toFixed(1)}`} />
-          <StatsPill label="Lowest" value={lowest !== null ? `${lowest.toFixed(1)}` : '—'} />
-          <StatsPill label="Highest" value={highest !== null ? `${highest.toFixed(1)}` : '—'} />
-          <StatsPill label="Average" value={avg !== null ? `${avg.toFixed(1)}` : '—'} />
+          <StatsPill label="Current" value={`${current.toFixed(1)} kg`} />
+          <StatsPill label="Lowest" value={lowest !== null ? `${lowest.toFixed(1)} kg` : '—'} />
+          <StatsPill label="Highest" value={highest !== null ? `${highest.toFixed(1)} kg` : '—'} />
+          <StatsPill label="Average" value={avg !== null ? `${avg.toFixed(1)} kg` : '—'} />
           <StatsPill
             label="BMI"
             value={bmi !== null ? `${bmi.toFixed(1)}` : '—'}
@@ -505,11 +551,10 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
           <Sparkline data={chartData} />
         </div>
       ) : (
-        records.length >= 2 && (
-          <div className="py-6 text-center text-xs text-[var(--color-text-muted)] bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl">
-            Not enough data in the selected period.
-          </div>
-        )
+        <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl p-6 text-center text-xs text-[var(--color-text-muted)] space-y-2">
+          <p className="font-bold">📈 Weight Trend Graph</p>
+          <p className="opacity-75">You have logged {records.length} record{records.length !== 1 ? 's' : ''}. Please add at least 2 logs with different dates to plot your weight graph trend.</p>
+        </div>
       )}
 
       {/* Log Form */}
