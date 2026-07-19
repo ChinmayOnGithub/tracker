@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState } from 'react'
-import { Check, Loader2 } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { createLinkCollection, updateLinkCollection } from '@/app/actions/links'
 import { LinkCollection } from '../LinkLibraryPanel'
 import { Modal, Input, Button } from '@/design-system'

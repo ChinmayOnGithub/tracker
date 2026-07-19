@@ -247,18 +247,18 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 const isActive = activeTab === item.id
                 return (
                   <Button
-                key={item.id}
-                variant={isActive ? 'primary' : 'secondary'}
-                size="sm"
-                onClick={() => {
-                  onTabChange(item.id)
-                  setIsMoreOpen(false)
-                }}
-                icon={<IconComponent className="w-4.5 h-4.5" />}
-                className="w-full justify-start"
-              >
-                {item.label}
-              </Button>
+                    key={item.id}
+                    variant={isActive ? 'primary' : 'secondary'}
+                    size="sm"
+                    onClick={() => {
+                      onTabChange(item.id)
+                      setIsMoreOpen(false)
+                    }}
+                    icon={<IconComponent className="w-4.5 h-4.5" />}
+                    className="w-full justify-start"
+                  >
+                    {item.label}
+                  </Button>
                 )
               })}
             </div>

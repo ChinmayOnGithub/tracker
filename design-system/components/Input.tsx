@@ -3,11 +3,15 @@ import React from 'react'
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string
   error?: string
+  helperText?: string
+  suffix?: React.ReactNode
 }
 
 export const Input: React.FC<InputProps> = React.forwardRef<HTMLInputElement, InputProps>(({
   label,
   error,
+  helperText,
+  suffix,
   className = '',
   id,
   ...props
@@ -23,13 +27,21 @@ export const Input: React.FC<InputProps> = React.forwardRef<HTMLInputElement, In
           {label}
         </label>
       )}
-      <input
-        ref={ref}
-        id={inputId}
-        className={`${baseInputStyle} ${borderStyle} ${className}`}
-        {...props}
-      />
+      <div className={suffix ? 'relative flex items-center' : ''}>
+        <input
+          ref={ref}
+          id={inputId}
+          className={`${baseInputStyle} ${borderStyle} ${suffix ? 'pr-8' : ''} ${className}`}
+          {...props}
+        />
+        {suffix && (
+          <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-[var(--color-text-muted)]">
+            {suffix}
+          </div>
+        )}
+      </div>
       {error && <span className="text-xs text-rose-500">{error}</span>}
+      {helperText && !error && <span className="text-xs text-[var(--color-text-muted)]">{helperText}</span>}
     </div>
   )
 })

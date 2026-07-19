@@ -499,7 +499,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
 
           <SearchInput
             value={search}
-            onChange={setSearch}
+            onValueChange={setSearch}
             placeholder="Search journal..."
             onClear={() => setSearch('')}
           />
