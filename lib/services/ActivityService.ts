@@ -150,6 +150,7 @@ export class ActivityService {
     }
 
     // Cascade soft deletions to linked sub-records
+    // NOTE: We do NOT delete the journal entry because it should persist independently
     if (existing.weightRecordId) {
       await db.weightRecord.update({
         where: { id: existing.weightRecordId },
@@ -162,12 +163,8 @@ export class ActivityService {
         data: { deletedAt: new Date() }
       })
     }
-    if (existing.journalEntryId) {
-      await db.journalEntry.update({
-        where: { id: existing.journalEntryId },
-        data: { deletedAt: new Date() }
-      })
-    }
+    // Journal entries are NOT deleted when activity log is deleted
+    // They should persist independently
 
     return await db.activityLog.update({
       where: { id: logId },

@@ -7,7 +7,7 @@ import { getTodayDateStr, addUTCDays, parseUTCDate, formatUTCDate } from '@/lib/
 import { Icon } from './Icon'
 import { Search, Flame, Calendar, RefreshCcw, Check, Sparkles, Scissors, ShieldAlert, X } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
-import { Card, Input, Select } from '@/design-system'
+import { Card, Input, Select, SearchInput, Button, EmptyState } from '@/design-system'
 
 interface AnalyzedTemplate {
   template: ActivityTemplate

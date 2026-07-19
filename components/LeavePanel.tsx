@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import {
   CalendarX, Plus, Trash2, CheckCircle2, Clock, XCircle, TrendingDown, ChevronDown
 } from 'lucide-react'
-import { Input, Select, Button, Card } from '@/design-system'
+import { Input, Select, Button, Card, EmptyState, Modal } from '@/design-system'
 
 // ---------------------------------------------------------------------------
 // Types (mirroring Prisma enums / model shape)

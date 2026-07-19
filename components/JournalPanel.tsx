@@ -6,6 +6,7 @@ import {
   Trash2, Search, CheckCircle2, CloudOff, Loader2, Edit3, PlusCircle,
   Bold, Italic, Underline, Code, List, Heading1, Heading2, Highlighter, Quote, Undo2, Redo2, Eraser, Image as ImageIcon, X
 } from 'lucide-react'
+import { Button, SearchInput, EmptyState, Card } from '@/design-system'
 
 interface JournalEntry {
   id: string

@@ -17,6 +17,7 @@ import { CollectionModal } from './links/CollectionModal'
 import { LinkModal } from './links/LinkModal'
 import { LinkCard } from './links/LinkCard'
 import { CollectionSidebar } from './links/CollectionSidebar'
+import { Button, SearchInput, EmptyState, Modal } from '@/design-system'
 
 export interface LinkTagItem {
   id: string
@@ -778,28 +779,24 @@ export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialColle
                 </div>
               </div>
 
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => instantInputRef.current?.focus()}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-primary)] text-white text-xs font-bold rounded-md hover:opacity-90 transition-opacity cursor-pointer shadow-3xs"
+                icon={<Plus className="w-4 h-4" />}
               >
-                <Plus size={13} className="shrink-0" />
-                <span>Add URL</span>
-              </button>
+                Add URL
+              </Button>
             </header>
 
             {/* Filter and Control toolbar */}
             <div className="px-6 py-3 border-b border-[var(--color-border)] bg-[var(--color-bg-surface)]/50 flex flex-col sm:flex-row gap-3 sm:items-center justify-between shrink-0">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-2.5 top-2.5 text-slate-400 dark:text-zinc-555" size={14} />
-                <input
-                  id="linkSearchInput"
-                  type="text"
-                  placeholder="Search inside this collection..."
-                  value={linkSearchQuery}
-                  onChange={e => setLinkSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-xs rounded-[3px] border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-main)] placeholder-slate-400 dark:placeholder-zinc-650 focus:outline-hidden focus:border-[var(--color-primary)]"
-                />
-              </div>
+              <SearchInput
+                value={linkSearchQuery}
+                onValueChange={setLinkSearchQuery}
+                placeholder="Search inside this collection..."
+                className="flex-1 max-w-md"
+              />
 
               <div className="flex items-center gap-3">
                 <div className="flex items-center border border-[var(--color-border)] rounded-[3px] bg-[var(--color-bg-surface)] p-0.5">
@@ -846,62 +843,51 @@ export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialColle
                     }
                   }}
                   disabled={isInstantAdding}
-                  className="w-full px-3.5 py-2 text-xs rounded-[3px] border border-[var(--color-border)] bg-[var(--color-bg-base)] text-[var(--color-text-main)] placeholder-slate-400 dark:placeholder-zinc-650 focus:outline-hidden focus:border-[var(--color-primary)] disabled:opacity-70"
+                  className="w-full px-3.5 py-2 text-sm rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-base)] text-[var(--color-text-main)] placeholder-slate-400 dark:placeholder-zinc-650 focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-70 transition-colors"
                 />
                 {isInstantAdding && (
-                  <div className="absolute right-3 top-2 flex items-center gap-1.5 h-7 text-[10px] text-slate-400 dark:text-zinc-500 font-bold select-none">
-                    <Loader2 size={11} className="animate-spin text-[var(--color-primary)] shrink-0" />
-                    <span className="shrink-0">Unfurling...</span>
+                  <div className="absolute right-3 top-2.5 flex items-center gap-2 text-xs text-slate-400 dark:text-zinc-500 font-semibold select-none">
+                    <Loader2 className="w-4 h-4 animate-spin text-[var(--color-primary)]" />
+                    <span>Unfurling...</span>
                   </div>
                 )}
               </div>
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleInstantAddLink}
                 disabled={isInstantAdding || !instantUrlInput.trim()}
-                className="flex items-center gap-1.5 px-4 py-2 bg-[var(--color-primary)] text-white text-xs font-bold rounded-[3px] hover:opacity-90 transition-opacity disabled:opacity-50 cursor-pointer shadow-3xs shrink-0"
               >
-                <span>Save</span>
-              </button>
+                Save
+              </Button>
             </div>
 
             {duplicateWarning && (
-              <div className="mx-6 mt-3 p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-[4px] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-slide-in shrink-0">
-                <div className="flex gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-amber-500/15 flex items-center justify-center text-amber-500 shrink-0">
-                    <ShieldAlert size={15} />
+              <div className="mx-6 mt-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-[var(--radius-md)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-slide-in shrink-0">
+                <div className="flex gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-500/15 flex items-center justify-center text-amber-500 shrink-0">
+                    <ShieldAlert className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-black text-amber-500 mb-0.5 uppercase tracking-wide">Already Saved!</h4>
-                    <p className="text-[10px] text-slate-600 dark:text-zinc-400 font-semibold leading-relaxed">
+                    <h4 className="text-sm font-bold text-amber-500 mb-1">Already Saved!</h4>
+                    <p className="text-xs text-slate-600 dark:text-zinc-400 font-medium leading-relaxed">
                       This link exists in your <span className="underline font-bold">{duplicateWarning.link?.collectionName}</span> collection. What would you like to do?
                     </p>
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={handleOpenExistingDuplicate}
-                    className="px-2.5 py-1.5 bg-slate-800 text-white dark:bg-zinc-800 dark:text-zinc-200 hover:opacity-90 rounded-[3px] text-[10px] font-black cursor-pointer uppercase tracking-wider shadow-3xs"
-                  >
+                  <Button variant="secondary" size="sm" onClick={handleOpenExistingDuplicate}>
                     Open Existing
-                  </button>
-                  <button
-                    onClick={handleMoveDuplicate}
-                    className="px-2.5 py-1.5 bg-indigo-600 text-white hover:bg-indigo-500 rounded-[3px] text-[10px] font-black cursor-pointer uppercase tracking-wider shadow-3xs"
-                  >
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={handleMoveDuplicate}>
                     Move Here
-                  </button>
-                  <button
-                    onClick={() => handleSaveAnyway(instantUrlInput.length > 0)}
-                    className="px-2.5 py-1.5 border border-amber-500/30 text-amber-600 hover:bg-amber-500/5 rounded-[3px] text-[10px] font-black cursor-pointer uppercase tracking-wider"
-                  >
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleSaveAnyway(instantUrlInput.length > 0)}>
                     Save Anyway
-                  </button>
-                  <button
-                    onClick={() => setDuplicateWarning(null)}
-                    className="px-2 py-1 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 text-[10px] font-bold cursor-pointer"
-                  >
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setDuplicateWarning(null)}>
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -955,31 +941,31 @@ export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialColle
                   </div>
                 )
               ) : (
-                <div className="text-center py-20 border-2 border-dashed border-slate-200 dark:border-zinc-800/85 rounded-lg bg-[var(--color-bg-surface)] p-6">
-                  <Folder size={32} className="mx-auto text-slate-400 mb-3" />
-                  <h3 className="text-xs font-bold text-[var(--color-text-main)] mb-1">No links saved here</h3>
-                  <p className="text-[10px] text-[var(--color-text-muted)] max-w-xs mx-auto mb-4 leading-normal">
-                    This collection is empty. Paste a link in the input box above to save it automatically.
-                  </p>
-                </div>
+                <EmptyState
+                  title="No links saved here"
+                  description="This collection is empty. Paste a link in the input box above to save it automatically."
+                  icon={<Folder className="w-8 h-8" />}
+                />
               )}
             </div>
           </div>
         ) : (
           <div className="flex-grow flex items-center justify-center p-8 bg-[var(--color-bg-surface)]">
-            <div className="text-center max-w-md">
-              <FolderPlus size={40} className="mx-auto text-[var(--color-primary)] mb-4" />
-              <h2 className="text-sm font-black text-[var(--color-text-main)] mb-1 uppercase tracking-wider">Create a Collection</h2>
-              <p className="text-xs text-[var(--color-text-muted)] mb-5 leading-relaxed">
-                {"Add a group (e.g. 'Work Docs', 'Watch List', 'Research') to start organizing and previewing your links."}
-              </p>
-              <button
-                onClick={openAddCol}
-                className="px-4 py-2 bg-[var(--color-primary)] text-white text-xs font-bold rounded-md hover:opacity-95 shadow-3xs cursor-pointer"
-              >
-                Create Collection Group
-              </button>
-            </div>
+            <EmptyState
+              title="Create a Collection"
+              description="Add a group (e.g. 'Work Docs', 'Watch List', 'Research') to start organizing and previewing your links."
+              icon={<FolderPlus className="w-10 h-10" />}
+              action={
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={openAddCol}
+                  icon={<Plus className="w-4 h-4" />}
+                >
+                  Create Collection Group
+                </Button>
+              }
+            />
           </div>
         )}
       </main>

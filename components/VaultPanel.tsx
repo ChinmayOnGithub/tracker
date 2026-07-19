@@ -18,7 +18,6 @@ import {
   ChevronRight,
   Shield,
   HardDrive,
-  Search,
   ArrowUpDown,
   X,
   Check,
@@ -34,7 +33,7 @@ import {
   getVaultStats,
 } from '@/app/actions/vault'
 import type { VaultItem, VaultBreadcrumb } from '@/app/actions/vault'
-import { Modal, Input, Button } from '@/design-system'
+import { Modal, Input, Button, Card, EmptyState, SkeletonWidget, SearchInput } from '@/design-system'
 
 // ─── File Type Helpers (use mimeGroup from DB — no decryption needed) ─────────
 
@@ -418,34 +417,37 @@ export function VaultPanel() {
       {/* ─── Header ────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-[var(--radius-md)] bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-            <Shield className="w-4.5 h-4.5 text-emerald-500" />
+          <div className="w-10 h-10 rounded-[var(--radius-md)] bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+            <Shield className="w-5 h-5 text-emerald-500" />
           </div>
           <div>
             <h1 className="text-lg font-black text-[var(--color-text-main)] tracking-tight leading-tight">Secure Vault</h1>
-            <p className="text-[10px] font-semibold text-[var(--color-text-muted)] flex items-center gap-1.5 mt-0.5">
-              <HardDrive className="w-3 h-3" />
+            <p className="text-xs font-semibold text-[var(--color-text-muted)] flex items-center gap-2 mt-0.5">
+              <HardDrive className="w-3.5 h-3.5" />
               {stats.totalFiles} files · {stats.totalFolders} folders · {formatFileSize(stats.totalSize)}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => { setShowNewFolder(true); setNewFolderName('') }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[var(--color-text-main)] bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-sm)] hover:bg-[var(--color-accent)] transition-colors cursor-pointer"
+            icon={<FolderPlus className="w-4 h-4" />}
           >
-            <FolderPlus className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">New Folder</span>
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[var(--color-primary)] rounded-[var(--radius-sm)] hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-50"
+            isLoading={uploading}
+            icon={!uploading ? <Upload className="w-4 h-4" /> : undefined}
           >
-            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
             <span className="hidden sm:inline">{uploading ? 'Uploading…' : 'Upload'}</span>
-          </button>
+          </Button>
           <input
             ref={fileInputRef}
             type="file"
@@ -458,16 +460,16 @@ export function VaultPanel() {
 
       {/* ─── Upload Progress ───────────────────────────────────────── */}
       {uploadProgress && (
-        <div className="bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 rounded-[var(--radius-sm)] px-3 py-2 flex items-center gap-2">
-          <Loader2 className="w-3.5 h-3.5 text-[var(--color-primary)] animate-spin shrink-0" />
-          <span className="text-xs font-semibold text-[var(--color-primary)]">{uploadProgress}</span>
+        <div className="bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 rounded-[var(--radius-md)] px-3 py-2 flex items-center gap-2">
+          <Loader2 className="w-4 h-4 text-[var(--color-primary)] animate-spin shrink-0" />
+          <span className="text-sm font-semibold text-[var(--color-primary)]">{uploadProgress}</span>
         </div>
       )}
 
       {/* ─── Error Notification ────────────────────────────────────── */}
       {errorMessage && (
-        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-[var(--radius-sm)] px-3 py-2 flex items-center justify-between gap-2 animate-in fade-in slide-in-from-top-1 duration-150">
-          <div className="flex items-center gap-2 text-xs font-semibold">
+        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-[var(--radius-md)] px-3 py-2 flex items-center justify-between gap-2 animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="flex items-center gap-2 text-sm font-semibold">
             <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
             <span>{errorMessage}</span>
           </div>
@@ -475,19 +477,19 @@ export function VaultPanel() {
             onClick={() => setErrorMessage(null)}
             className="p-0.5 rounded-[var(--radius-sm)] hover:bg-rose-500/10 cursor-pointer"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
       {/* ─── Breadcrumbs ───────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 text-xs font-medium overflow-x-auto pb-0.5">
+      <div className="flex items-center gap-1 text-sm font-medium overflow-x-auto pb-0.5">
         {breadcrumbs.map((crumb, index) => (
           <React.Fragment key={crumb.id ?? 'root'}>
-            {index > 0 && <ChevronRight className="w-3 h-3 text-[var(--color-text-muted)]/50 shrink-0" />}
+            {index > 0 && <ChevronRight className="w-4 h-4 text-[var(--color-text-muted)]/50 shrink-0" />}
             <button
               onClick={() => navigateToFolder(crumb.id)}
-              className={`shrink-0 px-1.5 py-0.5 rounded-[var(--radius-sm)] transition-colors cursor-pointer ${
+              className={`shrink-0 px-2 py-1 rounded-[var(--radius-sm)] transition-colors cursor-pointer ${
                 index === breadcrumbs.length - 1
                   ? 'text-[var(--color-text-main)] font-bold'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)]'
@@ -501,24 +503,11 @@ export function VaultPanel() {
 
       {/* ─── Search & Sort Bar ─────────────────────────────────────── */}
       <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)]" />
-          <input
-            type="text"
-            placeholder="Search files and folders…"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-[var(--radius-sm)] text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)]/50 focus:outline-none focus:border-[var(--color-primary)] transition-colors"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] cursor-pointer"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
+        <SearchInput
+          value={searchQuery}
+          onValueChange={setSearchQuery}
+          placeholder="Search files and folders…"
+        />
         <div className="flex items-center border border-[var(--color-border)] rounded-[var(--radius-sm)] overflow-hidden">
           {(['name', 'date', 'size'] as SortField[]).map(field => (
             <button
@@ -541,90 +530,102 @@ export function VaultPanel() {
 
       {/* ─── Content ───────────────────────────────────────────────── */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-6 h-6 text-[var(--color-primary)] animate-spin" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          <SkeletonWidget />
+          <SkeletonWidget />
+          <SkeletonWidget />
+          <SkeletonWidget />
         </div>
       ) : filteredItems.length === 0 ? (
         /* ─── Empty State ──────────────────────────────────────────── */
-        <div
-          className="flex flex-col items-center justify-center py-16 border border-dashed border-[var(--color-border)]/60 rounded-[var(--radius-lg)] bg-gradient-to-b from-[var(--color-bg-surface)] to-transparent cursor-pointer hover:border-[var(--color-primary)]/30 transition-colors"
-          onClick={() => fileInputRef.current?.click()}
-        >
-          <div className="w-14 h-14 rounded-[var(--radius-lg)] bg-[var(--color-accent)] flex items-center justify-center mb-4">
-            <Upload className="w-6 h-6 text-[var(--color-text-muted)]" />
-          </div>
-          <p className="text-sm font-bold text-[var(--color-text-main)] mb-1">
-            {searchQuery ? 'No results found' : 'This folder is empty'}
-          </p>
-          <p className="text-xs text-[var(--color-text-muted)]">
-            {searchQuery ? 'Try a different search query' : 'Drag and drop files here, or click to upload'}
-          </p>
-          <div className="flex items-center gap-1 mt-3 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-            <Shield className="w-3 h-3 text-emerald-500" />
-            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">AES-256-GCM Encrypted</span>
-          </div>
+        <div onClick={() => !searchQuery && fileInputRef.current?.click()}>
+          <EmptyState
+            title={searchQuery ? 'No results found' : 'This folder is empty'}
+            description={searchQuery ? 'Try a different search query' : 'Drag and drop files here, or click to upload'}
+            icon={<Upload className="w-6 h-6" />}
+            action={
+              !searchQuery ? (
+                <div className="flex flex-col items-center gap-3">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}
+                    icon={<Upload className="w-4 h-4" />}
+                  >
+                    Upload Files
+                  </Button>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                    <Shield className="w-3.5 h-3.5 text-emerald-500" />
+                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">AES-256-GCM Encrypted</span>
+                  </div>
+                </div>
+              ) : undefined
+            }
+          />
         </div>
       ) : (
         /* ─── File Grid ────────────────────────────────────────────── */
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {filteredItems.map(item => {
             const IconComponent = getFileIcon(item.mimeGroup, item.isFolder)
             const iconColor = getFileColor(item.mimeGroup, item.isFolder)
 
             return (
-              <div
+              <Card
                 key={item.id}
+                interactive={item.isFolder}
+                compact
                 onDoubleClick={() => handleDoubleClick(item)}
-                className={`group relative flex items-center gap-3 p-3 bg-[var(--color-bg-surface)] border border-[var(--color-border)]/60 rounded-[var(--radius-md)] hover:border-[var(--color-border)] hover:bg-[var(--color-accent)]/30 transition-all cursor-pointer ${
-                  item.isFolder ? 'hover:shadow-sm' : ''
-                }`}
+                className="group relative"
               >
-                {/* Icon */}
-                <div className={`w-9 h-9 rounded-[var(--radius-sm)] flex items-center justify-center shrink-0 ${
-                  item.isFolder ? 'bg-amber-500/10' : 'bg-[var(--color-accent)]'
-                }`}>
-                  <IconComponent className={`w-4.5 h-4.5 ${iconColor}`} />
-                </div>
+                <div className="flex items-center gap-3">
+                  {/* Icon */}
+                  <div className={`w-10 h-10 rounded-[var(--radius-md)] flex items-center justify-center shrink-0 ${
+                    item.isFolder ? 'bg-amber-500/10' : 'bg-[var(--color-accent)]'
+                  }`}>
+                    <IconComponent className={`w-5 h-5 ${iconColor}`} />
+                  </div>
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-[var(--color-text-main)] truncate leading-tight">
-                    {item.name}
-                  </p>
-                  <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
-                    {item.isFolder ? 'Folder' : formatFileSize(item.fileSize)}
-                    <span className="mx-1">·</span>
-                    {formatDate(item.createdAt)}
-                  </p>
-                </div>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-[var(--color-text-main)] truncate leading-tight">
+                      {item.name}
+                    </p>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                      {item.isFolder ? 'Folder' : formatFileSize(item.fileSize)}
+                      <span className="mx-1.5">·</span>
+                      {formatDate(item.createdAt)}
+                    </p>
+                  </div>
 
-                {/* Actions (shown on hover) */}
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {!item.isFolder && (
+                  {/* Actions (shown on hover) */}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {!item.isFolder && (
+                      <button
+                        onClick={e => { e.stopPropagation(); handleDownload(item) }}
+                        className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)] transition-colors cursor-pointer"
+                        title="Download"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    )}
                     <button
-                      onClick={e => { e.stopPropagation(); handleDownload(item) }}
-                      className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)] transition-colors cursor-pointer"
-                      title="Download"
+                      onClick={e => { e.stopPropagation(); setRenamingItem(item); setRenameValue(item.name) }}
+                      className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-amber-500/10 hover:text-amber-500 transition-colors cursor-pointer"
+                      title="Rename"
                     >
-                      <Download className="w-3.5 h-3.5" />
+                      <Pencil className="w-4 h-4" />
                     </button>
-                  )}
-                  <button
-                    onClick={e => { e.stopPropagation(); setRenamingItem(item); setRenameValue(item.name) }}
-                    className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-amber-500/10 hover:text-amber-500 transition-colors cursor-pointer"
-                    title="Rename"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={e => { e.stopPropagation(); setDeletingItem(item) }}
-                    className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-rose-500/10 hover:text-rose-500 transition-colors cursor-pointer"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); setDeletingItem(item) }}
+                      className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-rose-500/10 hover:text-rose-500 transition-colors cursor-pointer"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </Card>
             )
           })}
         </div>
@@ -632,9 +633,9 @@ export function VaultPanel() {
 
       {/* ─── Encryption Badge (footer) ─────────────────────────────── */}
       {filteredItems.length > 0 && (
-        <div className="flex items-center justify-center gap-1.5 pt-2">
-          <Shield className="w-3 h-3 text-emerald-500" />
-          <span className="text-[10px] font-semibold text-[var(--color-text-muted)]">
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <Shield className="w-4 h-4 text-emerald-500" />
+          <span className="text-xs font-semibold text-[var(--color-text-muted)]">
             All files encrypted with AES-256-GCM · {formatFileSize(stats.totalSize)} stored
           </span>
         </div>
@@ -653,7 +654,7 @@ export function VaultPanel() {
             placeholder="Folder name"
             value={newFolderName}
             onChange={e => setNewFolderName(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleCreateFolder() }}
+            onKeyDown={e => { if (e.key === 'Enter' && newFolderName.trim()) handleCreateFolder() }}
             autoFocus
           />
           <div className="flex justify-end gap-2">
@@ -670,7 +671,7 @@ export function VaultPanel() {
               onClick={handleCreateFolder}
               disabled={!newFolderName.trim()}
               isLoading={actionLoading}
-              icon={<Check className="w-3.5 h-3.5" />}
+              icon={<Check className="w-4 h-4" />}
             >
               Create
             </Button>
@@ -687,12 +688,12 @@ export function VaultPanel() {
       >
         {renamingItem && (
           <div className="space-y-4 pt-1">
-            <p className="text-[10px] text-[var(--color-text-muted)] mb-2">Rename &ldquo;{renamingItem.name}&rdquo;</p>
+            <p className="text-xs text-[var(--color-text-muted)] mb-2">Rename &ldquo;{renamingItem.name}&rdquo;</p>
             <Input
               type="text"
               value={renameValue}
               onChange={e => setRenameValue(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleRename() }}
+              onKeyDown={e => { if (e.key === 'Enter' && renameValue.trim()) handleRename() }}
               autoFocus
             />
             <div className="flex justify-end gap-2">
@@ -709,7 +710,7 @@ export function VaultPanel() {
                 onClick={handleRename}
                 disabled={!renameValue.trim()}
                 isLoading={actionLoading}
-                icon={<Check className="w-3.5 h-3.5" />}
+                icon={<Check className="w-4 h-4" />}
               >
                 Rename
               </Button>
@@ -728,15 +729,15 @@ export function VaultPanel() {
         {deletingItem && (
           <div className="space-y-4 pt-1">
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-[var(--radius-sm)] bg-rose-500/10 flex items-center justify-center shrink-0">
-                <AlertTriangle className="w-4 h-4 text-rose-500" />
+              <div className="w-10 h-10 rounded-[var(--radius-md)] bg-rose-500/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-rose-500" />
               </div>
               <div>
-                <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
+                <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">
                   Are you sure you want to permanently delete <span className="font-bold text-[var(--color-text-main)]">&ldquo;{deletingItem.name}&rdquo;</span>?
                 </p>
                 {deletingItem.isFolder && (
-                  <p className="text-[10px] text-rose-500 font-semibold mt-2">
+                  <p className="text-xs text-rose-500 font-semibold mt-2">
                     All files and subfolders inside will also be deleted.
                   </p>
                 )}
@@ -755,7 +756,7 @@ export function VaultPanel() {
                 size="sm"
                 onClick={handleDelete}
                 isLoading={actionLoading}
-                icon={<Trash2 className="w-3.5 h-3.5" />}
+                icon={<Trash2 className="w-4 h-4" />}
               >
                 Delete
               </Button>
