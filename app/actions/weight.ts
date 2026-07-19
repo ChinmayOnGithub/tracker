@@ -100,7 +100,7 @@ export async function getWeightHistory(days = 90) {
  */
 export async function deleteWeightRecord(id: string) {
   try {
-    const { user } = await requireOwnership('weightRecord', id)
+    await requireOwnership('weightRecord', id)
 
     await db.weightRecord.update({ where: { id }, data: { deletedAt: new Date() } })
     

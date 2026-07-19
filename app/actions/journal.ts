@@ -132,7 +132,7 @@ export async function listJournalEntries(page = 1, limit = 20) {
  */
 export async function deleteJournalEntry(id: string) {
   try {
-    const { user } = await requireOwnership('journalEntry', id)
+    await requireOwnership('journalEntry', id)
 
     await db.journalEntry.update({
       where: { id },

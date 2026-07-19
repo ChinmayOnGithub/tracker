@@ -110,7 +110,7 @@ export async function createLeaveRequest(data: {
 /** Update the status of an existing leave record. */
 export async function updateLeaveStatus(id: string, status: LeaveStatus) {
   try {
-    const { user } = await requireOwnership('leaveRecord', id)
+    await requireOwnership('leaveRecord', id)
 
     const updated = await db.leaveRecord.update({
       where: { id },
@@ -142,7 +142,7 @@ export async function updateLeaveStatus(id: string, status: LeaveStatus) {
 /** Soft-delete a leave record. */
 export async function deleteLeaveRecord(id: string) {
   try {
-    const { user } = await requireOwnership('leaveRecord', id)
+    await requireOwnership('leaveRecord', id)
 
     await db.leaveRecord.update({ where: { id }, data: { deletedAt: new Date() } })
     

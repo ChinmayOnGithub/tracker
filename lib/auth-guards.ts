@@ -16,13 +16,14 @@ export async function requireOwnership(
   const user = await requireAuth()
   
   // Dynamic lookup on Prisma db client
-  let record: any = null
+  let record: Record<string, unknown> | null = null
   if (model === 'savedLink') {
     record = await db.savedLink.findUnique({
       where: { id },
       include: { collection: true }
     })
   } else {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic Prisma delegate access
     record = await (db[model] as any).findUnique({
       where: { id }
     })
@@ -32,11 +33,13 @@ export async function requireOwnership(
     throw new Error(`${model} record not found`)
   }
   
-  const ownerId = model === 'savedLink' ? record.collection.userId : record.userId
+  const collection = record.collection as Record<string, unknown> | undefined
+  const ownerId = model === 'savedLink' && collection ? collection.userId : record.userId
   const isOwner = ownerId === user.id || (ownerId === null && user.username === 'admin')
   if (!isOwner) {
     throw new Error(`Unauthorized ${model} access`)
   }
   
-  return { record, user }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { record: record as any, user }
 }

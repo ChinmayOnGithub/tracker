@@ -36,7 +36,7 @@ export async function updateNote(
   title?: string | null
 ) {
   try {
-    const { user } = await requireOwnership('note', id)
+    await requireOwnership('note', id)
 
     const note = await db.note.update({
       where: { id },
@@ -104,7 +104,7 @@ export async function upsertNote(
 
 export async function deleteNote(id: string) {
   try {
-    const { user } = await requireOwnership('note', id)
+    await requireOwnership('note', id)
 
     await db.note.update({
       where: { id },

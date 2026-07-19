@@ -41,7 +41,7 @@ export async function createLinkCollection(name: string, color?: string, icon?: 
 
 export async function updateLinkCollection(id: string, data: { name?: string; color?: string; icon?: string | null }) {
   try {
-    const { user } = await requireOwnership('linkCollection', id)
+    await requireOwnership('linkCollection', id)
     const updated = await db.linkCollection.update({ where: { id }, data })
     revalidatePath('/')
     return { success: true, collection: updated }
@@ -53,7 +53,7 @@ export async function updateLinkCollection(id: string, data: { name?: string; co
 
 export async function deleteLinkCollection(id: string) {
   try {
-    const { user } = await requireOwnership('linkCollection', id)
+    await requireOwnership('linkCollection', id)
     await db.linkCollection.update({ where: { id }, data: { deletedAt: new Date() } })
     revalidatePath('/')
     return { success: true }
@@ -345,7 +345,7 @@ export async function updateLink(
   }
 ) {
   try {
-    const { record: link, user } = await requireOwnership('savedLink', id)
+    const { user } = await requireOwnership('savedLink', id)
 
     const { tags, ...scalarData } = data
     const updatedData: Prisma.SavedLinkUpdateInput = { ...scalarData }
@@ -383,7 +383,7 @@ export async function updateLink(
 
 export async function togglePinLink(id: string) {
   try {
-    const { record: link, user } = await requireOwnership('savedLink', id)
+    const { record: link } = await requireOwnership('savedLink', id)
     const updated = await db.savedLink.update({
       where: { id },
       data: { isPinned: !link.isPinned },
@@ -399,7 +399,7 @@ export async function togglePinLink(id: string) {
 
 export async function togglePrivateLink(id: string) {
   try {
-    const { record: link, user } = await requireOwnership('savedLink', id)
+    const { record: link } = await requireOwnership('savedLink', id)
     const updated = await db.savedLink.update({
       where: { id },
       data: { isPrivate: !link.isPrivate },
@@ -415,7 +415,7 @@ export async function togglePrivateLink(id: string) {
 
 export async function toggleArchiveLink(id: string) {
   try {
-    const { record: link, user } = await requireOwnership('savedLink', id)
+    const { record: link } = await requireOwnership('savedLink', id)
     const updated = await db.savedLink.update({
       where: { id },
       data: { isArchived: !link.isArchived },
@@ -467,7 +467,7 @@ export async function checkDuplicateLink(url: string) {
 
 export async function registerLinkVisit(id: string) {
   try {
-    const { record: link, user } = await requireOwnership('savedLink', id)
+    const { record: link } = await requireOwnership('savedLink', id)
     const updated = await db.savedLink.update({
       where: { id },
       data: {

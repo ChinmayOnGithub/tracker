@@ -1,11 +1,10 @@
 "use server"
 
 import { db } from '@/lib/db'
-import { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 
 
-import { requireAuth, requireOwnership } from '@/lib/auth-guards'
+import { requireOwnership } from '@/lib/auth-guards'
 import { ActivityService } from '@/lib/services/ActivityService'
 
 export async function createLog(data: {
