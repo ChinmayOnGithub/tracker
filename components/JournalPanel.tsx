@@ -6,6 +6,7 @@ import {
   Trash2, Search, CheckCircle2, CloudOff, Loader2, Edit3, PlusCircle,
   Bold, Italic, Underline, Code, List, Heading1, Heading2, Highlighter, Quote, Undo2, Redo2, Eraser, Image as ImageIcon, X
 } from 'lucide-react'
+import { Button, SearchInput, EmptyState, Card, Input } from '@/design-system'
 
 
 interface JournalEntry {
@@ -487,25 +488,21 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
         <div className="p-4 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-black tracking-tight text-[var(--color-text-main)]">Journal</h3>
-            <button
+            <Button
               onClick={() => setActiveDate(today)}
-              className="text-[var(--color-primary)] p-1.5 hover:bg-[var(--color-primary)]/10 rounded-full transition-colors"
+              variant="ghost"
+              size="sm"
+              icon={<Edit3 className="w-4 h-4" strokeWidth={2.5} />}
               title="New Entry (Today)"
-            >
-              <Edit3 size={18} strokeWidth={2.5} />
-            </button>
-          </div>
-
-          <div className="relative group">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[var(--color-primary)] transition-colors" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search journal..."
-              className="w-full bg-slate-200/50 dark:bg-zinc-800/80 border-none pl-9 pr-4 py-2 rounded-lg text-sm placeholder-slate-500 dark:placeholder-zinc-500 focus:outline-hidden focus:ring-2 focus:ring-[var(--color-primary)]/30 font-medium transition-all"
             />
           </div>
+
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Search journal..."
+            onClear={() => setSearch('')}
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto pb-4 px-2 space-y-0.5">

@@ -657,39 +657,41 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         <div className="space-y-6 xl:sticky xl:top-6">
           
           {/* Today's Journal Card */}
-          <Card className="p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
-            <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
-              <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
-                <BookOpen className="w-3.5 h-3.5 text-[var(--color-personal)]" />
-                Journal Today
-              </span>
-              {todayJournal?.mood && (
-                <span className="text-sm p-1 bg-[var(--color-accent)] rounded-lg animate-bounce" title={`Mood: ${todayJournal.mood}`}>
-                  {todayJournal.mood}
-                </span>
-              )}
-            </div>
+      <Card className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
+        <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
+          <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
+            <BookOpen className="w-3.5 h-3.5 text-[var(--color-personal)]" />
+            Journal Today
+          </span>
+          {todayJournal?.mood && (
+            <span className="text-sm p-1 bg-[var(--color-accent)] rounded-lg animate-bounce" title={`Mood: ${todayJournal.mood}`}>
+              {todayJournal.mood}
+            </span>
+          )}
+        </div>
             {todayJournal ? (
               <div className="space-y-2">
                 <p className="text-xs text-[var(--color-text-main)] leading-relaxed line-clamp-3 italic">
                   &ldquo;{stripHtml(todayJournal.content)}&rdquo;
                 </p>
-                <button
+                <Button
                   onClick={() => onTabChange('journal')}
-                  className="w-full text-center text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-primary)] bg-[var(--color-accent)] hover:bg-[var(--color-primary)]/10 py-2 rounded-lg cursor-pointer transition-colors"
+                  size="sm"
+                  className="w-full text-center"
                 >
                   Open Full Journal
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="space-y-2 text-center py-2">
                 <p className="text-xs text-[var(--color-text-muted)] italic">No entry written for today yet.</p>
-                <button
+                <Button
                   onClick={() => onTabChange('journal')}
-                  className="w-full text-center text-[10px] font-extrabold uppercase tracking-wider text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] py-2 rounded-lg cursor-pointer transition-all active:scale-[0.98]"
+                  size="sm"
+                  className="w-full"
                 >
                   Write Entry
-                </button>
+                </Button>
               </div>
             )}
           </Card>
@@ -716,12 +718,13 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                 )
               })}
             </div>
-            <button
+            <Button
               onClick={() => onTabChange('leave')}
-              className="w-full text-center text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-primary)] bg-[var(--color-accent)] hover:bg-[var(--color-primary)]/10 py-2 rounded-lg cursor-pointer transition-colors"
+              size="sm"
+              className="w-full"
             >
               Request Time Off
-            </button>
+            </Button>
           </Card>
 
           {/* Weight Tracker Card */}
