@@ -22,7 +22,7 @@ export class ActivityService {
     const logDate = new Date(`${date}T12:00:00.000Z`)
 
     // Check for existing log for this date and template
-    const existing = await db.activityLog.findFirst({
+    let existing = await db.activityLog.findFirst({
       where: {
         userId,
         activityId: templateId,
@@ -30,6 +30,23 @@ export class ActivityService {
         deletedAt: null
       }
     })
+
+    // If no existing log by date/template, but we have a journalEntryId, check if there's already a log for it
+    if (!existing && journalEntryId) {
+      console.log(`[ActivityService] Checking for existing log with journalEntryId: ${journalEntryId}`)
+      existing = await db.activityLog.findFirst({
+        where: {
+          journalEntryId
+          // Note: We don't filter by deletedAt here because journalEntryId is unique
+          // If a log exists with this journalEntryId, we must update it even if deleted
+        }
+      })
+      if (existing) {
+        console.log(`[ActivityService] Found existing log ${existing.id} for journalEntryId ${journalEntryId}, deletedAt: ${existing.deletedAt}`)
+      } else {
+        console.log(`[ActivityService] No existing log found for journalEntryId ${journalEntryId}`)
+      }
+    }
 
     let log
     if (existing) {
@@ -42,7 +59,8 @@ export class ActivityService {
           payload: payload !== undefined ? (payload as Prisma.InputJsonValue) : (existing.payload as Prisma.InputJsonValue),
           weightRecordId: weightRecordId !== undefined ? weightRecordId : existing.weightRecordId,
           leaveRecordId: leaveRecordId !== undefined ? leaveRecordId : existing.leaveRecordId,
-          journalEntryId: journalEntryId !== undefined ? journalEntryId : existing.journalEntryId
+          journalEntryId: journalEntryId !== undefined ? journalEntryId : existing.journalEntryId,
+          deletedAt: null // Un-delete if it was soft-deleted
         }
       })
     } else {
