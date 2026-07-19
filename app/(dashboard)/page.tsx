@@ -25,11 +25,11 @@ export default async function Page() {
     orderBy: { sortOrder: 'asc' },
   })
 
-  const [logsRaw, notesRaw, journalEntriesRaw, leaveRecordsRaw, leaveAllowancesRaw, weightRecordsRaw] = await Promise.all([
+  const [logsRaw, journalRawForNotes, journalEntriesRaw, leaveRecordsRaw, leaveAllowancesRaw, weightRecordsRaw] = await Promise.all([
     fetchRecurrenceLogs(loggedUser.id, templatesRaw, loggedUser.username === 'admin'),
-    db.note.findMany({
+    db.journalEntry.findMany({
       where: { userId: loggedUser.id, deletedAt: null },
-      orderBy: { date: 'desc' },
+      orderBy: { journalDate: 'desc' },
     }),
     db.journalEntry.findMany({
       where: { userId: loggedUser.id, deletedAt: null },
@@ -107,11 +107,22 @@ export default async function Page() {
     deletedAt: r.deletedAt?.toISOString() ?? null,
   }))
 
+  const notes = journalRawForNotes.map(j => ({
+    id: j.id,
+    date: j.journalDate.toISOString().split('T')[0],
+    title: null,
+    content: j.content,
+    userId: loggedUser.id,
+    createdAt: j.journalDate,
+    updatedAt: j.journalDate,
+    deletedAt: null
+  }))
+
   return (
     <TodayDashboardWrapper
       analyzedTemplates={analyzedTemplates}
       logs={logs}
-      notes={notesRaw}
+      notes={notes}
       todayStr={todayStr}
       journalEntries={journalEntries}
       leaveRecords={leaveRecords}

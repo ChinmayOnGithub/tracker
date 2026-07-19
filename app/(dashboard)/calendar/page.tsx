@@ -24,11 +24,11 @@ export default async function Page() {
     orderBy: { sortOrder: 'asc' },
   })
 
-  const [logsRaw, notesRaw] = await Promise.all([
+  const [logsRaw, journalRaw] = await Promise.all([
     fetchRecurrenceLogs(loggedUser.id, templatesRaw, loggedUser.username === 'admin'),
-    db.note.findMany({
+    db.journalEntry.findMany({
       where: { userId: loggedUser.id, deletedAt: null },
-      orderBy: { date: 'desc' },
+      orderBy: { journalDate: 'desc' },
     }),
   ])
 
@@ -53,11 +53,22 @@ export default async function Page() {
     return { template, analysis }
   })
 
+  const notes = journalRaw.map(j => ({
+    id: j.id,
+    date: j.journalDate.toISOString().split('T')[0],
+    title: null,
+    content: j.content,
+    userId: loggedUser.id,
+    createdAt: j.journalDate,
+    updatedAt: j.journalDate,
+    deletedAt: null
+  }))
+
   return (
     <CalendarWrapper
       logs={logs}
       templates={templates}
-      notes={notesRaw}
+      notes={notes}
       todayStr={todayStr}
       analyzedTemplates={analyzedTemplates}
     />

@@ -24,11 +24,11 @@ export default async function Page() {
     orderBy: { sortOrder: 'asc' },
   })
 
-  const [logsRaw, notesRaw, tagsRaw] = await Promise.all([
+  const [logsRaw, journalRaw, tagsRaw] = await Promise.all([
     fetchRecurrenceLogs(loggedUser.id, templatesRaw, loggedUser.username === 'admin'),
-    db.note.findMany({
+    db.journalEntry.findMany({
       where: { userId: loggedUser.id, deletedAt: null },
-      orderBy: { date: 'desc' },
+      orderBy: { journalDate: 'desc' },
     }),
     db.tag.findMany({ orderBy: { name: 'asc' } }),
   ])
@@ -62,6 +62,17 @@ export default async function Page() {
     })
     .sort((a, b) => b.date.localeCompare(a.date))
 
+  const notes = journalRaw.map(j => ({
+    id: j.id,
+    date: j.journalDate.toISOString().split('T')[0],
+    title: null,
+    content: j.content,
+    userId: loggedUser.id,
+    createdAt: j.journalDate,
+    updatedAt: j.journalDate,
+    deletedAt: null
+  }))
+
   return (
     <ActivitiesWrapper
       analyzedTemplates={analyzedTemplates}
@@ -69,7 +80,7 @@ export default async function Page() {
       tags={tagsRaw}
       templates={templates}
       logs={logs}
-      notes={notesRaw}
+      notes={notes}
     />
   )
 }
