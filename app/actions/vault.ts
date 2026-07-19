@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { getLoggedUser } from './auth'
+import { requireAuth } from '@/lib/auth-guards'
 import {
   encryptTitle,
   decryptTitle,
@@ -14,14 +14,6 @@ import fs from 'fs/promises'
 
 const DEFAULT_PAGE_SIZE = 100
 const MAX_PAGE_SIZE = 500
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-async function getAuthSession() {
-  const user = await getLoggedUser()
-  if (!user) throw new Error('Authentication required')
-  return user
-}
 
 function getVaultDir(userId: string): string {
   return path.join(process.cwd(), 'uploads', 'vault', userId)
@@ -95,7 +87,7 @@ export async function listVaultItems(
   error?: string
 }> {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const take = Math.min(Math.max(1, limit), MAX_PAGE_SIZE) + 1 // fetch one extra to detect next page
 
     // Validate parentId if provided
@@ -194,7 +186,7 @@ export async function searchVaultItems(
       return { success: true, items: [] }
     }
 
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const normalized = await normalizeSearchName(query)
     if (!normalized) return { success: true, items: [] }
 
@@ -269,7 +261,7 @@ export async function createVaultFolder(
       throw new Error('Folder name is too long (maximum 255 characters)')
     }
 
-    const user = await getAuthSession()
+    const user = await requireAuth()
 
     if (parentId) {
       const parent = await db.secureDocument.findFirst({
@@ -348,7 +340,7 @@ export async function renameVaultItem(
       throw new Error('Name is too long (maximum 255 characters)')
     }
 
-    const user = await getAuthSession()
+    const user = await requireAuth()
 
     const doc = await db.secureDocument.findFirst({
       where: { id, userId: user.id, deletedAt: null },
@@ -406,7 +398,7 @@ export async function toggleVaultFavorite(
       throw new Error('Invalid favorite status')
     }
 
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const doc = await db.secureDocument.findFirst({
       where: { id, userId: user.id, deletedAt: null },
       select: { id: true },
@@ -437,7 +429,7 @@ export async function deleteVaultItem(
       throw new Error('Invalid document ID')
     }
 
-    const user = await getAuthSession()
+    const user = await requireAuth()
 
     const doc = await db.secureDocument.findFirst({
       where: { id, userId: user.id, deletedAt: null },
@@ -548,7 +540,7 @@ export async function getVaultBreadcrumbs(
   folderId: string | null
 ): Promise<{ success: boolean; breadcrumbs: VaultBreadcrumb[]; error?: string }> {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const breadcrumbs: VaultBreadcrumb[] = [{ id: null, name: 'Vault' }]
     if (!folderId) return { success: true, breadcrumbs }
 
@@ -604,7 +596,7 @@ export async function getVaultStats(): Promise<{
   error?: string
 }> {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
 
     const [fileCount, folderCount, sizeResult] = await Promise.all([
       db.secureDocument.count({ where: { userId: user.id, isFolder: false, deletedAt: null } }),
@@ -634,7 +626,7 @@ export async function getVaultStats(): Promise<{
 
 export async function listVaultFavorites(): Promise<{ success: boolean; items: VaultItem[]; error?: string }> {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const documents = await db.secureDocument.findMany({
       where: { userId: user.id, isFavorite: true, deletedAt: null },
       select: {

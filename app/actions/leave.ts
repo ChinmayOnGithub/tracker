@@ -2,20 +2,14 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { getLoggedUser } from './auth'
+import { requireAuth, requireOwnership } from '@/lib/auth-guards'
 import { LeaveType, LeaveStatus } from '@prisma/client'
 import { ActivityService } from '@/lib/services/ActivityService'
-
-async function getAuthSession() {
-  const user = await getLoggedUser()
-  if (!user) throw new Error('Authentication required')
-  return user
-}
 
 /** Get leave allowances for a given year for the current user. */
 export async function getLeaveAllowances(year: number) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const allowances = await db.leaveAllowance.findMany({
       where: { userId: user.id, year },
       orderBy: { leaveType: 'asc' },
@@ -30,7 +24,7 @@ export async function getLeaveAllowances(year: number) {
 /** Get all leave records for the current user (optionally filtered by year). */
 export async function getLeaveRecords(year?: number) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
 
     const records = await db.leaveRecord.findMany({
       where: {
@@ -62,7 +56,7 @@ export async function createLeaveRequest(data: {
   status?: LeaveStatus
 }) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const record = await db.leaveRecord.create({
       data: {
         userId: user.id,
@@ -116,9 +110,7 @@ export async function createLeaveRequest(data: {
 /** Update the status of an existing leave record. */
 export async function updateLeaveStatus(id: string, status: LeaveStatus) {
   try {
-    const user = await getAuthSession()
-    const record = await db.leaveRecord.findUnique({ where: { id } })
-    if (!record || record.userId !== user.id) throw new Error('Unauthorized')
+    const { user } = await requireOwnership('leaveRecord', id)
 
     const updated = await db.leaveRecord.update({
       where: { id },
@@ -150,9 +142,7 @@ export async function updateLeaveStatus(id: string, status: LeaveStatus) {
 /** Soft-delete a leave record. */
 export async function deleteLeaveRecord(id: string) {
   try {
-    const user = await getAuthSession()
-    const record = await db.leaveRecord.findUnique({ where: { id } })
-    if (!record || record.userId !== user.id) throw new Error('Unauthorized')
+    const { user } = await requireOwnership('leaveRecord', id)
 
     await db.leaveRecord.update({ where: { id }, data: { deletedAt: new Date() } })
     
@@ -173,7 +163,7 @@ export async function deleteLeaveRecord(id: string) {
 /** Ensure allowance rows exist for a user for the given year (seed defaults if missing). */
 export async function ensureLeaveAllowances(year: number) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const defaults: { leaveType: LeaveType; allowance: number }[] = [
       { leaveType: LeaveType.CASUAL, allowance: 12 },
       { leaveType: LeaveType.SICK, allowance: 8 },
@@ -199,7 +189,7 @@ export async function ensureLeaveAllowances(year: number) {
 /** Update an allowance amount for a specific leave type and year. */
 export async function updateLeaveAllowance(leaveType: LeaveType, year: number, allowance: number) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const updated = await db.leaveAllowance.upsert({
       where: {
         userId_year_leaveType: {

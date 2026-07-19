@@ -1,8 +1,8 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useCallback } from 'react'
 import { logWeight, deleteWeightRecord } from '@/app/actions/weight'
-import { Scale, TrendingDown, TrendingUp, Minus, Trash2, Plus } from 'lucide-react'
+import { TrendingDown, TrendingUp, Minus, Trash2, Plus } from 'lucide-react'
 import { Input, Button, Card } from '@/design-system'
 
 // ---------------------------------------------------------------------------
@@ -315,12 +315,13 @@ function LogForm({ todayRecord, onLogged }: LogFormProps) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  useEffect(() => {
-    if (todayRecord && logDate === todayYMD()) {
+  const handleDateChange = (newDate: string) => {
+    setLogDate(newDate)
+    if (newDate === todayYMD() && todayRecord) {
       setWeight(String(todayRecord.weight))
       setNotes(todayRecord.notes ?? '')
     }
-  }, [todayRecord, logDate])
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -348,7 +349,7 @@ function LogForm({ todayRecord, onLogged }: LogFormProps) {
             type="date"
             label="Record Date"
             value={logDate}
-            onChange={e => setLogDate(e.target.value)}
+            onChange={e => handleDateChange(e.target.value)}
             required
           />
           <div className="flex items-end gap-2">
@@ -558,7 +559,7 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
       )}
 
       {/* Log Form */}
-      <LogForm todayRecord={todayRecord} onLogged={handleLogged} />
+      <LogForm key={todayRecord?.id || 'new'} todayRecord={todayRecord} onLogged={handleLogged} />
 
       {/* History Table */}
       <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl overflow-hidden">

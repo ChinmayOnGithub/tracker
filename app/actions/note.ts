@@ -2,35 +2,7 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { getLoggedUser } from './auth'
-
-/**
- * Helper to check if a user is logged in and returns their profile.
- */
-async function getAuthSession() {
-  const user = await getLoggedUser()
-  if (!user) {
-    throw new Error('Authentication required')
-  }
-  return user
-}
-
-/**
- * Checks if a note is owned by the current user.
- */
-async function verifyNoteOwnership(noteId: string, user: { id: string; username: string }) {
-  const note = await db.note.findUnique({
-    where: { id: noteId }
-  })
-  if (!note) {
-    throw new Error('Note not found')
-  }
-  const isOwner = note.userId === user.id || (note.userId === null && user.username === 'admin')
-  if (!isOwner) {
-    throw new Error('Unauthorized note access')
-  }
-  return note
-}
+import { requireAuth, requireOwnership } from '@/lib/auth-guards'
 
 export async function createNote(
   date: string, // YYYY-MM-DD
@@ -38,7 +10,7 @@ export async function createNote(
   title?: string | null
 ) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
 
     const note = await db.note.create({
       data: {
@@ -64,8 +36,7 @@ export async function updateNote(
   title?: string | null
 ) {
   try {
-    const user = await getAuthSession()
-    await verifyNoteOwnership(id, user)
+    const { user } = await requireOwnership('note', id)
 
     const note = await db.note.update({
       where: { id },
@@ -94,7 +65,7 @@ export async function upsertNote(
   title?: string | null
 ) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
 
     const existingNotes = await db.note.findMany({
       where: { date, userId: user.id, deletedAt: null },
@@ -133,8 +104,7 @@ export async function upsertNote(
 
 export async function deleteNote(id: string) {
   try {
-    const user = await getAuthSession()
-    await verifyNoteOwnership(id, user)
+    const { user } = await requireOwnership('note', id)
 
     await db.note.update({
       where: { id },

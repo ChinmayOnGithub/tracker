@@ -5,7 +5,7 @@ import { CalendarDataContext } from './DashboardLayout'
 import { ActivityManager } from './ActivityManager'
 import { DashboardPanel } from './DashboardPanel'
 import { DayLogsModal } from './DayLogsModal'
-import { ActivityTemplate, ActivityLog, Tag, RecurrenceAnalysis } from '@/types'
+import { ActivityTemplate, ActivityLog, Tag, RecurrenceAnalysis, Note } from '@/types'
 import { getTodayDateStr } from '@/lib/recurrence'
 
 interface ActivitiesWrapperProps {
@@ -14,7 +14,7 @@ interface ActivitiesWrapperProps {
   tags: Tag[]
   templates: ActivityTemplate[]
   logs: ActivityLog[]
-  notes: any[]
+  notes: Note[]
 }
 
 export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({

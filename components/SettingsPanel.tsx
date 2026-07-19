@@ -1,3 +1,5 @@
+"use client"
+
 import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardHeader, CardBody, Button, Skeleton, Select, Input } from '@/design-system'
 import { Calendar, CheckCircle2, AlertCircle, RefreshCw, Settings2, Database, Shield, Lock, Key } from 'lucide-react'

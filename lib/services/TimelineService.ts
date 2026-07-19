@@ -3,6 +3,70 @@ import { analyzeRecurrence } from '../recurrence'
 import { ActivityTemplate, ActivityLog, TimelineItem, RecurrenceType, Priority } from '@/types'
 import { ParsedCalendarEvent } from '../providers'
 
+export async function fetchRecurrenceLogs(
+  userId: string,
+  templates: { id: string; recurrenceType: string }[],
+  adminCheck: boolean = false
+): Promise<ActivityLog[]> {
+  const whereClause = adminCheck
+    ? { OR: [{ userId }, { userId: null }], deletedAt: null }
+    : { userId, deletedAt: null }
+
+  // 1. Get the latest log of each template
+  const latestLogs = await db.activityLog.findMany({
+    where: whereClause,
+    orderBy: { logDate: 'desc' },
+    distinct: ['activityId']
+  })
+
+  // 2. Get the latest completion log of each template
+  const latestCompletions = await db.activityLog.findMany({
+    where: {
+      ...whereClause,
+      status: { notIn: ['skipped', 'postponed', 'reminder'] }
+    },
+    orderBy: { logDate: 'desc' },
+    distinct: ['activityId']
+  })
+
+  // 3. Get recent logs (last 30 days) for daily templates to compute streaks
+  const dailyTemplates = templates.filter(t => t.recurrenceType === 'daily')
+  const dailyTemplateIds = dailyTemplates.map(t => t.id)
+  
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+  const recentDailyLogs = dailyTemplateIds.length > 0 ? await db.activityLog.findMany({
+    where: {
+      ...whereClause,
+      activityId: { in: dailyTemplateIds },
+      logDate: { gte: thirtyDaysAgo },
+      status: { notIn: ['skipped', 'postponed', 'reminder'] }
+    },
+    orderBy: { logDate: 'desc' }
+  }) : []
+
+  // 4. Get all logs of the last 7 days to cover general recent completions list
+  const sevenDaysAgo = new Date()
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
+  const lastSevenDaysLogs = await db.activityLog.findMany({
+    where: {
+      ...whereClause,
+      logDate: { gte: sevenDaysAgo }
+    },
+    orderBy: { logDate: 'desc' }
+  })
+
+  // Combine and de-duplicate by ID
+  const logsMap = new Map<string, ActivityLog>()
+  latestLogs.forEach(l => logsMap.set(l.id, l as unknown as ActivityLog))
+  latestCompletions.forEach(l => logsMap.set(l.id, l as unknown as ActivityLog))
+  recentDailyLogs.forEach(l => logsMap.set(l.id, l as unknown as ActivityLog))
+  lastSevenDaysLogs.forEach(l => logsMap.set(l.id, l as unknown as ActivityLog))
+
+  return Array.from(logsMap.values())
+}
+
 export class TimelineService {
   /**
    * Generates the unified timeline of occurrences for a specific user and date.
@@ -75,10 +139,7 @@ export class TimelineService {
     }
 
     // Pre-fetch all historical logs for the user to resolve the N+1 query loop
-    const allLogsList = await db.activityLog.findMany({
-      where: { userId, deletedAt: null },
-      orderBy: { logDate: 'desc' }
-    })
+    const allLogsList = await fetchRecurrenceLogs(userId, templates)
 
     const logsByActivityId: Record<string, typeof allLogsList> = {}
     for (const logItem of allLogsList) {
@@ -93,7 +154,7 @@ export class TimelineService {
       const templateLogsRaw = logsByActivityId[template.id] || []
       const allTemplateLogs = templateLogsRaw.map(l => ({
         ...l,
-        date: l.logDate.toISOString().split('T')[0]
+        date: l.logDate ? l.logDate.toISOString().split('T')[0] : l.date
       }))
 
       const analysis = analyzeRecurrence(template as unknown as ActivityTemplate, allTemplateLogs as unknown as ActivityLog[], todayStr)

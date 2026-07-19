@@ -2,15 +2,9 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { getLoggedUser } from './auth'
+import { requireAuth, requireOwnership } from '@/lib/auth-guards'
 
 import { ActivityService } from '@/lib/services/ActivityService'
-
-async function getAuthSession() {
-  const user = await getLoggedUser()
-  if (!user) throw new Error('Authentication required')
-  return user
-}
 
 /**
  * Log or update today's weight entry (one per day per user).
@@ -18,7 +12,7 @@ async function getAuthSession() {
  */
 export async function logWeight(date: string, weight: number, notes?: string | null) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     // Normalize to noon UTC to avoid timezone boundary issues
     const dateObj = new Date(`${date}T12:00:00.000Z`)
 
@@ -79,7 +73,7 @@ export async function logWeight(date: string, weight: number, notes?: string | n
  */
 export async function getWeightHistory(days = 90) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const since = new Date()
     since.setUTCHours(0, 0, 0, 0)
     since.setUTCDate(since.getUTCDate() - days)
@@ -106,9 +100,7 @@ export async function getWeightHistory(days = 90) {
  */
 export async function deleteWeightRecord(id: string) {
   try {
-    const user = await getAuthSession()
-    const record = await db.weightRecord.findUnique({ where: { id } })
-    if (!record || record.userId !== user.id) throw new Error('Unauthorized')
+    const { user } = await requireOwnership('weightRecord', id)
 
     await db.weightRecord.update({ where: { id }, data: { deletedAt: new Date() } })
     

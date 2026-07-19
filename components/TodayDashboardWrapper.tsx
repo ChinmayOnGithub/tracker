@@ -1,20 +1,22 @@
 "use client"
 
-import React, { useContext } from 'react'
+import React, { useContext, ComponentProps } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarDataContext } from './DashboardLayout'
 import { TodayDashboard } from './TodayDashboard'
-import { ActivityTemplate, ActivityLog, Note, RecurrenceAnalysis } from '@/types'
+import { ActivityTemplate } from '@/types'
+
+type TodayDashboardProps = ComponentProps<typeof TodayDashboard>
 
 interface TodayDashboardWrapperProps {
-  analyzedTemplates: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]
-  logs: ActivityLog[]
-  notes: Note[]
-  todayStr: string
-  journalEntries: any[]
-  leaveRecords: any[]
-  leaveAllowances: any[]
-  weightRecords: any[]
+  analyzedTemplates: TodayDashboardProps['analyzedTemplates']
+  logs: TodayDashboardProps['logs']
+  notes: TodayDashboardProps['_notes']
+  todayStr: TodayDashboardProps['todayStr']
+  journalEntries: TodayDashboardProps['journalEntries']
+  leaveRecords: TodayDashboardProps['leaveRecords']
+  leaveAllowances: TodayDashboardProps['leaveAllowances']
+  weightRecords: TodayDashboardProps['weightRecords']
 }
 
 export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
@@ -63,13 +65,13 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     <TodayDashboard
       analyzedTemplates={analyzedTemplates}
       logs={logs}
-      notes={notes}
+      _notes={notes}
       todayStr={todayStr}
       calendarData={calendarData}
       onRefetchCalendar={fetchCalendar}
       onOpenCreateActivity={onOpenCreateActivity}
-      onMarkHabitComplete={onMarkHabitComplete}
-      onEditTemplate={onEditTemplate}
+      _onMarkHabitComplete={onMarkHabitComplete}
+      _onEditTemplate={onEditTemplate}
       journalEntries={journalEntries}
       leaveRecords={leaveRecords}
       leaveAllowances={leaveAllowances}

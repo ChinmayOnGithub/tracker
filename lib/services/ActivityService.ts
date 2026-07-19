@@ -80,12 +80,75 @@ export class ActivityService {
   }
 
   /**
+   * Update an activity log entry.
+   */
+  static async updateLog(userId: string, id: string, data: {
+    status?: string
+    note?: string | null
+    amount?: number | null
+    payload?: unknown
+  }) {
+    const existing = await db.activityLog.findUnique({ where: { id } })
+    if (!existing || existing.userId !== userId) {
+      throw new Error('Log record not found or unauthorized')
+    }
+
+    const log = await db.activityLog.update({
+      where: { id },
+      data: {
+        status: data.status,
+        note: data.note !== undefined ? data.note : undefined,
+        amount: data.amount !== undefined ? data.amount : undefined,
+        payload: data.payload !== undefined ? (data.payload as Prisma.InputJsonValue) : undefined,
+      }
+    })
+
+    // Publish event
+    if (data.status && data.status !== existing.status) {
+      if (data.status === 'done' || data.status === 'paid' || data.status === 'completed') {
+        await eventBus.publish('ACTIVITY_COMPLETED', {
+          logId: log.id,
+          templateId: log.activityId,
+          userId
+        })
+      } else if (data.status === 'skipped') {
+        await eventBus.publish('ACTIVITY_SKIPPED', {
+          templateId: log.activityId,
+          userId
+        })
+      }
+    }
+
+    return log
+  }
+
+  /**
    * soft delete an activity log entry
    */
   static async deleteLog(userId: string, logId: string) {
     const existing = await db.activityLog.findUnique({ where: { id: logId } })
     if (!existing || existing.userId !== userId) {
       throw new Error('Log record not found or unauthorized')
+    }
+
+    // Cascade soft deletions to linked sub-records
+    if (existing.weightRecordId) {
+      await db.weightRecord.update({
+        where: { id: existing.weightRecordId },
+        data: { deletedAt: new Date() }
+      })
+    }
+    if (existing.leaveRecordId) {
+      await db.leaveRecord.update({
+        where: { id: existing.leaveRecordId },
+        data: { deletedAt: new Date() }
+      })
+    }
+    if (existing.journalEntryId) {
+      await db.journalEntry.update({
+        where: { id: existing.journalEntryId },
+        data: { deletedAt: new Date() }
+      })
     }
 
     return await db.activityLog.update({

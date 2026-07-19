@@ -2,20 +2,14 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { getLoggedUser } from './auth'
 import { Prisma } from '@prisma/client'
-
-async function getAuthSession() {
-  const user = await getLoggedUser()
-  if (!user) throw new Error('Authentication required')
-  return user
-}
+import { requireAuth, requireOwnership } from '@/lib/auth-guards'
 
 // ─── Collections ─────────────────────────────────────────────────────────────
 
 export async function listLinkCollections() {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const collections = await db.linkCollection.findMany({
       where: { userId: user.id, deletedAt: null },
       include: {
@@ -32,7 +26,7 @@ export async function listLinkCollections() {
 
 export async function createLinkCollection(name: string, color?: string, icon?: string | null) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const count = await db.linkCollection.count({ where: { userId: user.id, deletedAt: null } })
     const collection = await db.linkCollection.create({
       data: { userId: user.id, name, color: color ?? '#6366f1', icon: icon || null, sortOrder: count },
@@ -47,9 +41,7 @@ export async function createLinkCollection(name: string, color?: string, icon?: 
 
 export async function updateLinkCollection(id: string, data: { name?: string; color?: string; icon?: string | null }) {
   try {
-    const user = await getAuthSession()
-    const collection = await db.linkCollection.findUnique({ where: { id } })
-    if (!collection || collection.userId !== user.id) throw new Error('Unauthorized')
+    const { user } = await requireOwnership('linkCollection', id)
     const updated = await db.linkCollection.update({ where: { id }, data })
     revalidatePath('/')
     return { success: true, collection: updated }
@@ -61,9 +53,7 @@ export async function updateLinkCollection(id: string, data: { name?: string; co
 
 export async function deleteLinkCollection(id: string) {
   try {
-    const user = await getAuthSession()
-    const collection = await db.linkCollection.findUnique({ where: { id } })
-    if (!collection || collection.userId !== user.id) throw new Error('Unauthorized')
+    const { user } = await requireOwnership('linkCollection', id)
     await db.linkCollection.update({ where: { id }, data: { deletedAt: new Date() } })
     revalidatePath('/')
     return { success: true }
@@ -284,9 +274,7 @@ export async function createLink(
   }
 ) {
   try {
-    const user = await getAuthSession()
-    const collection = await db.linkCollection.findUnique({ where: { id: collectionId } })
-    if (!collection || collection.userId !== user.id) throw new Error('Unauthorized')
+    const { user } = await requireOwnership('linkCollection', collectionId)
 
     let finalUrl = data.url.trim()
     if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
@@ -357,12 +345,7 @@ export async function updateLink(
   }
 ) {
   try {
-    const user = await getAuthSession()
-    const link = await db.savedLink.findUnique({
-      where: { id },
-      include: { collection: true },
-    })
-    if (!link || link.collection.userId !== user.id) throw new Error('Unauthorized')
+    const { record: link, user } = await requireOwnership('savedLink', id)
 
     const { tags, ...scalarData } = data
     const updatedData: Prisma.SavedLinkUpdateInput = { ...scalarData }
@@ -400,12 +383,7 @@ export async function updateLink(
 
 export async function togglePinLink(id: string) {
   try {
-    const user = await getAuthSession()
-    const link = await db.savedLink.findUnique({
-      where: { id },
-      include: { collection: true },
-    })
-    if (!link || link.collection.userId !== user.id) throw new Error('Unauthorized')
+    const { record: link, user } = await requireOwnership('savedLink', id)
     const updated = await db.savedLink.update({
       where: { id },
       data: { isPinned: !link.isPinned },
@@ -421,12 +399,7 @@ export async function togglePinLink(id: string) {
 
 export async function togglePrivateLink(id: string) {
   try {
-    const user = await getAuthSession()
-    const link = await db.savedLink.findUnique({
-      where: { id },
-      include: { collection: true },
-    })
-    if (!link || link.collection.userId !== user.id) throw new Error('Unauthorized')
+    const { record: link, user } = await requireOwnership('savedLink', id)
     const updated = await db.savedLink.update({
       where: { id },
       data: { isPrivate: !link.isPrivate },
@@ -442,12 +415,7 @@ export async function togglePrivateLink(id: string) {
 
 export async function toggleArchiveLink(id: string) {
   try {
-    const user = await getAuthSession()
-    const link = await db.savedLink.findUnique({
-      where: { id },
-      include: { collection: true },
-    })
-    if (!link || link.collection.userId !== user.id) throw new Error('Unauthorized')
+    const { record: link, user } = await requireOwnership('savedLink', id)
     const updated = await db.savedLink.update({
       where: { id },
       data: { isArchived: !link.isArchived },
@@ -463,7 +431,7 @@ export async function toggleArchiveLink(id: string) {
 
 export async function checkDuplicateLink(url: string) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const cleaned = url.trim().replace(/\/$/, '')
     const existing = await db.savedLink.findFirst({
       where: {
@@ -499,12 +467,7 @@ export async function checkDuplicateLink(url: string) {
 
 export async function registerLinkVisit(id: string) {
   try {
-    const user = await getAuthSession()
-    const link = await db.savedLink.findUnique({
-      where: { id },
-      include: { collection: true }
-    })
-    if (!link || link.collection.userId !== user.id) throw new Error('Unauthorized')
+    const { record: link, user } = await requireOwnership('savedLink', id)
     const updated = await db.savedLink.update({
       where: { id },
       data: {
@@ -522,7 +485,7 @@ export async function registerLinkVisit(id: string) {
 
 export async function createLinkTag(name: string, color?: string) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const tag = await db.linkTag.upsert({
       where: {
         userId_name: {
@@ -548,9 +511,7 @@ export async function createLinkTag(name: string, color?: string) {
 
 export async function deleteLinkTag(id: string) {
   try {
-    const user = await getAuthSession()
-    const tag = await db.linkTag.findUnique({ where: { id } })
-    if (!tag || tag.userId !== user.id) throw new Error('Unauthorized')
+    await requireOwnership('linkTag', id)
     await db.linkTag.delete({ where: { id } })
     revalidatePath('/')
     return { success: true }
@@ -562,7 +523,7 @@ export async function deleteLinkTag(id: string) {
 
 export async function getLinkTags() {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const tags = await db.linkTag.findMany({
       where: { userId: user.id },
       orderBy: { name: 'asc' }
@@ -575,12 +536,7 @@ export async function getLinkTags() {
 
 export async function deleteLink(id: string) {
   try {
-    const user = await getAuthSession()
-    const link = await db.savedLink.findUnique({
-      where: { id },
-      include: { collection: true },
-    })
-    if (!link || link.collection.userId !== user.id) throw new Error('Unauthorized')
+    await requireOwnership('savedLink', id)
     await db.savedLink.update({ where: { id }, data: { deletedAt: new Date() } })
     revalidatePath('/')
     return { success: true }

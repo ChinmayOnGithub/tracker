@@ -3,36 +3,10 @@
 import { db } from '@/lib/db'
 import { Prisma, RecurrenceType, ActivityType, Priority, CalendarProvider } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
-import { getLoggedUser } from './auth'
+
 import { eventBus, EVENTS } from '@/lib/events'
 
-/**
- * Helper to check if a user is logged in and returns their profile.
- */
-async function getAuthSession() {
-  const user = await getLoggedUser()
-  if (!user) {
-    throw new Error('Authentication required')
-  }
-  return user
-}
-
-/**
- * Checks if a template is owned by the current user.
- */
-async function verifyTemplateOwnership(templateId: string, user: { id: string; username: string }) {
-  const template = await db.activityTemplate.findUnique({
-    where: { id: templateId }
-  })
-  if (!template) {
-    throw new Error('Activity template not found')
-  }
-  const isOwner = template.userId === user.id || (template.userId === null && user.username === 'admin')
-  if (!isOwner) {
-    throw new Error('Unauthorized template access')
-  }
-  return template
-}
+import { requireAuth, requireOwnership } from '@/lib/auth-guards'
 
 export async function createActivityTemplate(data: {
   name: string
@@ -59,7 +33,7 @@ export async function createActivityTemplate(data: {
   metadata?: unknown
 }) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const { tagNames = [], ...rest } = data
 
     // Get the maximum sortOrder for this user to put this at the end
@@ -133,8 +107,7 @@ export async function updateActivityTemplate(
   }
 ) {
   try {
-    const user = await getAuthSession()
-    await verifyTemplateOwnership(id, user)
+    const { user } = await requireOwnership('activityTemplate', id)
     const { tagNames, ...rest } = data
 
     // If tagNames are provided, reset tags connection
@@ -177,8 +150,7 @@ export async function updateActivityTemplate(
 
 export async function deleteActivityTemplate(id: string) {
   try {
-    const user = await getAuthSession()
-    await verifyTemplateOwnership(id, user)
+    const { user } = await requireOwnership('activityTemplate', id)
 
     const deleted = await db.activityTemplate.update({
       where: { id },
@@ -201,8 +173,7 @@ export async function deleteActivityTemplate(id: string) {
 
 export async function duplicateActivityTemplate(id: string) {
   try {
-    const user = await getAuthSession()
-    const original = await verifyTemplateOwnership(id, user)
+    const { record: original, user } = await requireOwnership('activityTemplate', id)
 
     const maxSortOrder = await db.activityTemplate.aggregate({
       where: { userId: user.id },
@@ -253,7 +224,7 @@ export async function duplicateActivityTemplate(id: string) {
 
 export async function reorderActivityTemplates(orderedIds: string[]) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
 
     // Verify ownership of all templates being reordered in a single bulk count query
     const validCount = await db.activityTemplate.count({

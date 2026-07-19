@@ -3,15 +3,9 @@
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
-import { getLoggedUser } from './auth'
+import { requireAuth, requireOwnership } from '@/lib/auth-guards'
 
 import { ActivityService } from '@/lib/services/ActivityService'
-
-async function getAuthSession() {
-  const user = await getLoggedUser()
-  if (!user) throw new Error('Authentication required')
-  return user
-}
 
 /** Converts any JSON-like value or null to the type Prisma requires for nullable JSON columns. */
 function toJsonField(v: unknown): Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue {
@@ -35,7 +29,7 @@ export async function upsertJournalEntry(
   }
 ) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     // journalDate is stored as a DateTime — use noon UTC to avoid timezone drift
     const journalDate = new Date(`${date}T12:00:00.000Z`)
 
@@ -112,7 +106,7 @@ export async function upsertJournalEntry(
  */
 export async function listJournalEntries(page = 1, limit = 20) {
   try {
-    const user = await getAuthSession()
+    const user = await requireAuth()
     const skip = (page - 1) * limit
 
     const [entries, total] = await Promise.all([
@@ -138,9 +132,7 @@ export async function listJournalEntries(page = 1, limit = 20) {
  */
 export async function deleteJournalEntry(id: string) {
   try {
-    const user = await getAuthSession()
-    const entry = await db.journalEntry.findUnique({ where: { id } })
-    if (!entry || entry.userId !== user.id) throw new Error('Unauthorized')
+    const { user } = await requireOwnership('journalEntry', id)
 
     await db.journalEntry.update({
       where: { id },

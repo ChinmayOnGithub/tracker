@@ -3,6 +3,8 @@ import { LeavePanel } from '@/components/LeavePanel'
 import { getLoggedUser } from '@/app/actions/auth'
 import { redirect } from 'next/navigation'
 
+import { LeaveType, LeaveStatus } from '@prisma/client'
+
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
@@ -34,15 +36,15 @@ export default async function Page() {
 
   const leaveRecords = leaveRecordsRaw.map(r => ({
     ...r,
-    leaveType: r.leaveType as any,
-    status: r.status as any,
+    leaveType: r.leaveType as LeaveType,
+    status: r.status as LeaveStatus,
     startDate: r.startDate.toISOString(),
     endDate: r.endDate.toISOString(),
     createdAt: r.createdAt.toISOString(),
   }))
 
   const leaveAllowances = leaveAllowancesRaw.map(a => ({
-    leaveType: a.leaveType as any,
+    leaveType: a.leaveType as LeaveType,
     allowance: a.allowance,
   }))
 

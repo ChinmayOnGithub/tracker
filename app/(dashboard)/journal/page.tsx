@@ -23,7 +23,7 @@ export default async function Page() {
     journalDate: e.journalDate.toISOString(),
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
-    metadata: e.metadata as any,
+    metadata: e.metadata as Record<string, unknown> | null,
   }))
 
   return <JournalPanel initialEntries={journalEntries} />

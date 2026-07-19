@@ -3,52 +3,10 @@
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
-import { getLoggedUser } from './auth'
 
-/**
- * Helper to check if a user is logged in and returns their profile.
- */
-async function getAuthSession() {
-  const user = await getLoggedUser()
-  if (!user) {
-    throw new Error('Authentication required')
-  }
-  return user
-}
 
-/**
- * Checks if a template is owned by the current user.
- */
-async function verifyTemplateOwnership(templateId: string, user: { id: string; username: string }) {
-  const template = await db.activityTemplate.findUnique({
-    where: { id: templateId }
-  })
-  if (!template) {
-    throw new Error('Activity template not found')
-  }
-  const isOwner = template.userId === user.id || (template.userId === null && user.username === 'admin')
-  if (!isOwner) {
-    throw new Error('Unauthorized template access')
-  }
-  return template
-}
-
-/**
- * Checks if a log is owned by the current user.
- */
-async function verifyLogOwnership(logId: string, user: { id: string; username: string }) {
-  const log = await db.activityLog.findUnique({
-    where: { id: logId }
-  })
-  if (!log) {
-    throw new Error('Activity log not found')
-  }
-  const isOwner = log.userId === user.id || (log.userId === null && user.username === 'admin')
-  if (!isOwner) {
-    throw new Error('Unauthorized log access')
-  }
-  return log
-}
+import { requireAuth, requireOwnership } from '@/lib/auth-guards'
+import { ActivityService } from '@/lib/services/ActivityService'
 
 export async function createLog(data: {
   activityId: string
@@ -59,19 +17,16 @@ export async function createLog(data: {
   payload?: unknown
 }) {
   try {
-    const user = await getAuthSession()
-    await verifyTemplateOwnership(data.activityId, user)
+    const { user } = await requireOwnership('activityTemplate', data.activityId)
 
-    const log = await db.activityLog.create({
-      data: {
-        activityId: data.activityId,
-        logDate: new Date(`${data.date}T12:00:00.000Z`),
-        status: data.status,
-        note: data.note ?? null,
-        amount: data.amount ?? null,
-        payload: data.payload as Prisma.InputJsonValue,
-        userId: user.id,
-      },
+    const log = await ActivityService.logActivity({
+      userId: user.id,
+      templateId: data.activityId,
+      date: data.date,
+      status: data.status,
+      note: data.note,
+      amount: data.amount,
+      payload: data.payload,
     })
 
     revalidatePath('/')
@@ -93,18 +48,9 @@ export async function updateLog(
   }
 ) {
   try {
-    const user = await getAuthSession()
-    await verifyLogOwnership(id, user)
+    const { user } = await requireOwnership('activityLog', id)
 
-    const log = await db.activityLog.update({
-      where: { id },
-      data: {
-        status: data.status,
-        note: data.note,
-        amount: data.amount,
-        payload: data.payload !== undefined ? (data.payload as Prisma.InputJsonValue) : undefined,
-      },
-    })
+    const log = await ActivityService.updateLog(user.id, id, data)
 
     revalidatePath('/')
     return { success: true, log }
@@ -117,34 +63,9 @@ export async function updateLog(
 
 export async function deleteLog(id: string) {
   try {
-    const user = await getAuthSession()
-    const log = await verifyLogOwnership(id, user)
+    const { user } = await requireOwnership('activityLog', id)
 
-    // Cascade soft deletions to linked sub-records
-    if (log.weightRecordId) {
-      await db.weightRecord.update({
-        where: { id: log.weightRecordId },
-        data: { deletedAt: new Date() }
-      })
-    }
-    if (log.leaveRecordId) {
-      await db.leaveRecord.update({
-        where: { id: log.leaveRecordId },
-        data: { deletedAt: new Date() }
-      })
-    }
-    if (log.journalEntryId) {
-      await db.journalEntry.update({
-        where: { id: log.journalEntryId },
-        data: { deletedAt: new Date() }
-      })
-    }
-
-    // Soft-delete the log entry instead of hard-deleting
-    await db.activityLog.update({
-      where: { id },
-      data: { deletedAt: new Date() }
-    })
+    await ActivityService.deleteLog(user.id, id)
 
     revalidatePath('/')
     return { success: true }
@@ -163,15 +84,16 @@ export async function markComplete(
   payload?: unknown
 ) {
   try {
-    const user = await getAuthSession()
-    await verifyTemplateOwnership(templateId, user)
+    const { user } = await requireOwnership('activityTemplate', templateId)
 
+    const logDate = new Date(`${date}T12:00:00.000Z`)
     const existing = await db.activityLog.findFirst({
       where: {
         activityId: templateId,
-        logDate: new Date(`${date}T12:00:00.000Z`),
+        logDate,
         status,
         userId: user.id,
+        deletedAt: null
       },
     })
 
@@ -179,15 +101,13 @@ export async function markComplete(
       return { success: true, log: existing, message: 'Already marked complete' }
     }
 
-    const log = await db.activityLog.create({
-      data: {
-        activityId: templateId,
-        logDate: new Date(`${date}T12:00:00.000Z`),
-        status,
-        amount: amount ?? null,
-        payload: payload as Prisma.InputJsonValue,
-        userId: user.id,
-      },
+    const log = await ActivityService.logActivity({
+      userId: user.id,
+      templateId,
+      date,
+      status,
+      amount: amount ?? null,
+      payload,
     })
 
     revalidatePath('/')

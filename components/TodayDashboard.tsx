@@ -1,25 +1,22 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Skeleton, EmptyState, Button, Card } from '@/design-system'
 import {
-  Calendar, Clock, MapPin, ExternalLink, Link as LinkIcon,
-  Check, Plus, ChevronDown, ChevronRight, Edit2, XCircle, ArrowRightCircle, RefreshCw, Sparkles,
-  Scale, Shield, FolderPlus, BookOpen, Smile, CalendarX, Lock, Database, Search, HardDrive,
-  FileText, FileImage, FileVideo, FileArchive, FileCode, FileSpreadsheet, File, Folder
+  ExternalLink, Check, Plus, ArrowRightCircle,
+  Scale, Shield, BookOpen, CalendarX, Lock,
+  FileText, FileImage, FileVideo, FileArchive, FileCode, FileSpreadsheet, File
 } from 'lucide-react'
 import { ActivityTemplate, ActivityLog, Note, RecurrenceAnalysis, TimelineItem } from '@/types'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
-import { upsertNote } from '@/app/actions/note'
 import { ParsedCalendarEvent } from '@/modules/sync/google-calendar/services/GoogleCalendarService'
 import { Icon } from './Icon'
 import { useRouter } from 'next/navigation'
 import { deleteLog, markComplete, updateLog } from '@/app/actions/log'
-import { updateActivityTemplate, reorderActivityTemplates } from '@/app/actions/template'
-import { ContestsWidget } from './ContestsWidget'
+import { reorderActivityTemplates } from '@/app/actions/template'
 import { useActivityNotifications } from '@/lib/hooks/useActivityNotifications'
 import { Sparkline } from './WeightPanel'
-import { listVaultItems } from '@/app/actions/vault'
+import { listVaultItems, VaultItem } from '@/app/actions/vault'
 
 interface TestAnalyzedTemplate {
   template: ActivityTemplate
@@ -29,7 +26,7 @@ interface TestAnalyzedTemplate {
 interface TodayDashboardProps {
   analyzedTemplates: TestAnalyzedTemplate[]
   logs: ActivityLog[]
-  notes: Note[]
+  _notes: Note[]
   todayStr: string
   calendarData: {
     connected: boolean
@@ -43,8 +40,8 @@ interface TodayDashboardProps {
   }
   onRefetchCalendar: (force?: boolean) => void
   onOpenCreateActivity: () => void
-  onMarkHabitComplete: (template: ActivityTemplate) => Promise<void>
-  onEditTemplate: (template: ActivityTemplate) => void
+  _onMarkHabitComplete: (template: ActivityTemplate) => Promise<void>
+  _onEditTemplate: (template: ActivityTemplate) => void
   journalEntries: {
     id: string; journalDate: string | Date; content: string; mood: string | null
     gratitude: string | null; reflections: string | null
@@ -60,17 +57,16 @@ interface TodayDashboardProps {
   onTabChange: (tabId: string) => void
 }
 
-type SectionKey = 'overdue' | 'now' | 'next' | 'later' | 'anytime' | 'completed'
 
 export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   analyzedTemplates,
   logs,
-  notes,
+  _notes,
   todayStr,
   calendarData,
   onOpenCreateActivity,
-  onMarkHabitComplete,
-  onEditTemplate,
+  _onMarkHabitComplete,
+  _onEditTemplate,
   journalEntries,
   leaveRecords,
   leaveAllowances,
@@ -80,8 +76,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   const router = useRouter()
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [completingHabitId, setCompletingHabitId] = useState<string | null>(null)
-  const [hoveredCheckboxId, setHoveredCheckboxId] = useState<string | null>(null)
-  const [vaultItems, setVaultItems] = useState<any[]>([])
+  const [vaultItems, setVaultItems] = useState<VaultItem[]>([])
   const [vaultLoading, setVaultLoading] = useState(true)
   useEffect(() => {
     async function loadVault() {
@@ -89,7 +84,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         const res = await listVaultItems(null, undefined, 20, true)
         if (res.success) {
           // Show most recently updated files (excluding folder structures)
-          setVaultItems(res.items.filter(item => !item.isFolder).slice(0, 4))
+          setVaultItems((res.items as VaultItem[]).filter(item => !item.isFolder).slice(0, 4))
         }
       } catch (err) {
         console.error("Failed to load vault items for dashboard:", err)
@@ -126,14 +121,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     }
   }
 
-  const [collapsed, setCollapsed] = useState<Record<SectionKey, boolean>>({
-    overdue: false,
-    now: false,
-    next: false,
-    later: true,
-    anytime: false,
-    completed: false
-  })
+  // collapsed state removed as it is unused
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 30000)
@@ -164,11 +152,8 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   })
 
   const activeTimeline = timeline.filter(o => !o.completed)
-  const completedTimeline = timeline.filter(o => o.completed)
   const activeOverdue = overdueOccurrences.filter(o => !o.completed)
-
   const timed = activeTimeline.filter(o => !o.isAllDay)
-  const anytime = activeTimeline.filter(o => o.isAllDay)
 
   const activeEvents = timed.filter(o => {
     const start = o.start ? new Date(o.start) : null
@@ -182,19 +167,8 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
 
   const nextEvent = upcomingEvents[0] ?? null
-  const laterEvents = upcomingEvents.slice(1)
 
-  const getPriorityWeight = (p?: string) =>
-    p === 'CRITICAL' ? 4 : p === 'HIGH' ? 3 : p === 'NORMAL' || p === 'MEDIUM' ? 2 : 1
-
-  const groupedTimeline = {
-    overdue: activeOverdue,
-    now: activeEvents,
-    next: nextEvent ? [nextEvent] : [],
-    later: laterEvents,
-    anytime: anytime.sort((a, b) => getPriorityWeight(b.priority) - getPriorityWeight(a.priority)),
-    completed: completedTimeline
-  }
+  // groupedTimeline removed as it is unused
 
   const [manualOrderIds, setManualOrderIds] = useState<string[] | null>(null)
   const [prevLogs, setPrevLogs] = useState(logs)
@@ -378,62 +352,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     }
   }
 
-  const handleHabitToggle = async (occurrence: TimelineItem) => {
-    if (!occurrence.templateId) return
-    const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-    if (!matched) return
-    setCompletingHabitId(occurrence.templateId)
-    try {
-      if (occurrence.completed) {
-        if (occurrence.logId) await deleteLog(occurrence.logId)
-      } else {
-        await onMarkHabitComplete(matched.template)
-      }
-      router.refresh()
-    } catch (err) { console.error(err) }
-    finally { setCompletingHabitId(null) }
-  }
-
-  const handleHabitSkip = async (occurrence: TimelineItem) => {
-    if (!occurrence.templateId) return
-    setCompletingHabitId(occurrence.templateId)
-    try { await markComplete(occurrence.templateId, todayStr, 'skipped'); router.refresh() }
-    catch (err) { console.error(err) }
-    finally { setCompletingHabitId(null) }
-  }
-
-  const handleHabitSnooze = async (occurrence: TimelineItem) => {
-    if (!occurrence.templateId) return
-    const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-    if (!matched) return
-    const meta = (matched.template.metadata || {}) as Record<string, string>
-    const [h, m] = (meta.startTime || '09:00').split(':').map(Number)
-    let newM = m + 15, newH = h
-    if (newM >= 60) { newM -= 60; newH = (newH + 1) % 24 }
-    const newTimeStr = `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`
-    setCompletingHabitId(occurrence.templateId)
-    try { await updateActivityTemplate(occurrence.templateId, { metadata: { ...meta, startTime: newTimeStr } }); router.refresh() }
-    catch (err) { console.error(err) }
-    finally { setCompletingHabitId(null) }
-  }
-
-  const handleHabitRescheduleTomorrow = async (occurrence: TimelineItem) => {
-    if (!occurrence.templateId) return
-    const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-    if (!matched) return
-    setCompletingHabitId(occurrence.templateId)
-    try {
-      if (matched.template.recurrenceType === 'one_time') {
-        const tomorrow = new Date()
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        await updateActivityTemplate(occurrence.templateId, { targetDate: tomorrow.toISOString().split('T')[0] })
-      } else {
-        await markComplete(occurrence.templateId, todayStr, 'skipped')
-      }
-      router.refresh()
-    } catch (err) { console.error(err) }
-    finally { setCompletingHabitId(null) }
-  }
+  // handleHabit handlers removed as they are unused
 
   // Semantic color mapping - color by meaning, not category
   const getSemanticColor = (occurrence: TimelineItem): {
@@ -496,34 +415,9 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     }
   }
 
-  const getCardBgClass = (occurrence: TimelineItem): string => {
-    const semantic = getSemanticColor(occurrence)
-    let bg = 'bg-[var(--color-bg-surface)]'
-    
-    // Apply very subtle background tints to give depth and separation
-    if (semantic.semanticType === 'completed') bg = 'bg-[var(--color-completed)]/5 dark:bg-[var(--color-completed)]/10'
-    else if (semantic.semanticType === 'warning') bg = 'bg-[var(--color-warning)]/5 dark:bg-[var(--color-warning)]/10'
-    else if (semantic.semanticType === 'overdue') bg = 'bg-[var(--color-overdue)]/5 dark:bg-[var(--color-overdue)]/10'
-    else if (semantic.semanticType === 'personal') bg = 'bg-[var(--color-personal)]/5 dark:bg-[var(--color-personal)]/10'
-    else if (semantic.semanticType === 'external') bg = 'bg-[var(--color-external)]/5 dark:bg-[var(--color-external)]/10'
+  // getCardBgClass removed as it is unused
 
-    const baseClass = [
-      bg,
-      'border-[var(--color-border)]',
-      'hover:border-[var(--color-primary)]/30',
-      'hover:shadow-[var(--card-hover-shadow)]',
-    ].join(' ')
-    
-    if (occurrence.completed && occurrence.status !== 'skipped')
-      return `${baseClass} opacity-70`
-    if (occurrence.status === 'skipped')
-      return `${baseClass} opacity-50`
-    
-    return baseClass
-  }
-
-  const toggleCollapse = (section: SectionKey) =>
-    setCollapsed(prev => ({ ...prev, [section]: !prev[section] }))
+  // toggleCollapse removed as it is unused
 
   // Parse date from todayStr to avoid SSR hydration mismatch
   const todayDate = new Date(todayStr + 'T12:00:00Z')
@@ -533,77 +427,10 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   const todayLongDate = `${dayName} • ${dayNum} ${monthName}`
 
   // ── Section header ────────────────────────────────────────────────────────
-  const renderSectionHeader = (key: SectionKey, title: string, count: number) => {
-    const isExpanded = !collapsed[key]
-    return (
-      <button
-        onClick={() => toggleCollapse(key)}
-        className="w-full flex items-center gap-2 py-2 px-2 hover:bg-[var(--color-accent)]/50 rounded-lg text-left select-none transition-colors"
-      >
-        <span className="text-[10px] font-bold text-[var(--color-text-muted)] shrink-0 select-none">
-          {isExpanded ? '▼' : '▶'}
-        </span>
-        <span className="text-[10px] uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex-1">
-          {title}
-        </span>
-        <span className="text-[9px] font-bold text-[var(--color-text-muted)] px-1.5 py-0.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md tabular-nums">
-          {count}
-        </span>
-      </button>
-    )
-  }
+  // renderSectionHeader removed as it is unused
 
   // Helper to determine semantic border and background colors
-  const getCardClasses = (occurrence: TimelineItem): string => {
-    const isGoogleCalendar = occurrence.id.startsWith('google_') || !occurrence.templateId
-    
-    // Determine background tint
-    let bg = 'bg-[var(--color-bg-surface)]'
-    if (occurrence.completed && occurrence.status !== 'skipped') {
-      bg = 'bg-[var(--color-completed)]/5 dark:bg-[var(--color-completed)]/10'
-    } else {
-      const matchedTemplate = occurrence.templateId
-        ? analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-        : null
-      const isOverdue = matchedTemplate?.analysis.overdue
-      
-      if (isOverdue) bg = 'bg-[var(--color-overdue)]/5 dark:bg-[var(--color-overdue)]/10'
-      else if (occurrence.type === 'MEETING' || occurrence.type === 'EVENT') bg = 'bg-[var(--color-external)]/5 dark:bg-[var(--color-external)]/10'
-      else if (occurrence.templateId?.includes('personal') || (matchedTemplate && matchedTemplate.template.category === 'PERSONAL')) bg = 'bg-[var(--color-personal)]/5 dark:bg-[var(--color-personal)]/10'
-    }
-
-    // Determine left border color
-    let leftBorderColor = 'border-l-[var(--color-personal)]' // Default local purple
-    if (occurrence.completed && occurrence.status !== 'skipped') {
-      leftBorderColor = 'border-l-[var(--color-completed)]'
-    } else if (isGoogleCalendar) {
-      leftBorderColor = 'border-l-[var(--color-external)]'
-    } else {
-      const matchedTemplate = occurrence.templateId
-        ? analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-        : null
-      const isOverdue = matchedTemplate?.analysis.overdue
-      if (isOverdue) {
-        leftBorderColor = 'border-l-[var(--color-overdue)]'
-      }
-    }
-
-    const baseClass = [
-      bg,
-      'border-[var(--color-border)]',
-      'border-l-4',
-      leftBorderColor,
-      'hover:border-r-[var(--color-primary)]/30 hover:border-t-[var(--color-primary)]/30 hover:border-b-[var(--color-primary)]/30',
-      'hover:shadow-[var(--card-hover-shadow)]',
-    ].join(' ')
-    
-    if (occurrence.completed && occurrence.status !== 'skipped')
-      return `${baseClass} opacity-70`
-    if (occurrence.status === 'skipped')
-      return `${baseClass} opacity-50`
-    
-    return baseClass
-  }
+  // getCardClasses removed as it is unused
 
   // ── Timeline item card (unified flat style) ────────────────────────────────
   const renderTimelineItemCard = (occurrence: TimelineItem, index: number) => {
@@ -938,7 +765,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               </div>
             ) : vaultItems.length > 0 ? (
               <div className="space-y-1 py-0.5">
-                {vaultItems.map((item: any) => {
+                {vaultItems.map((item: VaultItem) => {
                   const IconComponent = getVaultIcon(item.mimeGroup)
                   const iconColor = getVaultIconColor(item.mimeGroup)
                   return (

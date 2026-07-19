@@ -5,6 +5,8 @@ import { ActivityTemplate, RecurrenceType } from '@/types'
 import { getLoggedUser } from '@/app/actions/auth'
 import { redirect } from 'next/navigation'
 
+import { fetchRecurrenceLogs } from '@/lib/services/TimelineService'
+
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
@@ -14,20 +16,16 @@ export default async function Page() {
     redirect('/')
   }
 
-  const [templatesRaw, logsRaw, notesRaw] = await Promise.all([
-    db.activityTemplate.findMany({
-      where: loggedUser.username === 'admin'
-        ? { OR: [{ userId: loggedUser.id }, { userId: null }] }
-        : { userId: loggedUser.id },
-      include: { tags: true },
-      orderBy: { sortOrder: 'asc' },
-    }),
-    db.activityLog.findMany({
-      where: loggedUser.username === 'admin'
-        ? { OR: [{ userId: loggedUser.id }, { userId: null }], deletedAt: null }
-        : { userId: loggedUser.id, deletedAt: null },
-      orderBy: { logDate: 'desc' },
-    }),
+  const templatesRaw = await db.activityTemplate.findMany({
+    where: loggedUser.username === 'admin'
+      ? { OR: [{ userId: loggedUser.id }, { userId: null }] }
+      : { userId: loggedUser.id },
+    include: { tags: true },
+    orderBy: { sortOrder: 'asc' },
+  })
+
+  const [logsRaw, notesRaw] = await Promise.all([
+    fetchRecurrenceLogs(loggedUser.id, templatesRaw, loggedUser.username === 'admin'),
     db.note.findMany({
       where: { userId: loggedUser.id, deletedAt: null },
       orderBy: { date: 'desc' },
@@ -43,7 +41,7 @@ export default async function Page() {
 
   const logs = logsRaw.map(l => ({
     ...l,
-    date: l.logDate.toISOString().split('T')[0],
+    date: l.logDate ? l.logDate.toISOString().split('T')[0] : l.date,
     payload: l.payload,
   }))
 

@@ -156,6 +156,7 @@ export interface TimelineItem {
   status?: string
   notes?: string | null
   icon?: string | null
+  amount?: number | null
   metadata?: Record<string, unknown>
 }
 
