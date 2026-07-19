@@ -3,6 +3,7 @@
 import React from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import { WorkoutExercise, WorkoutSet } from '@/types'
+import { Button, Select } from '@/design-system'
 
 interface WorkoutLoggerProps {
   exercises: WorkoutExercise[]
@@ -89,18 +90,16 @@ export const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({
     <div className="border-t border-slate-200 dark:border-zinc-800 pt-4 space-y-4">
       {/* Energy Selector for Workout */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-2">
-        <div>
-          <label className="block text-[11px] text-slate-500 dark:text-zinc-500 mb-1 font-medium">Energy / Feeling</label>
-          <select
-            value={energy}
-            onChange={e => setEnergy(e.target.value)}
-            className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:border-slate-355 cursor-pointer"
-          >
-            <option value="High">⚡ High</option>
-            <option value="Medium">⚡ Medium</option>
-            <option value="Low">⚡ Low</option>
-          </select>
-        </div>
+        <Select
+          label="Energy / Feeling"
+          value={energy}
+          onChange={e => setEnergy(e.target.value)}
+          options={[
+            { value: 'High', label: '⚡ High' },
+            { value: 'Medium', label: '⚡ Medium' },
+            { value: 'Low', label: '⚡ Low' },
+          ]}
+        />
       </div>
 
       {/* Quick Presets Bar */}
@@ -111,9 +110,11 @@ export const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({
             'Pushups', 'Squats', 'Plank', 'Suryanamaskar', 'Pullups', 'Burpees', 'Dips',
             'Walking', 'Running', 'Cycling', 'Stretching', 'Mobility', 'Yoga', 'Core Work'
           ].map(preset => (
-            <button
+            <Button
               key={preset}
               type="button"
+              variant="outline"
+              size="sm"
               onClick={() => {
                 setExercises(prev => {
                   if (prev.length === 1 && prev[0].name.trim() === '') {
@@ -122,35 +123,39 @@ export const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({
                   return [...prev, { name: preset, sets: [{ reps: 10 }] }]
                 })
               }}
-              className="px-2 py-0.5 rounded bg-slate-200/65 hover:bg-slate-300 dark:bg-zinc-800 dark:hover:bg-zinc-705 text-slate-705 dark:text-zinc-350 text-[10px] font-semibold transition-all cursor-pointer"
             >
               + {preset}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
 
       <div className="flex items-center justify-between">
         <label className="block text-xs font-semibold text-slate-500 dark:text-zinc-400">Workout Exercises</label>
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           onClick={handleAddExercise}
-          className="text-xs text-slate-650 hover:text-slate-900 dark:text-zinc-300 dark:hover:text-white flex items-center gap-1 font-medium cursor-pointer"
+          icon={<Plus size={12} />}
         >
-          <Plus size={12} /> Add Exercise
-        </button>
+          Add Exercise
+        </Button>
       </div>
 
       <div className="space-y-4 max-h-60 overflow-y-auto pr-1">
         {exercises.map((ex, exIdx) => (
           <div key={exIdx} className="bg-slate-100/40 dark:bg-zinc-900/60 p-3 rounded-lg border border-slate-200 dark:border-zinc-800/80 relative space-y-3">
-            <button
+            <Button
               type="button"
+              variant="danger"
+              size="sm"
               onClick={() => handleRemoveExercise(exIdx)}
-              className="absolute top-2 right-2 text-slate-400 hover:text-red-505 dark:text-zinc-500 dark:hover:text-red-400 transition-colors cursor-pointer"
+              className="absolute top-2 right-2"
+              aria-label="Remove exercise"
             >
               <Trash2 size={14} />
-            </button>
+            </Button>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pr-6">
               <div>
@@ -223,13 +228,15 @@ export const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({
                   </button>
                 </div>
               ))}
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => handleAddSet(exIdx)}
-                className="text-[10px] text-slate-500 hover:text-slate-950 dark:text-zinc-405 dark:hover:text-white mt-1 font-semibold cursor-pointer"
+                className="mt-1"
               >
                 + Add Set
-              </button>
+              </Button>
             </div>
           </div>
         ))}

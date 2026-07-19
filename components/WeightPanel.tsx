@@ -1,8 +1,8 @@
 "use client"
 
 import React, { useState, useCallback } from 'react'
+import { Plus, Minus, Trash2, TrendingDown, TrendingUp } from 'lucide-react'
 import { logWeight, deleteWeightRecord } from '@/app/actions/weight'
-import { TrendingDown, TrendingUp, Minus, Trash2, Plus } from 'lucide-react'
 import { Input, Button, Card } from '@/design-system'
 
 // ---------------------------------------------------------------------------
@@ -369,22 +369,25 @@ function LogForm({ todayRecord, onLogged }: LogFormProps) {
               <span className="absolute right-3 bottom-2.5 text-xs font-bold text-[var(--color-text-muted)]">kg</span>
             </div>
 
-            {/* Increment / Decrement */}
             <div className="flex gap-1 pb-1">
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => setWeight(w => (parseFloat(w || '0') + 0.1).toFixed(1))}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
+                className="w-8 h-8 p-0"
               >
                 <Plus className="w-3.5 h-3.5" />
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => setWeight(w => Math.max(0, parseFloat(w || '0') - 0.1).toFixed(1))}
-                className="w-8 h-8 flex items-center justify-center rounded-lg border border-[var(--color-border)] hover:border-[var(--color-primary)] text-[var(--color-text-muted)] hover:text(--color-primary) transition-colors cursor-pointer"
+                className="w-8 h-8 p-0"
               >
                 <Minus className="w-3.5 h-3.5" />
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -532,20 +535,22 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
                 {fmtDate(chartData[0].date)} → {fmtDate(chartData[chartData.length - 1].date)}
               </span>
             </div>
-            {/* Period selector */}
             <div className="flex bg-slate-100 dark:bg-zinc-900/60 p-0.5 rounded-[9px] shadow-inner text-[10px] self-start">
               {(['30D', '60D', '90D', 'All'] as const).map(p => (
-                <button
+                <Button
                   key={p}
+                  type="button"
+                  variant={period === p ? 'secondary' : 'outline'}
+                  size="sm"
                   onClick={() => setPeriod(p)}
                   className={`px-2.5 py-1 text-center font-bold rounded-md transition-all duration-200 cursor-pointer ${
                     period === p
                       ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
-                      : 'text-slate-500 dark:text-zinc-550 hover:text-slate-700 dark:hover:text-zinc-300'
+                      : 'text-slate-500 dark:text-zinc-550 hover:text-slate-700 dark:hover:text-zinc-300 border-none bg-transparent shadow-none hover:bg-transparent'
                   }`}
                 >
                   {p}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -597,12 +602,15 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
                       )}
                     </div>
                   </div>
-                  <button
+                  <Button
+                    variant="danger"
+                    size="sm"
                     onClick={() => handleDelete(record.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+                    className="opacity-0 group-hover:opacity-100 p-1.5"
+                    aria-label="Delete entry"
                   >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
                 </div>
               )
             })}

@@ -339,12 +339,9 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
       {leaveAllowances.length === 0 ? (
         <div className="text-center py-6 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl space-y-3">
           <p className="text-xs text-[var(--color-text-muted)]">No leave allowances configured for {currentYear}.</p>
-          <button
-            onClick={handleSeedAllowances}
-            className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-xs font-bold hover:opacity-90 cursor-pointer transition-opacity"
-          >
+          <Button onClick={handleSeedAllowances} size="sm">
             Set Default Allowances
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -404,26 +401,24 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
                   </div>
 
                   {/* Status selector */}
-                  <select
+                  <Select
                     value={record.status}
                     onChange={e => handleStatusChange(record.id, e.target.value as LeaveStatus)}
                     disabled={isPending}
-                    className={`text-[10px] font-bold bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1 focus:outline-hidden cursor-pointer ${sc.cls} disabled:opacity-50`}
-                  >
-                    {(['APPROVED', 'PENDING', 'REJECTED'] as LeaveStatus[]).map(s => (
-                      <option key={s} value={s} className="bg-[var(--color-bg-surface)] text-[var(--color-text-main)]">
-                        {STATUS_CONFIG[s].label}
-                      </option>
-                    ))}
-                  </select>
+                    options={(['APPROVED', 'PENDING', 'REJECTED'] as LeaveStatus[]).map(s => ({ value: s, label: STATUS_CONFIG[s].label }))}
+                    className={`text-[10px] font-bold ${sc.cls}`}
+                  />
 
                   {/* Delete */}
-                  <button
+                  <Button
+                    variant="danger"
+                    size="sm"
                     onClick={() => handleDelete(record.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-all cursor-pointer shrink-0"
+                    className="opacity-0 group-hover:opacity-100 shrink-0"
+                    aria-label="Delete record"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  </Button>
                 </div>
               )
             })}
