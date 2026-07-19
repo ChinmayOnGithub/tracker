@@ -6,6 +6,8 @@ import { revalidatePath } from 'next/cache'
 
 import { requireOwnership } from '@/lib/auth-guards'
 import { ActivityService } from '@/lib/services/ActivityService'
+import { isFeatureEnabled } from '@/lib/feature-flags'
+import { SyncedActivityService } from '@/lib/services/SyncedActivityService'
 
 export async function createLog(data: {
   activityId: string
@@ -18,7 +20,12 @@ export async function createLog(data: {
   try {
     const { user } = await requireOwnership('activityTemplate', data.activityId)
 
-    const log = await ActivityService.logActivity({
+    // Feature-flagged: Use Sync Engine if enabled
+    const service = isFeatureEnabled('SYNC_ENGINE_ENABLED') 
+      ? SyncedActivityService 
+      : ActivityService
+
+    const log = await service.logActivity({
       userId: user.id,
       templateId: data.activityId,
       date: data.date,
@@ -49,7 +56,12 @@ export async function updateLog(
   try {
     const { user } = await requireOwnership('activityLog', id)
 
-    const log = await ActivityService.updateLog(user.id, id, data)
+    // Feature-flagged: Use Sync Engine if enabled
+    const service = isFeatureEnabled('SYNC_ENGINE_ENABLED') 
+      ? SyncedActivityService 
+      : ActivityService
+
+    const log = await service.updateLog(user.id, id, data)
 
     revalidatePath('/')
     return { success: true, log }
@@ -64,7 +76,12 @@ export async function deleteLog(id: string) {
   try {
     const { user } = await requireOwnership('activityLog', id)
 
-    await ActivityService.deleteLog(user.id, id)
+    // Feature-flagged: Use Sync Engine if enabled
+    const service = isFeatureEnabled('SYNC_ENGINE_ENABLED') 
+      ? SyncedActivityService 
+      : ActivityService
+
+    await service.deleteLog(user.id, id)
 
     revalidatePath('/')
     return { success: true }
@@ -100,7 +117,12 @@ export async function markComplete(
       return { success: true, log: existing, message: 'Already marked complete' }
     }
 
-    const log = await ActivityService.logActivity({
+    // Feature-flagged: Use Sync Engine if enabled
+    const service = isFeatureEnabled('SYNC_ENGINE_ENABLED') 
+      ? SyncedActivityService 
+      : ActivityService
+
+    const log = await service.logActivity({
       userId: user.id,
       templateId,
       date,
