@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
   FolderPlus, Grid, List, Folder, Loader2, X,
-  ShieldAlert, Plus, Search
+  ShieldAlert, Plus
 } from 'lucide-react'
 import {
   deleteLinkCollection, createLink, updateLink, deleteLink,
@@ -17,7 +17,7 @@ import { CollectionModal } from './links/CollectionModal'
 import { LinkModal } from './links/LinkModal'
 import { LinkCard } from './links/LinkCard'
 import { CollectionSidebar } from './links/CollectionSidebar'
-import { Button, SearchInput, EmptyState, Modal } from '@/design-system'
+import { Button, SearchInput, EmptyState } from '@/design-system'
 
 export interface LinkTagItem {
   id: string
@@ -971,7 +971,7 @@ export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialColle
       </main>
 
       <CollectionModal
-        key={editingCollection?.id || (isColModalOpen ? 'new' : 'closed')}
+        key={editingCollection?.id || (isColModalOpen ? 'collection-new' : 'collection-closed')}
         isOpen={isColModalOpen}
         onClose={() => setIsColModalOpen(false)}
         editingCollection={editingCollection}
@@ -979,7 +979,7 @@ export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialColle
       />
 
       <LinkModal
-        key={editingLink?.id || (isLinkModalOpen ? 'new' : 'closed')}
+        key={editingLink?.id || (isLinkModalOpen ? 'link-new' : 'link-closed')}
         isOpen={isLinkModalOpen}
         onClose={() => setIsLinkModalOpen(false)}
         editingLink={editingLink}

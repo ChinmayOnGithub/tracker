@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardBody, Button, Skeleton, Select, Input, Modal, EmptyState } from '@/design-system'
+import { Card, CardHeader, CardBody, Button, Skeleton, Select, Input } from '@/design-system'
 import { Calendar, CheckCircle2, AlertCircle, RefreshCw, Settings2, Database, Shield, Lock, Key } from 'lucide-react'
 import { checkGoogleConnection, disconnectGoogleAccount } from '@/modules/sync/google-calendar/actions'
 import { getUserProfileAction, setPasscodeAction } from '@/app/actions/auth'
