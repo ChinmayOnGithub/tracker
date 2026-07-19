@@ -4,7 +4,7 @@ import React, { useState } from 'react'
 import { ActivityTemplate, ActivityLog, Note, RecurrenceAnalysis, TimelineItem } from '@/types'
 import { ChevronLeft, ChevronRight, BookOpen, Calendar as CalendarIcon } from 'lucide-react'
 import { getEventsForDate } from '@/lib/marathiCalendar'
-import { Card } from '@/design-system'
+import { Card, Button } from '@/design-system'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
 import { ParsedCalendarEvent } from '@/modules/sync/google-calendar/services/GoogleCalendarService'
 
@@ -171,15 +171,16 @@ export const Calendar: React.FC<CalendarProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5">
-            <button
+            <Button
               onClick={handleResetToToday}
-              className="px-3 py-1.5 text-[11px] font-bold bg-slate-50 dark:bg-zinc-850 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-[var(--color-text-main)] rounded-lg transition-colors"
+              variant="outline"
+              size="sm"
             >
               Today
-            </button>
+            </Button>
             <div className="flex bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg p-0.5 shadow-xs">
-              <button onClick={handlePrev} className="p-1 text-slate-500 hover:text-[var(--color-text-main)] hover:bg-white dark:hover:bg-zinc-800 rounded transition-colors"><ChevronLeft size={16} /></button>
-              <button onClick={handleNext} className="p-1 text-slate-500 hover:text-[var(--color-text-main)] hover:bg-white dark:hover:bg-zinc-800 rounded transition-colors"><ChevronRight size={16} /></button>
+              <Button variant="ghost" size="sm" onClick={handlePrev} className="p-1"><ChevronLeft size={16} /></Button>
+              <Button variant="ghost" size="sm" onClick={handleNext} className="p-1"><ChevronRight size={16} /></Button>
             </div>
           </div>
         </div>
