@@ -144,7 +144,7 @@ export const AgendaWidget: React.FC<AgendaWidgetProps> = ({ todayStr }) => {
               {/* Event Description Hover Icon */}
               {event.description && (
                 <div 
-                  className="absolute right-2.5 top-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-help"
+                  className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200 cursor-help"
                   title={event.description}
                 >
                   <Info className="w-3.5 h-3.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]" />

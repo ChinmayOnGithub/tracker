@@ -482,8 +482,8 @@ export function VaultPanel() {
         </div>
       )}
 
-      {/* ─── Breadcrumbs ───────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 text-sm font-medium overflow-x-auto pb-0.5">
+      {/* ─── Breadcrumbs - Responsive with truncation ───────────────────────────────────────────── */}
+      <div className="flex items-center gap-1 text-sm font-medium overflow-x-auto pb-0.5 scrollbar-thin">
         {breadcrumbs.map((crumb, index) => (
           <React.Fragment key={crumb.id ?? 'root'}>
             {index > 0 && <ChevronRight className="w-4 h-4 text-[var(--color-text-muted)]/50 shrink-0" />}
@@ -598,13 +598,14 @@ export function VaultPanel() {
                     </p>
                   </div>
 
-                  {/* Actions (shown on hover) */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Actions - Always visible on mobile, hover on desktop */}
+                  <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     {!item.isFolder && (
                       <button
                         onClick={e => { e.stopPropagation(); handleDownload(item) }}
                         className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-[var(--color-primary)]/10 hover:text-[var(--color-primary)] transition-colors cursor-pointer"
                         title="Download"
+                        aria-label="Download"
                       >
                         <Download className="w-4 h-4" />
                       </button>
@@ -613,6 +614,7 @@ export function VaultPanel() {
                       onClick={e => { e.stopPropagation(); setRenamingItem(item); setRenameValue(item.name) }}
                       className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-amber-500/10 hover:text-amber-500 transition-colors cursor-pointer"
                       title="Rename"
+                      aria-label="Rename"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
@@ -620,6 +622,7 @@ export function VaultPanel() {
                       onClick={e => { e.stopPropagation(); setDeletingItem(item) }}
                       className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-rose-500/10 hover:text-rose-500 transition-colors cursor-pointer"
                       title="Delete"
+                      aria-label="Delete"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>

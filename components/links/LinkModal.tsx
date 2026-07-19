@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { X, Loader2, Lock } from 'lucide-react'
 import { createLink, updateLink, checkDuplicateLink } from '@/app/actions/links'
 import { SavedLink, LinkTagItem } from '../LinkLibraryPanel'
+import { Modal, Button, Input, Textarea } from '@/design-system'
 
 interface LinkModalProps {
   isOpen: boolean
@@ -177,68 +178,47 @@ export const LinkModal: React.FC<LinkModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg shadow-xl w-full max-w-md animate-fade-in">
-        <div className="px-5 py-4 border-b border-[var(--color-border)] flex items-center justify-between">
-          <h2 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-main)]">
-            {editingLink ? 'Edit Link' : 'Add New Link'}
-          </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-[var(--color-text-main)] cursor-pointer">
-            <X size={16} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+    <Modal isOpen={isOpen} onClose={onClose} title={editingLink ? 'Edit Link' : 'Add New Link'}>
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-[10px] font-black uppercase text-[var(--color-text-muted)] mb-1.5">Link URL</label>
-            <div className="relative">
-              <input
-                type="text"
-                required
-                placeholder="https://example.com/some-page"
-                value={url}
-                onChange={e => setUrl(e.target.value)}
-                className="w-full pl-3 pr-8 py-2 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-bg-base)] text-[var(--color-text-main)] focus:outline-hidden focus:border-[var(--color-primary)]"
-              />
-              {isFetchingMeta && (
-                <div className="absolute right-2.5 top-2.5">
-                  <Loader2 size={13} className="animate-spin text-slate-400" />
-                </div>
-              )}
-            </div>
-            <p className="text-[9px] text-slate-400 dark:text-zinc-550 font-bold mt-1.5">
-              Type or paste URL. Title, summary & thumbnail will auto-fetch in background.
-            </p>
+            <Input
+              label="Link URL"
+              type="text"
+              required
+              placeholder="https://example.com/some-page"
+              value={url}
+              onChange={e => setUrl(e.target.value)}
+              helperText="Type or paste URL. Title, summary & thumbnail will auto-fetch in background."
+              suffix={isFetchingMeta ? <Loader2 size={13} className="animate-spin text-slate-400" /> : undefined}
+            />
           </div>
 
           <div>
-            <label className="block text-[10px] font-black uppercase text-[var(--color-text-muted)] mb-1.5">Title (Optional)</label>
-            <input
+            <Input
+              label="Title (Optional)"
               type="text"
               placeholder="e.g. Apple News, Tutorial video (Autofills if blank)"
               value={title}
               onChange={e => setTitle(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-bg-base)] text-[var(--color-text-main)] focus:outline-hidden focus:border-[var(--color-primary)]"
             />
           </div>
 
           <div>
-            <label className="block text-[10px] font-black uppercase text-[var(--color-text-muted)] mb-1.5">Short Summary (Optional)</label>
-            <textarea
+            <Textarea
+              label="Short Summary (Optional)"
               placeholder="Website description (autofills if blank)..."
               rows={2}
               value={desc}
               onChange={e => setDesc(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-bg-base)] text-[var(--color-text-main)] focus:outline-hidden focus:border-[var(--color-primary)] resize-none mb-3"
+              className="mb-3"
             />
 
-            <label className="block text-[10px] font-black uppercase text-[var(--color-text-muted)] mb-1.5">Personal Notes (Optional)</label>
-            <textarea
+            <Textarea
+              label="Personal Notes (Optional)"
               placeholder="Add custom notes, guidelines, or keywords..."
               rows={2}
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-bg-base)] text-[var(--color-text-main)] focus:outline-hidden focus:border-[var(--color-primary)] resize-none"
             />
           </div>
 
@@ -262,7 +242,7 @@ export const LinkModal: React.FC<LinkModalProps> = ({
               ))}
             </div>
             <div className="flex gap-2">
-              <input
+              <Input
                 type="text"
                 placeholder="Add tag..."
                 value={tagInput}
@@ -273,15 +253,16 @@ export const LinkModal: React.FC<LinkModalProps> = ({
                     handleAddTag(tagInput)
                   }
                 }}
-                className="flex-grow px-3 py-1.5 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-bg-base)] text-[var(--color-text-main)] focus:outline-hidden focus:border-[var(--color-primary)]"
+                className="flex-grow"
               />
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => handleAddTag(tagInput)}
-                className="px-3 py-1.5 border border-[var(--color-border)] text-xs font-bold rounded-md hover:bg-slate-50 dark:hover:bg-zinc-900 cursor-pointer"
+                type="button"
               >
                 Add
-              </button>
+              </Button>
             </div>
             
             {/* Tag presets/suggestions */}
@@ -338,25 +319,26 @@ export const LinkModal: React.FC<LinkModalProps> = ({
             </div>
 
             <div className="flex items-center justify-end gap-2.5 border-t border-[var(--color-border)]/50 pt-3">
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={onClose}
-                className="px-3.5 py-1.5 text-xs font-bold border border-[var(--color-border)] rounded-md hover:bg-slate-50 dark:hover:bg-zinc-900 text-[var(--color-text-main)] cursor-pointer"
+                type="button"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
                 type="submit"
+                loading={loading}
                 disabled={loading}
-                className="px-4 py-1.5 bg-[var(--color-primary)] text-white text-xs font-bold rounded-md hover:opacity-90 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-3xs"
               >
-                {loading && <Loader2 size={12} className="animate-spin" />}
-                <span>{editingLink ? 'Save' : 'Add Link'}</span>
-              </button>
+                {editingLink ? 'Save' : 'Add Link'}
+              </Button>
             </div>
           </div>
         </form>
-      </div>
-    </div>
+      </Modal>
   )
 }

@@ -9,6 +9,7 @@ import { getTemplateColorClasses } from '@/lib/colors'
 import { useRouter } from 'next/navigation'
 import { analyzeRecurrence } from '@/lib/recurrence'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
+import { Button, Input, Select } from '@/design-system'
 
 import { MarathiCalendarEvents } from './daylogs/MarathiCalendarEvents'
 
@@ -211,23 +212,25 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
 
           {/* Edit/Delete Actions if logged */}
           {log && (
-            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 shrink-0">
-              <button
-                type="button"
+            <div className="flex gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200 shrink-0">
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => handleOpenLogger(template!, log)}
-                className="text-slate-400 hover:text-slate-900 dark:text-zinc-550 dark:hover:text-zinc-300 cursor-pointer"
+                className="p-1"
                 title="Edit log details"
               >
                 <Edit2 size={13} />
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => handleDeleteLog(log.id)}
-                className="text-slate-400 hover:text-red-500 dark:text-zinc-550 dark:hover:text-red-450 cursor-pointer"
+                className="p-1 text-red-500 hover:text-red-600"
                 title="Delete completion"
               >
                 <Trash2 size={13} />
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -549,12 +552,12 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
             <h3 className="text-[10px] uppercase tracking-wider font-extrabold text-[var(--color-text-muted)]">Day Planner</h3>
             <p className="text-xs font-bold text-[var(--color-text-main)] mt-0.5">{formattedDate}</p>
           </div>
-          <button 
+          <Button 
+            variant="ghost"
+            size="sm"
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-slate-105 dark:hover:bg-zinc-850 text-slate-400 dark:text-zinc-550 cursor-pointer"
-          >
-            <X size={16} />
-          </button>
+            icon={<X size={16} />}
+          />
         </div>
 
         {/* Tabs */}
@@ -607,55 +610,55 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                         />
                         Log {templates.find(t => t.id === editingTemplateId)?.name}
                       </h3>
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => {
                           setEditingTemplateId(null)
                           setEditingLogId(null)
                         }}
-                        className="text-slate-400 hover:text-slate-900 dark:text-zinc-500 dark:hover:text-zinc-300 cursor-pointer"
                       >
                         Cancel
-                      </button>
+                      </Button>
                     </div>
 
                     {/* Log Fields */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
-                        <label className="block text-[11px] text-slate-500 dark:text-zinc-500 mb-1 font-medium">Status</label>
-                        <select
+                        <Select
+                          label="Status"
                           value={logStatus}
                           onChange={e => setLogStatus(e.target.value)}
-                          className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:border-slate-350 dark:focus:border-zinc-700 cursor-pointer"
-                        >
-                          <option value="done">Done / Completed</option>
-                          <option value="paid">Paid</option>
-                          <option value="renewed">Renewed</option>
-                          <option value="skipped">Skipped</option>
-                          <option value="reminder">Reminder</option>
-                          <option value="custom">Custom</option>
-                        </select>
+                          options={[
+                            { value: 'done', label: 'Done / Completed' },
+                            { value: 'paid', label: 'Paid' },
+                            { value: 'renewed', label: 'Renewed' },
+                            { value: 'skipped', label: 'Skipped' },
+                            { value: 'reminder', label: 'Reminder' },
+                            { value: 'custom', label: 'Custom' }
+                          ]}
+                        />
                       </div>
 
                       <div>
-                        <label className="block text-[11px] text-slate-500 dark:text-zinc-500 mb-1 font-medium">Amount (Optional)</label>
-                        <input
+                        <Input
+                          label="Amount (Optional)"
                           type="number"
                           step="0.01"
                           placeholder="0.00"
                           value={logAmount}
                           onChange={e => setLogAmount(e.target.value)}
-                          className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-2 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:border-slate-355 dark:focus:border-zinc-700"
                         />
                       </div>
 
                       <div className="sm:col-span-3">
-                        <label className="block text-[11px] text-slate-500 dark:text-zinc-500 mb-1 font-medium">Log Note</label>
-                        <input
+                        <Input
+                          label="Log Note"
                           type="text"
                           placeholder="e.g. Done in morning, feeling fine"
                           value={logNote}
                           onChange={e => setLogNote(e.target.value)}
-                          className="w-full bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-hidden focus:border-slate-355 dark:focus:border-zinc-700"
+                          className="sm:col-span-3"
                         />
                       </div>
                     </div>
@@ -690,14 +693,15 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                     )}
 
                     <div className="flex justify-end gap-2 border-t border-slate-200 dark:border-zinc-800 pt-3">
-                      <button
-                        type="button"
+                      <Button
+                        variant="primary"
+                        size="sm"
                         disabled={isSavingLog}
                         onClick={handleSaveLog}
-                        className="bg-slate-900 hover:bg-slate-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-950 px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                        loading={isSavingLog}
                       >
-                        {isSavingLog ? 'Saving...' : 'Save Log'}
-                      </button>
+                        {editingLogId ? 'Update' : 'Save'} Log
+                      </Button>
                     </div>
                   </div>
                 )}

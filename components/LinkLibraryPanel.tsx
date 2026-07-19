@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import {
-  FolderPlus, Grid, List, Folder, Loader2, X,
+  FolderPlus, Grid, List, Folder, Loader2,
   ShieldAlert, Plus
 } from 'lucide-react'
 import {
@@ -17,7 +17,7 @@ import { CollectionModal } from './links/CollectionModal'
 import { LinkModal } from './links/LinkModal'
 import { LinkCard } from './links/LinkCard'
 import { CollectionSidebar } from './links/CollectionSidebar'
-import { Button, SearchInput, EmptyState } from '@/design-system'
+import { Button, SearchInput, EmptyState, Modal } from '@/design-system'
 
 export interface LinkTagItem {
   id: string
@@ -1001,62 +1001,53 @@ export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialColle
       />
 
       {/* IMPORT BOOKMARKS MODAL */}
-      {isImportOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg shadow-xl w-full max-w-md animate-fade-in">
-            <div className="px-5 py-4 border-b border-[var(--color-border)] flex items-center justify-between">
-              <h2 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-main)]">Import Bookmarks</h2>
-              <button onClick={() => { setIsImportOpen(false); setImportResult(null); }} className="text-slate-400 hover:text-[var(--color-text-main)] cursor-pointer">
-                <X size={16} />
-              </button>
-            </div>
+      <Modal isOpen={isImportOpen} onClose={() => { setIsImportOpen(false); setImportResult(null); }} title="Import Bookmarks">
+        <form onSubmit={handleImportBookmarks} className="space-y-4">
+          <p className="text-[10px] text-slate-500 dark:text-zinc-400 font-semibold leading-relaxed">
+            Upload a standard Chrome/Firefox <span className="font-bold underline">bookmarks.html</span> file. 
+            Folders will convert to collections, and links will be auto-imported.
+          </p>
 
-            <form onSubmit={handleImportBookmarks} className="p-5 space-y-4">
-              <p className="text-[10px] text-slate-500 dark:text-zinc-400 font-semibold leading-relaxed">
-                Upload a standard Chrome/Firefox <span className="font-bold underline">bookmarks.html</span> file. 
-                Folders will convert to collections, and links will be auto-imported.
-              </p>
-
-              <div>
-                <input
-                  type="file"
-                  id="bookmarksFileInput"
-                  required
-                  accept=".html"
-                  className="w-full text-xs text-slate-500 dark:text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-[var(--color-accent)] file:text-[var(--color-text-main)] hover:file:opacity-90 file:cursor-pointer"
-                />
-              </div>
-
-              {importResult && (
-                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-[10px] text-emerald-600 dark:text-emerald-400 font-bold space-y-1">
-                  <p>✓ Bookmarks imported successfully!</p>
-                  <p>• {importResult.linksImported} links added.</p>
-                  <p>• {importResult.collectionsCreated} collections created.</p>
-                  <p className="text-[9px] opacity-75 font-normal">Page will reload shortly...</p>
-                </div>
-              )}
-
-              <div className="pt-2 border-t border-[var(--color-border)] flex items-center justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => { setIsImportOpen(false); setImportResult(null); }}
-                  className="px-3.5 py-1.5 text-xs font-bold border border-[var(--color-border)] rounded-md hover:bg-slate-50 dark:hover:bg-zinc-900 text-[var(--color-text-main)] cursor-pointer"
-                >
-                  Close
-                </button>
-                <button
-                  type="submit"
-                  disabled={isImportLoading}
-                  className="px-4 py-1.5 bg-[var(--color-primary)] text-white text-xs font-bold rounded-md hover:opacity-90 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-3xs"
-                >
-                  {isImportLoading && <Loader2 size={12} className="animate-spin" />}
-                  <span>{isImportLoading ? 'Importing...' : 'Upload'}</span>
-                </button>
-              </div>
-            </form>
+          <div>
+            <input
+              type="file"
+              id="bookmarksFileInput"
+              required
+              accept=".html"
+              className="w-full text-xs text-slate-500 dark:text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-[10px] file:font-black file:uppercase file:bg-[var(--color-accent)] file:text-[var(--color-text-main)] hover:file:opacity-90 file:cursor-pointer"
+            />
           </div>
-        </div>
-      )}
+
+          {importResult && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-[10px] text-emerald-600 dark:text-emerald-400 font-bold space-y-1">
+              <p>✓ Bookmarks imported successfully!</p>
+              <p>• {importResult.linksImported} links added.</p>
+              <p>• {importResult.collectionsCreated} collections created.</p>
+              <p className="text-[9px] opacity-75 font-normal">Page will reload shortly...</p>
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-[var(--color-border)] flex items-center justify-end gap-2.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => { setIsImportOpen(false); setImportResult(null); }}
+              type="button"
+            >
+              Close
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              disabled={isImportLoading}
+              loading={isImportLoading}
+            >
+              {isImportLoading ? 'Importing...' : 'Upload'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Floating Privacy Incognito Notification Alert */}
       {privacyNotification && (
@@ -1070,12 +1061,13 @@ export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialColle
               &quot;{privacyNotification.title}&quot; was copied to your clipboard. Paste it directly in private browsing.
             </p>
             <div className="flex gap-2">
-              <button
+              <Button
+                variant="warning"
+                size="sm"
                 onClick={() => setPrivacyNotification(null)}
-                className="px-2.5 py-1 bg-amber-500 text-white rounded text-[9px] font-black cursor-pointer uppercase tracking-wider shadow-3xs"
               >
                 Got it
-              </button>
+              </Button>
             </div>
           </div>
         </div>

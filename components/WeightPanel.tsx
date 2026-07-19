@@ -606,7 +606,7 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
                     variant="danger"
                     size="sm"
                     onClick={() => handleDelete(record.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5"
+                    className="opacity-0 sm:group-hover:opacity-100 p-1.5"
                     aria-label="Delete entry"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

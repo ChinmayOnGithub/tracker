@@ -1,9 +1,10 @@
 "use client"
 
 import React, { useState } from 'react'
-import { X, Check, Loader2 } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import { createLinkCollection, updateLinkCollection } from '@/app/actions/links'
 import { LinkCollection } from '../LinkLibraryPanel'
+import { Modal, Input, Button } from '@/design-system'
 
 interface CollectionModalProps {
   isOpen: boolean
@@ -83,96 +84,76 @@ export const CollectionModal: React.FC<CollectionModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg shadow-xl w-full max-w-sm animate-fade-in">
-        <div className="px-5 py-4 border-b border-[var(--color-border)] flex items-center justify-between">
-          <h2 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-main)]">
-            {editingCollection ? 'Edit Collection' : 'New Collection'}
-          </h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-[var(--color-text-main)] cursor-pointer">
-            <X size={16} />
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editingCollection ? 'Edit Collection' : 'New Collection'}
+      size="sm"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          label="Collection Name"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="e.g. Travel ideas, Design inspirations"
+          required
+        />
+
+        <div>
+          <label className="block text-[10px] font-black uppercase text-[var(--color-text-muted)] mb-1.5">Collection Icon (Emoji)</label>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {['📁', '📚', '🎥', '💼', '💻', '🚀', '🎨', '🧠', '🏠', '🛒', '❤️'].map(em => (
+              <Button
+                key={em}
+                type="button"
+                variant={emoji === em ? 'primary' : 'outline'}
+                size="sm"
+                onClick={() => setEmoji(em)}
+                className="w-7 h-7 p-0 text-sm"
+              >
+                {em}
+              </Button>
+            ))}
+          </div>
+          <Input
+            type="text"
+            maxLength={4}
+            placeholder="Or type any emoji..."
+            value={emoji}
+            onChange={e => setEmoji(e.target.value)}
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div>
-            <label className="block text-[10px] font-black uppercase text-[var(--color-text-muted)] mb-1.5">Collection Name</label>
-            <input
-              type="text"
-              required
-              placeholder="e.g. Travel ideas, Design inspirations"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-bg-base)] text-[var(--color-text-main)] focus:outline-hidden focus:border-[var(--color-primary)]"
-            />
+        <div>
+          <label className="block text-[10px] font-black uppercase text-[var(--color-text-muted)] mb-2">Accent Color</label>
+          <div className="grid grid-cols-5 gap-2.5">
+            {COLLECTION_COLORS.map(c => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setColor(c)}
+                className={`w-full aspect-square rounded-md border transition-all cursor-pointer relative ${
+                  color === c ? 'border-[var(--color-text-main)] scale-105' : 'border-transparent hover:scale-102'
+                }`}
+                style={{ backgroundColor: c }}
+              >
+                {color === c && (
+                  <Check size={11} className="absolute inset-0 m-auto text-white drop-shadow-sm font-bold" />
+                )}
+              </button>
+            ))}
           </div>
+        </div>
 
-          <div>
-            <label className="block text-[10px] font-black uppercase text-[var(--color-text-muted)] mb-1.5">Collection Icon (Emoji)</label>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {['📁', '📚', '🎥', '💼', '💻', '🚀', '🎨', '🧠', '🏠', '🛒', '❤️'].map(em => (
-                <button
-                  key={em}
-                  type="button"
-                  onClick={() => setEmoji(em)}
-                  className={`w-7 h-7 flex items-center justify-center rounded border transition-all text-sm cursor-pointer ${
-                    emoji === em ? 'border-[var(--color-text-main)] bg-slate-100 dark:bg-zinc-800 scale-110' : 'border-[var(--color-border)] hover:bg-slate-50 dark:hover:bg-zinc-905'
-                  }`}
-                >
-                  {em}
-                </button>
-              ))}
-            </div>
-            <input
-              type="text"
-              maxLength={4}
-              placeholder="Or type any emoji..."
-              value={emoji}
-              onChange={e => setEmoji(e.target.value)}
-              className="w-full px-3 py-1.5 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-bg-base)] text-[var(--color-text-main)] focus:outline-hidden focus:border-[var(--color-primary)]"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-black uppercase text-[var(--color-text-muted)] mb-2">Accent Color</label>
-            <div className="grid grid-cols-5 gap-2.5">
-              {COLLECTION_COLORS.map(c => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  className={`w-full aspect-square rounded-md border transition-all cursor-pointer relative ${
-                    color === c ? 'border-[var(--color-text-main)] scale-105' : 'border-transparent hover:scale-102'
-                  }`}
-                  style={{ backgroundColor: c }}
-                >
-                  {color === c && (
-                    <Check size={11} className="absolute inset-0 m-auto text-white drop-shadow-sm font-bold" />
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="pt-2 border-t border-[var(--color-border)] flex items-center justify-end gap-2.5">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3.5 py-1.5 text-xs font-bold border border-[var(--color-border)] rounded-md hover:bg-slate-50 dark:hover:bg-zinc-900 text-[var(--color-text-main)] cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-1.5 bg-[var(--color-primary)] text-white text-xs font-bold rounded-md hover:opacity-90 flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-3xs"
-            >
-              {loading && <Loader2 size={12} className="animate-spin" />}
-              <span>{editingCollection ? 'Save' : 'Create'}</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="pt-2 border-t border-[var(--color-border)] flex items-center justify-end gap-2.5">
+          <Button variant="outline" type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" isLoading={loading}>
+            {editingCollection ? 'Save' : 'Create'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   )
 }

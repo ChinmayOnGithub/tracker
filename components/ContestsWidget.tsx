@@ -166,7 +166,7 @@ export function ContestsWidget() {
                   <span className="text-xs font-bold text-[var(--color-text-main)] truncate">
                     {contest.name}
                   </span>
-                  <ExternalLink className="w-2.5 h-2.5 text-[var(--color-text-muted)] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                  <ExternalLink className="w-2.5 h-2.5 text-[var(--color-text-muted)] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0" />
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[9px] text-[var(--color-text-muted)] font-medium">

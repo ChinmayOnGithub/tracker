@@ -3,7 +3,7 @@
 import React from 'react'
 import { Plus, Trash2, X } from 'lucide-react'
 import { WorkoutExercise, WorkoutSet } from '@/types'
-import { Button, Select } from '@/design-system'
+import { Button, Select, Input } from '@/design-system'
 
 interface WorkoutLoggerProps {
   exercises: WorkoutExercise[]
@@ -158,24 +158,18 @@ export const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({
             </Button>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pr-6">
-              <div>
-                <input
-                  type="text"
-                  placeholder="Exercise Name (e.g. Bench Press)"
-                  value={ex.name}
-                  onChange={e => handleExerciseNameChange(exIdx, e.target.value)}
-                  className="w-full bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded px-2 py-1 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-700 focus:outline-hidden"
-                />
-              </div>
-              <div>
-                <input
-                  type="text"
-                  placeholder="Exercise Note (optional)"
-                  value={ex.note || ''}
-                  onChange={e => handleExerciseNoteChange(exIdx, e.target.value)}
-                  className="w-full bg-white dark:bg-zinc-955 border border-slate-200 dark:border-zinc-800 rounded px-2 py-1 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-700 focus:outline-hidden"
-                />
-              </div>
+              <Input
+                type="text"
+                placeholder="Exercise Name (e.g. Bench Press)"
+                value={ex.name}
+                onChange={e => handleExerciseNameChange(exIdx, e.target.value)}
+              />
+              <Input
+                type="text"
+                placeholder="Exercise Note (optional)"
+                value={ex.note || ''}
+                onChange={e => handleExerciseNoteChange(exIdx, e.target.value)}
+              />
             </div>
 
             {/* Sets list */}
@@ -184,19 +178,19 @@ export const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({
                 <div key={setIdx} className="flex items-center gap-2 text-xs">
                   <span className="text-slate-400 dark:text-zinc-500 font-mono w-10">Set {setIdx + 1}:</span>
                   <div className="flex items-center gap-1.5">
-                    <input
+                    <Input
                       type="number"
                       placeholder="Reps"
                       value={set.reps}
                       onChange={e =>
                         handleSetChange(exIdx, setIdx, 'reps', parseInt(e.target.value) || 0)
                       }
-                      className="w-16 bg-white dark:bg-zinc-955 border border-slate-200 dark:border-zinc-800 rounded px-1.5 py-0.5 text-center text-slate-900 dark:text-white font-mono text-xs"
+                      className="w-16 text-center font-mono text-xs"
                     />
                     <span className="text-slate-400 dark:text-zinc-650">reps</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <input
+                    <Input
                       type="number"
                       placeholder="Weight"
                       value={set.weight !== undefined ? set.weight : ''}
@@ -208,24 +202,24 @@ export const WorkoutLogger: React.FC<WorkoutLoggerProps> = ({
                           e.target.value !== '' ? parseFloat(e.target.value) : undefined
                         )
                       }
-                      className="w-16 bg-white dark:bg-zinc-955 border border-slate-200 dark:border-zinc-800 rounded px-1.5 py-0.5 text-center text-slate-900 dark:text-white font-mono text-xs"
+                      className="w-16 text-center font-mono text-xs"
                     />
                     <span className="text-slate-400 dark:text-zinc-600 font-semibold">kg</span>
                   </div>
-                  <input
+                  <Input
                     type="text"
                     placeholder="Set Note"
                     value={set.note || ''}
                     onChange={e => handleSetChange(exIdx, setIdx, 'note', e.target.value)}
-                    className="flex-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded px-2 py-0.5 text-slate-900 dark:text-white placeholder-slate-350 dark:placeholder-zinc-700"
+                    className="flex-1"
                   />
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
                     onClick={() => handleRemoveSet(exIdx, setIdx)}
-                    className="text-slate-400 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400 cursor-pointer"
-                  >
-                    <X size={12} />
-                  </button>
+                    icon={<X size={12} />}
+                    className="text-slate-400 hover:text-red-500 dark:text-zinc-600 dark:hover:text-red-400"
+                  />
                 </div>
               ))}
               <Button

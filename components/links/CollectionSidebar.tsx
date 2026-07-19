@@ -222,16 +222,18 @@ export const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
                   <span className="text-[9px] bg-slate-200/50 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 px-1.5 py-0.5 rounded-sm font-bold">
                     {col.links.length}
                   </span>
-                  <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5">
+                  <div className="sm:opacity-0 sm:group-hover:opacity-100 flex items-center gap-0.5">
                     <button
                       onClick={e => { e.stopPropagation(); onOpenEditCol(col) }}
                       className="p-0.5 rounded-sm hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-400 hover:text-[var(--color-text-main)] cursor-pointer"
+                      aria-label="Edit collection"
                     >
                       <Edit2 size={10} />
                     </button>
                     <button
                       onClick={e => { e.stopPropagation(); onDeleteCol(col.id) }}
                       className="p-0.5 rounded-sm hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-400 hover:text-rose-500 cursor-pointer"
+                      aria-label="Delete collection"
                     >
                       <Trash2 size={10} />
                     </button>

@@ -3,10 +3,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { upsertJournalEntry, deleteJournalEntry } from '@/app/actions/journal'
 import {
-  Trash2, Search, CheckCircle2, CloudOff, Loader2, Edit3, PlusCircle,
+  Trash2, CheckCircle2, CloudOff, Loader2, Edit3, PlusCircle,
   Bold, Italic, Underline, Code, List, Heading1, Heading2, Highlighter, Quote, Undo2, Redo2, Eraser, Image as ImageIcon, X
 } from 'lucide-react'
-import { Button, SearchInput, EmptyState, Card, Input } from '@/design-system'
+import { Button, SearchInput } from '@/design-system'
 
 
 interface JournalEntry {
@@ -539,10 +539,11 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                 </p>
                 <button
                   onClick={e => { e.stopPropagation(); handleDelete(entry.id, dateStr) }}
-                  className={`absolute right-2 bottom-2 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-colors ${
+                  className={`absolute right-2 bottom-2 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 rounded-lg transition-colors ${
                     isActive ? 'text-white hover:bg-white/20' : 'text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10'
                   }`}
                   title="Delete Entry"
+                  aria-label="Delete Entry"
                 >
                   <Trash2 size={12} />
                 </button>
@@ -581,113 +582,101 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
 
             {/* Rich Formatting Toolbar */}
             <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-50 dark:bg-zinc-900/50 border border-slate-205/65 dark:border-zinc-800/80 rounded-lg max-w-max">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onMouseDown={e => { e.preventDefault(); execCmd('undo') }}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
                 title="Undo (Ctrl+Z)"
-              >
-                <Undo2 size={13} />
-              </button>
-              <button
-                type="button"
+                icon={<Undo2 size={13} />}
+              />
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onMouseDown={e => { e.preventDefault(); execCmd('redo') }}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
                 title="Redo (Ctrl+Y)"
-              >
-                <Redo2 size={13} />
-              </button>
+                icon={<Redo2 size={13} />}
+              />
               <div className="w-px h-3.5 bg-slate-200 dark:bg-zinc-800 mx-1" />
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onMouseDown={e => { e.preventDefault(); execCmd('bold') }}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
                 title="Bold (Ctrl+B)"
-              >
-                <Bold size={13} />
-              </button>
-              <button
-                type="button"
+                icon={<Bold size={13} />}
+              />
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onMouseDown={e => { e.preventDefault(); execCmd('italic') }}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
                 title="Italic (Ctrl+I)"
-              >
-                <Italic size={13} />
-              </button>
-              <button
-                type="button"
+                icon={<Italic size={13} />}
+              />
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onMouseDown={e => { e.preventDefault(); execCmd('underline') }}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
                 title="Underline (Ctrl+U)"
-              >
-                <Underline size={13} />
-              </button>
-              <button
-                type="button"
+                icon={<Underline size={13} />}
+              />
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onMouseDown={e => { e.preventDefault(); execCmd('hiliteColor', '#fef08a') }}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
                 title="Highlight text"
-              >
-                <Highlighter size={13} />
-              </button>
+                icon={<Highlighter size={13} />}
+              />
               <div className="w-px h-3.5 bg-slate-200 dark:bg-zinc-800 mx-1" />
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<h1>') }}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
                 title="Heading 1"
-              >
-                <Heading1 size={13} />
-              </button>
-              <button
-                type="button"
+                icon={<Heading1 size={13} />}
+              />
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<h2>') }}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
                 title="Heading 2"
-              >
-                <Heading2 size={13} />
-              </button>
-              <button
-                type="button"
+                icon={<Heading2 size={13} />}
+              />
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onMouseDown={e => { e.preventDefault(); execCmd('insertUnorderedList') }}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
                 title="Bullet List"
-              >
-                <List size={13} />
-              </button>
-              <button
-                type="button"
+                icon={<List size={13} />}
+              />
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<blockquote>') }}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
                 title="Blockquote"
-              >
-                <Quote size={13} />
-              </button>
-              <button
-                type="button"
+                icon={<Quote size={13} />}
+              />
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<pre>') }}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
                 title="Code Block"
-              >
-                <Code size={13} />
-              </button>
-              <button
-                type="button"
+                icon={<Code size={13} />}
+              />
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onMouseDown={e => { e.preventDefault(); fileInputRef.current?.click() }}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
                 title="Attach Image"
-              >
-                <ImageIcon size={13} />
-              </button>
+                icon={<ImageIcon size={13} />}
+              />
               <div className="w-px h-3.5 bg-slate-200 dark:bg-zinc-800 mx-1" />
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon-sm"
                 onMouseDown={e => { e.preventDefault(); clearFormatting() }}
-                className="p-1.5 rounded-lg hover:bg-slate-200 dark:hover:bg-zinc-800 text-slate-550 dark:text-zinc-400 hover:text-rose-500 transition-colors cursor-pointer"
                 title="Clear all formatting"
-              >
-                <Eraser size={13} />
-              </button>
+                icon={<Eraser size={13} />}
+                className="hover:text-rose-500"
+              />
             </div>
 
             <input
@@ -774,12 +763,13 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                         className="w-full h-full object-cover cursor-pointer"
                         onClick={() => setZoomImage(img.data)}
                       />
-                      <div className="absolute inset-x-0 bottom-0 bg-black/70 py-1 px-2 flex items-center justify-around opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute inset-x-0 bottom-0 bg-black/70 py-1 px-2 flex items-center justify-around sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         <button
                           type="button"
                           onClick={() => insertExistingImage(img.data, img.name)}
                           className="text-white hover:text-blue-400 p-1 cursor-pointer"
                           title="Insert into text"
+                          aria-label="Insert into text"
                         >
                           <PlusCircle size={13} />
                         </button>
@@ -788,6 +778,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                           onClick={() => deleteImageFromGallery(img.data)}
                           className="text-white hover:text-rose-500 p-1 cursor-pointer"
                           title="Delete from memories"
+                          aria-label="Delete from memories"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -825,12 +816,13 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                       className="w-full h-full object-cover cursor-pointer"
                       onClick={() => setZoomImage(img.data)}
                     />
-                    <div className="absolute inset-x-0 bottom-0 bg-black/75 py-1.5 px-2 flex items-center justify-around opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute inset-x-0 bottom-0 bg-black/75 py-1.5 px-2 flex items-center justify-around sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                       <button
                         type="button"
                         onClick={() => insertExistingImage(img.data, img.name)}
                         className="text-white hover:text-blue-400 p-1 cursor-pointer"
                         title="Insert into text"
+                        aria-label="Insert into text"
                       >
                         <PlusCircle size={14} />
                       </button>

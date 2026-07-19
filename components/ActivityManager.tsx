@@ -309,8 +309,8 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                     </div>
                   </div>
 
-                  {/* Right operations (Hover only) */}
-                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0">
+                  {/* Right operations - Always visible on mobile, hover on desktop */}
+                  <div className="flex items-center gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150 shrink-0">
                     {/* Ordering (manual sortOrder) */}
                     {isTemplateActive && !showArchived && (
                       <div className="flex bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded p-0.5">
@@ -320,6 +320,7 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                           disabled={isFirst || isProcessing !== null}
                           className="p-1 hover:text-[var(--color-text-main)] text-slate-400 rounded hover:bg-[var(--color-accent)] disabled:opacity-20 cursor-pointer"
                           title="Move Up"
+                          aria-label="Move Up"
                         >
                           <ArrowUp size={11} />
                         </button>
@@ -329,6 +330,7 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                           disabled={isLast || isProcessing !== null}
                           className="p-1 hover:text-[var(--color-text-main)] text-slate-400 rounded hover:bg-[var(--color-accent)] disabled:opacity-20 cursor-pointer"
                           title="Move Down"
+                          aria-label="Move Down"
                         >
                           <ArrowDown size={11} />
                         </button>
@@ -342,6 +344,7 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                         disabled={isProcessing !== null}
                         className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] rounded hover:bg-[var(--color-accent)] transition-colors cursor-pointer"
                         title="Edit Template"
+                        aria-label="Edit Template"
                       >
                         <Edit2 size={11} />
                       </button>

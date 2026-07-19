@@ -414,7 +414,7 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
                     variant="danger"
                     size="sm"
                     onClick={() => handleDelete(record.id)}
-                    className="opacity-0 group-hover:opacity-100 shrink-0"
+                    className="opacity-0 sm:group-hover:opacity-100 shrink-0"
                     aria-label="Delete record"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

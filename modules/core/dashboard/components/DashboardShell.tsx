@@ -15,6 +15,7 @@ import {
   Scale,
   Link2
 } from 'lucide-react'
+import { Button } from '@/design-system'
 
 export interface NavigationItem {
   id: string
@@ -232,9 +233,12 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           <div className="relative bg-[var(--color-bg-surface)] border-t border-[var(--color-border)] rounded-t-3xl p-5 pb-8 space-y-4 shadow-2xl z-10 animate-fade-in-up max-h-[70vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-[var(--color-border)]/50">
               <h3 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-muted)]">More Modules</h3>
-              <button onClick={() => setIsMoreOpen(false)} className="text-slate-400 dark:text-zinc-500 p-1 cursor-pointer">
-                <X className="w-4 h-4" />
-              </button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setIsMoreOpen(false)}
+                icon={<X className="w-4 h-4" />}
+              />
             </div>
             
             <div className="grid grid-cols-2 gap-3">
@@ -242,21 +246,19 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 const IconComponent = item.icon
                 const isActive = activeTab === item.id
                 return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      onTabChange(item.id)
-                      setIsMoreOpen(false)
-                    }}
-                    className={`flex items-center gap-3 p-3.5 rounded-xl border transition-all cursor-pointer ${
-                      isActive
-                        ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)] text-[var(--color-primary)] font-bold'
-                        : 'bg-slate-50 dark:bg-zinc-900 border-[var(--color-border)] text-[var(--color-text-main)] hover:bg-[var(--color-accent)]'
-                    }`}
-                  >
-                    <IconComponent className="w-4.5 h-4.5" />
-                    <span className="text-xs font-semibold">{item.label}</span>
-                  </button>
+                  <Button
+                key={item.id}
+                variant={isActive ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => {
+                  onTabChange(item.id)
+                  setIsMoreOpen(false)
+                }}
+                icon={<IconComponent className="w-4.5 h-4.5" />}
+                className="w-full justify-start"
+              >
+                {item.label}
+              </Button>
                 )
               })}
             </div>
@@ -265,21 +267,26 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               {user && (
                 <div className="flex items-center justify-between px-2 text-xs font-semibold text-[var(--color-text-muted)]">
                   <span>Logged in as: {user.username}</span>
-                  <button onClick={onToggleTheme} className="p-1.5 rounded-lg bg-slate-100 dark:bg-zinc-900 cursor-pointer">
-                    {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-blue-500" />}
-                  </button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={onToggleTheme}
+                    icon={theme === 'dark' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-blue-500" />}
+                  />
                 </div>
               )}
-              <button
+              <Button
+                variant="danger"
+                size="sm"
                 onClick={() => {
                   setIsMoreOpen(false)
                   onLogout()
                 }}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 text-xs font-black uppercase tracking-wider transition-colors cursor-pointer"
+                icon={<LogOut className="w-4 h-4" />}
+                className="w-full"
               >
-                <LogOut className="w-4 h-4" />
-                <span>Logout</span>
-              </button>
+                Logout
+              </Button>
             </div>
           </div>
         </div>

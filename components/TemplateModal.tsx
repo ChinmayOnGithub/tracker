@@ -326,20 +326,19 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           </div>
           <div className="max-h-48 overflow-y-auto pr-1 grid grid-cols-6 sm:grid-cols-8 gap-2 border border-[var(--color-border)]/50 p-2 rounded-xl bg-slate-50/50 dark:bg-zinc-900/30">
             {filteredIcons.map(opt => (
-              <button
+              <Button
                 key={opt.name}
                 type="button"
+                variant={icon === opt.name ? 'primary' : 'outline'}
                 onClick={() => setIcon(opt.name)}
-                className={`flex flex-col items-center justify-center gap-1 p-2.5 rounded-xl border transition-all cursor-pointer ${
-                  icon === opt.name
-                    ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)] text-[var(--color-primary)] shadow-xs ring-1 ring-[var(--color-primary)]/30'
-                    : 'bg-[var(--color-bg-surface)] border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-accent)] hover:text-[var(--color-text-main)] hover:border-slate-300 dark:hover:border-zinc-700'
+                className={`flex flex-col items-center justify-center gap-1 p-2.5 ${
+                  icon === opt.name ? 'ring-1 ring-[var(--color-primary)]/30' : ''
                 }`}
                 title={opt.label}
               >
                 <Icon name={opt.name} size={18} />
                 <span className="text-[8px] font-bold leading-none truncate w-full text-center">{opt.label.split('/')[0]}</span>
-              </button>
+              </Button>
             ))}
             {filteredIcons.length === 0 && (
               <div className="col-span-full py-6 text-center text-xs text-[var(--color-text-muted)] font-medium">

@@ -4,6 +4,7 @@ import React from 'react'
 import {
   Folder, Pin, Lock, ExternalLink, Copy, Check, EyeOff, Eye, Archive, Edit2, Trash2
 } from 'lucide-react'
+import { Button } from '@/design-system'
 
 interface LinkTagItem {
   id: string
@@ -190,76 +191,31 @@ export const LinkCard: React.FC<LinkCardProps> = ({
           {/* Action Row */}
           <div className="flex items-center justify-between border-t border-[var(--color-border)]/55 pt-3.5 mt-auto">
             <div className="flex items-center gap-1.5">
-              {/* Edit */}
-              <button
-                onClick={() => onOpenEditLink(link)}
-                className="p-1 text-slate-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
-                title="Edit link details"
-              >
+              <Button variant="ghost" size="sm" onClick={() => onOpenEditLink(link)} className="p-1" title="Edit link details">
                 <Edit2 size={11} />
-              </button>
-              {/* Delete */}
-              <button
-                onClick={() => onDeleteLink(link.id)}
-                className="p-1 text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
-                title="Delete Link"
-              >
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => onDeleteLink(link.id)} className="p-1 text-rose-500" title="Delete Link">
                 <Trash2 size={11} />
-              </button>
+              </Button>
               <div className="w-px h-3 bg-[var(--color-border)] mx-0.5" />
-              {/* Archive */}
-              <button
-                onClick={() => onToggleArchiveLink(link.id)}
-                className={`p-1 transition-colors cursor-pointer ${
-                  link.isArchived ? 'text-indigo-500 font-bold' : 'text-slate-400 hover:text-indigo-500'
-                }`}
-                title={link.isArchived ? "Restore to collection" : "Archive"}
-              >
+              <Button variant="ghost" size="sm" onClick={() => onToggleArchiveLink(link.id)} className={`p-1 ${link.isArchived ? 'text-indigo-500' : ''}`} title={link.isArchived ? "Restore" : "Archive"}>
                 <Archive size={11} />
-              </button>
-              {/* Pin */}
-              <button
-                onClick={() => onTogglePinLink(link.id)}
-                className={`p-1 transition-colors cursor-pointer ${
-                  link.isPinned ? 'text-amber-500' : 'text-slate-400 hover:text-amber-500'
-                }`}
-                title={link.isPinned ? "Unpin Link" : "Pin Link"}
-              >
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => onTogglePinLink(link.id)} className={`p-1 ${link.isPinned ? 'text-amber-500' : ''}`} title={link.isPinned ? "Unpin" : "Pin"}>
                 <Pin size={11} fill={link.isPinned ? "currentColor" : "none"} />
-              </button>
+              </Button>
             </div>
 
             <div className="flex items-center gap-1.5">
-              {/* Copy */}
-              <button
-                onClick={() => onCopyLink(link)}
-                className="p-1.5 rounded-[3.5px] hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-[var(--color-text-main)] transition-colors cursor-pointer"
-                title="Copy URL"
-              >
-                {copiedLinkId === link.id ? (
-                  <Check size={11} className="text-emerald-500" />
-                ) : (
-                  <Copy size={11} />
-                )}
-              </button>
-              {/* Visibility Lock */}
-              <button
-                onClick={() => onTogglePrivateLink(link.id)}
-                className={`p-1.5 rounded-[3.5px] hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer ${
-                  link.isPrivate ? 'text-amber-500 bg-amber-500/5 dark:bg-amber-500/2 border border-amber-500/20' : 'text-slate-400 hover:text-amber-500 border border-transparent'
-                }`}
-                title={link.isPrivate ? "Disable incognito mode" : "Enable incognito mode"}
-              >
+              <Button variant="ghost" size="sm" onClick={() => onCopyLink(link)} className="p-1.5" title="Copy URL">
+                {copiedLinkId === link.id ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => onTogglePrivateLink(link.id)} className={`p-1.5 ${link.isPrivate ? 'text-amber-500 bg-amber-500/5' : ''}`} title={link.isPrivate ? "Disable incognito" : "Enable incognito"}>
                 {link.isPrivate ? <EyeOff size={11} /> : <Eye size={11} />}
-              </button>
-              {/* Open */}
-              <button
-                onClick={() => onOpenLink(link)}
-                className="p-1.5 rounded-[3.5px] bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity cursor-pointer shadow-3xs"
-                title={link.isPrivate ? "Copy & Alert Incognito" : "Open Link"}
-              >
+              </Button>
+              <Button size="sm" onClick={() => onOpenLink(link)} className="p-1.5" title={link.isPrivate ? "Copy & Alert Incognito" : "Open Link"}>
                 {link.isPrivate ? <Lock size={10} /> : <ExternalLink size={10} />}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -342,80 +298,35 @@ export const LinkCard: React.FC<LinkCardProps> = ({
       </div>
 
       <div className="flex items-center justify-end gap-1.5 shrink-0">
-        {/* Copy URL */}
-        <button
-          onClick={() => onCopyLink(link)}
-          className="p-1.5 rounded-[3px] hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-[var(--color-text-main)] cursor-pointer transition-colors"
-          title="Copy URL"
-        >
-          {copiedLinkId === link.id ? (
-            <Check size={11} className="text-emerald-500" />
-          ) : (
-            <Copy size={11} />
-          )}
-        </button>
+        <Button variant="ghost" size="sm" onClick={() => onCopyLink(link)} className="p-1.5" title="Copy URL">
+          {copiedLinkId === link.id ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+        </Button>
 
-        {/* Toggle Privacy */}
-        <button
-          onClick={() => onTogglePrivateLink(link.id)}
-          className={`p-1.5 rounded-[3px] hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer transition-colors ${
-              link.isPrivate ? 'text-amber-500' : 'text-slate-400 hover:text-amber-500'
-          }`}
-          title={link.isPrivate ? "Disable Privacy Lock" : "Enable Privacy Lock"}
-        >
+        <Button variant="ghost" size="sm" onClick={() => onTogglePrivateLink(link.id)} className={`p-1.5 ${link.isPrivate ? 'text-amber-500' : ''}`} title={link.isPrivate ? "Disable Privacy" : "Enable Privacy"}>
           {link.isPrivate ? <EyeOff size={11} /> : <Eye size={11} />}
-        </button>
+        </Button>
 
-        {/* Toggle Archive */}
-        <button
-          onClick={() => onToggleArchiveLink(link.id)}
-          className={`p-1.5 rounded-[3px] hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer transition-colors ${
-            link.isArchived ? 'text-indigo-500 font-bold' : 'text-slate-400 hover:text-indigo-500'
-          }`}
-          title={link.isArchived ? "Unarchive" : "Archive"}
-        >
+        <Button variant="ghost" size="sm" onClick={() => onToggleArchiveLink(link.id)} className={`p-1.5 ${link.isArchived ? 'text-indigo-500' : ''}`} title={link.isArchived ? "Unarchive" : "Archive"}>
           <Archive size={11} />
-        </button>
+        </Button>
 
-        {/* Open */}
-        <button
-          onClick={() => onOpenLink(link)}
-          className="p-1.5 rounded-[3px] bg-[var(--color-primary)] text-white hover:opacity-90 shadow-3xs cursor-pointer"
-          title={link.isPrivate ? "Copy & Alert Incognito" : "Open Link"}
-        >
+        <Button size="sm" onClick={() => onOpenLink(link)} className="p-1.5" title={link.isPrivate ? "Copy & Alert Incognito" : "Open Link"}>
           {link.isPrivate ? <Lock size={10} /> : <ExternalLink size={10} />}
-        </button>
+        </Button>
 
         <div className="w-px h-4 bg-slate-200 dark:bg-zinc-800 mx-1 hidden md:block" />
 
-        {/* Pin Toggle */}
-        <button
-          onClick={() => onTogglePinLink(link.id)}
-          className={`p-1.5 rounded-[3px] hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer transition-colors ${
-            link.isPinned ? 'text-amber-500' : 'text-slate-400 hover:text-amber-500'
-          }`}
-          title={link.isPinned ? "Unpin Link" : "Pin Link"}
-        >
+        <Button variant="ghost" size="sm" onClick={() => onTogglePinLink(link.id)} className={`p-1.5 ${link.isPinned ? 'text-amber-500' : ''}`} title={link.isPinned ? "Unpin" : "Pin"}>
           <Pin size={11} fill={link.isPinned ? "currentColor" : "none"} />
-        </button>
+        </Button>
 
-        {/* Edit */}
-        <button
-          onClick={() => onOpenEditLink(link)}
-          className="p-1.5 rounded-[3px] hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-[var(--color-text-main)] cursor-pointer"
-          title="Edit"
-        >
+        <Button variant="ghost" size="sm" onClick={() => onOpenEditLink(link)} className="p-1.5" title="Edit">
           <Edit2 size={11} />
-        </button>
+        </Button>
 
-        {/* Delete */}
-        <button
-          onClick={() => onDeleteLink(link.id)}
-          className="p-1.5 rounded-[3px] hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-rose-500 cursor-pointer"
-          title="Delete"
-        >
+        <Button variant="ghost" size="sm" onClick={() => onDeleteLink(link.id)} className="p-1.5 text-rose-500" title="Delete">
           <Trash2 size={11} />
-        </button>
+        </Button>
       </div>
     </div>
   )
