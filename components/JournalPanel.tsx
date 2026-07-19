@@ -84,6 +84,11 @@ interface JournalPanelProps {
 }
 
 export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) => {
+  console.log('[JournalPanel] Initialized with entries:', initialEntries.length)
+  initialEntries.forEach(e => {
+    console.log(`  - ${e.id}: ${e.journalDate}, content length: ${e.content.length}`)
+  })
+  
   const today = todayYMD()
   const [entries, setEntries] = useState<JournalEntry[]>(initialEntries)
   const [activeDate, setActiveDate] = useState<string>(today)
@@ -91,6 +96,9 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('editor')
   // Editor states for active date
   const activeEntry = entries.find(e => toYMD(e.journalDate) === activeDate) || null
+  
+  console.log('[JournalPanel] Active date:', activeDate, 'Active entry:', activeEntry ? `${activeEntry.id} (${activeEntry.content.length} chars)` : 'null')
+  
   const [content, setContent] = useState(markdownToHtml(activeEntry?.content || ''))
   const [contentStatus, setContentStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
@@ -392,11 +400,23 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
 
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const saveContent = useCallback(async (v: string) => {
+    console.log('[JournalPanel] saveContent called with:', { 
+      length: v.length, 
+      preview: v.substring(0, 100),
+      activeDate 
+    })
+    
     if (isSavingRef.current) { pendingRef.current = v; return }
     isSavingRef.current = true
     setContentStatus('saving')
     try {
       const res = await upsertJournalEntry(activeDate, { content: v })
+      console.log('[JournalPanel] Save response:', { 
+        success: res.success, 
+        entryId: res.entry?.id,
+        savedContentLength: res.entry?.content.length 
+      })
+      
       if (res.success && res.entry) {
         setContentStatus('saved')
         setEntries(prev => {
@@ -404,20 +424,25 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
           if (idx >= 0) {
             const copy = [...prev]
             copy[idx] = { ...copy[idx], content: v, id: res.entry.id }
+            console.log('[JournalPanel] Updated existing entry in state:', copy[idx].id)
             return copy
           }
-          return [{
+          const newEntry = {
             id: res.entry.id,
             journalDate: activeDate + 'T12:00:00Z',
             content: v, mood: null, gratitude: null, reflections: null, lessonsLearned: null, tomorrowPlan: null,
             createdAt: new Date(), updatedAt: new Date(),
             metadata: null
-          }, ...prev]
+          }
+          console.log('[JournalPanel] Created new entry in state:', newEntry.id)
+          return [newEntry, ...prev]
         })
       } else {
+        console.error('[JournalPanel] Save failed:', res.error)
         setContentStatus('error')
       }
-    } catch {
+    } catch (err) {
+      console.error('[JournalPanel] Save error:', err)
       setContentStatus('error')
     } finally {
       isSavingRef.current = false

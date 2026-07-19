@@ -28,17 +28,27 @@ export async function upsertJournalEntry(
     metadata?: Record<string, unknown> | null
   }
 ) {
+  console.log(`[Journal] upsertJournalEntry called for date ${date}, fields:`, {
+    hasContent: !!fields.content,
+    contentLength: fields.content?.length || 0,
+    contentPreview: fields.content?.substring(0, 50)
+  })
+  
   try {
     const user = await requireAuth()
+    console.log(`[Journal] User authenticated: ${user.id}`)
+    
     // journalDate is stored as a DateTime — use noon UTC to avoid timezone drift
     const journalDate = new Date(`${date}T12:00:00.000Z`)
 
     const existing = await db.journalEntry.findUnique({
       where: { userId_journalDate: { userId: user.id, journalDate } },
     })
+    console.log(`[Journal] Existing entry:`, existing ? `Found ${existing.id}` : 'Not found')
 
     let entry
     if (existing) {
+      console.log(`[Journal] Updating existing entry ${existing.id} for date ${date}`)
       entry = await db.journalEntry.update({
         where: { id: existing.id },
         data: {
@@ -53,7 +63,9 @@ export async function upsertJournalEntry(
           ),
         },
       })
+      console.log(`[Journal] Entry updated successfully: ${entry.id}, content length: ${entry.content.length}`)
     } else {
+      console.log(`[Journal] Creating new entry for date ${date}`)
       entry = await db.journalEntry.create({
         data: {
           userId: user.id,
@@ -67,7 +79,20 @@ export async function upsertJournalEntry(
           metadata: toJsonField(fields.metadata ?? null),
         },
       })
+      console.log(`[Journal] Entry created successfully: ${entry.id}, content length: ${entry.content.length}`)
     }
+
+    // Verify the save by reading it back
+    const verification = await db.journalEntry.findUnique({
+      where: { id: entry.id },
+      select: { id: true, content: true, updatedAt: true }
+    })
+    console.log(`[Journal] Verification read from DB:`, {
+      id: verification?.id,
+      contentLength: verification?.content.length,
+      contentPreview: verification?.content.substring(0, 100),
+      updatedAt: verification?.updatedAt
+    })
 
     // Dynamic Template + Log Sync
     const template = await ActivityService.getOrCreateDefaultTemplate(
@@ -83,14 +108,19 @@ export async function upsertJournalEntry(
       ? fields.content.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() 
       : ''
 
-    await ActivityService.logActivity({
-      userId: user.id,
-      templateId: template.id,
-      date,
-      status: 'done',
-      journalEntryId: entry.id,
-      note: cleanNoteText ? (cleanNoteText.substring(0, 100) + '...') : ''
-    })
+    try {
+      await ActivityService.logActivity({
+        userId: user.id,
+        templateId: template.id,
+        date,
+        status: 'done',
+        journalEntryId: entry.id,
+        note: cleanNoteText ? (cleanNoteText.substring(0, 100) + '...') : ''
+      })
+    } catch (activityError) {
+      // Log the error but don't fail the journal save
+      console.error('Failed to log activity for journal entry:', activityError)
+    }
 
     revalidatePath('/')
     return { success: true, entry }
