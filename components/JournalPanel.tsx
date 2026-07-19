@@ -88,6 +88,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   const [entries, setEntries] = useState<JournalEntry[]>(initialEntries)
   const [activeDate, setActiveDate] = useState<string>(today)
   const [search, setSearch] = useState('')
+  const [mobileView, setMobileView] = useState<'list' | 'editor'>('editor')
   // Editor states for active date
   const activeEntry = entries.find(e => toYMD(e.journalDate) === activeDate) || null
   const [content, setContent] = useState(markdownToHtml(activeEntry?.content || ''))
@@ -453,10 +454,10 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   })
 
   return (
-    <div className="flex h-full min-h-[70vh] bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg overflow-hidden shadow-xs">
+    <div className="flex flex-col md:flex-row h-full min-h-[70vh] bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg overflow-hidden shadow-xs">
       
       {/* ── LEFT SIDEBAR: History ── */}
-      <aside className="w-72 shrink-0 flex flex-col bg-slate-50/50 dark:bg-zinc-900/40 border-r border-slate-200 dark:border-zinc-800">
+      <aside className={`w-full md:w-72 md:shrink-0 flex flex-col bg-slate-50/50 dark:bg-zinc-900/40 border-b md:border-b-0 md:border-r border-slate-200 dark:border-zinc-800 ${mobileView === 'editor' ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-4 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-black tracking-tight text-[var(--color-text-main)]">Journal</h3>
@@ -498,7 +499,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
             return (
               <div
                 key={entry.id}
-                onClick={() => setActiveDate(dateStr)}
+                onClick={() => { setActiveDate(dateStr); setMobileView('editor') }}
                 className={`group relative flex flex-col gap-1 px-3 py-3 rounded-lg cursor-pointer transition-all ${
                   isActive
                     ? 'bg-[var(--color-primary)] text-white shadow-sm'
@@ -534,15 +535,24 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
       </aside>
 
       {/* ── RIGHT WORKSPACE: Canvas ── */}
-      <main className="flex-1 flex flex-col xl:flex-row bg-white dark:bg-[#09090b] relative overflow-hidden">
+      <main className={`flex-1 flex flex-col xl:flex-row bg-white dark:bg-[#09090b] relative overflow-hidden ${mobileView === 'list' ? 'hidden md:flex' : 'flex'}`}>
         {/* Editor Writing Area */}
-        <div className="flex-1 overflow-y-auto px-6 md:px-12 py-10 pb-24 border-r border-slate-100 dark:border-zinc-900/60">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 md:px-12 py-6 sm:py-10 pb-24 border-r border-slate-100 dark:border-zinc-900/60">
           <div className="max-w-3xl mx-auto w-full flex flex-col gap-6">
             
-            <div className="flex items-center justify-between">
-              <h1 className="text-3xl font-black text-[var(--color-text-main)] tracking-tight">
-                {formatJournalDate(activeDate + 'T12:00:00Z')}
-              </h1>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setMobileView('list')}
+                  className="md:hidden p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
+                  title="Back to list"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <h1 className="text-xl sm:text-3xl font-black text-[var(--color-text-main)] tracking-tight">
+                  {formatJournalDate(activeDate + 'T12:00:00Z')}
+                </h1>
+              </div>
               <SyncStatus status={contentStatus} />
             </div>
 

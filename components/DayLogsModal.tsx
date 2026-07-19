@@ -11,7 +11,7 @@ import { analyzeRecurrence } from '@/lib/recurrence'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
 
 import { MarathiCalendarEvents } from './daylogs/MarathiCalendarEvents'
-import { DayNotesTab } from './daylogs/DayNotesTab'
+
 import { WorkoutLogger } from './daylogs/WorkoutLogger'
 import { RunningLogger } from './daylogs/RunningLogger'
 import { MeasurementsLogger } from './daylogs/MeasurementsLogger'
@@ -580,7 +580,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
               }`}
             >
               <BookOpen size={14} />
-              Daily Note
+              Journal
               {note && <span className="w-1.5 h-1.5 rounded-full bg-green-500 dark:bg-green-400" />}
             </button>
           </div>
@@ -807,7 +807,24 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
             )}
 
             {activeTab === 'notes' && (
-              <DayNotesTab key={dateStr} note={note} dateStr={dateStr} />
+              <div className="space-y-4">
+                {note ? (
+                  <div className="bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 p-5 rounded-xl space-y-3 shadow-xs">
+                    <div className="border-b border-slate-200 dark:border-zinc-900 pb-3">
+                      <h3 className="font-semibold text-slate-900 dark:text-white text-base">Journal Entry</h3>
+                      <p className="text-[10px] text-slate-400 dark:text-zinc-500 mt-0.5">Written on this day</p>
+                    </div>
+                    <div
+                      className="text-slate-800 dark:text-zinc-300 text-sm leading-relaxed prose dark:prose-invert max-w-none"
+                      dangerouslySetInnerHTML={{ __html: note.content }}
+                    />
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-xs text-[var(--color-text-muted)] italic">
+                    No journal entry for this day.
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

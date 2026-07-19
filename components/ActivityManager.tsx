@@ -14,14 +14,13 @@ interface ActivityManagerProps {
   onEditTemplate: (template: ActivityTemplate) => void
 }
 
-const CATEGORIES = [
-  { value: 'all', label: 'All Activities' },
-  { value: 'personal', label: 'Personal' },
-  { value: 'work', label: 'Work' },
-  { value: 'health', label: 'Health' },
-  { value: 'fitness', label: 'Fitness' },
-  { value: 'finance', label: 'Finance' },
-  { value: 'chores', label: 'Chores' },
+const RECURRENCE_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
+  { value: 'custom', label: 'Custom' },
 ]
 
 export const ActivityManager: React.FC<ActivityManagerProps> = ({
@@ -34,7 +33,7 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeCategory, setActiveCategory] = useState('all')
+  const [activeRecurrence, setActiveRecurrence] = useState('all')
 
   // Bulk Selection States
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -46,9 +45,8 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
   const filteredTemplates = useMemo(() => {
     let list = showArchived ? archivedTemplates : activeTemplates
 
-    // Category Filter
-    if (activeCategory !== 'all') {
-      list = list.filter(item => item.template.category === activeCategory)
+    if (activeRecurrence !== 'all') {
+      list = list.filter(item => item.template.recurrenceType === activeRecurrence)
     }
 
     // Search Query
@@ -62,7 +60,7 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
 
     // Sort by manual sortOrder
     return [...list].sort((a, b) => a.template.sortOrder - b.template.sortOrder)
-  }, [showArchived, activeTemplates, archivedTemplates, activeCategory, searchQuery])
+  }, [showArchived, activeTemplates, archivedTemplates, activeRecurrence, searchQuery])
 
   // Reordering
   const handleMove = async (index: number, direction: 'up' | 'down') => {
@@ -138,67 +136,32 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
   }
 
   return (
-    <div className="flex gap-6 min-h-[500px]">
+    <div className="flex flex-col gap-4">
       
-      {/* LEFT SIDEBAR: Category filters */}
-      <aside className="w-48 shrink-0 flex flex-col gap-1 pr-4 border-r border-[var(--color-border)]/60">
-        <h3 className="px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-[var(--color-text-muted)]">
-          Categories
-        </h3>
-        <div className="space-y-0.5">
-          {CATEGORIES.map(cat => {
-            const isActive = activeCategory === cat.value
-            return (
-              <button
-                key={cat.value}
-                onClick={() => {
-                  setActiveCategory(cat.value)
-                  setSelectedIds([])
-                }}
-                className={`w-full text-left px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  isActive
-                    ? 'bg-[var(--color-accent)] text-[var(--color-text-main)] font-black'
-                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]/40 hover:text-[var(--color-text-main)]'
-                }`}
-              >
-                {cat.label}
-              </button>
-            )
-          })}
+      {/* TOP BAR: Search + New Activity + Archive toggle */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search activities..."
+            className="w-full bg-transparent pl-9 pr-4 py-2 text-sm text-[var(--color-text-main)] placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-hidden font-bold border-b border-[var(--color-border)]/60"
+          />
         </div>
-
-        <div className="mt-auto pt-4 border-t border-[var(--color-border)]/45">
-          <button
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => {
               setShowArchived(!showArchived)
               setSelectedIds([])
             }}
-            className={`w-full text-left px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all ${
-              showArchived
-                ? 'bg-rose-500/10 text-rose-500 font-extrabold'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
-            }`}
+            className={showArchived ? 'text-rose-500 border-rose-500/30' : ''}
           >
             {showArchived ? 'View Active' : 'View Archived'}
-          </button>
-        </div>
-      </aside>
-
-      {/* RIGHT WORKSPACE: List View */}
-      <main className="flex-1 flex flex-col gap-4">
-        
-        {/* Search header bar with absolute Bulk Action Bar overlay to prevent layout shifting */}
-        <div className="relative flex items-center justify-between gap-4 border-b border-[var(--color-border)]/60 pb-3">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search activities..."
-              className="w-full bg-transparent pl-9 pr-4 py-2 text-sm text-[var(--color-text-main)] placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-hidden font-bold"
-            />
-          </div>
+          </Button>
           <Button
             onClick={onAddTemplate}
             size="sm"
@@ -206,6 +169,31 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
           >
             New Activity
           </Button>
+        </div>
+      </div>
+
+      {/* Recurrence Type Filter Pills */}
+      <div className="flex flex-wrap gap-1.5">
+        {RECURRENCE_FILTERS.map(f => {
+          const isActive = activeRecurrence === f.value
+          return (
+            <button
+              key={f.value}
+              onClick={() => {
+                setActiveRecurrence(f.value)
+                setSelectedIds([])
+              }}
+              className={`px-3 py-1.5 text-[11px] font-bold rounded-full border transition-all cursor-pointer ${
+                isActive
+                  ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm'
+                  : 'bg-[var(--color-bg-surface)] text-[var(--color-text-muted)] border-[var(--color-border)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text-main)]'
+              }`}
+            >
+              {f.label}
+            </button>
+          )
+        })}
+      </div>
 
           {/* Bulk Action Bar overlay */}
           {selectedIds.length > 0 && (
@@ -243,7 +231,6 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
               </div>
             </div>
           )}
-        </div>
 
         {/* Activities List */}
         {filteredTemplates.length === 0 ? (
@@ -392,8 +379,6 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
             })}
           </div>
         )}
-      </main>
-
     </div>
   )
 }
