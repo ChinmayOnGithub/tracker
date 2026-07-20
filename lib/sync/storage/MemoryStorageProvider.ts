@@ -85,7 +85,7 @@ export class MemoryStorageProvider implements StorageProvider {
   private storage = new Map<string, MemoryEntry>()
   private metadata = new Map<string, SyncMetadata>()
   private operationQueue: SyncOperation[] = []
-  private locks = new Set<string>()
+  private locks = new Map<string, Promise<void>>()
   private stats = {
     totalOperations: 0,
     totalBytes: 0,
@@ -114,7 +114,8 @@ export class MemoryStorageProvider implements StorageProvider {
     try {
       // Wait for any existing locks
       await this.waitForLock(key)
-      this.acquireLock(key)
+      
+      const releaseLock = await this.acquireLock(key)
       
       try {
         const now = Date.now()
@@ -142,7 +143,7 @@ export class MemoryStorageProvider implements StorageProvider {
           this.stats.totalBytes += size
         }
       } finally {
-        this.releaseLock(key)
+        releaseLock()
       }
     } catch (error) {
       throw new Error(`Failed to set key ${key}: ${error}`)
@@ -152,7 +153,7 @@ export class MemoryStorageProvider implements StorageProvider {
   async delete(key: string): Promise<void> {
     try {
       await this.waitForLock(key)
-      this.acquireLock(key)
+      const releaseLock = await this.acquireLock(key)
       
       try {
         const entry = this.storage.get(key)
@@ -163,7 +164,7 @@ export class MemoryStorageProvider implements StorageProvider {
           this.stats.totalOperations++
         }
       } finally {
-        this.releaseLock(key)
+        releaseLock()
       }
     } catch (error) {
       throw new Error(`Failed to delete key ${key}: ${error}`)
@@ -207,12 +208,13 @@ export class MemoryStorageProvider implements StorageProvider {
       sortOrder = 'asc'
     } = options
 
-    let entries = Array.from(this.storage.entries())
+    const entries = Array.from(this.storage.entries())
       .filter(([key]) => !prefix || key.startsWith(prefix))
       .map(([key, entry]) => ({ key, value: entry.value as T, ...entry.metadata }))
 
     // Sort
     entries.sort((a, b) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let aVal: any, bVal: any
       switch (sortBy) {
         case 'created':
@@ -383,17 +385,38 @@ export class MemoryStorageProvider implements StorageProvider {
     return priorities[priority as keyof typeof priorities] || 2
   }
 
-  private acquireLock(key: string): void {
-    this.locks.add(key)
-  }
-
-  private releaseLock(key: string): void {
-    this.locks.delete(key)
-  }
-
-  private async waitForLock(key: string): Promise<void> {
+  /**
+   * Acquire lock using Promise-based coordination
+   * Fixed: Proper async lock mechanism instead of Set-based
+   */
+  private async acquireLock(key: string): Promise<() => void> {
+    // Wait for existing lock
     while (this.locks.has(key)) {
-      await new Promise(resolve => setTimeout(resolve, 1))
+      await this.locks.get(key)
+    }
+    
+    // Create new lock
+    let releaseFn: () => void
+    const lockPromise = new Promise<void>(resolve => {
+      releaseFn = resolve
+    })
+    
+    this.locks.set(key, lockPromise)
+    
+    // Return release function
+    return () => {
+      this.locks.delete(key)
+      releaseFn!()
+    }
+  }
+
+  /**
+   * Wait for existing lock to be released
+   */
+  private async waitForLock(key: string): Promise<void> {
+    const existing = this.locks.get(key)
+    if (existing) {
+      await existing
     }
   }
 

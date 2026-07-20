@@ -3,7 +3,7 @@
  * Sophisticated conflict detection and resolution strategies
  */
 
-import { ConflictContext, ConflictResolution, SyncMetadata, SyncLogger } from '../types'
+import { ConflictContext, ConflictResolution, SyncLogger } from '../types'
 
 export interface ConflictResolutionStrategy<T = unknown> {
   name: string
@@ -96,7 +96,7 @@ export class ThreeWayMergeStrategy<T = Record<string, unknown>> implements Confl
     return merged
   }
 
-  private resolveFieldConflict(field: string, localValue: unknown, remoteValue: unknown): unknown {
+  private resolveFieldConflict(_field: string, localValue: unknown, remoteValue: unknown): unknown {
     // Prefer non-null values
     if (localValue != null && remoteValue == null) {
       return localValue

@@ -5,7 +5,7 @@
 
 import { SyncEngine } from '../core/SyncEngine'
 import { ConflictResolution, ConflictContext } from '../types'
-import { ActivityLog, ActivityTemplate } from '@/types'
+import { ActivityLog } from '@/types'
 import { ActivitySyncAdapter, ActivityLogSync, ActivityTemplateSync } from '../adapters/ActivitySyncAdapter'
 import { ActivityService } from '@/lib/services/ActivityService'
 

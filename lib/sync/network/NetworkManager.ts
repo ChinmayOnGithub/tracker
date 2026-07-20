@@ -53,6 +53,7 @@ export class NetworkManager extends EventEmitter<SyncEventMap> {
   private logger?: SyncLogger
   private endpoints: string[] = []
   private abortController?: AbortController
+  private browserEventCleanup?: () => void
 
   constructor(endpoints: string[] = ['/api/sync/health'], logger?: SyncLogger) {
     super()
@@ -78,6 +79,7 @@ export class NetworkManager extends EventEmitter<SyncEventMap> {
     }, this.QUALITY_INTERVAL)
     
     // Browser online/offline events (when available)
+    // Fixed: Proper cleanup function storage
     if (typeof window !== 'undefined') {
       const handleOnline = () => this.handleBrowserEvent(true)
       const handleOffline = () => this.handleBrowserEvent(false)
@@ -85,18 +87,11 @@ export class NetworkManager extends EventEmitter<SyncEventMap> {
       window.addEventListener('online', handleOnline)
       window.addEventListener('offline', handleOffline)
       
-      // Store cleanup function
-      this.once = (() => {
-        const original = this.once
-        return (event: unknown, listener: unknown) => {
-          if (event === 'cleanup') {
-            window.removeEventListener('online', handleOnline)
-            window.removeEventListener('offline', handleOffline)
-            return () => {}
-          }
-          return original.call(this, event, listener)
-        }
-      })()
+      // Store proper cleanup function
+      this.browserEventCleanup = () => {
+        window.removeEventListener('online', handleOnline)
+        window.removeEventListener('offline', handleOffline)
+      }
     }
   }
 
@@ -414,8 +409,11 @@ export class NetworkManager extends EventEmitter<SyncEventMap> {
     
     this.abortController?.abort()
     
-    // Cleanup browser events
-    this.emit('cleanup' as keyof SyncEventMap, undefined as never)
+    // Cleanup browser events using stored cleanup function
+    if (this.browserEventCleanup) {
+      this.browserEventCleanup()
+      this.browserEventCleanup = undefined
+    }
     
     this.removeAllListeners()
   }

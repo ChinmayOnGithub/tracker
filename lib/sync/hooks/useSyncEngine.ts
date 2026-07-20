@@ -57,20 +57,32 @@ export function useSyncEngine(userId: string): SyncHookReturn {
     isOnline: false
   })
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null)
+  
+  // Fixed: Guard against React Strict Mode double initialization
+  const [isInitialized, setIsInitialized] = useState(false)
 
   // Initialize sync engine and set up event listeners
   useEffect(() => {
+    // Prevent double initialization in React Strict Mode
+    if (isInitialized) return
+    
     let unsubscribeCallbacks: Array<() => void> = []
+
+    const updateSyncStats = () => {
+      const stats = SyncedActivityService.getSyncStats(userId)
+      setSyncStats(stats)
+      setIsOnline(stats.isOnline)
+    }
 
     const initializeSync = async () => {
       try {
-        // Initialize the synced service
         await SyncedActivityService.initialize(userId)
 
-        // Subscribe to sync events
         const unsubscribeNetworkStatus = SyncedActivityService.onSyncEvent(
           'network:statusChanged',
-          ({ status }) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (data: any) => {
+            const { status } = data
             setIsOnline(status === 'online')
             updateSyncStats()
           }
@@ -107,17 +119,11 @@ export function useSyncEngine(userId: string): SyncHookReturn {
           unsubscribeSyncFailed
         ]
 
-        // Initial stats update
         updateSyncStats()
+        setIsInitialized(true)
       } catch (error) {
         console.error('[useSyncEngine] Failed to initialize:', error)
       }
-    }
-
-    const updateSyncStats = () => {
-      const stats = SyncedActivityService.getSyncStats(userId)
-      setSyncStats(stats)
-      setIsOnline(stats.isOnline)
     }
 
     initializeSync()
@@ -128,9 +134,11 @@ export function useSyncEngine(userId: string): SyncHookReturn {
     return () => {
       // Cleanup subscriptions
       unsubscribeCallbacks.forEach(unsubscribe => unsubscribe())
-      clearInterval(statsInterval)
+      if (statsInterval) {
+        clearInterval(statsInterval)
+      }
     }
-  }, [userId])
+  }, [userId, isInitialized])
 
   // Force sync operation
   const forceSync = useCallback(async () => {

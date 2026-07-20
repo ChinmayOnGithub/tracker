@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
-import { Skeleton, EmptyState, Button, Card } from '@/design-system'
+import { Skeleton, EmptyState, Button, Card, Input } from '@/design-system'
 import {
   ExternalLink, Check, Plus, ArrowRightCircle,
   Scale, Shield, BookOpen, CalendarX, Lock,
@@ -13,7 +13,7 @@ import { ParsedCalendarEvent } from '@/modules/sync/google-calendar/services/Goo
 import { Icon } from './Icon'
 import { useRouter } from 'next/navigation'
 import { deleteLog, markComplete, updateLog } from '@/app/actions/log'
-import { reorderActivityTemplates } from '@/app/actions/template'
+import { reorderActivityTemplates, createActivityTemplate } from '@/app/actions/template'
 import { useActivityNotifications } from '@/lib/hooks/useActivityNotifications'
 import { Sparkline } from './WeightPanel'
 import { listVaultItems, VaultItem } from '@/app/actions/vault'
@@ -170,9 +170,50 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   // groupedTimeline removed as it is unused
 
+  const overdueTemplateIds = new Set(overdueOccurrences.map(o => o.templateId).filter(Boolean))
+  const nonOverdueTimeline = timeline.filter(o => !o.templateId || !overdueTemplateIds.has(o.templateId))
+
   const [manualOrderIds, setManualOrderIds] = useState<string[] | null>(null)
   const [prevLogs, setPrevLogs] = useState(logs)
   const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, { completed: boolean; status?: string }>>({})
+
+  const [quickTaskTitle, setQuickTaskTitle] = useState('')
+  const [isCreatingQuickTask, setIsCreatingQuickTask] = useState(false)
+
+  const handleCreateQuickTask = async () => {
+    const title = quickTaskTitle.trim()
+    if (!title || isCreatingQuickTask) return
+
+    setIsCreatingQuickTask(true)
+    try {
+      const res = await createActivityTemplate({
+        name: title,
+        category: 'general',
+        type: 'TASK',
+        priority: 'NORMAL',
+        icon: 'CheckSquare',
+        color: 'blue',
+        recurrenceType: 'one_time',
+        targetDate: `${todayStr}T00:00:00.000Z`
+      })
+
+      if (res.success) {
+        setQuickTaskTitle('')
+        router.refresh()
+      }
+    } catch (err) {
+      console.error('Failed to create quick task:', err)
+    } finally {
+      setIsCreatingQuickTask(false)
+    }
+  }
+
+  const handleQuickTaskKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleCreateQuickTask()
+    }
+  }
 
   // Clear optimistic statuses when server logs are updated
   if (logs !== prevLogs) {
@@ -181,12 +222,12 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   }
 
   // Sort: timed events first (sorted by start time), then all-day events (sorted by template sortOrder)
-  const sortedTimed = timeline.filter(o => !o.isAllDay).sort((a, b) => {
+  const sortedTimed = nonOverdueTimeline.filter(o => !o.isAllDay).sort((a, b) => {
     const aTime = a.start ? new Date(a.start).getTime() : 0
     const bTime = b.start ? new Date(b.start).getTime() : 0
     return aTime - bTime
   })
-  const sortedAnytime = timeline.filter(o => o.isAllDay).sort((a, b) => {
+  const sortedAnytime = nonOverdueTimeline.filter(o => o.isAllDay).sort((a, b) => {
     if (manualOrderIds) {
       const idxA = manualOrderIds.indexOf(a.templateId || '')
       const idxB = manualOrderIds.indexOf(b.templateId || '')
@@ -644,11 +685,35 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             <div className="space-y-1.5">
               {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-10 w-full rounded-md" />)}
             </div>
-          ) : orderedItems.length === 0 ? (
-            <EmptyState title="Your Day is Clear! 🎉" description="No activities scheduled for today." />
           ) : (
             <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-md divide-y divide-[var(--color-border)]/40 overflow-hidden shadow-xs">
-              {orderedItems.map((o, idx) => renderTimelineItemCard(o, idx))}
+              {orderedItems.length === 0 ? (
+                <EmptyState title="Your Day is Clear! 🎉" description="No activities scheduled for today." />
+              ) : (
+                orderedItems.map((o, idx) => renderTimelineItemCard(o, idx))
+              )}
+              <div className="p-2.5 bg-[var(--color-bg-subtle)]/60 border-t border-[var(--color-border)]/60 flex items-center gap-2">
+                <div className="flex-1">
+                  <Input
+                    placeholder="+ Type a task for today and press Enter..."
+                    value={quickTaskTitle}
+                    onChange={(e) => setQuickTaskTitle(e.target.value)}
+                    onKeyDown={handleQuickTaskKeyDown}
+                    className="text-xs bg-[var(--color-bg-surface)] placeholder:text-[var(--color-text-muted)]"
+                    disabled={isCreatingQuickTask}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleCreateQuickTask}
+                  isLoading={isCreatingQuickTask}
+                  disabled={!quickTaskTitle.trim() || isCreatingQuickTask}
+                  className="shrink-0 text-xs"
+                >
+                  <Plus className="w-3.5 h-3.5 mr-1" />
+                  Add
+                </Button>
+              </div>
             </div>
           )}
         </div>

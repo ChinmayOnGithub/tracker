@@ -7,13 +7,9 @@ import {
   SyncEngineConfig, 
   EntitySyncConfig, 
   SyncOperation, 
-  SyncResult, 
   SyncMetadata,
-  ConflictContext,
   SyncEventMap,
-  NetworkStatus,
   SyncMetrics,
-  RetryConfig,
   SyncLogger
 } from '../types'
 
@@ -619,19 +615,19 @@ export class ProductionSyncEngine extends EventEmitter<SyncEventMap> {
   }
 
   // Stub methods - these would be implemented based on specific needs
-  private async processPendingOperations(entityType: string, operations: any[], batchId: string): Promise<void> {
+  private async processPendingOperations(_entityType: string, _operations: unknown[], _batchId: string): Promise<void> {
     // Implementation would process operations through network adapter
   }
 
-  private async pullRemoteChanges(entityType: string, batchId: string): Promise<void> {
+  private async pullRemoteChanges(_entityType: string, _batchId: string): Promise<void> {
     // Implementation would pull from network adapter
   }
 
-  private async rollbackOptimisticUpdate(entityType: string, entityId: string): Promise<void> {
+  private async rollbackOptimisticUpdate(_entityType: string, _entityId: string): Promise<void> {
     // Implementation would revert local changes
   }
 
-  private async waitForOperationsToComplete(timeoutMs: number): Promise<void> {
+  private async waitForOperationsToComplete(_timeoutMs: number): Promise<void> {
     // Implementation would wait for current operations to finish
   }
 

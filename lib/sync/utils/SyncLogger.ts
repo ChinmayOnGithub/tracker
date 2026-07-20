@@ -32,12 +32,12 @@ export class ProductionSyncLogger implements SyncLogger {
   
   // External logging integration
   private externalLogger?: {
-    log: (level: string, message: string, context?: any) => void
+    log: (level: string, message: string, context?: Record<string, unknown>) => void
     metric: (name: string, value: number, tags?: Record<string, string>) => void
   }
 
   constructor(externalLogger?: {
-    log: (level: string, message: string, context?: any) => void
+    log: (level: string, message: string, context?: Record<string, unknown>) => void
     metric: (name: string, value: number, tags?: Record<string, string>) => void
   }) {
     this.externalLogger = externalLogger

@@ -3,8 +3,9 @@
  * Comprehensive queue management with priority scheduling, retry logic, and crash recovery
  */
 
-import { SyncOperation, SyncResult, StorageProvider, SyncEventMap, SyncError, ErrorCategory, RetryConfig, OperationPriority, SyncLogger } from '../types'
+import { SyncOperation, SyncResult, StorageProvider, SyncEventMap, SyncError, RetryConfig, OperationPriority, SyncLogger } from '../types'
 import { EventEmitter } from '../utils/EventEmitter'
+import { SyncQueueHelpers } from './SyncQueueHelpers'
 
 interface QueuedOperation extends SyncOperation {
   attempts: number
@@ -81,36 +82,45 @@ export class SyncQueue extends EventEmitter<SyncEventMap> {
 
   /**
    * Add operation to queue with comprehensive validation and deduplication
+   * Fixed: Atomic duplicate check to prevent race conditions
    */
   async enqueue(operation: SyncOperation): Promise<void> {
     try {
       // Validate operation
       this.validateOperation(operation)
       
-      // Check for duplicates
-      if (await this.isDuplicate(operation)) {
-        this.logger?.warn('SyncQueue duplicate operation rejected', {
-          operationId: operation.id,
-          clientRequestId: operation.clientRequestId
-        })
-        throw new Error(`Duplicate operation: ${operation.clientRequestId || operation.id}`)
-      }
+      // Atomic duplicate check with lock to prevent race condition
+      await this.waitForLock(`enqueue:${operation.id}`)
+      this.acquireLock(`enqueue:${operation.id}`)
       
-      // Check queue capacity
-      if (this.queue.length >= this.maxQueueSize) {
-        await this.handleQueueOverflow(operation)
-        return
+      try {
+        // Check for duplicates while holding lock
+        if (await this.isDuplicate(operation)) {
+          this.logger?.warn('SyncQueue duplicate operation rejected', {
+            operationId: operation.id,
+            clientRequestId: operation.clientRequestId
+          })
+          throw new Error(`Duplicate operation: ${operation.clientRequestId || operation.id}`)
+        }
+        
+        // Check queue capacity
+        if (this.queue.length >= this.maxQueueSize) {
+          await this.handleQueueOverflow(operation)
+          return
+        }
+        
+        const queuedOperation: QueuedOperation = {
+          ...operation,
+          attempts: 0,
+          addedAt: Date.now(),
+          errors: []
+        }
+        
+        // Insert based on priority and creation time
+        this.insertByPriority(queuedOperation)
+      } finally {
+        this.releaseLock(`enqueue:${operation.id}`)
       }
-      
-      const queuedOperation: QueuedOperation = {
-        ...operation,
-        attempts: 0,
-        addedAt: Date.now(),
-        errors: []
-      }
-      
-      // Insert based on priority and creation time
-      this.insertByPriority(queuedOperation)
       
       // Persist queue state
       if (this.persistenceEnabled) {
@@ -211,12 +221,67 @@ export class SyncQueue extends EventEmitter<SyncEventMap> {
   }
 
   /**
-   * Execute a single operation (to be overridden by implementations)
+   * Execute a single operation (stub - should be overridden by network adapter)
+   * For base SyncQueue, this delegates to a hypothetical network adapter
    */
-  protected async executeOperation(operation: QueuedOperation): Promise<SyncResult> {
-    // This is a base implementation that should be overridden
-    // by specific queue implementations (ActivitySyncQueue, etc.)
-    throw new Error('executeOperation must be implemented by subclass')
+  protected async executeOperation(_operation: QueuedOperation): Promise<SyncResult> {
+    // This is intentionally a stub since SyncQueue is typically used with
+    // a network adapter that handles actual execution
+    // Subclasses or adapters should override this
+    throw new Error('executeOperation must be implemented by subclass or adapter')
+  }
+
+  /**
+   * Process a single operation with timeout and error handling
+   * Fixed: Ensures operations are removed from processingOperations on all exit paths
+   */
+  private async processOperation(operation: QueuedOperation): Promise<void> {
+    const startTime = Date.now()
+    operation.startedAt = startTime
+    
+    try {
+      // Execute the operation with timeout
+      const timeout = operation.timeout || this.retryConfig.maxDelay || 30000
+      const result = await Promise.race([
+        this.executeOperation(operation),
+        new Promise<SyncResult>((_, reject) =>
+          setTimeout(() => reject(new Error('Operation timeout')), timeout)
+        )
+      ])
+
+      // Success path
+      if (result.success) {
+        operation.completedAt = Date.now()
+        this.stats.totalSuccessful++
+        this.processingOperations.delete(operation.id) // Clean up processing map
+        this.addToCompleted(operation)
+        
+        this.emit('operation:completed', {
+          operation,
+          result,
+          duration: Date.now() - startTime
+        })
+        
+        this.logger?.info('SyncQueue operation completed', {
+          operationId: operation.id,
+          duration: Date.now() - startTime
+        })
+      } else {
+        // Operation executed but failed
+        await this.handleOperationFailure(operation, new Error(result.error?.message || 'Operation failed'))
+      }
+    } catch (error) {
+      // Execution error
+      await this.handleOperationFailure(operation, error instanceof Error ? error : new Error(String(error)))
+    } finally {
+      // Ensure we always remove from processing map on any exit path
+      if (this.processingOperations.has(operation.id)) {
+        this.processingOperations.delete(operation.id)
+      }
+      
+      // Continue processing queue
+      setImmediate(() => this.processBatch())
+    }
   }
 
   /**
@@ -373,7 +438,6 @@ export class SyncQueue extends EventEmitter<SyncEventMap> {
   }
 
   private insertByPriority(operation: QueuedOperation): void {
-    const { SyncQueueHelpers } = require('./SyncQueueHelpers')
     const priority = SyncQueueHelpers.getPriorityValue(operation.priority)
     let insertIndex = this.queue.length
     
@@ -510,7 +574,7 @@ export class SyncQueue extends EventEmitter<SyncEventMap> {
       const queueState = await this.storageProvider.get<{
         queue: QueuedOperation[]
         processing: QueuedOperation[]
-        stats: any
+        stats: unknown
         timestamp: number
       }>('sync:queue:state')
       
@@ -605,7 +669,6 @@ export class SyncQueue extends EventEmitter<SyncEventMap> {
 
   getStats(): QueueStats {
     const now = Date.now()
-    const { SyncQueueHelpers } = require('./SyncQueueHelpers')
     
     const byPriority: Record<OperationPriority, number> = {
       realtime: 0, urgent: 0, high: 0, normal: 0, low: 0

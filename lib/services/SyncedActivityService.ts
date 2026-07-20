@@ -16,6 +16,8 @@ class SyncedActivityServiceImpl {
   private syncEngineByUser = new Map<string, SyncEngine>()
   private activitySyncServiceByUser = new Map<string, ActivitySyncService>()
   private initializingUsers = new Set<string>()
+  private initializationPromises = new Map<string, Promise<void>>()
+  private readonly MAX_INIT_WAIT_TIME = 10000 // 10 seconds max wait for initialization
 
   /**
    * Check if sync is enabled
@@ -25,7 +27,15 @@ class SyncedActivityServiceImpl {
   }
 
   /**
+   * Public initialization method for explicit setup (used by React hooks)
+   */
+  async initialize(userId: string): Promise<void> {
+    await this.ensureInitialized(userId)
+  }
+
+  /**
    * Initialize sync engine for a user (server-side only falls back, client-side uses the engine)
+   * Fixed: Eliminates infinite recursion by using Promise-based coordination
    */
   private async ensureInitialized(userId: string): Promise<void> {
     if (!this.isSyncEnabled()) return
@@ -33,13 +43,34 @@ class SyncedActivityServiceImpl {
     // Check if already initialized
     if (this.syncEngineByUser.has(userId)) return
 
-    // Prevent concurrent initialization
-    if (this.initializingUsers.has(userId)) {
-      // Wait for initialization to complete
-      await new Promise(resolve => setTimeout(resolve, 100))
-      return this.ensureInitialized(userId)
+    // Check if initialization is in progress - wait for it instead of recursing
+    if (this.initializationPromises.has(userId)) {
+      const existingPromise = this.initializationPromises.get(userId)!
+      await Promise.race([
+        existingPromise,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Initialization timeout')), this.MAX_INIT_WAIT_TIME)
+        )
+      ])
+      return
     }
 
+    // Start new initialization
+    const initPromise = this.performInitialization(userId)
+    this.initializationPromises.set(userId, initPromise)
+
+    try {
+      await initPromise
+    } finally {
+      // Always clean up, even on error
+      this.initializationPromises.delete(userId)
+    }
+  }
+
+  /**
+   * Perform actual initialization (separated for better error handling)
+   */
+  private async performInitialization(userId: string): Promise<void> {
     this.initializingUsers.add(userId)
 
     try {
@@ -273,17 +304,24 @@ class SyncedActivityServiceImpl {
   /**
    * Subscribe to sync events
    */
-  onSyncEvent(userId: string, event: string, callback: (data: unknown) => void): () => void {
+  onSyncEvent(event: string, callback: (data: unknown) => void): () => void {
     if (!this.isSyncEnabled()) {
       return () => {} // No-op unsubscribe
     }
 
-    const syncEngine = this.syncEngineByUser.get(userId)
-    if (!syncEngine) {
-      return () => {} // No-op unsubscribe
+    // Subscribe to all user engines - this is a limitation of the singleton approach
+    // For production, consider per-user event bus
+    const unsubscribers: Array<() => void> = []
+    
+    for (const syncEngine of this.syncEngineByUser.values()) {
+      const unsub = syncEngine.on(event as keyof SyncEventMap, callback)
+      unsubscribers.push(unsub)
     }
 
-    return syncEngine.on(event as keyof SyncEventMap, callback)
+    // Return combined unsubscribe function
+    return () => {
+      unsubscribers.forEach(unsub => unsub())
+    }
   }
 
   /**

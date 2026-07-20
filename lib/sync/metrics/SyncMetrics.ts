@@ -3,7 +3,7 @@
  * Comprehensive metrics and observability for sync operations
  */
 
-import { SyncMetrics, SyncLogger, OperationPriority, ErrorCategory } from '../types'
+import { SyncMetrics, SyncLogger, ErrorCategory } from '../types'
 
 interface MetricSample {
   timestamp: number
@@ -307,12 +307,12 @@ export class SyncMetricsCollector {
   /**
    * Export metrics for external monitoring systems
    */
-  exportMetrics(): Record<string, any> {
+  exportMetrics(): Record<string, unknown> {
     const metrics = this.getMetrics()
     const samples: Record<string, MetricSample[]> = {}
     
     // Export recent samples
-    for (const [name, sampleArray] of this.samples.entries()) {
+    for (const [name, _sampleArray] of this.samples.entries()) {
       const recent = this.getSamplesInWindow(name, this.SAMPLE_RETENTION['5m'])
       if (recent.length > 0) {
         samples[name] = recent

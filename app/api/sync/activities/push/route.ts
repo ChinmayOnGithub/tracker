@@ -1,6 +1,7 @@
 /**
  * Activity Sync Push Endpoint
  * Receives and processes local changes from clients
+ * Fixed: Added idempotency key support to prevent duplicate processing
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -9,6 +10,20 @@ import { ActivityService } from '@/lib/services/ActivityService'
 import { SyncOperation, SyncResult } from '@/lib/sync/types'
 import { ActivityLogSync, ActivityTemplateSync } from '@/lib/sync/adapters/ActivitySyncAdapter'
 import { db } from '@/lib/db'
+
+// In-memory cache for idempotency (in production, use Redis or database)
+const processedOperations = new Map<string, { timestamp: number; result: SyncResult }>()
+const IDEMPOTENCY_TTL = 24 * 60 * 60 * 1000 // 24 hours
+
+// Cleanup old entries periodically
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, value] of processedOperations.entries()) {
+    if (now - value.timestamp > IDEMPOTENCY_TTL) {
+      processedOperations.delete(key)
+    }
+  }
+}, 60 * 60 * 1000) // Every hour
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,10 +41,27 @@ export async function POST(request: NextRequest) {
 
     const results: SyncResult[] = []
 
-    // Process each operation
+    // Process each operation with idempotency
     for (const operation of operations) {
       try {
+        // Check idempotency key
+        const idempotencyKey = operation.clientRequestId || operation.id
+        const cached = processedOperations.get(idempotencyKey)
+        
+        if (cached) {
+          console.log(`[SyncAPI] Returning cached result for ${idempotencyKey}`)
+          results.push(cached.result)
+          continue
+        }
+        
         const result = await processOperation(operation, user.id)
+        
+        // Cache the result
+        processedOperations.set(idempotencyKey, {
+          timestamp: Date.now(),
+          result
+        })
+        
         results.push(result)
       } catch (error) {
         console.error('[SyncAPI] Operation failed:', error)
@@ -217,7 +249,18 @@ async function processActivityLogOperation(
     return {
       operation,
       success: false,
-      error: error instanceof Error ? error.message : 'Operation failed'
+      error: {
+        category: 'internal',
+        code: 'PROCESSING_FAILED',
+        message: error instanceof Error ? error.message : 'Operation failed',
+        retryable: true
+      },
+      timing: {
+        queuedAt: operation.createdAt,
+        startedAt: Date.now(),
+        completedAt: Date.now(),
+        duration: 0
+      }
     }
   }
 }
@@ -295,7 +338,18 @@ async function processActivityTemplateOperation(
     return {
       operation,
       success: false,
-      error: error instanceof Error ? error.message : 'Operation failed'
+      error: {
+        category: 'internal',
+        code: 'PROCESSING_FAILED',
+        message: error instanceof Error ? error.message : 'Operation failed',
+        retryable: true
+      },
+      timing: {
+        queuedAt: operation.createdAt,
+        startedAt: Date.now(),
+        completedAt: Date.now(),
+        duration: 0
+      }
     }
   }
 }

@@ -41,16 +41,16 @@ export class ActivitySyncAdapter implements NetworkAdapter {
     this.baseUrl = baseUrl
   }
 
-  async push<T>(operations: SyncOperation<T>[]): Promise<SyncResult<T>[]> {
+  async push<T>(batch: SyncBatch<T>): Promise<SyncResult<T>[]> {
     try {
-      console.log(`[ActivitySyncAdapter] Pushing ${operations.length} operations`)
+      console.log(`[ActivitySyncAdapter] Pushing batch ${batch.id} with ${batch.operations.length} operations`)
       
       const response = await fetch(`${this.baseUrl}/activities/push`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ operations }),
+        body: JSON.stringify({ operations: batch.operations }),
       })
 
       if (!response.ok) {
@@ -63,7 +63,7 @@ export class ActivitySyncAdapter implements NetworkAdapter {
       console.error('[ActivitySyncAdapter] Push failed:', error)
       
       // Return failed results for all operations
-      return operations.map(operation => ({
+      return batch.operations.map(operation => ({
         operation,
         success: false,
         error: {
@@ -232,7 +232,7 @@ export class ActivitySyncAdapter implements NetworkAdapter {
       id: sync.id,
       name: sync.name,
       category: sync.category,
-      type: sync.type as any,
+      type: sync.type as unknown,
       icon: sync.icon,
       color: sync.color,
       isActive: sync.isActive,

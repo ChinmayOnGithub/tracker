@@ -7,13 +7,8 @@ import {
   SyncEngineConfig, 
   EntitySyncConfig, 
   SyncOperation, 
-  SyncResult, 
-  SyncStatus,
   SyncMetadata,
-  ConflictContext,
-  ConflictResolution,
-  SyncEventMap,
-  NetworkStatus
+  SyncEventMap
 } from '../types'
 import { SyncQueue } from '../queue/SyncQueue'
 import { NetworkManager } from '../network/NetworkManager'
@@ -70,7 +65,7 @@ export class SyncEngine extends EventEmitter<SyncEventMap> {
     console.log('[SyncEngine] Stopping sync engine...')
 
     // Clear all sync intervals
-    for (const [entityType, interval] of this.syncIntervals) {
+    for (const [_entityType, interval] of this.syncIntervals) {
       clearInterval(interval)
     }
     this.syncIntervals.clear()
