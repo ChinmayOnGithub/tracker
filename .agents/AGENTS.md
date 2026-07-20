@@ -23,4 +23,11 @@ You MUST read and strictly adhere to the **AI Constitution** in [AI Constitution
   * Non-Daily activities cycle: `Cleared` ➔ `Done` ➔ `Canceled` ➔ `Postponed` ➔ `Cleared`.
   * Daily activities cycle: `Cleared` ➔ `Done` ➔ `Canceled` ➔ `Cleared` (Postpone is skipped).
   * Marking a non-daily task `Postponed` must automatically reschedule the activity for the next day (`addUTCDays(log.date, 1)`) via the recurrence analysis. Any subsequent status change (Done/Canceled) must delete the postponed log, reverting the item to its normal recurrence logic.
+
+### 4. Type Safety & Test Mocking Rules (CRITICAL)
+* **No Unsafe Type Casts**: Do not use `as any`, `as unknown`, or `as object` to satisfy the TypeScript compiler unless there is no type-safe alternative. Always prefer narrowing types, defining explicit generic parameters, or extracting interface declarations.
+* **Test Mocks & Bun Compatibility**: The repository uses `bun test` as its primary test runner. Test files under `__tests__` or `tests/` must import test block helpers (`describe`, `it`, `expect`, `beforeEach`, `afterEach`, `mock`) from `bun:test` instead of `vitest` or `@jest/globals`.
+* **Database Mock Typing**: When mocking functions that return Prisma database entities (like `ActivityService.logActivity` returning `ActivityLog`), fully specify all properties required by the model (e.g. `userId`, `deletedAt`, `journalEntryId`, etc.) and import the model from `@prisma/client` to guarantee 100% strict type safety.
+* **Clean Event Mocks**: Do not use `jest.clearAllMocks()` or `vi.clearAllMocks()` in `beforeEach` hooks in Bun tests as it causes reference errors. Instead, reset the mock call history manually by casting the mocked function to `{ mock?: { calls: unknown[][] } }` and setting its call list length to 0 (e.g., `(ActivityService.logActivity as { mock?: { calls: unknown[][] } })?.mock?.calls.length = 0`).
+* **No Duplicate Implementations**: Never add duplicate methods (like `persistQueue` or `getStats`) to classes. Retain only one fully featured implementation, typically at the bottom of the module file.
 <!-- END:tracker-system-guidelines -->
