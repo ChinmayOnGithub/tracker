@@ -262,7 +262,7 @@ export class ConflictResolver {
 
     // No specific rule found - use default strategy
     const defaultStrategy = this.strategies.get('last-writer-wins')!
-    const result = await defaultStrategy.resolve(context)
+    const result = await defaultStrategy.resolve(context) as { resolution: ConflictResolution; data?: T; reason?: string }
     
     this.logger?.info('ConflictResolver used default strategy', {
       entityType: context.entityType,

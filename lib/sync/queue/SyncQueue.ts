@@ -29,6 +29,14 @@ interface QueueStats {
   averageWaitTime: number
 }
 
+interface InternalQueueCounters {
+  totalProcessed: number
+  totalSuccessful: number
+  totalFailed: number
+  totalRetries: number
+  totalDropped: number
+}
+
 export class SyncQueue extends EventEmitter<SyncEventMap> {
   private queue: QueuedOperation[] = []
   private processingOperations = new Map<string, QueuedOperation>()
@@ -47,12 +55,41 @@ export class SyncQueue extends EventEmitter<SyncEventMap> {
   private recoveryInProgress = false
   
   // Metrics and monitoring
-  private stats = {
+  private stats: InternalQueueCounters = {
     totalProcessed: 0,
     totalSuccessful: 0,
     totalFailed: 0,
     totalRetries: 0,
     totalDropped: 0
+  }
+
+  private locks = new Map<string, Array<() => void>>()
+
+  private async waitForLock(key: string): Promise<void> {
+    if (!this.locks.has(key)) {
+      return
+    }
+    return new Promise<void>((resolve) => {
+      this.locks.get(key)!.push(resolve)
+    })
+  }
+
+  private acquireLock(key: string): void {
+    if (!this.locks.has(key)) {
+      this.locks.set(key, [])
+    }
+  }
+
+  private releaseLock(key: string): void {
+    const waiters = this.locks.get(key)
+    if (!waiters) return
+
+    if (waiters.length > 0) {
+      const next = waiters.shift()!
+      next()
+    } else {
+      this.locks.delete(key)
+    }
   }
 
   constructor(
@@ -241,7 +278,7 @@ export class SyncQueue extends EventEmitter<SyncEventMap> {
     
     try {
       // Execute the operation with timeout
-      const timeout = operation.timeout || this.retryConfig.maxDelay || 30000
+      const timeout = operation.timeoutMs || this.retryConfig.maxDelay || 30000
       const result = await Promise.race([
         this.executeOperation(operation),
         new Promise<SyncResult>((_, reject) =>
@@ -258,8 +295,7 @@ export class SyncQueue extends EventEmitter<SyncEventMap> {
         
         this.emit('operation:completed', {
           operation,
-          result,
-          duration: Date.now() - startTime
+          result
         })
         
         this.logger?.info('SyncQueue operation completed', {
@@ -358,61 +394,11 @@ export class SyncQueue extends EventEmitter<SyncEventMap> {
     }
   }
 
-  /**
-   * Persist queue to storage
-   */
-  private async persistQueue(): Promise<void> {
-    try {
-      await this.storageProvider.set('sync:queue', this.queue)
-    } catch (error) {
-      console.error('[SyncQueue] Failed to persist queue:', error)
-    }
-  }
 
-  /**
-   * Load queue from storage
-   */
-  private async loadPersistedQueue(): Promise<void> {
-    try {
-      const persistedQueue = await this.storageProvider.get<QueuedOperation[]>('sync:queue')
-      if (persistedQueue) {
-        this.queue = persistedQueue
-        console.log(`[SyncQueue] Loaded ${this.queue.length} operations from storage`)
-      }
-    } catch (error) {
-      console.error('[SyncQueue] Failed to load persisted queue:', error)
-    }
-  }
 
-  /**
-   * Clear all operations
-   */
-  async clear(): Promise<void> {
-    this.queue = []
-    await this.persistQueue()
-  }
 
-  /**
-   * Get queue statistics
-   */
-  getStats() {
-    const byEntityType = new Map<string, number>()
-    const byStatus = new Map<string, number>()
-    
-    for (const op of this.queue) {
-      byEntityType.set(op.entityType, (byEntityType.get(op.entityType) || 0) + 1)
-      
-      const status = op.attempts === 0 ? 'pending' : 'retrying'
-      byStatus.set(status, (byStatus.get(status) || 0) + 1)
-    }
 
-    return {
-      total: this.queue.length,
-      byEntityType: Object.fromEntries(byEntityType),
-      byStatus: Object.fromEntries(byStatus),
-      processing: this.processing
-    }
-  }
+
 
   // Queue management helper methods
 
@@ -574,7 +560,7 @@ export class SyncQueue extends EventEmitter<SyncEventMap> {
       const queueState = await this.storageProvider.get<{
         queue: QueuedOperation[]
         processing: QueuedOperation[]
-        stats: unknown
+        stats: Partial<InternalQueueCounters>
         timestamp: number
       }>('sync:queue:state')
       
@@ -602,7 +588,9 @@ export class SyncQueue extends EventEmitter<SyncEventMap> {
       }
       
       // Restore stats
-      this.stats = { ...this.stats, ...queueState.stats }
+      if (queueState.stats) {
+        this.stats = { ...this.stats, ...queueState.stats }
+      }
       
       this.emit('queue:recovered', {
         operationCount: this.queue.length,

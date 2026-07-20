@@ -223,7 +223,7 @@ export interface RetryConfig {
 }
 
 // Sync event types with enhanced metrics
-export interface SyncEventMap {
+export type SyncEventMap = {
   'sync:started': { entityTypes: string[]; batchId: string }
   'sync:progress': { completed: number; total: number; entityType?: string; batchId: string }
   'sync:completed': { results: SyncResult[]; duration: number; batchId: string }

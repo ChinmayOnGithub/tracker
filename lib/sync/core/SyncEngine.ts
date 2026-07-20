@@ -162,8 +162,9 @@ export class SyncEngine extends EventEmitter<SyncEventMap> {
 
     console.log(`[SyncEngine] Starting sync for entity type: ${entityType}`)
 
+    const batchId = 'batch_' + Math.random().toString(36).substring(2, 11)
     const startTime = Date.now()
-    this.emit('sync:started', { entityTypes: [entityType] })
+    this.emit('sync:started', { entityTypes: [entityType], batchId })
 
     try {
       // Get pending operations for this entity
@@ -181,7 +182,8 @@ export class SyncEngine extends EventEmitter<SyncEventMap> {
           this.emit('sync:progress', {
             completed: Math.min(i + batchSize, operations.length),
             total: operations.length,
-            entityType
+            entityType,
+            batchId
           })
         }
       }
@@ -190,12 +192,21 @@ export class SyncEngine extends EventEmitter<SyncEventMap> {
       await this.pullRemoteChanges(entityType)
 
       const duration = Date.now() - startTime
-      this.emit('sync:completed', { results: [], duration })
+      this.emit('sync:completed', { results: [], duration, batchId })
 
       console.log(`[SyncEngine] Sync completed for ${entityType} in ${duration}ms`)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown sync error'
-      this.emit('sync:failed', { error: errorMessage, entityType })
+      this.emit('sync:failed', {
+        error: {
+          message: errorMessage,
+          code: 'SYNC_ERROR',
+          category: 'internal',
+          retryable: true
+        },
+        entityType,
+        batchId
+      })
       console.error(`[SyncEngine] Sync failed for ${entityType}:`, error)
     }
   }
@@ -208,8 +219,9 @@ export class SyncEngine extends EventEmitter<SyncEventMap> {
     
     console.log(`[SyncEngine] Starting sync for all entities: ${entityTypes.join(', ')}`)
     
+    const batchId = 'batch_' + Math.random().toString(36).substring(2, 11)
     const startTime = Date.now()
-    this.emit('sync:started', { entityTypes })
+    this.emit('sync:started', { entityTypes, batchId })
 
     try {
       for (const entityType of entityTypes) {
@@ -217,10 +229,18 @@ export class SyncEngine extends EventEmitter<SyncEventMap> {
       }
 
       const duration = Date.now() - startTime
-      this.emit('sync:completed', { results: [], duration })
+      this.emit('sync:completed', { results: [], duration, batchId })
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown sync error'
-      this.emit('sync:failed', { error: errorMessage })
+      this.emit('sync:failed', {
+        error: {
+          message: errorMessage,
+          code: 'SYNC_ERROR',
+          category: 'internal',
+          retryable: true
+        },
+        batchId
+      })
     }
   }
 
@@ -271,8 +291,8 @@ export class SyncEngine extends EventEmitter<SyncEventMap> {
 
   private setupEventListeners(): void {
     // Listen to network changes
-    this.networkManager.on('network:statusChanged', ({ status }) => {
-      this.emit('network:statusChanged', { status })
+    this.networkManager.on('network:statusChanged', ({ status, previousStatus }) => {
+      this.emit('network:statusChanged', { status, previousStatus })
       
       if (status === 'online') {
         console.log('[SyncEngine] Network restored - resuming sync')

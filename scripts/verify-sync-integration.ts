@@ -28,7 +28,7 @@ const requiredMethods = [
 ]
 
 const missingMethods = requiredMethods.filter(
-  method => typeof (SyncedActivityService as Record<string, unknown>)[method] !== 'function'
+  method => !(method in SyncedActivityService) || typeof SyncedActivityService[method as keyof typeof SyncedActivityService] !== 'function'
 )
 
 if (missingMethods.length === 0) {

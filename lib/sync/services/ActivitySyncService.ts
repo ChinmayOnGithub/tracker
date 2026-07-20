@@ -27,7 +27,8 @@ export class ActivitySyncService {
       entityType: 'activityLog',
       syncInterval: 30000, // 30 seconds
       priority: 'high', // High priority
-      conflictResolver: this.resolveActivityLogConflict.bind(this),
+      conflictResolver: (context: ConflictContext) =>
+        this.resolveActivityLogConflict(context as ConflictContext<ActivityLogSync>),
       enableRealtime: true
     })
 
@@ -36,7 +37,8 @@ export class ActivitySyncService {
       entityType: 'activityTemplate',
       syncInterval: 60000, // 1 minute
       priority: 'high', // High priority
-      conflictResolver: this.resolveActivityTemplateConflict.bind(this),
+      conflictResolver: (context: ConflictContext) =>
+        this.resolveActivityTemplateConflict(context as ConflictContext<ActivityTemplateSync>),
       enableRealtime: true
     })
   }
@@ -86,7 +88,7 @@ export class ActivitySyncService {
       console.error('[ActivitySyncService] Failed to create log optimistically:', error)
       
       // Fallback to direct service call
-      return await ActivityService.logActivity({
+      const log = await ActivityService.logActivity({
         userId: this.userId,
         templateId: data.activityId,
         date: data.date,
@@ -95,6 +97,10 @@ export class ActivitySyncService {
         amount: data.amount,
         payload: data.payload
       })
+      return {
+        ...log,
+        date: log.logDate.toISOString().split('T')[0]
+      }
     }
   }
 
@@ -143,7 +149,11 @@ export class ActivitySyncService {
       console.error('[ActivitySyncService] Failed to update log optimistically:', error)
       
       // Fallback to direct service call
-      return await ActivityService.updateLog(this.userId, id, data)
+      const log = await ActivityService.updateLog(this.userId, id, data)
+      return {
+        ...log,
+        date: log.logDate.toISOString().split('T')[0]
+      }
     }
   }
 

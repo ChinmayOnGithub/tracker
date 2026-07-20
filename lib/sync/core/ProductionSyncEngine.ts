@@ -338,6 +338,7 @@ export class ProductionSyncEngine extends EventEmitter<SyncEventMap> {
     }
 
     const batchId = this.generateBatchId()
+    const startTimestamp = Date.now()
     const timing = this.logger.startTiming(`sync_${entityType}`)
 
     try {
@@ -378,7 +379,7 @@ export class ProductionSyncEngine extends EventEmitter<SyncEventMap> {
 
       this.emit('sync:completed', {
         results: [], // Would contain actual results
-        duration: Date.now() - timing,
+        duration: Date.now() - startTimestamp,
         batchId
       })
 
@@ -403,14 +404,13 @@ export class ProductionSyncEngine extends EventEmitter<SyncEventMap> {
       batchTimeoutMs: config.batchTimeoutMs || 30000,
       maxConcurrentBatches: config.maxConcurrentBatches || 3,
       retryConfig: {
-        maxAttempts: 3,
-        baseDelay: 1000,
-        maxDelay: 30000,
-        strategy: 'exponential',
-        jitter: true,
-        backoffMultiplier: 2,
-        retryableErrors: ['network', 'internal', 'rate_limit'],
-        ...config.retryConfig
+        maxAttempts: config.retryConfig?.maxAttempts ?? 3,
+        baseDelay: config.retryConfig?.baseDelay ?? 1000,
+        maxDelay: config.retryConfig?.maxDelay ?? 30000,
+        strategy: config.retryConfig?.strategy ?? 'exponential',
+        jitter: config.retryConfig?.jitter ?? true,
+        backoffMultiplier: config.retryConfig?.backoffMultiplier ?? 2,
+        retryableErrors: config.retryConfig?.retryableErrors ?? ['network', 'internal', 'rate_limit']
       },
       networkTimeout: config.networkTimeout || 15000,
       connectionPoolSize: config.connectionPoolSize || 5,
@@ -523,7 +523,7 @@ export class ProductionSyncEngine extends EventEmitter<SyncEventMap> {
     }
   }
 
-  private async performPeriodicMaintenance(): void {
+  private async performPeriodicMaintenance(): Promise<void> {
     try {
       // Cleanup old metadata
       const cleaned = await this.config.storageProvider.cleanup(

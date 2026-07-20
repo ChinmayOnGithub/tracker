@@ -12,50 +12,66 @@
  * Tests are deterministic and should pass consistently on repeated runs.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test'
 import { SyncedActivityService } from '../SyncedActivityService'
 import { ActivityService } from '../ActivityService'
+import { ActivityLog, Prisma } from '@prisma/client'
 
 // Mock ActivityService to avoid database dependencies
-vi.mock('../ActivityService', () => ({
+mock.module('../ActivityService', () => ({
   ActivityService: {
-    logActivity: vi.fn().mockImplementation(async (params) => ({
+    logActivity: mock(async (params: { userId: string; templateId: string; date: string; note?: string | null; status: string; amount?: number | null; payload?: unknown }): Promise<ActivityLog> => ({
       id: `log-${Date.now()}-${Math.random()}`,
+      userId: params.userId,
       activityId: params.templateId,
-      date: params.date,
       logDate: new Date(params.date),
       note: params.note || null,
       status: params.status,
       amount: params.amount || null,
-      payload: params.payload || null,
+      payload: (params.payload as Prisma.JsonValue) || null,
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      deletedAt: null,
+      journalEntryId: null,
+      weightRecordId: null,
+      leaveRecordId: null
     })),
-    updateLog: vi.fn().mockImplementation(async (_userId, id, data) => ({
+    updateLog: mock(async (userId: string, id: string, data: { note?: string | null; status?: string; amount?: number | null; payload?: unknown }): Promise<ActivityLog> => ({
       id,
+      userId,
       activityId: 'template-1',
-      date: '2024-01-01',
       logDate: new Date('2024-01-01'),
       note: data.note || null,
       status: data.status || 'done',
       amount: data.amount || null,
-      payload: data.payload || null,
+      payload: (data.payload as Prisma.JsonValue) || null,
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
+      deletedAt: null,
+      journalEntryId: null,
+      weightRecordId: null,
+      leaveRecordId: null
     })),
-    deleteLog: vi.fn().mockResolvedValue(undefined),
-    getOrCreateDefaultTemplate: vi.fn().mockResolvedValue({
+    deleteLog: mock(() => Promise.resolve(undefined)),
+    getOrCreateDefaultTemplate: mock(() => Promise.resolve({
       id: 'template-1',
       name: 'Test Template',
       userId: 'test-user'
-    })
+    }))
   }
 }))
 
 describe('SyncedActivityService - Memory Leaks', () => {
   beforeEach(() => {
     process.env.NEXT_PUBLIC_SYNC_ENGINE_ENABLED = 'true'
-    vi.clearAllMocks()
+    const logActivity = ActivityService.logActivity as { mock?: { calls: unknown[][] } }
+    if (logActivity?.mock?.calls) logActivity.mock.calls.length = 0
+    const updateLog = ActivityService.updateLog as { mock?: { calls: unknown[][] } }
+    if (updateLog?.mock?.calls) updateLog.mock.calls.length = 0
+    const deleteLog = ActivityService.deleteLog as { mock?: { calls: unknown[][] } }
+    if (deleteLog?.mock?.calls) deleteLog.mock.calls.length = 0
+    const getOrCreateDefaultTemplate = ActivityService.getOrCreateDefaultTemplate as { mock?: { calls: unknown[][] } }
+    if (getOrCreateDefaultTemplate?.mock?.calls) getOrCreateDefaultTemplate.mock.calls.length = 0
   })
 
   afterEach(async () => {
@@ -264,22 +280,26 @@ describe('SyncedActivityService - Memory Leaks', () => {
       
       // Mock ActivityService to fail once, then succeed
       let callCount = 0
-      ActivityService.logActivity = vi.fn().mockImplementation(async (params) => {
+      ActivityService.logActivity = mock(async (params: { userId: string; templateId: string; date: string; note?: string | null; status: string; amount?: number | null; payload?: unknown }): Promise<ActivityLog> => {
         callCount++
         if (callCount === 1) {
           throw new Error('Simulated initialization failure')
         }
         return {
           id: `log-${Date.now()}`,
+          userId: params.userId,
           activityId: params.templateId,
-          date: params.date,
           logDate: new Date(params.date),
           note: params.note || null,
           status: params.status,
           amount: params.amount || null,
-          payload: params.payload || null,
+          payload: (params.payload as Prisma.JsonValue) || null,
           createdAt: new Date(),
-          updatedAt: new Date()
+          updatedAt: new Date(),
+          deletedAt: null,
+          journalEntryId: null,
+          weightRecordId: null,
+          leaveRecordId: null
         }
       })
 

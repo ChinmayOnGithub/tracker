@@ -3,7 +3,7 @@
  * Bridges the sync engine with Activity domain logic
  */
 
-import { SyncOperation, SyncResult, NetworkAdapter, NetworkStatus, ConnectionQuality } from '../types'
+import { SyncOperation, SyncResult, SyncBatch, NetworkAdapter, NetworkStatus, ConnectionQuality } from '../types'
 import { ActivityLog, ActivityTemplate } from '@/types'
 
 // Activity-specific sync data structures
@@ -160,11 +160,6 @@ export class ActivitySyncAdapter implements NetworkAdapter {
     } catch {
       return false
     }
-  }
-
-  getNetworkStatus() {
-    // This would be implemented with more sophisticated network detection
-    return (typeof navigator !== 'undefined' && navigator.onLine) ? 'online' : 'offline' as NetworkStatus
   }
 
   // Activity-specific helper methods

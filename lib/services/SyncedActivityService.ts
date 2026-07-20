@@ -10,6 +10,7 @@ import { ActivitySyncService } from '../sync/services/ActivitySyncService'
 import { MemoryStorageProvider } from '../sync/storage/MemoryStorageProvider'
 import { ActivitySyncAdapter } from '../sync/adapters/ActivitySyncAdapter'
 import { ActivityLog } from '@/types'
+import { SyncEventMap } from '../sync/types'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 
 class SyncedActivityServiceImpl {
@@ -150,7 +151,11 @@ class SyncedActivityServiceImpl {
   }): Promise<ActivityLog> {
     // If sync is disabled, use original service directly
     if (!this.isSyncEnabled()) {
-      return await ActivityService.logActivity(params)
+      const log = await ActivityService.logActivity(params)
+      return {
+        ...log,
+        date: log.logDate.toISOString().split('T')[0]
+      }
     }
 
     // Ensure sync is initialized
@@ -174,7 +179,11 @@ class SyncedActivityServiceImpl {
     }
 
     // Fallback to original service
-    return await ActivityService.logActivity(params)
+    const log = await ActivityService.logActivity(params)
+    return {
+      ...log,
+      date: log.logDate.toISOString().split('T')[0]
+    }
   }
 
   /**
@@ -192,7 +201,11 @@ class SyncedActivityServiceImpl {
   ): Promise<ActivityLog> {
     // If sync is disabled, use original service directly
     if (!this.isSyncEnabled()) {
-      return await ActivityService.updateLog(userId, id, data)
+      const log = await ActivityService.updateLog(userId, id, data)
+      return {
+        ...log,
+        date: log.logDate.toISOString().split('T')[0]
+      }
     }
 
     // Ensure sync is initialized
@@ -209,7 +222,11 @@ class SyncedActivityServiceImpl {
     }
 
     // Fallback to original service
-    return await ActivityService.updateLog(userId, id, data)
+    const log = await ActivityService.updateLog(userId, id, data)
+    return {
+      ...log,
+      date: log.logDate.toISOString().split('T')[0]
+    }
   }
 
   /**
@@ -218,7 +235,8 @@ class SyncedActivityServiceImpl {
   async deleteLog(userId: string, logId: string): Promise<void> {
     // If sync is disabled, use original service directly
     if (!this.isSyncEnabled()) {
-      return await ActivityService.deleteLog(userId, logId)
+      await ActivityService.deleteLog(userId, logId)
+      return
     }
 
     // Ensure sync is initialized
@@ -236,7 +254,7 @@ class SyncedActivityServiceImpl {
     }
 
     // Fallback to original service
-    return await ActivityService.deleteLog(userId, logId)
+    await ActivityService.deleteLog(userId, logId)
   }
 
   /**
@@ -304,7 +322,7 @@ class SyncedActivityServiceImpl {
   /**
    * Subscribe to sync events
    */
-  onSyncEvent(event: string, callback: (data: unknown) => void): () => void {
+  onSyncEvent<K extends keyof SyncEventMap>(event: K, callback: (data: SyncEventMap[K]) => void): () => void {
     if (!this.isSyncEnabled()) {
       return () => {} // No-op unsubscribe
     }
@@ -314,7 +332,7 @@ class SyncedActivityServiceImpl {
     const unsubscribers: Array<() => void> = []
     
     for (const syncEngine of this.syncEngineByUser.values()) {
-      const unsub = syncEngine.on(event as keyof SyncEventMap, callback)
+      const unsub = syncEngine.on(event, callback)
       unsubscribers.push(unsub)
     }
 
