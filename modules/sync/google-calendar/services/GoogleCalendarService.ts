@@ -598,6 +598,145 @@ export class GoogleCalendarService {
   }
 
   /**
+   * Retrieves events list with optional syncToken for delta imports.
+   */
+  static async listEventsWithSyncToken(
+    userId: string,
+    syncToken?: string
+  ): Promise<{ items: unknown[]; nextSyncToken: string | null }> {
+    const accessToken = await this.getAccessToken(userId)
+    const credential = await db.googleCredential.findUnique({
+      where: { userId }
+    })
+    const calendarId = credential?.calendarId || 'primary'
+
+    const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`)
+    if (syncToken) {
+      url.searchParams.set('syncToken', syncToken)
+    } else {
+      // For initial sync, list events from 1 month ago to 1 year ahead
+      const timeMin = new Date()
+      timeMin.setMonth(timeMin.getMonth() - 1)
+      const timeMax = new Date()
+      timeMax.setFullYear(timeMax.getFullYear() + 1)
+      url.searchParams.set('timeMin', timeMin.toISOString())
+      url.searchParams.set('timeMax', timeMax.toISOString())
+    }
+
+    logger.debug('GoogleCalendarService', 'Fetching events list with sync token', {
+      userId,
+      hasSyncToken: !!syncToken,
+    })
+
+    const response = await fetchWithRetry(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    if (!response.ok) {
+      const errText = await response.text()
+      logger.error('GoogleCalendarService', 'Failed to list events with sync token', {
+        userId,
+        status: response.status,
+        error: errText.substring(0, 500)
+      })
+      throw new GoogleApiError(`Failed to list events: ${errText}`, response.status)
+    }
+
+    const data = await response.json()
+    return {
+      items: data.items || [],
+      nextSyncToken: data.nextSyncToken || null
+    }
+  }
+
+  /**
+   * Subscribes to a Google Calendar push notification watch channel.
+   */
+  static async watchEvents(
+    userId: string,
+    channelId: string,
+    address: string
+  ): Promise<{ resourceId: string; expiration: Date }> {
+    const accessToken = await this.getAccessToken(userId)
+    const credential = await db.googleCredential.findUnique({
+      where: { userId }
+    })
+    const calendarId = credential?.calendarId || 'primary'
+
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/watch`
+    const body = {
+      id: channelId,
+      type: 'web_hook',
+      address
+    }
+
+    const response = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    })
+
+    if (!response.ok) {
+      const errText = await response.text()
+      logger.error('GoogleCalendarService', 'Failed to watch events', {
+        userId,
+        status: response.status,
+        error: errText
+      })
+      throw new GoogleApiError(`Failed to watch events: ${errText}`, response.status)
+    }
+
+    const data = await response.json()
+    const expMs = parseInt(data.expiration, 10)
+    return {
+      resourceId: data.resourceId,
+      expiration: new Date(expMs)
+    }
+  }
+
+  /**
+   * Stops a Google Calendar push notification watch channel.
+   */
+  static async stopWatchEvents(
+    userId: string,
+    channelId: string,
+    resourceId: string
+  ): Promise<boolean> {
+    const accessToken = await this.getAccessToken(userId)
+    const url = 'https://www.googleapis.com/calendar/v3/channels/stop'
+    const body = {
+      id: channelId,
+      resourceId
+    }
+
+    const response = await fetchWithRetry(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    })
+
+    if (!response.ok) {
+      const errText = await response.text()
+      logger.warn('GoogleCalendarService', 'Failed to stop watch channel', {
+        channelId,
+        status: response.status,
+        error: errText
+      })
+      return false
+    }
+
+    return true
+  }
+
+  /**
    * Diagnostics method for development-only debug views.
    */
   static getDebugDiagnostics() {

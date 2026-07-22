@@ -236,6 +236,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       type,
       priority,
       estimatedDuration: isAllDay ? 0 : parseInt(estimatedDuration) || 0,
+      scheduledTime: isAllDay ? null : startTime,
       calendarProvider,
       notificationRules: hasReminder ? [{ channel: 'PUSH', offsetMinutes: -15 }] : [],
       icon,

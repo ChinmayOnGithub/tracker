@@ -1,8 +1,9 @@
 "use server"
 
 import { db } from '@/lib/db'
-import { Prisma, RecurrenceType, ActivityType, Priority, CalendarProvider } from '@prisma/client'
+import { Prisma, RecurrenceType, ActivityType, Priority, CalendarProvider, ActivityTemplate } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
+import { CalendarService } from '@/modules/calendar/services/CalendarService'
 
 import { eventBus, EVENTS } from '@/lib/events'
 
@@ -31,6 +32,7 @@ export async function createActivityTemplate(data: {
   remindBeforeDays?: number | null
   tagNames?: string[]
   metadata?: unknown
+  scheduledTime?: string | null
 }) {
   try {
     const user = await requireAuth()
@@ -73,6 +75,9 @@ export async function createActivityTemplate(data: {
       },
     })
 
+    // Auto-schedule task in calendar if it has a scheduledTime
+    await syncTemplateToCalendarEvent(created)
+
     eventBus.publish(EVENTS.ACTIVITY_CREATED, { template: created, userId: user.id })
 
     revalidatePath('/')
@@ -110,6 +115,7 @@ export async function updateActivityTemplate(
     remindBeforeDays?: number | null
     tagNames?: string[]
     metadata?: unknown
+    scheduledTime?: string | null
   }
 ) {
   try {
@@ -136,12 +142,16 @@ export async function updateActivityTemplate(
       where: { id },
       data: {
         ...templateRest,
-        ...(recurrenceType !== undefined && { recurrenceType: recurrenceType as RecurrenceType }),
-        metadata: templateRest.metadata !== undefined ? (templateRest.metadata as Prisma.InputJsonValue) : undefined,
-        notificationRules: templateRest.notificationRules !== undefined ? (templateRest.notificationRules as Prisma.InputJsonValue) : undefined,
-        ...(tagsUpdate && { tags: tagsUpdate }),
+        recurrenceType: recurrenceType ? (recurrenceType as RecurrenceType) : undefined,
+        targetDate: recurrenceType === 'one_time' && rest.targetDate ? new Date(rest.targetDate) : undefined,
+        metadata: templateRest.metadata as Prisma.InputJsonValue,
+        notificationRules: templateRest.notificationRules as Prisma.InputJsonValue,
+        tags: tagsUpdate,
       },
     })
+
+    // Auto-schedule/unschedule task in calendar on update
+    await syncTemplateToCalendarEvent(updated)
 
     eventBus.publish(EVENTS.ACTIVITY_UPDATED, { template: updated, userId: user.id })
 
@@ -264,4 +274,39 @@ export async function reorderActivityTemplates(orderedIds: string[]) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     return { success: false, error: message }
   }
+}
+
+/**
+ * Automatically schedules or unschedules a task template in the local CalendarEvent mapping
+ * based on whether it has a definite time of day parameter (`scheduledTime`).
+ */
+async function syncTemplateToCalendarEvent(template: ActivityTemplate) {
+  if (template.type !== 'TASK') {
+    return
+  }
+
+  if (!template.scheduledTime) {
+    await CalendarService.unscheduleTask(template.id)
+    return
+  }
+
+  // Parse time e.g. "14:30"
+  const [hours, minutes] = template.scheduledTime.split(':').map(Number)
+  
+  // Use targetDate or default to current date
+  const targetDate = template.targetDate || new Date()
+  const start = new Date(targetDate)
+  start.setHours(hours, minutes, 0, 0)
+
+  const duration = template.estimatedDuration || 30
+  const end = new Date(start.getTime() + duration * 60 * 1000)
+
+  await CalendarService.scheduleTask(
+    template.userId || '',
+    template.id,
+    template.name,
+    start,
+    end,
+    template.color
+  )
 }

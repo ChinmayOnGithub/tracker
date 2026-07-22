@@ -107,6 +107,8 @@ model User {
   settings          UserSetting[]
   linkCollections   LinkCollection[]
   linkTags          LinkTag[]
+  calendarEvents    CalendarEvent[]
+  calendarSyncStates CalendarSyncState[]
 }
 
 model GoogleCredential {
@@ -349,6 +351,7 @@ model ActivityTemplate {
   type                 ActivityType     @default(PERSONAL)
   priority             Priority         @default(NORMAL)
   estimatedDuration    Int              @default(0) // in minutes, 0 = untimed
+  scheduledTime        String?          // optional definite time of day, e.g. "14:30"
   energyRequired       String           @default("MEDIUM") // "LOW" | "MEDIUM" | "HIGH"
   calendarProvider     CalendarProvider @default(NONE)
   calendarEventId      String?
@@ -478,4 +481,63 @@ model LinkTag {
 
   @@unique([userId, name])
   @@index([userId])
+}
+
+// ----------------------------------------------------
+// Calendar & Scheduling Module
+// ----------------------------------------------------
+
+enum CalendarEventType {
+  TASK
+  MEETING
+  WORK
+  REMINDER
+  PERSONAL
+  LEAVE
+  JOURNAL
+  WEIGHT
+}
+
+model CalendarEvent {
+  id                  String            @id @default(uuid())
+  userId              String
+  user                User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title               String
+  description         String?
+  start               DateTime
+  end                 DateTime
+  allDay              Boolean           @default(false)
+  type                CalendarEventType
+  status              String            @default("confirmed")
+  color               String?
+  trackerArtifactId   String?
+  trackerArtifactType String?
+  externalId          String?
+  externalProvider    String?
+  etag                String?
+  externalMetadata    Json?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  deletedAt           DateTime?         // For soft deletion safety
+
+  @@index([userId])
+  @@index([start, end])
+  @@index([trackerArtifactId, trackerArtifactType])
+  @@index([externalId, externalProvider])
+}
+
+model CalendarSyncState {
+  id                String            @id @default(uuid())
+  userId            String
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          String            // e.g. "google"
+  syncToken         String?
+  channelId         String?           // For webhook watch channels
+  resourceId        String?
+  expiration        DateTime?
+  lastSyncAt        DateTime          @default(now())
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@unique([userId, provider])
 }

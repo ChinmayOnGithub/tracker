@@ -9,6 +9,7 @@ import { revalidatePath } from 'next/cache'
 import { logger } from '@/lib/logger'
 import { handleActionError, UnauthorizedError } from '@/lib/errors'
 import { parseUTCDate } from '@/lib/recurrence'
+import { CalendarService } from '@/modules/calendar/services/CalendarService'
 
 /**
  * Checks if the current user has connected their Google account.
@@ -174,6 +175,25 @@ export async function deleteGoogleEventAction(eventId: string) {
     return { success: true as const, deleted }
   } catch (error) {
     logger.error('GoogleCalendarActions', 'Failed to delete Google event', error)
+    return handleActionError(error)
+  }
+}
+
+/**
+  * Server Action to manually trigger a two-way sync with Google Calendar.
+  */
+export async function syncCalendarAction() {
+  try {
+    const user = await getLoggedUser()
+    if (!user) {
+      throw new UnauthorizedError()
+    }
+
+    const result = await CalendarService.sync(user.id)
+    revalidatePath('/')
+    return { success: true as const, result }
+  } catch (error) {
+    logger.error('GoogleCalendarActions', 'Failed to sync calendar', error)
     return handleActionError(error)
   }
 }

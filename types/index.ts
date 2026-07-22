@@ -48,6 +48,7 @@ export interface ActivityTemplate {
   type: ActivityType
   priority: Priority
   estimatedDuration: number
+  scheduledTime?: string | null
   energyRequired: string
   calendarProvider: CalendarProvider
   calendarEventId: string | null

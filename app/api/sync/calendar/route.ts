@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { GoogleCalendarService } from '@/modules/sync/google-calendar/services/GoogleCalendarService'
+import { CalendarService } from '@/modules/calendar/services/CalendarService'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import crypto from 'crypto'
@@ -90,6 +91,57 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     logger.error('BackgroundSyncApi', 'Background sync handler failed', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}
+
+/**
+ * POST handler for Google Calendar webhook push notifications.
+ * Processes incremental sync updates when changes are detected externally.
+ */
+export async function POST(request: Request) {
+  try {
+    const headers = request.headers
+    const channelId = headers.get('x-goog-channel-id')
+    const resourceId = headers.get('x-goog-resource-id')
+    const resourceState = headers.get('x-goog-resource-state')
+
+    logger.info('BackgroundSyncApi', 'Received Google Calendar webhook notification', {
+      channelId,
+      resourceId,
+      resourceState,
+    })
+
+    if (!channelId || !resourceId) {
+      return NextResponse.json({ error: 'Missing webhook headers' }, { status: 400 })
+    }
+
+    // Ignore sync channel establishment confirmation
+    if (resourceState === 'sync') {
+      logger.info('BackgroundSyncApi', 'Sync channel confirmed', { channelId })
+      return new Response(null, { status: 200 })
+    }
+
+    // Find the sync state record mapped to this channel ID
+    const syncState = await db.calendarSyncState.findFirst({
+      where: { channelId }
+    })
+
+    if (!syncState) {
+      logger.warn('BackgroundSyncApi', 'No sync state record matches channel ID', { channelId })
+      return NextResponse.json({ error: 'Channel not recognized' }, { status: 404 })
+    }
+
+    // Trigger sync for the user
+    const syncResult = await CalendarService.sync(syncState.userId)
+    logger.info('BackgroundSyncApi', 'Webhook sync completed successfully', {
+      userId: syncState.userId,
+      result: syncResult
+    })
+
+    return new Response(null, { status: 204 })
+  } catch (error) {
+    logger.error('BackgroundSyncApi', 'Webhook sync trigger failed', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

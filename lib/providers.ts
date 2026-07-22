@@ -76,5 +76,8 @@ export const providerRegistry = new ProviderRegistry()
 // Register calendar providers dynamically to avoid compile-time circular imports or core coupling
 providerRegistry.register(DbProvider.GOOGLE, async () => {
   const { GoogleCalendarProvider } = await import('@/modules/sync/google-calendar/providers/GoogleCalendarProvider')
-  return new GoogleCalendarProvider()
+  const instance = new GoogleCalendarProvider()
+  const { calendarProviderRegistry } = await import('@/modules/calendar/providers/CalendarProvider')
+  calendarProviderRegistry.register('GOOGLE', instance)
+  return instance
 })
