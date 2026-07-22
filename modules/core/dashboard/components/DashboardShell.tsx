@@ -45,7 +45,48 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
 
-  const navItems: NavigationItem[] = [
+  // Module visibility config (Safe hydration check on mount)
+  const [visibleModules, setVisibleModules] = React.useState<Record<string, boolean>>(() => {
+    const defaults = {
+      today: true,
+      calendar: true,
+      activities: true,
+      journal: true,
+      leave: true,
+      weight: true,
+      links: true,
+      documents: true,
+      settings: true,
+    }
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('personal_modules_visibility')
+      if (saved) {
+        try {
+          return { ...defaults, ...JSON.parse(saved) }
+        } catch (e) {
+          console.error(e)
+        }
+      }
+    }
+    return defaults
+  })
+
+  React.useEffect(() => {
+    const handleSettingsUpdate = () => {
+      const updated = localStorage.getItem('personal_modules_visibility')
+      if (updated) {
+        try {
+          setVisibleModules(prev => ({ ...prev, ...JSON.parse(updated) }))
+        } catch (e) {
+          console.error(e)
+        }
+      }
+    }
+    window.addEventListener('personal_settings_changed', handleSettingsUpdate)
+    return () => window.removeEventListener('personal_settings_changed', handleSettingsUpdate)
+  }, [])
+
+  const allNavItems: NavigationItem[] = [
     { id: 'today', label: 'Today', icon: LayoutDashboard },
     { id: 'calendar', label: 'Calendar', icon: CalendarDays },
     { id: 'activities', label: 'Activities', icon: CheckSquare },
@@ -57,12 +98,14 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     { id: 'settings', label: 'Settings', icon: Settings },
   ]
 
+  const navItems = allNavItems.filter(item => visibleModules[item.id] !== false)
+
   const bottomNavItems = [
     { id: 'today', label: 'Today', icon: LayoutDashboard },
     { id: 'calendar', label: 'Calendar', icon: CalendarDays },
     { id: 'journal', label: 'Journal', icon: BookOpen },
     { id: 'weight', label: 'Weight', icon: Scale },
-  ]
+  ].filter(item => visibleModules[item.id] !== false)
 
   const moreNavItems = [
     { id: 'activities', label: 'Activities', icon: CheckSquare },
@@ -70,9 +113,9 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     { id: 'links', label: 'Link Library', icon: Link2 },
     { id: 'documents', label: 'Secure Vault', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
-  ]
+  ].filter(item => visibleModules[item.id] !== false)
 
-  const currentItem = navItems.find(item => item.id === activeTab)
+  const currentItem = allNavItems.find(item => item.id === activeTab)
 
   return (
     <div className="flex h-screen bg-[var(--color-bg-base)] overflow-hidden font-sans relative">
@@ -86,9 +129,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
       {/* Navigation Sidebar (Desktop & Mobile drawer) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex flex-col w-64 bg-[var(--color-bg-surface)] border-r border-[var(--color-border)] transform transition-transform duration-200 lg:translate-x-0 lg:static lg:inset-auto ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col w-64 bg-[var(--color-bg-surface)] border-r border-[var(--color-border)] transform transition-transform duration-200 lg:translate-x-0 lg:static lg:inset-auto ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         {/* Sidebar Header */}
         <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between">
@@ -121,11 +163,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   onTabChange(item.id)
                   setIsSidebarOpen(false)
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-1.75 text-xs font-medium rounded-[var(--radius-md)] transition-all duration-[var(--motion-duration-fast)] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] ${
-                  isActive
+                className={`w-full flex items-center gap-3 px-3 py-1.75 text-xs font-medium rounded-[var(--radius-md)] transition-all duration-[var(--motion-duration-fast)] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] ${isActive
                     ? 'bg-[var(--color-accent)] text-[var(--color-text-main)] border border-[var(--color-border)]'
                     : 'text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]/50 hover:text-[var(--color-text-main)] border border-transparent'
-                }`}
+                  }`}
               >
                 <IconComponent className={`w-3.75 h-3.75 transition-colors ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}`} />
                 <span>{item.label}</span>
@@ -201,9 +242,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 onTabChange(item.id)
                 setIsMoreOpen(false)
               }}
-              className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${
-                isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'
-              }`}
+              className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'
+                }`}
             >
               <IconComponent className="w-4.5 h-4.5" />
               <span className="text-[9px] font-bold tracking-tight">{item.label}</span>
@@ -212,9 +252,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         })}
         <button
           onClick={() => setIsMoreOpen(true)}
-          className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${
-            isMoreOpen || moreNavItems.some(n => n.id === activeTab) ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'
-          }`}
+          className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${isMoreOpen || moreNavItems.some(n => n.id === activeTab) ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'
+            }`}
         >
           <Menu className="w-4.5 h-4.5" />
           <span className="text-[9px] font-bold tracking-tight">More</span>
@@ -225,7 +264,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       {isMoreOpen && (
         <div className="fixed inset-0 z-50 lg:hidden flex flex-col justify-end">
           {/* Backdrop */}
-          <div 
+          <div
             className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
             onClick={() => setIsMoreOpen(false)}
           />
@@ -240,7 +279,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 icon={<X className="w-4 h-4" />}
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-3">
               {moreNavItems.map(item => {
                 const IconComponent = item.icon
@@ -262,7 +301,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 )
               })}
             </div>
-            
+
             <div className="pt-4 border-t border-[var(--color-border)] flex flex-col gap-3">
               {user && (
                 <div className="flex items-center justify-between px-2 text-xs font-semibold text-[var(--color-text-muted)]">

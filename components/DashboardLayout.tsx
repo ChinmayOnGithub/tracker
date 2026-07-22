@@ -49,7 +49,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // Modal states
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
   const [templateToEdit, setTemplateToEdit] = useState<ActivityTemplate | null>(null)
-  
+
   // Command Palette & Placeholder dialog state
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const [placeholderDialog, setPlaceholderDialog] = useState<{ isOpen: boolean; title: string; message: string } | null>(null)
@@ -148,7 +148,75 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
       setTimeout(() => setTheme(systemDark ? 'dark' : 'light'), 0)
     }
+
+    // Apply personal styles on load
+    applyPersonalStyles()
+
+    // Listen to custom settings update events to refresh layout styles instantly
+    window.addEventListener('personal_settings_changed', applyPersonalStyles)
+    return () => window.removeEventListener('personal_settings_changed', applyPersonalStyles)
   }, [])
+
+  const applyPersonalStyles = () => {
+    const accent = localStorage.getItem('personal_accent_color') || 'blue'
+    const fontSize = localStorage.getItem('personal_font_size') || 'md'
+    const rounded = localStorage.getItem('personal_rounded_corners') || 'md'
+    const animations = localStorage.getItem('personal_animations') || 'on'
+
+    const colors: Record<string, { primary: string; hover: string }> = {
+      purple: { primary: '#a855f7', hover: '#9333ea' },
+      green: { primary: '#22c55e', hover: '#16a34a' },
+      blue: { primary: '#007aff', hover: '#0056b3' },
+      orange: { primary: '#f97316', hover: '#ea580c' },
+      indigo: { primary: '#818cf8', hover: '#6366f1' },
+    }
+
+    const match = colors[accent] || colors.blue
+    const fontSizes: Record<string, string> = {
+      sm: '13px',
+      md: '14px',
+      lg: '16px',
+    }
+
+    const radiusConfig: Record<string, { sm: string; md: string; lg: string }> = {
+      none: { sm: '0px', md: '0px', lg: '0px' },
+      md: { sm: '2px', md: '4px', lg: '6px' },
+      full: { sm: '6px', md: '12px', lg: '20px' },
+    }
+
+    const activeRadius = radiusConfig[rounded] || radiusConfig.md
+
+    const styleId = 'custom-personal-styles'
+    let styleEl = document.getElementById(styleId) as HTMLStyleElement
+    if (!styleEl) {
+      styleEl = document.createElement('style')
+      styleEl.id = styleId
+      document.head.appendChild(styleEl)
+    }
+
+    styleEl.innerHTML = `
+      :root {
+        --color-primary: ${match.primary} !important;
+        --color-primary-hover: ${match.hover} !important;
+        --radius-sm: ${activeRadius.sm} !important;
+        --radius-md: ${activeRadius.md} !important;
+        --radius-lg: ${activeRadius.lg} !important;
+        --card-radius: ${activeRadius.lg} !important;
+        font-size: ${fontSizes[fontSize] || fontSizes.md} !important;
+      }
+      .dark {
+        --color-primary: ${match.primary} !important;
+        --color-primary-hover: ${match.hover} !important;
+      }
+      ${animations === 'off' ? `
+        *, *::before, *::after {
+          animation-duration: 0s !important;
+          animation-delay: 0s !important;
+          transition-duration: 0s !important;
+        }
+      ` : ''}
+    `
+  }
 
   // Sync theme with document class
   useEffect(() => {
@@ -212,7 +280,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     if (enteredPin.length < 4) {
       const nextPin = enteredPin + num
       setEnteredPin(nextPin)
-      
+
       // Auto submit during login mode
       if (nextPin.length === 4 && !isRegisterMode) {
         handleAuthSubmit(usernameInput, nextPin)
@@ -361,11 +429,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   type="button"
                   disabled={isAuthLoading}
                   onClick={() => { setIsRegisterMode(false); setAuthError(''); setEnteredPin(''); }}
-                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-extrabold rounded-[var(--radius-sm)] transition-all duration-200 cursor-pointer ${
-                    !isRegisterMode
+                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-extrabold rounded-[var(--radius-sm)] transition-all duration-200 cursor-pointer ${!isRegisterMode
                       ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] border border-[var(--color-border)] shadow-xs'
                       : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
-                  } disabled:opacity-50`}
+                    } disabled:opacity-50`}
                 >
                   Sign In
                 </button>
@@ -373,11 +440,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   type="button"
                   disabled={isAuthLoading}
                   onClick={() => { setIsRegisterMode(true); setAuthError(''); setEnteredPin(''); }}
-                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-extrabold rounded-[var(--radius-sm)] transition-all duration-200 cursor-pointer ${
-                    isRegisterMode
+                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-extrabold rounded-[var(--radius-sm)] transition-all duration-200 cursor-pointer ${isRegisterMode
                       ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] border border-[var(--color-border)] shadow-xs'
                       : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
-                  } disabled:opacity-50`}
+                    } disabled:opacity-50`}
                 >
                   Register
                 </button>

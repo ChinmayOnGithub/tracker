@@ -81,6 +81,28 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   const [completingHabitId, setCompletingHabitId] = useState<string | null>(null)
   const [vaultItems, setVaultItems] = useState<VaultItem[]>([])
   const [vaultLoading, setVaultLoading] = useState(true)
+  const [widgetsVisibility, setWidgetsVisibility] = useState<Record<string, boolean>>(() => {
+    const defaults = {
+      tasks: true,
+      workHours: true,
+      journal: true,
+      leaveBalance: true,
+      weight: true,
+      recentDocuments: true,
+    }
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('personal_dashboard_widgets')
+      if (saved) {
+        try {
+          return { ...defaults, ...JSON.parse(saved) }
+        } catch (e) {
+          console.error(e)
+        }
+      }
+    }
+    return defaults
+  })
+
   useEffect(() => {
     async function loadVault() {
       try {
@@ -96,6 +118,19 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
       }
     }
     loadVault()
+
+    const handleSettingsUpdate = () => {
+      const updated = localStorage.getItem('personal_dashboard_widgets')
+      if (updated) {
+        try {
+          setWidgetsVisibility(prev => ({ ...prev, ...JSON.parse(updated) }))
+        } catch (e) {
+          console.error(e)
+        }
+      }
+    }
+    window.addEventListener('personal_settings_changed', handleSettingsUpdate)
+    return () => window.removeEventListener('personal_settings_changed', handleSettingsUpdate)
   }, [])
 
   const getVaultIcon = (mimeGroup: string | null) => {
@@ -132,10 +167,10 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     const current = new Date(Date.UTC(y, m - 1, d))
     const day = current.getUTCDay()
     const monDiff = day === 0 ? -6 : 1 - day // Adjust for Monday start
-    
+
     const mon = new Date(current)
     mon.setUTCDate(current.getUTCDate() + monDiff)
-    
+
     const dates: string[] = []
     for (let i = 0; i < 7; i++) {
       const temp = new Date(mon)
@@ -146,24 +181,24 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   }
 
   const weekDates = getWeekDates(todayStr)
-  
+
   // Find the Work Tracker template and daily log
   const workTemplateObj = analyzedTemplates.find(t => t.template.name === 'Work Tracker')?.template
   const workTemplateId = workTemplateObj?.id
-  
+
   const todayWorkLog = workTemplateId
     ? logs.find(l => l.activityId === workTemplateId && l.date === todayStr)
     : null
-    
+
   // Calculate weekly stats
   const weeklyWorkLogs = workTemplateId
     ? logs.filter(l => l.activityId === workTemplateId && weekDates.includes(l.date))
     : []
-    
+
   const totalOfficeHours = weeklyWorkLogs
     .filter(l => l.status === 'done')
     .reduce((sum, l) => sum + (l.amount ?? 0), 0)
-    
+
   const totalWfhHours = weeklyWorkLogs
     .filter(l => l.status === 'wfh')
     .reduce((sum, l) => sum + (l.amount ?? 0), 0)
@@ -179,17 +214,17 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     }
     return 'cleared'
   })
-  
+
   const [inTime, setInTime] = useState(() => {
     const payload = todayWorkLog?.payload as Record<string, unknown> | null
     return (payload?.inTime as string) || '09:00'
   })
-  
+
   const [outTime, setOutTime] = useState(() => {
     const payload = todayWorkLog?.payload as Record<string, unknown> | null
     return (payload?.outTime as string) || '17:30'
   })
-  
+
   const [wfhHours, setWfhHours] = useState(() => {
     if (todayWorkLog && todayWorkLog.status === 'wfh') {
       return todayWorkLog.amount || 8.0
@@ -232,10 +267,10 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     if (!workTemplateId || isLoggingWork) return
     setIsLoggingWork(true)
     try {
-      const computedHours = workStatus === 'office' 
+      const computedHours = workStatus === 'office'
         ? computeOfficeHours(inTime, outTime)
         : workStatus === 'wfh' ? wfhHours : 0
-        
+
       const { logWorkPresence } = await import('@/app/actions/log')
       const res = await logWorkPresence({
         templateId: workTemplateId,
@@ -366,7 +401,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     const tB = analyzedTemplates.find(t => t.template.id === b.templateId)?.template
     return (tA?.sortOrder ?? 0) - (tB?.sortOrder ?? 0)
   })
-  
+
   const orderedItems = [...overdueOccurrences, ...sortedTimed, ...sortedAnytime]
 
   const getContextSubtitle = () => {
@@ -374,7 +409,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     const activeContest = upcomingEvents.find(e => e.templateName.toLowerCase().includes('codeforces') || e.templateName.toLowerCase().includes('leetcode'))
     if (activeContest) {
       const diffMins = Math.round((new Date(activeContest.start!).getTime() - currentTime.getTime()) / 60000)
-      if (diffMins > 0 && diffMins <= 240) return `🔥 Next ${activeContest.templateName.split(' ')[0]} in ${Math.floor(diffMins/60)}h ${diffMins%60}m`
+      if (diffMins > 0 && diffMins <= 240) return `🔥 Next ${activeContest.templateName.split(' ')[0]} in ${Math.floor(diffMins / 60)}h ${diffMins % 60}m`
     }
 
     // 2. Overdue or Standard Context
@@ -392,12 +427,12 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   // ── Action handlers ──────────────────────────────────────────────────────
   const cycleTaskStatus = async (occurrence: TimelineItem) => {
     if (!occurrence.templateId) return
-    
+
     // Read current states with optimistic overrides
     const optimisticVal = optimisticStatuses[occurrence.id]
     const currentCompleted = optimisticVal ? optimisticVal.completed : occurrence.completed
     const currentStatus = optimisticVal ? optimisticVal.status : occurrence.status
-    
+
     const isCanceled = currentStatus === 'skipped'
     const isPostponed = currentStatus === 'postponed'
     const isDone = currentCompleted && !isCanceled && !isPostponed
@@ -567,7 +602,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     const isGoogleCalendar = occurrence.id.startsWith('google_') || !occurrence.templateId
     const templateColor = template?.color || 'zinc'
     const colorClasses = getTemplateColorClasses(templateColor)
-    
+
     // Map color names to Tailwind bg classes
     const colorBgClasses: Record<string, string> = {
       red: 'bg-red-500 dark:bg-red-400',
@@ -606,30 +641,27 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         onDragStart={(e) => handleDragStart(e, index)}
         onDragOver={handleDragOver}
         onDrop={(e) => handleDrop(e, index)}
-        className={`flex items-center gap-3 px-3 py-1.5 transition-all duration-150 group relative hover:bg-[var(--color-accent)]/30 ${
-          isGoogleCalendar ? '' : 'cursor-move'
-        } ${
-          isDone ? 'opacity-65' : isCanceled || isPostponed ? 'opacity-40' : ''
-        }`}
+        className={`flex items-center gap-3 px-3 py-1.5 transition-all duration-150 group relative hover:bg-[var(--color-accent)]/30 ${isGoogleCalendar ? '' : 'cursor-move'
+          } ${isDone ? 'opacity-65' : isCanceled || isPostponed ? 'opacity-40' : ''
+          }`}
       >
         {/* Left Indicator Strip inside card */}
         <div className={`absolute left-0 top-0 bottom-0 w-1 ${statusIndicatorColor}`} />
 
         {/* ── Custom Cycling Checkbox Component ── */}
-        <button 
+        <button
           disabled={completingHabitId === occurrence.templateId}
           onClick={() => cycleTaskStatus(occurrence)}
           title={`Status: ${isDone ? 'Done' : isCanceled ? 'Canceled' : isPostponed ? 'Postponed' : 'Cleared'}. Click to cycle.`}
           aria-label="Cycle task status"
           className="shrink-0 w-6 h-6 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-90 disabled:opacity-50"
         >
-          <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-300 shadow-xs ${
-            completingHabitId === occurrence.templateId ? 'bg-slate-100 dark:bg-zinc-800 border-[var(--color-border)]' :
-            isDone ? 'bg-[var(--color-completed)] border-[var(--color-completed)] text-white' :
-            isCanceled ? 'bg-[var(--color-overdue)] border-[var(--color-overdue)] text-white' :
-            isPostponed ? 'bg-[var(--color-external)] border-[var(--color-external)] text-white' :
-            'bg-[var(--color-bg-base)] border-[var(--color-border)] hover:border-[var(--color-primary)]'
-          }`}>
+          <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-300 shadow-xs ${completingHabitId === occurrence.templateId ? 'bg-slate-100 dark:bg-zinc-800 border-[var(--color-border)]' :
+              isDone ? 'bg-[var(--color-completed)] border-[var(--color-completed)] text-white' :
+                isCanceled ? 'bg-[var(--color-overdue)] border-[var(--color-overdue)] text-white' :
+                  isPostponed ? 'bg-[var(--color-external)] border-[var(--color-external)] text-white' :
+                    'bg-[var(--color-bg-base)] border-[var(--color-border)] hover:border-[var(--color-primary)]'
+            }`}>
             {completingHabitId === occurrence.templateId ? (
               <span className="w-1.5 h-1.5 bg-[var(--color-primary)] rounded-full animate-ping" />
             ) : isDone ? (
@@ -643,22 +675,20 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         </button>
 
         {/* ── Category Icon ── */}
-        <div className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 ${
-          isGoogleCalendar 
-            ? 'bg-[var(--color-external)]/10 border-[var(--color-external)]/20 text-[var(--color-external)]' 
+        <div className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 ${isGoogleCalendar
+            ? 'bg-[var(--color-external)]/10 border-[var(--color-external)]/20 text-[var(--color-external)]'
             : `${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`
-        }`}>
+          }`}>
           <Icon name={occurrence.icon || template?.icon || 'CheckSquare'} size={12} />
         </div>
 
         {/* ── Content ── */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-xs font-semibold leading-tight truncate ${
-              isDone || isCanceled
+            <span className={`text-xs font-semibold leading-tight truncate ${isDone || isCanceled
                 ? 'line-through text-[var(--color-text-muted)]'
                 : 'text-[var(--color-text-main)]'
-            }`}>
+              }`}>
               {occurrence.htmlLink ? (
                 <a href={occurrence.htmlLink} target="_blank" rel="noopener noreferrer"
                   className="hover:underline inline-flex items-center gap-1">
@@ -673,11 +703,10 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               </span>
             )}
             {isTimed && startTimeLabel && (
-              <span className={`shrink-0 text-[9px] font-mono font-bold px-1 py-0.5 rounded-sm border ${
-                isGoogleCalendar 
-                  ? 'text-[var(--color-external)] border-[var(--color-external)]/25 bg-[var(--color-external)]/5' 
+              <span className={`shrink-0 text-[9px] font-mono font-bold px-1 py-0.5 rounded-sm border ${isGoogleCalendar
+                  ? 'text-[var(--color-external)] border-[var(--color-external)]/25 bg-[var(--color-external)]/5'
                   : `${colorClasses.text} ${colorClasses.border} ${colorClasses.bg}`
-              }`}>
+                }`}>
                 {startTimeLabel}
                 {estimatedDuration ? ` • ${estimatedDuration}m` : ''}
               </span>
@@ -700,8 +729,8 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   // ── Render ────────────────────────────────────────────────────────────────
   const todayJournal = journalEntries.find(e => {
-    const entryDateStr = typeof e.journalDate === 'string' 
-      ? e.journalDate.split('T')[0] 
+    const entryDateStr = typeof e.journalDate === 'string'
+      ? e.journalDate.split('T')[0]
       : new Date(e.journalDate).toISOString().split('T')[0]
     return entryDateStr === todayStr
   })
@@ -772,7 +801,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
         {/* ── Left Column: Timeline feed ── */}
         <div className="space-y-6 min-w-0">
-          
+
           {/* Minimal Progress bar */}
           {totalActivities > 0 && (
             <div className="flex items-center justify-between text-xs text-[var(--color-text-muted)] border-b border-[var(--color-border)]/40 pb-2 mb-2">
@@ -828,263 +857,269 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
         {/* ── Right Column: Metrics & Modular Widgets ── */}
         <div className="space-y-6 xl:sticky xl:top-6">
-          
+
           {/* Today's Journal Card */}
-      {/* Work Presence Tracker Card */}
-      {workTemplateId && (
-        <Card className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
-          <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
-            <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
-              <Briefcase className="w-3.5 h-3.5 text-emerald-500" />
-              Work Hours Tracker
-            </span>
-            <Clock className="w-3 h-3 text-[var(--color-text-muted)]" />
-          </div>
+          {/* Work Presence Tracker Card */}
+          {widgetsVisibility.workHours !== false && workTemplateId && (
+            <Card className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
+              <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
+                <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
+                  <Briefcase className="w-3.5 h-3.5 text-emerald-500" />
+                  Work Hours Tracker
+                </span>
+                <Clock className="w-3 h-3 text-[var(--color-text-muted)]" />
+              </div>
 
-          <div className="space-y-3">
-            {/* Status Segmented Controls */}
-            <div className="flex bg-[var(--color-bg-base)] p-0.5 rounded-[9px] border border-[var(--color-border)]">
-              {(['cleared', 'office', 'wfh'] as const).map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => setWorkStatus(status)}
-                  className={`flex-1 py-1 text-[10px] font-bold rounded-md capitalize transition-all duration-150 cursor-pointer ${
-                    workStatus === status
-                      ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-xs border border-[var(--color-border)]'
-                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
-                  }`}
+              <div className="space-y-3">
+                {/* Status Segmented Controls */}
+                <div className="flex bg-[var(--color-bg-base)] p-0.5 rounded-[9px] border border-[var(--color-border)]">
+                  {(['cleared', 'office', 'wfh'] as const).map((status) => (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setWorkStatus(status)}
+                      className={`flex-1 py-1 text-[10px] font-bold rounded-md capitalize transition-all duration-150 cursor-pointer ${workStatus === status
+                          ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-xs border border-[var(--color-border)]'
+                          : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                        }`}
+                    >
+                      {status === 'cleared' ? 'Clear' : status}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Office Time Pickers */}
+                {workStatus === 'office' && (
+                  <div className="space-y-2 pt-1">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">In-Time</label>
+                        <input
+                          type="time"
+                          value={inTime}
+                          onChange={(e) => setInTime(e.target.value)}
+                          className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">Out-Time</label>
+                        <input
+                          type="time"
+                          value={outTime}
+                          onChange={(e) => setOutTime(e.target.value)}
+                          className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-right font-semibold text-[var(--color-text-muted)] pr-0.5">
+                      Calculated: <span className="text-[var(--color-text-main)] font-mono">{computeOfficeHours(inTime, outTime)}h</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* WFH Hours Inputs */}
+                {workStatus === 'wfh' && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex justify-between items-center text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+                      <span>WFH Hours</span>
+                      <span className="text-xs font-mono text-[var(--color-text-main)] font-bold">{wfhHours}h</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="16"
+                      step="0.5"
+                      value={wfhHours}
+                      onChange={(e) => setWfhHours(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                    />
+                  </div>
+                )}
+
+                {/* Action Save Button */}
+                <Button
+                  onClick={handleSaveWorkPresence}
+                  isLoading={isLoggingWork}
+                  variant="primary"
+                  size="sm"
+                  className="w-full font-bold text-xs"
                 >
-                  {status === 'cleared' ? 'Clear' : status}
-                </button>
-              ))}
-            </div>
+                  Save Presence
+                </Button>
 
-            {/* Office Time Pickers */}
-            {workStatus === 'office' && (
-              <div className="space-y-2 pt-1">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="block text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">In-Time</label>
-                    <input
-                      type="time"
-                      value={inTime}
-                      onChange={(e) => setInTime(e.target.value)}
-                      className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
+                {/* Progress Section */}
+                <div className="border-t border-[var(--color-border)]/50 pt-3 space-y-2">
+                  <div className="flex items-center justify-between text-[10px] font-bold text-[var(--color-text-muted)]">
+                    <span>Weekly Office Presence</span>
+                    <span className="font-mono text-[var(--color-text-main)]">
+                      {totalOfficeHours}h / {weeklyGoal}h
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-full overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 rounded-full ${isGoalMet ? 'bg-emerald-500' : 'bg-blue-500'
+                        }`}
+                      style={{ width: `${Math.min(100, (totalOfficeHours / weeklyGoal) * 100)}%` }}
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="block text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">Out-Time</label>
-                    <input
-                      type="time"
-                      value={outTime}
-                      onChange={(e) => setOutTime(e.target.value)}
-                      className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
-                    />
+                  <div className="flex justify-between items-center text-[9px] font-semibold text-[var(--color-text-muted)]">
+                    <span>
+                      {isGoalMet ? '🎉 Weekly Goal Met!' : `${remainingHours.toFixed(1)}h remaining`}
+                    </span>
+                    {totalWfhHours > 0 && (
+                      <span>WFH: <span className="font-mono text-[var(--color-text-main)]">{totalWfhHours}h</span></span>
+                    )}
                   </div>
                 </div>
-                <div className="text-[10px] text-right font-semibold text-[var(--color-text-muted)] pr-0.5">
-                  Calculated: <span className="text-[var(--color-text-main)] font-mono">{computeOfficeHours(inTime, outTime)}h</span>
-                </div>
               </div>
-            )}
+            </Card>
+          )}
 
-            {/* WFH Hours Inputs */}
-            {workStatus === 'wfh' && (
-              <div className="space-y-1.5 pt-1">
-                <div className="flex justify-between items-center text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
-                  <span>WFH Hours</span>
-                  <span className="text-xs font-mono text-[var(--color-text-main)] font-bold">{wfhHours}h</span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="16"
-                  step="0.5"
-                  value={wfhHours}
-                  onChange={(e) => setWfhHours(parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                />
-              </div>
-            )}
-
-            {/* Action Save Button */}
-            <Button
-              onClick={handleSaveWorkPresence}
-              isLoading={isLoggingWork}
-              variant="primary"
-              size="sm"
-              className="w-full font-bold text-xs"
-            >
-              Save Presence
-            </Button>
-
-            {/* Progress Section */}
-            <div className="border-t border-[var(--color-border)]/50 pt-3 space-y-2">
-              <div className="flex items-center justify-between text-[10px] font-bold text-[var(--color-text-muted)]">
-                <span>Weekly Office Presence</span>
-                <span className="font-mono text-[var(--color-text-main)]">
-                  {totalOfficeHours}h / {weeklyGoal}h
+          {widgetsVisibility.journal !== false && (
+            <Card className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
+              <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
+                <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
+                  <BookOpen className="w-3.5 h-3.5 text-[var(--color-personal)]" />
+                  Journal Today
                 </span>
-              </div>
-              <div className="w-full h-2 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-500 rounded-full ${
-                    isGoalMet ? 'bg-emerald-500' : 'bg-blue-500'
-                  }`}
-                  style={{ width: `${Math.min(100, (totalOfficeHours / weeklyGoal) * 100)}%` }}
-                />
-              </div>
-              <div className="flex justify-between items-center text-[9px] font-semibold text-[var(--color-text-muted)]">
-                <span>
-                  {isGoalMet ? '🎉 Weekly Goal Met!' : `${remainingHours.toFixed(1)}h remaining`}
-                </span>
-                {totalWfhHours > 0 && (
-                  <span>WFH: <span className="font-mono text-[var(--color-text-main)]">{totalWfhHours}h</span></span>
+                {todayJournal?.mood && (
+                  <span className="text-sm p-1 bg-[var(--color-accent)] rounded-lg animate-bounce" title={`Mood: ${todayJournal.mood}`}>
+                    {todayJournal.mood}
+                  </span>
                 )}
               </div>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      <Card className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
-          <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
-            <BookOpen className="w-3.5 h-3.5 text-[var(--color-personal)]" />
-            Journal Today
-          </span>
-          {todayJournal?.mood && (
-            <span className="text-sm p-1 bg-[var(--color-accent)] rounded-lg animate-bounce" title={`Mood: ${todayJournal.mood}`}>
-              {todayJournal.mood}
-            </span>
+              {todayJournal ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-[var(--color-text-main)] leading-relaxed line-clamp-3 italic">
+                    &ldquo;{stripHtml(todayJournal.content)}&rdquo;
+                  </p>
+                  <Button
+                    onClick={() => onTabChange('journal')}
+                    size="sm"
+                    className="w-full text-center"
+                  >
+                    Open Full Journal
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2 text-center py-2">
+                  <p className="text-xs text-[var(--color-text-muted)] italic">No entry written for today yet.</p>
+                  <Button
+                    onClick={() => onTabChange('journal')}
+                    size="sm"
+                    className="w-full"
+                  >
+                    Write Entry
+                  </Button>
+                </div>
+              )}
+            </Card>
           )}
-        </div>
-            {todayJournal ? (
-              <div className="space-y-2">
-                <p className="text-xs text-[var(--color-text-main)] leading-relaxed line-clamp-3 italic">
-                  &ldquo;{stripHtml(todayJournal.content)}&rdquo;
-                </p>
-                <Button
-                  onClick={() => onTabChange('journal')}
-                  size="sm"
-                  className="w-full text-center"
-                >
-                  Open Full Journal
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2 text-center py-2">
-                <p className="text-xs text-[var(--color-text-muted)] italic">No entry written for today yet.</p>
-                <Button
-                  onClick={() => onTabChange('journal')}
-                  size="sm"
-                  className="w-full"
-                >
-                  Write Entry
-                </Button>
-              </div>
-            )}
-          </Card>
 
           {/* Time Off Status Card */}
-          <Card className="p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
-            <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
-              <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
-                <CalendarX className="w-3.5 h-3.5 text-[var(--color-overdue)]" />
-                Time Off
-              </span>
-              <span className="text-[10px] font-bold text-[var(--color-text-muted)]">Remaining</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {leaveTypes.map(type => {
-                const allowance = leaveAllowances.find(a => a.leaveType === type)?.allowance ?? 0
-                const used = usedByType[type] ?? 0
-                const remaining = Math.max(0, allowance - used)
-                return (
-                  <div key={type} className={`border border-[var(--color-border)] p-2 rounded-xl flex flex-col justify-center ${leaveColors[type] || ''}`}>
-                    <div className="text-sm font-black tabular-nums">{remaining} / {allowance}</div>
-                    <div className="text-[9px] font-bold uppercase tracking-wider opacity-85 mt-0.5">{leaveLabels[type] || type}</div>
-                  </div>
-                )
-              })}
-            </div>
-            <Button
-              onClick={() => onTabChange('leave')}
-              size="sm"
-              className="w-full"
-            >
-              Request Time Off
-            </Button>
-          </Card>
-
-          {/* Weight Tracker Card */}
-          <Card className="p-4 space-y-3 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
-            <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
-              <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
-                <Scale className="w-3.5 h-3.5 text-[var(--color-completed)]" />
-                Weight Graph
-              </span>
-              {latestWeightRecord && (
-                <span className="text-xs font-black text-[var(--color-text-main)] tabular-nums">
-                  {latestWeightRecord.weight.toFixed(1)} kg
+          {widgetsVisibility.leaveBalance !== false && (
+            <Card className="p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
+              <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
+                <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
+                  <CalendarX className="w-3.5 h-3.5 text-[var(--color-overdue)]" />
+                  Time Off
                 </span>
-              )}
-            </div>
-            {sparklineData.length >= 2 ? (
-              <div className="pt-2">
-                <Sparkline data={sparklineData} width={280} height={120} />
+                <span className="text-[10px] font-bold text-[var(--color-text-muted)]">Remaining</span>
               </div>
-            ) : (
-              <div className="py-6 text-center text-xs text-[var(--color-text-muted)] italic">
-                Need at least 2 logs to show weight graph.
-              </div>
-            )}
-          </Card>
-
-          {/* Secure Vault Card */}
-          <Card className="p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
-            <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
-              <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
-                <Shield className="w-3.5 h-3.5 text-[var(--color-external)]" />
-                Secure Vault
-              </span>
-              <Lock className="w-3 h-3 text-[var(--color-text-muted)]" />
-            </div>
-
-            {/* Active Documents List */}
-            {vaultLoading ? (
-              <div className="space-y-1.5 py-1">
-                {[1, 2].map(i => <Skeleton key={i} className="h-6 w-full rounded-md" />)}
-              </div>
-            ) : vaultItems.length > 0 ? (
-              <div className="space-y-1 py-0.5">
-                {vaultItems.map((item: VaultItem) => {
-                  const IconComponent = getVaultIcon(item.mimeGroup)
-                  const iconColor = getVaultIconColor(item.mimeGroup)
+              <div className="grid grid-cols-2 gap-2">
+                {leaveTypes.map(type => {
+                  const allowance = leaveAllowances.find(a => a.leaveType === type)?.allowance ?? 0
+                  const used = usedByType[type] ?? 0
+                  const remaining = Math.max(0, allowance - used)
                   return (
-                    <div 
-                      key={item.id}
-                      onClick={() => onTabChange('documents')}
-                      className="flex items-center gap-2 p-1.5 rounded-md hover:bg-[var(--color-accent)]/50 transition-colors cursor-pointer border border-transparent hover:border-[var(--color-border)] group/vaultitem"
-                    >
-                      <IconComponent className={`w-3.5 h-3.5 ${iconColor} shrink-0`} />
-                      <span className="text-xs text-[var(--color-text-main)] font-semibold truncate flex-1 group-hover/vaultitem:text-[var(--color-primary)]">
-                        {item.searchName}
-                      </span>
-                      <span className="text-[9px] text-[var(--color-text-muted)] font-mono shrink-0">
-                        {item.extension ? `.${item.extension}` : ''}
-                      </span>
+                    <div key={type} className={`border border-[var(--color-border)] p-2 rounded-xl flex flex-col justify-center ${leaveColors[type] || ''}`}>
+                      <div className="text-sm font-black tabular-nums">{remaining} / {allowance}</div>
+                      <div className="text-[9px] font-bold uppercase tracking-wider opacity-85 mt-0.5">{leaveLabels[type] || type}</div>
                     </div>
                   )
                 })}
               </div>
-            ) : (
-              <div className="py-2 text-center text-xs text-[var(--color-text-muted)] italic">
-                No files in vault yet.
+              <Button
+                onClick={() => onTabChange('leave')}
+                size="sm"
+                className="w-full"
+              >
+                Request Time Off
+              </Button>
+            </Card>
+          )}
+
+          {/* Weight Tracker Card */}
+          {widgetsVisibility.weight !== false && (
+            <Card className="p-4 space-y-3 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
+              <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
+                <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
+                  <Scale className="w-3.5 h-3.5 text-[var(--color-completed)]" />
+                  Weight Graph
+                </span>
+                {latestWeightRecord && (
+                  <span className="text-xs font-black text-[var(--color-text-main)] tabular-nums">
+                    {latestWeightRecord.weight.toFixed(1)} kg
+                  </span>
+                )}
               </div>
-            )}
-          </Card>
+              {sparklineData.length >= 2 ? (
+                <div className="pt-2">
+                  <Sparkline data={sparklineData} width={280} height={120} />
+                </div>
+              ) : (
+                <div className="py-6 text-center text-xs text-[var(--color-text-muted)] italic">
+                  Need at least 2 logs to show weight graph.
+                </div>
+              )}
+            </Card>
+          )}
+
+          {/* Secure Vault Card */}
+          {widgetsVisibility.recentDocuments !== false && (
+            <Card className="p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
+              <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
+                <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
+                  <Shield className="w-3.5 h-3.5 text-[var(--color-external)]" />
+                  Secure Vault
+                </span>
+                <Lock className="w-3 h-3 text-[var(--color-text-muted)]" />
+              </div>
+
+              {/* Active Documents List */}
+              {vaultLoading ? (
+                <div className="space-y-1.5 py-1">
+                  {[1, 2].map(i => <Skeleton key={i} className="h-6 w-full rounded-md" />)}
+                </div>
+              ) : vaultItems.length > 0 ? (
+                <div className="space-y-1 py-0.5">
+                  {vaultItems.map((item: VaultItem) => {
+                    const IconComponent = getVaultIcon(item.mimeGroup)
+                    const iconColor = getVaultIconColor(item.mimeGroup)
+                    return (
+                      <div 
+                        key={item.id}
+                        onClick={() => onTabChange('documents')}
+                        className="flex items-center gap-2 p-1.5 rounded-md hover:bg-[var(--color-accent)]/50 transition-colors cursor-pointer border border-transparent hover:border-[var(--color-border)] group/vaultitem"
+                      >
+                        <IconComponent className={`w-3.5 h-3.5 ${iconColor} shrink-0`} />
+                        <span className="text-xs text-[var(--color-text-main)] font-semibold truncate flex-1 group-hover/vaultitem:text-[var(--color-primary)]">
+                          {item.searchName}
+                        </span>
+                        <span className="text-[9px] text-[var(--color-text-muted)] font-mono shrink-0">
+                          {item.extension ? `.${item.extension}` : ''}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="py-2 text-center text-xs text-[var(--color-text-muted)] italic">
+                  No files in vault yet.
+                </div>
+              )}
+            </Card>
+          )}
 
         </div>
       </div>
