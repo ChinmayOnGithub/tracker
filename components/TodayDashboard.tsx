@@ -5,18 +5,20 @@ import { Skeleton, EmptyState, Button, Card, Input } from '@/design-system'
 import {
   ExternalLink, Check, Plus, ArrowRightCircle,
   Scale, Shield, BookOpen, CalendarX, Lock,
-  FileText, FileImage, FileVideo, FileArchive, FileCode, FileSpreadsheet, File
+  FileText, FileImage, FileVideo, FileArchive, FileCode, FileSpreadsheet, File,
+  RefreshCw, Clock, Briefcase
 } from 'lucide-react'
 import { ActivityTemplate, ActivityLog, Note, RecurrenceAnalysis, TimelineItem } from '@/types'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
 import { ParsedCalendarEvent } from '@/modules/sync/google-calendar/services/GoogleCalendarService'
 import { Icon } from './Icon'
 import { useRouter } from 'next/navigation'
-import { deleteLog, markComplete, updateLog } from '@/app/actions/log'
+import { deleteLog, markComplete, updateLog, postponeOneTimeTask, unpostponeOneTimeTask } from '@/app/actions/log'
 import { reorderActivityTemplates, createActivityTemplate } from '@/app/actions/template'
 import { useActivityNotifications } from '@/lib/hooks/useActivityNotifications'
 import { Sparkline } from './WeightPanel'
 import { listVaultItems, VaultItem } from '@/app/actions/vault'
+import { getTemplateColorClasses } from '@/lib/colors'
 
 interface TestAnalyzedTemplate {
   template: ActivityTemplate
@@ -64,6 +66,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   _notes,
   todayStr,
   calendarData,
+  onRefetchCalendar,
   onOpenCreateActivity,
   _onMarkHabitComplete,
   _onEditTemplate,
@@ -123,10 +126,134 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   // collapsed state removed as it is unused
 
+  // Compute start and end dates of the current week (Mon to Sun) based on todayStr
+  const getWeekDates = (dateStr: string) => {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    const current = new Date(Date.UTC(y, m - 1, d))
+    const day = current.getUTCDay()
+    const monDiff = day === 0 ? -6 : 1 - day // Adjust for Monday start
+    
+    const mon = new Date(current)
+    mon.setUTCDate(current.getUTCDate() + monDiff)
+    
+    const dates: string[] = []
+    for (let i = 0; i < 7; i++) {
+      const temp = new Date(mon)
+      temp.setUTCDate(mon.getUTCDate() + i)
+      dates.push(temp.toISOString().split('T')[0])
+    }
+    return dates
+  }
+
+  const weekDates = getWeekDates(todayStr)
+  
+  // Find the Work Tracker template and daily log
+  const workTemplateObj = analyzedTemplates.find(t => t.template.name === 'Work Tracker')?.template
+  const workTemplateId = workTemplateObj?.id
+  
+  const todayWorkLog = workTemplateId
+    ? logs.find(l => l.activityId === workTemplateId && l.date === todayStr)
+    : null
+    
+  // Calculate weekly stats
+  const weeklyWorkLogs = workTemplateId
+    ? logs.filter(l => l.activityId === workTemplateId && weekDates.includes(l.date))
+    : []
+    
+  const totalOfficeHours = weeklyWorkLogs
+    .filter(l => l.status === 'done')
+    .reduce((sum, l) => sum + (l.amount ?? 0), 0)
+    
+  const totalWfhHours = weeklyWorkLogs
+    .filter(l => l.status === 'wfh')
+    .reduce((sum, l) => sum + (l.amount ?? 0), 0)
+
+  const weeklyGoal = 27
+  const remainingHours = Math.max(0, weeklyGoal - totalOfficeHours)
+  const isGoalMet = totalOfficeHours >= weeklyGoal
+
+  // Work Tracker state
+  const [workStatus, setWorkStatus] = useState<'office' | 'wfh' | 'cleared'>(() => {
+    if (todayWorkLog) {
+      return todayWorkLog.status === 'wfh' ? 'wfh' : 'office'
+    }
+    return 'cleared'
+  })
+  
+  const [inTime, setInTime] = useState(() => {
+    const payload = todayWorkLog?.payload as Record<string, unknown> | null
+    return (payload?.inTime as string) || '09:00'
+  })
+  
+  const [outTime, setOutTime] = useState(() => {
+    const payload = todayWorkLog?.payload as Record<string, unknown> | null
+    return (payload?.outTime as string) || '17:30'
+  })
+  
+  const [wfhHours, setWfhHours] = useState(() => {
+    if (todayWorkLog && todayWorkLog.status === 'wfh') {
+      return todayWorkLog.amount || 8.0
+    }
+    return 8.0
+  })
+
+  const [isLoggingWork, setIsLoggingWork] = useState(false)
+
+  // Sync state with incoming props on log updates during render to avoid useEffect warnings
+  const [prevLogId, setPrevLogId] = useState(todayWorkLog?.id)
+  if (todayWorkLog?.id !== prevLogId) {
+    setPrevLogId(todayWorkLog?.id)
+    if (todayWorkLog) {
+      setWorkStatus(todayWorkLog.status === 'wfh' ? 'wfh' : 'office')
+      const payload = todayWorkLog.payload as Record<string, unknown> | null
+      setInTime((payload?.inTime as string) || '09:00')
+      setOutTime((payload?.outTime as string) || '17:30')
+      setWfhHours(todayWorkLog.status === 'wfh' ? (todayWorkLog.amount || 8.0) : 8.0)
+    } else {
+      setWorkStatus('cleared')
+    }
+  }
+
+  // Restore currentTime tick interval
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 30000)
     return () => clearInterval(timer)
   }, [])
+
+  const computeOfficeHours = (inT: string, outT: string): number => {
+    const [inH, inM] = inT.split(':').map(Number)
+    const [outH, outM] = outT.split(':').map(Number)
+    let diffMins = (outH * 60 + outM) - (inH * 60 + inM)
+    if (diffMins < 0) diffMins += 24 * 60 // handle overnight shifts
+    return parseFloat((diffMins / 60).toFixed(1))
+  }
+
+  const handleSaveWorkPresence = async () => {
+    if (!workTemplateId || isLoggingWork) return
+    setIsLoggingWork(true)
+    try {
+      const computedHours = workStatus === 'office' 
+        ? computeOfficeHours(inTime, outTime)
+        : workStatus === 'wfh' ? wfhHours : 0
+        
+      const { logWorkPresence } = await import('@/app/actions/log')
+      const res = await logWorkPresence({
+        templateId: workTemplateId,
+        date: todayStr,
+        status: workStatus,
+        inTime: workStatus === 'office' ? inTime : null,
+        outTime: workStatus === 'office' ? outTime : null,
+        hours: computedHours
+      })
+      if (res.success) {
+        router.refresh()
+      }
+    } catch (err) {
+      console.error('Failed to log work presence:', err)
+    } finally {
+      setIsLoggingWork(false)
+    }
+  }
 
   const calendarEvents = calendarData.agenda?.today || []
   const timeline = generateTimeline(analyzedTemplates, logs, todayStr, calendarEvents)
@@ -329,10 +456,14 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         // Canceled -> Postponed (or Cleared if daily)
         const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
         const isDaily = matched?.template.recurrenceType === 'daily'
+        const isOneTime = matched?.template.recurrenceType === 'one_time'
         if (isDaily) {
           if (occurrence.logId) {
             await deleteLog(occurrence.logId)
           }
+        } else if (isOneTime) {
+          // For one_time tasks: use dedicated action that updates targetDate
+          await postponeOneTimeTask(occurrence.templateId, todayStr, occurrence.logId)
         } else {
           if (occurrence.logId) {
             await updateLog(occurrence.logId, { status: 'postponed' })
@@ -342,7 +473,12 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         }
       } else if (isPostponed) {
         // Postponed -> Cleared
-        if (occurrence.logId) {
+        const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
+        const isOneTime = matched?.template.recurrenceType === 'one_time'
+        if (isOneTime && occurrence.logId) {
+          // For one_time tasks: revert targetDate back to today
+          await unpostponeOneTimeTask(occurrence.templateId, occurrence.logId, todayStr)
+        } else if (occurrence.logId) {
           await deleteLog(occurrence.logId)
         }
       }
@@ -395,66 +531,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   // handleHabit handlers removed as they are unused
 
-  // Semantic color mapping - color by meaning, not category
-  const getSemanticColor = (occurrence: TimelineItem): {
-    iconBg: string
-    textColor: string
-    semanticType: 'external' | 'completed' | 'warning' | 'overdue' | 'personal' | 'neutral'
-  } => {
-    // Determine semantic meaning
-    if (occurrence.completed && occurrence.status !== 'skipped') {
-      return {
-        iconBg: 'bg-[var(--color-completed)]/10 border-[var(--color-completed)]/20 text-[var(--color-completed)]',
-        textColor: 'text-[var(--color-completed)]',
-        semanticType: 'completed'
-      }
-    }
-    
-    if (occurrence.type === 'MEETING' || occurrence.type === 'EVENT') {
-      return {
-        iconBg: 'bg-[var(--color-external)]/10 border-[var(--color-external)]/20 text-[var(--color-external)]',
-        textColor: 'text-[var(--color-external)]',
-        semanticType: 'external'
-      }
-    }
 
-    const matchedTemplate = occurrence.templateId
-      ? analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-      : null
-    const template = matchedTemplate?.template
-    const analysis = matchedTemplate?.analysis
-    
-    if (analysis?.overdue) {
-      return {
-        iconBg: 'bg-[var(--color-overdue)]/10 border-[var(--color-overdue)]/20 text-[var(--color-overdue)]',
-        textColor: 'text-[var(--color-overdue)]',
-        semanticType: 'overdue'
-      }
-    }
-    
-    if (occurrence.priority === 'HIGH' || occurrence.priority === 'CRITICAL') {
-      return {
-        iconBg: 'bg-[var(--color-warning)]/10 border-[var(--color-warning)]/20 text-[var(--color-warning)]',
-        textColor: 'text-[var(--color-warning)]',
-        semanticType: 'warning'
-      }
-    }
-    
-    if (template?.category === 'PERSONAL' || occurrence.templateId?.includes('personal')) {
-      return {
-        iconBg: 'bg-[var(--color-personal)]/10 border-[var(--color-personal)]/20 text-[var(--color-personal)]',
-        textColor: 'text-[var(--color-personal)]',
-        semanticType: 'personal'
-      }
-    }
-    
-    // Default neutral
-    return {
-      iconBg: 'bg-[var(--color-accent)] border-[var(--color-border)] text-[var(--color-text-muted)]',
-      textColor: 'text-[var(--color-text-muted)]',
-      semanticType: 'neutral'
-    }
-  }
 
   // getCardBgClass removed as it is unused
 
@@ -487,9 +564,23 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     const estimatedDuration = template?.estimatedDuration
     const streak = matchedTemplate?.analysis.streak ?? 0
 
-    const semantic = getSemanticColor(occurrence)
     const isGoogleCalendar = occurrence.id.startsWith('google_') || !occurrence.templateId
+    const templateColor = template?.color || 'zinc'
+    const colorClasses = getTemplateColorClasses(templateColor)
     
+    // Map color names to Tailwind bg classes
+    const colorBgClasses: Record<string, string> = {
+      red: 'bg-red-500 dark:bg-red-400',
+      orange: 'bg-orange-500 dark:bg-orange-400',
+      amber: 'bg-amber-500 dark:bg-amber-400',
+      green: 'bg-green-500 dark:bg-green-400',
+      blue: 'bg-blue-500 dark:bg-blue-400',
+      purple: 'bg-purple-500 dark:bg-purple-400',
+      pink: 'bg-pink-500 dark:bg-pink-400',
+      zinc: 'bg-zinc-500 dark:bg-zinc-400',
+    }
+    const colorBg = colorBgClasses[templateColor] || 'bg-zinc-500'
+
     // Read status from optimistic state if available
     const optimisticVal = optimisticStatuses[occurrence.id]
     const isCanceled = optimisticVal ? optimisticVal.status === 'skipped' : occurrence.status === 'skipped'
@@ -497,20 +588,15 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     const isDone = optimisticVal ? (optimisticVal.completed && !isCanceled && !isPostponed) : (occurrence.completed && !isCanceled && !isPostponed)
 
     // Status border color strip
-    let statusIndicatorColor = 'bg-[var(--color-personal)]'
-    if (isDone) {
+    let statusIndicatorColor = colorBg
+    if (isGoogleCalendar) {
+      statusIndicatorColor = 'bg-[var(--color-external)]'
+    } else if (isDone) {
       statusIndicatorColor = 'bg-[var(--color-completed)]'
     } else if (isCanceled) {
       statusIndicatorColor = 'bg-[var(--color-overdue)]'
     } else if (isPostponed) {
       statusIndicatorColor = 'bg-[var(--color-external)]'
-    } else if (isGoogleCalendar) {
-      statusIndicatorColor = 'bg-[var(--color-external)]'
-    } else {
-      const isOverdue = matchedTemplate?.analysis.overdue
-      if (isOverdue) {
-        statusIndicatorColor = 'bg-[var(--color-overdue)]'
-      }
     }
 
     return (
@@ -557,7 +643,11 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         </button>
 
         {/* ── Category Icon ── */}
-        <div className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 ${semantic.iconBg}`}>
+        <div className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 ${
+          isGoogleCalendar 
+            ? 'bg-[var(--color-external)]/10 border-[var(--color-external)]/20 text-[var(--color-external)]' 
+            : `${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`
+        }`}>
           <Icon name={occurrence.icon || template?.icon || 'CheckSquare'} size={12} />
         </div>
 
@@ -583,7 +673,11 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               </span>
             )}
             {isTimed && startTimeLabel && (
-              <span className={`shrink-0 text-[9px] font-mono font-bold px-1 py-0.5 rounded-sm border ${semantic.textColor} bg-current/5 border-current/25`}>
+              <span className={`shrink-0 text-[9px] font-mono font-bold px-1 py-0.5 rounded-sm border ${
+                isGoogleCalendar 
+                  ? 'text-[var(--color-external)] border-[var(--color-external)]/25 bg-[var(--color-external)]/5' 
+                  : `${colorClasses.text} ${colorClasses.border} ${colorClasses.bg}`
+              }`}>
                 {startTimeLabel}
                 {estimatedDuration ? ` • ${estimatedDuration}m` : ''}
               </span>
@@ -654,9 +748,23 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             {todayLongDate} • {getContextSubtitle()}
           </p>
         </div>
-        <Button onClick={onOpenCreateActivity} size="sm" icon={<Plus className="w-3.5 h-3.5" />}>
-          New Activity
-        </Button>
+        <div className="flex items-center gap-2">
+          {calendarData.connected && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onRefetchCalendar(true)}
+              isLoading={calendarData.loading}
+              icon={<RefreshCw className="w-3.5 h-3.5" />}
+              className="font-semibold shadow-xs"
+            >
+              Refresh
+            </Button>
+          )}
+          <Button onClick={onOpenCreateActivity} size="sm" icon={<Plus className="w-3.5 h-3.5" />}>
+            New Activity
+          </Button>
+        </div>
       </div>
 
       {/* 2-column grid layout on desktop, single column on mobile */}
@@ -722,6 +830,124 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         <div className="space-y-6 xl:sticky xl:top-6">
           
           {/* Today's Journal Card */}
+      {/* Work Presence Tracker Card */}
+      {workTemplateId && (
+        <Card className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
+          <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
+            <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
+              <Briefcase className="w-3.5 h-3.5 text-emerald-500" />
+              Work Hours Tracker
+            </span>
+            <Clock className="w-3 h-3 text-[var(--color-text-muted)]" />
+          </div>
+
+          <div className="space-y-3">
+            {/* Status Segmented Controls */}
+            <div className="flex bg-[var(--color-bg-base)] p-0.5 rounded-[9px] border border-[var(--color-border)]">
+              {(['cleared', 'office', 'wfh'] as const).map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setWorkStatus(status)}
+                  className={`flex-1 py-1 text-[10px] font-bold rounded-md capitalize transition-all duration-150 cursor-pointer ${
+                    workStatus === status
+                      ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-xs border border-[var(--color-border)]'
+                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                  }`}
+                >
+                  {status === 'cleared' ? 'Clear' : status}
+                </button>
+              ))}
+            </div>
+
+            {/* Office Time Pickers */}
+            {workStatus === 'office' && (
+              <div className="space-y-2 pt-1">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">In-Time</label>
+                    <input
+                      type="time"
+                      value={inTime}
+                      onChange={(e) => setInTime(e.target.value)}
+                      className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">Out-Time</label>
+                    <input
+                      type="time"
+                      value={outTime}
+                      onChange={(e) => setOutTime(e.target.value)}
+                      className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
+                    />
+                  </div>
+                </div>
+                <div className="text-[10px] text-right font-semibold text-[var(--color-text-muted)] pr-0.5">
+                  Calculated: <span className="text-[var(--color-text-main)] font-mono">{computeOfficeHours(inTime, outTime)}h</span>
+                </div>
+              </div>
+            )}
+
+            {/* WFH Hours Inputs */}
+            {workStatus === 'wfh' && (
+              <div className="space-y-1.5 pt-1">
+                <div className="flex justify-between items-center text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+                  <span>WFH Hours</span>
+                  <span className="text-xs font-mono text-[var(--color-text-main)] font-bold">{wfhHours}h</span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="16"
+                  step="0.5"
+                  value={wfhHours}
+                  onChange={(e) => setWfhHours(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                />
+              </div>
+            )}
+
+            {/* Action Save Button */}
+            <Button
+              onClick={handleSaveWorkPresence}
+              isLoading={isLoggingWork}
+              variant="primary"
+              size="sm"
+              className="w-full font-bold text-xs"
+            >
+              Save Presence
+            </Button>
+
+            {/* Progress Section */}
+            <div className="border-t border-[var(--color-border)]/50 pt-3 space-y-2">
+              <div className="flex items-center justify-between text-[10px] font-bold text-[var(--color-text-muted)]">
+                <span>Weekly Office Presence</span>
+                <span className="font-mono text-[var(--color-text-main)]">
+                  {totalOfficeHours}h / {weeklyGoal}h
+                </span>
+              </div>
+              <div className="w-full h-2 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-500 rounded-full ${
+                    isGoalMet ? 'bg-emerald-500' : 'bg-blue-500'
+                  }`}
+                  style={{ width: `${Math.min(100, (totalOfficeHours / weeklyGoal) * 100)}%` }}
+                />
+              </div>
+              <div className="flex justify-between items-center text-[9px] font-semibold text-[var(--color-text-muted)]">
+                <span>
+                  {isGoalMet ? '🎉 Weekly Goal Met!' : `${remainingHours.toFixed(1)}h remaining`}
+                </span>
+                {totalWfhHours > 0 && (
+                  <span>WFH: <span className="font-mono text-[var(--color-text-main)]">{totalWfhHours}h</span></span>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <Card className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
         <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
           <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">

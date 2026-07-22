@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { ActivityTemplate, ActivityLog, Note, WorkoutExercise, WorkoutPayload, RunningPayload, MeasurementsPayload, TimelineItem } from '@/types'
-import { createLog, updateLog, deleteLog, markComplete } from '@/app/actions/log'
+import { createLog, updateLog, deleteLog, markComplete, postponeOneTimeTask, unpostponeOneTimeTask } from '@/app/actions/log'
 import { Icon } from './Icon'
 import { X, Trash2, Edit2, Sparkles, BookOpen, Search, Check, ArrowRightCircle } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
@@ -94,10 +94,14 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
       } else if (isCanceled) {
         // Canceled -> Postponed (or Cleared if daily)
         const isDaily = matched.recurrenceType === 'daily'
+        const isOneTime = matched.recurrenceType === 'one_time'
         if (isDaily) {
           if (occurrence.logId) {
             await deleteLog(occurrence.logId)
           }
+        } else if (isOneTime) {
+          // For one_time tasks: use dedicated action that updates targetDate
+          await postponeOneTimeTask(occurrence.templateId, dateStr, occurrence.logId)
         } else {
           if (occurrence.logId) {
             await updateLog(occurrence.logId, { status: 'postponed' })
@@ -107,7 +111,10 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
         }
       } else if (isPostponed) {
         // Postponed -> Cleared
-        if (occurrence.logId) {
+        const isOneTime = matched.recurrenceType === 'one_time'
+        if (isOneTime && occurrence.logId) {
+          await unpostponeOneTimeTask(occurrence.templateId, occurrence.logId, dateStr)
+        } else if (occurrence.logId) {
           await deleteLog(occurrence.logId)
         }
       }

@@ -23,6 +23,6 @@ export const GOOGLE_OAUTH = {
 } as const
 
 export const CACHE_TTL = {
-  CALENDAR_EVENTS_MS: 10 * 60 * 1000, // 10 minutes
+  CALENDAR_EVENTS_MS: 30 * 1000, // 30 seconds for fast refresh of deleted/completed events
   ACCESS_TOKEN_THRESHOLD_MS: 60 * 1000 // 1 minute buffer before expiry
 } as const

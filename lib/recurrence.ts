@@ -62,7 +62,8 @@ export function analyzeRecurrence(
   const latestLog = sortedLogs.length > 0 ? sortedLogs[0] : null
 
   // If the latest state was postponed, it is due on the next day
-  if (latestLog && latestLog.status === 'postponed') {
+  // For one_time tasks: skip this — their targetDate is updated directly by postponeOneTimeTask
+  if (latestLog && latestLog.status === 'postponed' && template.recurrenceType !== 'one_time') {
     const nextDueDate = addUTCDays(latestLog.date, 1)
     const daysSinceLast = diffUTCDays(todayStr, latestLog.date)
     return {
@@ -192,9 +193,23 @@ export function analyzeRecurrence(
       if (lastCompletedDate) {
         nextDueDate = null // Completed
       } else {
-        nextDueDate = template.targetDate 
-          ? formatUTCDate((template.targetDate as unknown) instanceof Date ? (template.targetDate as unknown as Date) : new Date(template.targetDate))
-          : todayStr
+        const latestPostponeLog = sortedLogs.find(log => log.status === 'postponed')
+        if (latestPostponeLog) {
+          nextDueDate = addUTCDays(latestPostponeLog.date, 1)
+        } else {
+          const targetDateObj = template.targetDate
+          if (targetDateObj) {
+            nextDueDate = formatUTCDate(
+              (targetDateObj as unknown) instanceof Date
+                ? (targetDateObj as unknown as Date)
+                : new Date(targetDateObj)
+            )
+          } else if (template.createdAt) {
+            nextDueDate = formatUTCDate(new Date(template.createdAt))
+          } else {
+            nextDueDate = todayStr
+          }
+        }
       }
       break
     }
@@ -207,7 +222,7 @@ export function analyzeRecurrence(
 
   // Calculate overdue status
   if (nextDueDate) {
-    overdue = nextDueDate < todayStr
+    overdue = template.recurrenceType === 'one_time' ? false : nextDueDate < todayStr
   }
 
   // Calculate daily streak

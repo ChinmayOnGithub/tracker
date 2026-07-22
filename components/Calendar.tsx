@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { ActivityTemplate, ActivityLog, Note, RecurrenceAnalysis, TimelineItem } from '@/types'
-import { ChevronLeft, ChevronRight, BookOpen, Calendar as CalendarIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, BookOpen, Briefcase } from 'lucide-react'
 import { getEventsForDate } from '@/lib/marathiCalendar'
 import { Card, Button } from '@/design-system'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
@@ -44,12 +44,12 @@ export const Calendar: React.FC<CalendarProps> = ({
   onDayClick,
 }) => {
   const [currentDate, setCurrentDate] = useState(() => new Date())
-  const [view, setView] = useState<'month' | 'week' | 'agenda'>(() => {
+  const [view, setView] = useState<'month' | 'week'>(() => {
     if (typeof window !== 'undefined') {
       const val = localStorage.getItem('calendar_default_view')
-      if (val === 'month' || val === 'week' || val === 'agenda') return val
+      if (val === 'month' || val === 'week') return val
     }
-    return 'agenda'
+    return 'month'
   })
   const startOfWeekPref = typeof window !== 'undefined' && localStorage.getItem('calendar_start_of_week') === 'monday' ? 'monday' : 'sunday'
   
@@ -58,19 +58,15 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   const handlePrev = () => {
     if (view === 'month') setCurrentDate(new Date(year, month - 1, 1))
-    else if (view === 'week') {
+    else {
       const d = new Date(currentDate); d.setDate(d.getDate() - 7); setCurrentDate(d)
-    } else {
-      const d = new Date(currentDate); d.setDate(d.getDate() - 14); setCurrentDate(d)
     }
   }
 
   const handleNext = () => {
     if (view === 'month') setCurrentDate(new Date(year, month + 1, 1))
-    else if (view === 'week') {
+    else {
       const d = new Date(currentDate); d.setDate(d.getDate() + 7); setCurrentDate(d)
-    } else {
-      const d = new Date(currentDate); d.setDate(d.getDate() + 14); setCurrentDate(d)
     }
   }
 
@@ -132,9 +128,51 @@ export const Calendar: React.FC<CalendarProps> = ({
     const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i); return d
   })
   
-  const agendaDaysList = Array.from({ length: 14 }).map((_, i) => {
-    const d = new Date(currentDate); d.setDate(currentDate.getDate() + i); return d
-  })
+
+  // Find Work Tracker template and compute stats for the current view
+  const workTemplate = _templates.find(t => t.name === 'Work Tracker')
+  const workTemplateId = workTemplate?.id
+  
+  const getWorkStats = () => {
+    if (!workTemplateId) return null
+    
+    let targetDates: string[] = []
+    let rangeLabel = ''
+    
+    if (view === 'week') {
+      targetDates = weekDaysList.map(d => d.toISOString().split('T')[0])
+      const startLabel = weekDaysList[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const endLabel = weekDaysList[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      rangeLabel = `${startLabel} – ${endLabel}`
+    } else {
+      targetDates = cells.map(c => c.dateStr).filter((d): d is string => !!d)
+      rangeLabel = `${currentDate.toLocaleString('default', { month: 'short' })} ${year}`
+    }
+    
+    const rangeLogs = logs.filter(l => l.activityId === workTemplateId && targetDates.includes(l.date))
+    
+    const officeHours = rangeLogs
+      .filter(l => l.status === 'done')
+      .reduce((sum, l) => sum + (l.amount ?? 0), 0)
+      
+    const wfhHours = rangeLogs
+      .filter(l => l.status === 'wfh')
+      .reduce((sum, l) => sum + (l.amount ?? 0), 0)
+      
+    const weeklyGoal = 27
+    const remaining = Math.max(0, weeklyGoal - officeHours)
+    const goalMet = officeHours >= weeklyGoal
+    
+    return {
+      officeHours,
+      wfhHours,
+      rangeLabel,
+      remaining,
+      goalMet
+    }
+  }
+
+  const workStats = getWorkStats()
 
   const monthName = currentDate.toLocaleString('default', { month: 'long' })
 
@@ -155,10 +193,13 @@ export const Calendar: React.FC<CalendarProps> = ({
         <div className="flex flex-wrap items-center gap-3">
           {/* iOS-style Segmented Control */}
           <div className="flex bg-slate-100 dark:bg-zinc-800/60 p-0.5 rounded-[9px] shadow-inner">
-            {(['month', 'week', 'agenda'] as const).map(v => (
+            {(['month', 'week'] as const).map(v => (
               <button
                 key={v}
-                onClick={() => setView(v)}
+                onClick={() => {
+                  setView(v)
+                  localStorage.setItem('calendar_default_view', v)
+                }}
                 className={`px-3.5 py-1.5 text-[11px] font-bold rounded-md transition-all duration-200 capitalize ${
                   view === v 
                     ? 'bg-white dark:bg-zinc-700 text-black dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
@@ -185,6 +226,30 @@ export const Calendar: React.FC<CalendarProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Weekly Work Hours Tracker Summary banner */}
+      {workStats && (
+        <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-semibold">
+          <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+            <Briefcase size={14} className="shrink-0" />
+            <span>
+              Work Summary ({workStats.rangeLabel}): Office <span className="font-extrabold">{workStats.officeHours}h</span> / 27h
+              {workStats.wfhHours > 0 && <> + WFH <span className="font-extrabold">{workStats.wfhHours}h</span></>}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={workStats.goalMet ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : 'text-slate-500 dark:text-zinc-400'}>
+              {workStats.goalMet ? '🎉 Weekly Goal Met!' : `${workStats.remaining.toFixed(1)}h remaining`}
+            </span>
+            <div className="w-24 h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden shrink-0">
+              <div
+                className={`h-full ${workStats.goalMet ? 'bg-emerald-500' : 'bg-blue-500'} rounded-full`}
+                style={{ width: `${Math.min(100, (workStats.officeHours / 27) * 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 1. MONTH VIEW ── */}
       {view === 'month' && (
@@ -302,90 +367,6 @@ export const Calendar: React.FC<CalendarProps> = ({
         </div>
       )}
 
-      {/* ── 3. AGENDA VIEW ── */}
-      {view === 'agenda' && (() => {
-        const today = new Date(); today.setHours(0, 0, 0, 0)
-        const getRelativeLabel = (day: Date): string => {
-          const target = new Date(day); target.setHours(0, 0, 0, 0)
-          const diffDays = Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-          if (diffDays === 0) return 'Today'
-          if (diffDays === 1) return 'Tomorrow'
-          return day.toLocaleDateString(undefined, { weekday: 'long' })
-        }
-
-        const agendaDays = agendaDaysList.map(day => {
-          const dateStr = day.toISOString().split('T')[0]
-          return {
-            day, dateStr, isToday: dateStr === todayStr,
-            dayTimeline: getTimelineForDate(dateStr),
-            note: notesByDate.get(dateStr),
-            marathi: getEventsForDate(dateStr),
-          }
-        })
-        const nonEmptyDays = agendaDays.filter(d => d.dayTimeline.length > 0 || d.note || d.marathi.length > 0)
-
-        if (nonEmptyDays.length === 0) {
-          return (
-            <div className="flex flex-col items-center justify-center py-20 text-center bg-slate-50/50 dark:bg-zinc-900/30 rounded-xl border border-slate-100 dark:border-zinc-850">
-              <div className="w-12 h-12 rounded-full bg-white dark:bg-zinc-800 flex items-center justify-center mb-4 shadow-sm border border-slate-200 dark:border-zinc-700">
-                <CalendarIcon size={20} className="text-slate-400" />
-              </div>
-              <p className="text-base font-bold text-[var(--color-text-main)]">No upcoming events</p>
-              <p className="text-sm text-[var(--color-text-muted)] mt-1">Your schedule is clear for the next 14 days.</p>
-            </div>
-          )
-        }
-
-        return (
-          <div className="flex flex-col gap-0 max-w-2xl mx-auto py-2 relative">
-            <div className="absolute left-[31px] top-4 bottom-4 w-px bg-slate-200 dark:bg-zinc-800 z-0" />
-            {nonEmptyDays.map(({ day, dateStr, isToday, dayTimeline, note, marathi }) => {
-              return (
-                <div key={dateStr} className="relative flex items-start gap-4 py-4 group z-10">
-                  <div className="w-16 pt-0.5 text-right shrink-0">
-                    <div className={`text-xs font-black uppercase tracking-wide ${isToday ? 'text-[var(--color-primary)]' : 'text-slate-400 dark:text-zinc-500'}`}>
-                      {day.toLocaleDateString(undefined, { month: 'short' })}
-                    </div>
-                    <div className={`text-xl font-black tabular-nums leading-none mt-1 ${isToday ? 'text-[var(--color-text-main)]' : 'text-[var(--color-text-main)]'}`}>
-                      {day.getDate()}
-                    </div>
-                  </div>
-                  
-                  <div className={`w-3 h-3 rounded-full mt-1.5 shrink-0 border-2 bg-[var(--color-bg-surface)] ${isToday ? 'border-[var(--color-primary)] shadow-[0_0_8px_rgba(0,122,255,0.4)]' : 'border-slate-300 dark:border-zinc-600 group-hover:border-slate-400 dark:group-hover:border-zinc-500 transition-colors'}`} />
-                  
-                  <button onClick={() => onDayClick(dateStr)} className="flex-1 flex flex-col gap-2 text-left bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl p-3 shadow-xs hover:shadow-sm hover:border-slate-300 dark:hover:border-zinc-700 transition-all">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[11px] font-bold text-slate-500 dark:text-zinc-400 uppercase tracking-wider">{getRelativeLabel(day)}</span>
-                      {marathi.map((m, i) => <span key={i} className="text-[9px] font-bold bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded">{m.title}</span>)}
-                    </div>
-                    
-                    {dayTimeline.map(o => (
-                      <div key={o.id} className="flex items-center gap-3">
-                        <div className={`w-1 h-1 rounded-full ${o.completed ? 'bg-emerald-500' : 'bg-slate-400 dark:bg-zinc-600'}`} />
-                        <span className={`text-sm font-semibold truncate ${o.completed ? 'line-through text-slate-400' : 'text-[var(--color-text-main)]'}`}>
-                          {o.templateName}
-                        </span>
-                        {o.isAllDay ? (
-                          <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-zinc-850 px-1.5 py-0.5 rounded ml-auto">All Day</span>
-                        ) : o.start ? (
-                          <span className="text-[11px] font-mono text-slate-500 ml-auto">{new Date(o.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
-                        ) : null}
-                      </div>
-                    ))}
-                    
-                    {note && (
-                      <div className="flex items-center gap-2 mt-1 py-1.5 px-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
-                        <BookOpen size={12} className="text-amber-600 dark:text-amber-500" />
-                        <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 truncate">{note.title || 'Journal entry'}</span>
-                      </div>
-                    )}
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        )
-      })()}
     </Card>
   )
 }

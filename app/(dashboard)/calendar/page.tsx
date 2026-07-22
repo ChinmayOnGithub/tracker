@@ -18,11 +18,31 @@ export default async function Page() {
 
   const templatesRaw = await db.activityTemplate.findMany({
     where: loggedUser.username === 'admin'
-      ? { OR: [{ userId: loggedUser.id }, { userId: null }] }
-      : { userId: loggedUser.id },
+      ? { OR: [{ userId: loggedUser.id }, { userId: null }], deletedAt: null }
+      : { userId: loggedUser.id, deletedAt: null },
     include: { tags: true },
     orderBy: { sortOrder: 'asc' },
   })
+
+  // Ensure "Work Tracker" template exists for tracking office in/out and WFH
+  let workTemplate = templatesRaw.find(t => t.name === 'Work Tracker' && !t.deletedAt)
+  if (!workTemplate) {
+    workTemplate = await db.activityTemplate.create({
+      data: {
+        userId: loggedUser.id,
+        name: 'Work Tracker',
+        category: 'productivity',
+        type: 'PERSONAL',
+        priority: 'NORMAL',
+        icon: 'Briefcase',
+        color: 'emerald',
+        recurrenceType: 'daily',
+        isActive: true
+      },
+      include: { tags: true }
+    })
+    templatesRaw.push(workTemplate)
+  }
 
   const [logsRaw, journalRaw] = await Promise.all([
     fetchRecurrenceLogs(loggedUser.id, templatesRaw, loggedUser.username === 'admin'),

@@ -45,12 +45,18 @@ export async function createActivityTemplate(data: {
     })
     const nextSortOrder = (maxSortOrder._max.sortOrder ?? 0) + 1
 
-    const { recurrenceType, ...templateRest } = rest
+    const { recurrenceType, targetDate, ...templateRest } = rest
+
+    // For one_time tasks, if no targetDate is passed, default to current date
+    const parsedTargetDate = targetDate
+      ? new Date(targetDate)
+      : (recurrenceType === 'one_time' ? new Date() : null)
 
     const created = await db.activityTemplate.create({
       data: {
         ...templateRest,
         recurrenceType: recurrenceType as RecurrenceType,
+        targetDate: parsedTargetDate,
         metadata: templateRest.metadata as Prisma.InputJsonValue,
         notificationRules: templateRest.notificationRules as Prisma.InputJsonValue,
         sortOrder: nextSortOrder,

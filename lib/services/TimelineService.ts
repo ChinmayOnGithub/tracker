@@ -158,11 +158,23 @@ export class TimelineService {
       }))
 
       const analysis = analyzeRecurrence(template as unknown as ActivityTemplate, allTemplateLogs as unknown as ActivityLog[], todayStr)
-      const isDue = analysis.nextDueDate && analysis.nextDueDate <= todayStr
+      const log = logs.find(l => l.activityId === template.id)
+
+      // For one_time tasks: only show on the exact due date (not overdue on future days).
+      // Recurring tasks: show if due today OR overdue.
+      // Always show if there's a log for today (preserves postponed/done history).
+      let isDue = false
+      if (log) {
+        isDue = true // Always show items that have a log for today
+      } else if (analysis.nextDueDate) {
+        if (template.recurrenceType === 'one_time') {
+          isDue = analysis.nextDueDate === todayStr // Exact date match only
+        } else {
+          isDue = analysis.nextDueDate <= todayStr // Due or overdue
+        }
+      }
 
       if (!isDue) continue
-
-      const log = logs.find(l => l.activityId === template.id)
       const meta = (template.metadata || {}) as Record<string, unknown>
       const isAllDay = (meta.isAllDay ?? (template.type !== 'MEETING')) as boolean
       const startTime = (meta.startTime ?? '09:00') as string

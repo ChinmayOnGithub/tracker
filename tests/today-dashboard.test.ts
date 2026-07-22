@@ -224,6 +224,43 @@ describe("Today Dashboard Helpers & Logic", () => {
       expect(timeline[1].type).toBe("WORKOUT")
       expect(timeline[1].completed).toBe(true) // Checked via logs
     })
+
+    test("one_time tasks should only appear on their exact scheduled day or when historically logged", () => {
+      const taskTemplate: ActivityTemplate = {
+        id: "one_time_task",
+        name: "One-off task",
+        isActive: true,
+        recurrenceType: "one_time",
+        targetDate: "2026-07-11",
+        type: "TASK",
+        priority: "NORMAL",
+        estimatedDuration: 0,
+      } as ActivityTemplate
+
+      const mockTemplates = [
+        {
+          template: taskTemplate,
+          analysis: { nextDueDate: "2026-07-11" } as unknown as RecurrenceAnalysis
+        }
+      ]
+
+      // Case 1: Target date matches todayStr
+      const timelineToday = generateTimeline(mockTemplates, [], "2026-07-11", [])
+      expect(timelineToday.length).toBe(1)
+      expect(timelineToday[0].templateName).toBe("One-off task")
+
+      // Case 2: Different day without log - should not appear
+      const timelineOtherDay = generateTimeline(mockTemplates, [], "2026-07-12", [])
+      expect(timelineOtherDay.length).toBe(0)
+
+      // Case 3: Different day with a historical log - should appear (preserves history)
+      const mockLogs = [
+        { id: "log_hist", activityId: "one_time_task", date: "2026-07-10", status: "postponed" } as unknown as ActivityLog
+      ]
+      const timelineHist = generateTimeline(mockTemplates, mockLogs, "2026-07-10", [])
+      expect(timelineHist.length).toBe(1)
+      expect(timelineHist[0].status).toBe("postponed")
+    })
   })
 })
 

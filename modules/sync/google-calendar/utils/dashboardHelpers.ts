@@ -223,7 +223,18 @@ export function generateTimeline(
     if (!template.isActive) return false
     if (template.recurrenceType === 'milestone' || template.recurrenceType === 'yearly') return false
     const hasLogToday = logs.some(l => l.activityId === template.id && l.date === todayStr)
-    return (analysis.nextDueDate && analysis.nextDueDate <= todayStr) || hasLogToday
+
+    // Always show items that have a log for today (preserves postponed/done history)
+    if (hasLogToday) return true
+
+    // For one_time tasks: only show on exact due date (not overdue on future days)
+    if (analysis.nextDueDate) {
+      if (template.recurrenceType === 'one_time') {
+        return analysis.nextDueDate === todayStr
+      }
+      return analysis.nextDueDate <= todayStr
+    }
+    return false
   })
   
   for (const { template } of dueTemplates) {

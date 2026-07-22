@@ -19,8 +19,9 @@ describe("Google Token Encryption", () => {
     
     const [iv, data, tag] = encrypted.split(':')
     
-    // Tamper with data part
-    const tamperedData = data.substring(0, data.length - 2) + "ab"
+    // Tamper with data part (guaranteeing change)
+    const lastTwo = data.slice(-2)
+    const tamperedData = data.slice(0, -2) + (lastTwo === "00" ? "ff" : "00")
     const tamperedEncrypted = `${iv}:${tamperedData}:${tag}`
     
     expect(() => GoogleCredentialService.decrypt(tamperedEncrypted)).toThrow()
