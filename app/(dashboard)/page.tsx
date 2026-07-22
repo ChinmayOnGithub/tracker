@@ -12,7 +12,7 @@ export const revalidate = 0
 export default async function Page() {
   const loggedUser = await getLoggedUser()
   if (!loggedUser) {
-    redirect('/')
+    return null
   }
   
   const currentYear = new Date().getFullYear()

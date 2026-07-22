@@ -9,7 +9,7 @@ import { DashboardShell } from '@/modules/core/dashboard'
 import { getAgendaAction } from '@/modules/sync/google-calendar/actions'
 import { ParsedCalendarEvent } from '@/modules/sync/google-calendar/services/GoogleCalendarService'
 import { CommandPalette } from './CommandPalette'
-import { Modal } from '@/design-system'
+import { Card, CardBody, Button, Input, Modal } from '@/design-system'
 import { TemplateModal } from './TemplateModal'
 import { getTodayDateStr } from '@/lib/recurrence'
 
@@ -183,12 +183,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     if (isRegisterMode) {
       const res = await registerUserAction(username, pin)
       if (res.success) {
-        setIsAuthenticated(true)
-        if (res.user) {
-          setUser(res.user)
-        }
-        setIsAuthLoading(false)
-        router.refresh()
+        window.location.replace('/')
       } else {
         setIsAuthLoading(false)
         setShake(true)
@@ -199,12 +194,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     } else {
       const res = await verifyPinAction(username, pin)
       if (res.success) {
-        setIsAuthenticated(true)
-        if (res.user) {
-          setUser(res.user)
-        }
-        setIsAuthLoading(false)
-        router.refresh()
+        window.location.replace('/')
       } else {
         setIsAuthLoading(false)
         setShake(true)
@@ -213,7 +203,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         setTimeout(() => setShake(false), 600)
       }
     }
-  }, [isRegisterMode, isAuthLoading, router])
+  }, [isRegisterMode, isAuthLoading])
 
   const handleKeyPress = useCallback((num: string) => {
     if (isAuthLoading) return
@@ -245,7 +235,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     setIsAuthenticated(false) // Immediately hide calendar data
     setUser(null)
     await logoutAction()
-    router.refresh()
+    window.location.replace('/')
   }
 
   // Keyboard entry hook
@@ -288,215 +278,180 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }
 
   if (!isAuthenticated) {
+    const handleSubmitForm = (e: React.FormEvent) => {
+      e.preventDefault()
+      handleAuthSubmit(usernameInput, enteredPin)
+    }
+
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-zinc-950 p-4 transition-colors duration-300 relative overflow-hidden">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-base)] p-4 transition-colors duration-300 relative overflow-hidden">
         {/* Ambient background glowing orbs */}
         <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-blue-500/10 dark:bg-blue-600/5 blur-3xl pointer-events-none select-none animate-pulse duration-[6000ms]" />
         <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-purple-500/10 dark:bg-purple-600/5 blur-3xl pointer-events-none select-none animate-pulse duration-[8000ms]" />
 
         {/* Theme Toggle Button */}
         <div className="absolute top-4 right-4 z-20">
-          <button
+          <Button
+            variant="outline"
+            size="icon-sm"
             onClick={toggleTheme}
-            className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/80 hover:bg-slate-50 dark:bg-zinc-900/50 dark:hover:bg-zinc-800/80 border border-slate-200/80 dark:border-zinc-800/80 text-slate-700 dark:text-zinc-300 transition-all duration-200 cursor-pointer shadow-xs"
             title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
           >
             {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-          </button>
+          </Button>
         </div>
 
         {/* Loading Overlay */}
         {isAuthLoading && (
-          <div className="absolute inset-0 bg-slate-50/60 dark:bg-zinc-950/70 backdrop-blur-xs flex flex-col items-center justify-center z-50 transition-all duration-300">
-            <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-xs font-black text-slate-700 dark:text-zinc-300 uppercase tracking-widest mt-4 animate-pulse">
+          <div className="absolute inset-0 bg-[var(--color-bg-base)]/70 backdrop-blur-xs flex flex-col items-center justify-center z-50 transition-all duration-300">
+            <div className="w-10 h-10 border-4 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-xs font-black text-[var(--color-text-main)] uppercase tracking-widest mt-4 animate-pulse">
               {isRegisterMode ? 'Creating Account...' : 'Logging in...'}
             </p>
           </div>
         )}
 
-        <div className={`w-full max-w-sm backdrop-blur-xl bg-white/80 dark:bg-zinc-900/40 border border-slate-200/50 dark:border-zinc-800/65 rounded-3xl p-6 md:p-8 shadow-[0_20px_50px_rgba(15,23,42,0.06)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.35)] space-y-6 flex flex-col items-center transition-all duration-300 relative z-10 ${shake ? 'animate-shake' : ''}`}>
-          <div className="flex flex-col items-center text-center space-y-2.5 w-full">
-            <div className="relative group mb-1">
-              {/* Outer logo glow aura */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-2xl blur-md opacity-20 group-hover:opacity-35 transition-opacity duration-300" />
-              <div className="relative p-3.5 bg-slate-50 dark:bg-zinc-950 border border-slate-200/60 dark:border-zinc-800/80 rounded-2xl text-blue-500 dark:text-blue-400 shadow-xs flex items-center justify-center">
-                <Layers size={24} className="animate-pulse" />
+        <Card className={`w-full max-w-sm border-[var(--color-border)] bg-[var(--color-bg-surface)] backdrop-blur-xl shadow-xl transition-all duration-300 relative z-10 ${shake ? 'animate-shake' : ''}`}>
+          <CardBody className="p-6 md:p-8 space-y-6 flex flex-col items-center">
+            <div className="flex flex-col items-center text-center space-y-2.5 w-full">
+              <div className="relative group mb-1">
+                <div className="absolute inset-0 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-2xl blur-md opacity-20 group-hover:opacity-35 transition-opacity duration-300" />
+                <div className="relative p-3.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-2xl text-[var(--color-primary)] shadow-xs flex items-center justify-center">
+                  <Layers size={24} className="animate-pulse" />
+                </div>
               </div>
+              <h1 className="text-lg font-black tracking-wider text-[var(--color-text-main)] uppercase">
+                Operations Login
+              </h1>
+              <p className="text-[11px] text-[var(--color-text-muted)] font-medium max-w-[240px] leading-relaxed">
+                Access your personal control panel, metrics, activity schedules, and exercise workspace.
+              </p>
             </div>
-            <h1 className="text-lg font-black tracking-wider text-slate-900 dark:text-white uppercase">
-              Operations Login
-            </h1>
-            <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-bold max-w-[240px] leading-relaxed">
-              Access your personal control panel, metrics, activity schedules, and exercise workspace.
-            </p>
-          </div>
 
-          {/* Primary Google Login Button */}
-          <div className="w-full">
-            <a
-              href="/api/auth/google"
-              className="w-full bg-white hover:bg-slate-50 dark:bg-zinc-800/80 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-100 flex items-center justify-center gap-3 py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-wider transition-all duration-300 cursor-pointer shadow-[0_4px_12px_rgba(15,23,42,0.04)] dark:shadow-[0_4px_12px_rgba(0,0,0,0.2)] select-none border border-slate-200/80 dark:border-zinc-750 hover:border-slate-350 dark:hover:border-zinc-700 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-              </svg>
-              Sign In with Google
-            </a>
-          </div>
-
-          {/* Passcode Login Divider */}
-          <div className="relative w-full flex items-center justify-center my-1 select-none">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-150 dark:border-zinc-800/80" />
-            </div>
-            <span className="relative px-3 bg-white dark:bg-zinc-900 text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest leading-none">
-              or access via passcode
-            </span>
-          </div>
-
-          <div className="w-full space-y-4 pt-1">
-            {/* Sign In vs Register Toggle */}
-            <div className="flex border border-slate-200/60 dark:border-zinc-800/80 bg-slate-50 dark:bg-zinc-950/80 p-1 rounded-xl w-full relative shadow-inner">
-              <button
-                disabled={isAuthLoading}
-                onClick={() => { setIsRegisterMode(false); setAuthError(''); setEnteredPin(''); }}
-                className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-black rounded-lg transition-all duration-200 cursor-pointer ${
-                  !isRegisterMode
-                    ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-200/40 dark:border-zinc-700/60 shadow-xs'
-                    : 'text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-350'
-                } disabled:opacity-50`}
+            {/* Primary Google Login Button */}
+            <div className="w-full">
+              <a
+                href="/api/auth/google"
+                className="w-full bg-[var(--color-bg-base)] hover:bg-[var(--color-accent)] text-[var(--color-text-main)] flex items-center justify-center gap-3 py-3 px-4 rounded-[var(--radius-md)] text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer border border-[var(--color-border)] hover:border-[var(--color-primary)] shadow-xs select-none"
               >
-                Sign In
-              </button>
-              <button
-                disabled={isAuthLoading}
-                onClick={() => { setIsRegisterMode(true); setAuthError(''); setEnteredPin(''); }}
-                className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-black rounded-lg transition-all duration-200 cursor-pointer ${
-                  isRegisterMode
-                    ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white border border-slate-200/40 dark:border-zinc-700/60 shadow-xs'
-                    : 'text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-350'
-                } disabled:opacity-50`}
-              >
-                Register
-              </button>
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                </svg>
+                Sign In with Google
+              </a>
             </div>
 
-            {/* Username Text Input */}
-            <div className="w-full space-y-1.5">
-              <label className="block text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest">Username</label>
-              <input
+            {/* Passcode Login Divider */}
+            <div className="relative w-full flex items-center justify-center my-1 select-none">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[var(--color-border)]" />
+              </div>
+              <span className="relative px-3 bg-[var(--color-bg-surface)] text-[9px] font-black text-[var(--color-text-muted)] uppercase tracking-widest leading-none">
+                or access via passcode
+              </span>
+            </div>
+
+            <form onSubmit={handleSubmitForm} className="w-full space-y-4 pt-1">
+              {/* Sign In vs Register Toggle */}
+              <div className="flex border border-[var(--color-border)] bg-[var(--color-bg-base)] p-1 rounded-[var(--radius-md)] w-full relative">
+                <button
+                  type="button"
+                  disabled={isAuthLoading}
+                  onClick={() => { setIsRegisterMode(false); setAuthError(''); setEnteredPin(''); }}
+                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-extrabold rounded-[var(--radius-sm)] transition-all duration-200 cursor-pointer ${
+                    !isRegisterMode
+                      ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] border border-[var(--color-border)] shadow-xs'
+                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                  } disabled:opacity-50`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  disabled={isAuthLoading}
+                  onClick={() => { setIsRegisterMode(true); setAuthError(''); setEnteredPin(''); }}
+                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-extrabold rounded-[var(--radius-sm)] transition-all duration-200 cursor-pointer ${
+                    isRegisterMode
+                      ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] border border-[var(--color-border)] shadow-xs'
+                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                  } disabled:opacity-50`}
+                >
+                  Register
+                </button>
+              </div>
+
+              {/* Username Text Input via Design System Component */}
+              <Input
+                label="Username"
                 disabled={isAuthLoading}
                 type="text"
-                placeholder="e.g. amruta"
+                placeholder="e.g. chinmay"
                 value={usernameInput}
                 onChange={(e) => {
                   setUsernameInput(e.target.value)
                   setAuthError('')
                 }}
-                className="w-full bg-slate-50 dark:bg-zinc-950/60 border border-slate-200 dark:border-zinc-800/80 focus:border-blue-500 dark:focus:border-blue-500 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-650 focus:outline-hidden transition-all duration-200 shadow-xs"
+                error={authError ? authError : undefined}
+                autoCapitalize="none"
+                autoCorrect="off"
               />
-            </div>
 
-            {/* Hidden PIN Input for system keyboard support */}
-            <input
-              ref={pinInputRef}
-              type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={4}
-              value={enteredPin}
-              onChange={(e) => {
-                if (isAuthLoading) return
-                const val = e.target.value.replace(/\D/g, '')
-                setEnteredPin(val)
-                if (val.length === 4 && !isRegisterMode) {
-                  handleAuthSubmit(usernameInput, val)
-                }
-              }}
-              className="opacity-0 absolute w-1 h-1 pointer-events-none"
-            />
+              {/* PIN Input Section - Native Keyboard Support & Auto Login */}
+              <div className="w-full space-y-2 flex flex-col items-center">
+                <label className="block text-xs font-medium text-[var(--color-text-muted)] text-center">
+                  Passcode PIN (4 Digits)
+                </label>
 
-            {/* 4 PIN Dots */}
-            <div 
-              onClick={() => !isAuthLoading && pinInputRef.current?.focus()}
-              className="w-full space-y-2 cursor-pointer flex flex-col items-center select-none"
-            >
-              <label className="block text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest text-center">Passcode PIN (Tap to Type)</label>
-              <div className="flex gap-4 justify-center py-2">
-                {Array.from({ length: 4 }).map((_, i) => {
-                  const isFilled = i < enteredPin.length;
-                  return (
-                    <div
-                      key={i}
-                      className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-300 ${
-                        isFilled
-                          ? 'bg-blue-500 border-blue-500 scale-115 shadow-[0_0_12px_rgba(59,130,246,0.6)]'
-                          : 'bg-slate-50 dark:bg-zinc-950/80 border-slate-300 dark:border-zinc-800 hover:border-slate-400 dark:hover:border-zinc-700'
-                      }`}
-                    />
-                  );
-                })}
+                {/* Visible PIN Input / Interactive Dots wrapper */}
+                <div className="relative w-full flex justify-center items-center">
+                  <input
+                    ref={pinInputRef}
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={4}
+                    value={enteredPin}
+                    disabled={isAuthLoading}
+                    onChange={(e) => {
+                      if (isAuthLoading) return
+                      const val = e.target.value.replace(/\D/g, '')
+                      setEnteredPin(val)
+                      setAuthError('')
+                      if (val.length === 4) {
+                        handleAuthSubmit(usernameInput, val)
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && enteredPin.length === 4) {
+                        handleAuthSubmit(usernameInput, enteredPin)
+                      }
+                    }}
+                    className="w-full text-center tracking-[1em] text-lg font-bold py-2.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] focus:border-[var(--color-primary)] rounded-[var(--radius-md)] text-[var(--color-text-main)] focus:outline-none transition-colors shadow-xs"
+                    placeholder="••••"
+                  />
+                </div>
+                <p className="text-[10px] text-[var(--color-text-muted)] text-center">
+                  Type 4 digits to sign in automatically
+                </p>
               </div>
-            </div>
 
-            {authError && (
-              <div className="text-xs font-bold text-red-500 dark:text-red-400 text-center animate-pulse">
-                {authError}
-              </div>
-            )}
-
-            {/* Keypad */}
-            <div className="grid grid-cols-3 gap-x-4 gap-y-3 justify-items-center w-full max-w-[240px] mx-auto select-none">
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(num => (
-                <button
-                  disabled={isAuthLoading}
-                  key={num}
-                  onClick={() => handleKeyPress(num)}
-                  className="w-11 h-11 rounded-full bg-white/70 hover:bg-slate-50 active:bg-slate-100 dark:bg-zinc-900/40 dark:hover:bg-zinc-800/60 dark:active:bg-zinc-850/60 border border-slate-200/60 dark:border-zinc-800/80 text-slate-800 dark:text-zinc-200 font-extrabold text-sm flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer shadow-xs disabled:opacity-30 disabled:pointer-events-none"
-                >
-                  {num}
-                </button>
-              ))}
-              <button
-                disabled={isAuthLoading}
-                onClick={handleClear}
-                className="w-11 h-11 rounded-full text-slate-450 hover:text-slate-650 dark:text-zinc-500 dark:hover:text-zinc-350 font-extrabold text-[9px] uppercase flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
-              >
-                Clear
-              </button>
-              <button
-                disabled={isAuthLoading}
-                key="0"
-                onClick={() => handleKeyPress('0')}
-                className="w-11 h-11 rounded-full bg-white/70 hover:bg-slate-50 active:bg-slate-100 dark:bg-zinc-900/40 dark:hover:bg-zinc-800/60 dark:active:bg-zinc-850/60 border border-slate-200/60 dark:border-zinc-800/80 text-slate-800 dark:text-zinc-200 font-extrabold text-sm flex items-center justify-center transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer shadow-xs disabled:opacity-30 disabled:pointer-events-none"
-              >
-                0
-              </button>
-              <button
-                disabled={isAuthLoading}
-                onClick={handleBackspace}
-                className="w-11 h-11 rounded-full text-slate-450 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 font-extrabold text-[9px] uppercase flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
-              >
-                Del
-              </button>
-            </div>
-
-            {/* Registration Submit Button */}
-            {isRegisterMode && (
-              <button
-                onClick={() => handleAuthSubmit(usernameInput, enteredPin)}
+              {/* Submit Action Button using Design System Component */}
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                isLoading={isAuthLoading}
                 disabled={isAuthLoading || usernameInput.trim().length === 0 || enteredPin.length !== 4}
-                className="w-full bg-slate-900 hover:bg-slate-850 dark:bg-white dark:hover:bg-zinc-50 text-white dark:text-zinc-950 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 cursor-pointer shadow-md border border-slate-800 dark:border-zinc-200"
+                className="w-full font-semibold shadow-xs"
               >
-                Register & Log In
-              </button>
-            )}
-          </div>
-        </div>
+                {isRegisterMode ? 'Register & Sign In' : 'Sign In'}
+              </Button>
+            </form>
+          </CardBody>
+        </Card>
       </div>
     )
   }
