@@ -11,7 +11,7 @@ import { checkGoogleConnection, disconnectGoogleAccount } from '@/modules/sync/g
 import { getUserProfileAction, setPasscodeAction } from '@/app/actions/auth'
 
 export const SettingsPanel: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'advanced'>('profile')
+  const [activeSection, setActiveSection] = useState<'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'advanced' | 'leave'>('profile')
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
   const [lastSync, setLastSync] = useState<string | null>(null)
@@ -58,6 +58,19 @@ export const SettingsPanel: React.FC = () => {
   const [workingHoursStart, setWorkingHoursStart] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_working_hours_start') || '09:00' : '09:00')
   const [workingHoursEnd, setWorkingHoursEnd] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_working_hours_end') || '18:00' : '18:00')
   const [defaultTaskDuration, setDefaultTaskDuration] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_default_task_duration') || '30' : '30')
+  const [weeklyGoal, setWeeklyGoal] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_weekly_goal') || '27' : '27')
+  const [enabledLeaveTypes, setEnabledLeaveTypes] = useState<string[]>(() => {
+    const defaults = ['CASUAL', 'SICK', 'PTO', 'COMP_OFF']
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('personal_enabled_leave_types')
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch (e) { console.error(e) }
+      }
+    }
+    return defaults
+  })
 
   // 4. Dashboard Widgets States
   const [widgetsVisibility, setWidgetsVisibility] = useState<Record<string, boolean>>(() => {
@@ -253,6 +266,7 @@ export const SettingsPanel: React.FC = () => {
             { id: 'appearance', label: 'Appearance', icon: Palette },
             { id: 'calendar', label: 'Calendar', icon: Calendar },
             { id: 'dashboard', label: 'Dashboard', icon: Layout },
+            { id: 'leave', label: 'Time Off', icon: Calendar },
             { id: 'notifications', label: 'Notifications', icon: Bell },
             { id: 'integrations', label: 'Integrations', icon: RefreshCw },
             { id: 'security', label: 'Security', icon: Lock },
@@ -471,6 +485,61 @@ export const SettingsPanel: React.FC = () => {
                       { value: '90', label: '90 minutes' },
                     ]}
                   />
+                  <Input 
+                    label="Weekly Office Target Hours Goal" 
+                    type="number"
+                    min="1"
+                    max="168"
+                    value={weeklyGoal} 
+                    onChange={e => { setWeeklyGoal(e.target.value); saveToLocal('personal_weekly_goal', e.target.value); }} 
+                  />
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
+          {activeSection === 'leave' && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4.5 h-4.5 text-[var(--color-primary)]" />
+                  <span className="text-xs font-black text-[var(--color-text-main)] uppercase tracking-wider">Time Off & Leave Configuration</span>
+                </div>
+              </CardHeader>
+              <CardBody className="space-y-4">
+                <p className="text-[11px] text-[var(--color-text-muted)] leading-relaxed">
+                  Configure which leave types are active for your company&apos;s time off tracker. Disabled types will be hidden from balance views and request forms.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {([
+                    { key: 'CASUAL', label: 'Casual Leave (CASUAL)' },
+                    { key: 'SICK', label: 'Sick Leave (SICK)' },
+                    { key: 'PTO', label: 'Paid Time Off (PTO)' },
+                    { key: 'COMP_OFF', label: 'Compensatory Off (COMP_OFF)' },
+                    { key: 'HALF_DAY', label: 'Half Day (HALF_DAY)' },
+                    { key: 'WFH', label: 'Work From Home (WFH)' },
+                  ] as const).map(item => (
+                    <div key={item.key} className="flex items-center justify-between p-2.5 bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-855 rounded-xl">
+                      <span className="text-xs font-semibold text-[var(--color-text-main)]">{item.label}</span>
+                      <button
+                        onClick={() => {
+                          const updated = enabledLeaveTypes.includes(item.key)
+                            ? enabledLeaveTypes.filter(x => x !== item.key)
+                            : [...enabledLeaveTypes, item.key]
+                          setEnabledLeaveTypes(updated)
+                          localStorage.setItem('personal_enabled_leave_types', JSON.stringify(updated))
+                          window.dispatchEvent(new Event('personal_settings_changed'))
+                        }}
+                        className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 cursor-pointer ${
+                          enabledLeaveTypes.includes(item.key) ? 'bg-[var(--color-primary)]' : 'bg-slate-200 dark:bg-zinc-800'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
+                          enabledLeaveTypes.includes(item.key) ? 'translate-x-4' : 'translate-x-0'
+                        }`} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </CardBody>
             </Card>

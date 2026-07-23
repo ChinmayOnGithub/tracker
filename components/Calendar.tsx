@@ -22,6 +22,7 @@ interface CalendarProps {
   todayStr?: string
   analyzedTemplates?: TestAnalyzedTemplate[]
   onDayClick: (dateStr: string) => void
+  selectedDateStr?: string
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -32,9 +33,17 @@ export const Calendar: React.FC<CalendarProps> = ({
   templates: _templates,
   todayStr = '',
   onDayClick,
+  selectedDateStr,
 }) => {
   const [currentDate, setCurrentDate] = useState(() => new Date())
   const [view, setView] = useState<'month' | 'week'>('month')
+  const [settingsVer, setSettingsVer] = useState(0)
+
+  useEffect(() => {
+    const handleSettingsChange = () => setSettingsVer(v => v + 1)
+    window.addEventListener('personal_settings_changed', handleSettingsChange)
+    return () => window.removeEventListener('personal_settings_changed', handleSettingsChange)
+  }, [])
   
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -152,7 +161,12 @@ export const Calendar: React.FC<CalendarProps> = ({
     }
   }
 
-  const handleResetToToday = () => setCurrentDate(new Date())
+  const handleResetToToday = () => {
+    setCurrentDate(new Date())
+    if (todayStr && onDayClick) {
+      onDayClick(todayStr)
+    }
+  }
 
   // Memoized month grid cell setup to resolve dependencies changing on every render
   const cells = useMemo(() => {
@@ -201,12 +215,12 @@ export const Calendar: React.FC<CalendarProps> = ({
     const rangeLogs = logs.filter(l => l.activityId === workTemplateId && targetDates.includes(l.date))
     const officeHours = rangeLogs.filter(l => l.status === 'done').reduce((sum, l) => sum + (l.amount ?? 0), 0)
     const wfhHours = rangeLogs.filter(l => l.status === 'wfh').reduce((sum, l) => sum + (l.amount ?? 0), 0)
-    const weeklyGoal = 27
+    const weeklyGoal = typeof window !== 'undefined' ? Number(localStorage.getItem('personal_weekly_goal') || '27') : 27
     const remaining = Math.max(0, weeklyGoal - officeHours)
     const goalMet = officeHours >= weeklyGoal
     
-    return { officeHours, wfhHours, rangeLabel, remaining, goalMet }
-  }, [logs, _templates, view, weekDaysList, cells, currentDate, year])
+    return { officeHours, wfhHours, rangeLabel, remaining, goalMet, settingsVer }
+  }, [logs, _templates, view, weekDaysList, cells, currentDate, year, settingsVer])
 
   // Helper to map event elements to absolute timeline grid offsets
   const getEventPosition = (event: CalendarWeekEventDTO) => {
@@ -335,6 +349,7 @@ export const Calendar: React.FC<CalendarProps> = ({
               }
 
               const isToday = dateStr === todayStr
+              const isSelected = dateStr === selectedDateStr
               const summary = monthSummaries.find(s => s.date === dateStr)
               const marathiEvents = getEventsForDate(dateStr)
 
@@ -344,6 +359,8 @@ export const Calendar: React.FC<CalendarProps> = ({
                   onClick={() => onDayClick(dateStr)}
                   className={`aspect-square sm:aspect-auto sm:min-h-[100px] p-2 border-r border-b border-slate-200 dark:border-zinc-800 flex flex-col transition-colors focus:outline-hidden hover:bg-slate-50 dark:hover:bg-zinc-900/80 group ${
                     isToday ? 'bg-blue-50/30 dark:bg-blue-900/10' : 'bg-white dark:bg-zinc-950'
+                  } ${
+                    isSelected ? 'ring-2 ring-[var(--color-primary)] ring-inset bg-[var(--color-accent)]/30 dark:bg-[var(--color-accent)]/10' : ''
                   }`}
                 >
                   <div className="w-full flex justify-between items-start">
@@ -421,13 +438,16 @@ export const Calendar: React.FC<CalendarProps> = ({
             {weekDaysList.map((day) => {
               const dateStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
               const isToday = dateStr === todayStr
+              const isSelected = dateStr === selectedDateStr
               const matchedDayDTO = weekData?.days.find(d => d.date === dateStr)
               
               return (
                 <div key={dateStr} className="flex flex-col items-center">
                   <span className="text-[9px] opacity-75">{WEEKDAYS[day.getDay()]}</span>
                   <span className={`text-sm tabular-nums mt-0.5 w-7 h-7 flex items-center justify-center rounded-full leading-none ${
-                    isToday ? 'bg-[var(--color-primary)] text-white font-extrabold shadow-xs' : 'text-[var(--color-text-main)]'
+                    isToday ? 'bg-[var(--color-primary)] text-white font-extrabold shadow-xs' : 
+                    isSelected ? 'bg-[var(--color-accent)] text-[var(--color-primary)] border border-[var(--color-primary)] font-bold shadow-xs' :
+                    'text-[var(--color-text-main)]'
                   }`}>{day.getDate()}</span>
                   
                   {/* Worked hours summary in header */}
@@ -468,13 +488,16 @@ export const Calendar: React.FC<CalendarProps> = ({
                 const dayEvents = matchedDayDTO?.events || []
                 
                 const isToday = dateStr === todayStr
+                const isSelected = dateStr === selectedDateStr
                 return (
                   <div
                     key={dateStr}
                     className={`border-r border-slate-200 dark:border-zinc-800 h-full relative group transition-colors ${
                       isToday 
                         ? 'bg-blue-50/10 dark:bg-blue-900/5 hover:bg-blue-50/20 dark:hover:bg-blue-900/10' 
-                        : 'hover:bg-slate-50/20 dark:hover:bg-zinc-900/10'
+                        : isSelected
+                          ? 'bg-[var(--color-accent)]/10'
+                          : 'hover:bg-slate-50/20 dark:hover:bg-zinc-900/10'
                     }`}
                   >
                     {/* Hour cell borders */}

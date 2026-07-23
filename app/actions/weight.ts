@@ -56,6 +56,7 @@ export async function logWeight(date: string, weight: number, notes?: string | n
       date,
       status: 'done',
       weightRecordId: record.id,
+      amount: weight,
       note: notes ?? `Logged weight: ${weight} kg`
     })
 

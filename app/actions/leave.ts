@@ -169,6 +169,8 @@ export async function ensureLeaveAllowances(year: number) {
       { leaveType: LeaveType.SICK, allowance: 8 },
       { leaveType: LeaveType.PTO, allowance: 15 },
       { leaveType: LeaveType.COMP_OFF, allowance: 0 },
+      { leaveType: LeaveType.HALF_DAY, allowance: 0 },
+      { leaveType: LeaveType.WFH, allowance: 0 },
     ]
 
     for (const d of defaults) {

@@ -203,7 +203,23 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     .filter(l => l.status === 'wfh')
     .reduce((sum, l) => sum + (l.amount ?? 0), 0)
 
-  const weeklyGoal = 27
+  const [weeklyGoal, setWeeklyGoal] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const val = localStorage.getItem('personal_weekly_goal')
+      if (val) return Number(val)
+    }
+    return 27
+  })
+
+  useEffect(() => {
+    const handleSettingsChange = () => {
+      const val = localStorage.getItem('personal_weekly_goal')
+      if (val) setWeeklyGoal(Number(val))
+    }
+    window.addEventListener('personal_settings_changed', handleSettingsChange)
+    return () => window.removeEventListener('personal_settings_changed', handleSettingsChange)
+  }, [])
+
   const remainingHours = Math.max(0, weeklyGoal - totalOfficeHours)
   const isGoalMet = totalOfficeHours >= weeklyGoal
 

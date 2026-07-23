@@ -4,7 +4,7 @@ import { CalendarEvent, CalendarSyncState, Prisma } from '@prisma/client'
 export class CalendarRepository {
   static async findEventsForUser(
     userId: string,
-    start: Date,
+    _start: Date,
     end: Date
   ): Promise<CalendarEvent[]> {
     return db.calendarEvent.findMany({
@@ -12,7 +12,6 @@ export class CalendarRepository {
         userId,
         deletedAt: null,
         start: { lte: end },
-        end: { gte: start },
       },
       orderBy: {
         start: 'asc',

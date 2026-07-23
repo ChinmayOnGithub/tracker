@@ -4,9 +4,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { upsertJournalEntry, deleteJournalEntry } from '@/app/actions/journal'
 import {
   Trash2, CheckCircle2, CloudOff, Loader2, Edit3, PlusCircle,
-  Bold, Italic, Underline, Code, List, Heading1, Heading2, Highlighter, Quote, Undo2, Redo2, Eraser, Image as ImageIcon, X
+  Bold, Italic, Underline, Code, List, Heading1, Heading2, Highlighter, Quote, Undo2, Redo2, Eraser, Image as ImageIcon, X, ArrowLeft
 } from 'lucide-react'
 import { Button, SearchInput } from '@/design-system'
+import { useSearchParams, useRouter } from 'next/navigation'
 
 
 interface JournalEntry {
@@ -86,6 +87,10 @@ interface JournalPanelProps {
 }
 
 export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) => {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const dateParam = searchParams?.get('date')
+
   console.log('[JournalPanel] Initialized with entries:', initialEntries.length)
   initialEntries.forEach(e => {
     console.log(`  - ${e.id}: ${e.journalDate}, content length: ${e.content.length}`)
@@ -93,7 +98,16 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   
   const today = todayYMD()
   const [entries, setEntries] = useState<JournalEntry[]>(initialEntries)
-  const [activeDate, setActiveDate] = useState<string>(today)
+  const [activeDate, setActiveDate] = useState<string>(() => dateParam || today)
+
+  useEffect(() => {
+    if (dateParam) {
+      const timer = setTimeout(() => {
+        setActiveDate(dateParam)
+      }, 0)
+      return () => clearTimeout(timer)
+    }
+  }, [dateParam])
   const [search, setSearch] = useState('')
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('editor')
   // Editor states for active date
@@ -564,6 +578,20 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 md:px-12 py-6 sm:py-10 pb-24 border-r border-slate-100 dark:border-zinc-900/60">
           <div className="max-w-3xl mx-auto w-full flex flex-col gap-6">
             
+            {dateParam && (
+              <div className="flex">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/calendar?date=${activeDate}`)}
+                  className="text-xs font-bold flex items-center gap-1.5"
+                  icon={<ArrowLeft size={13} />}
+                >
+                  Back to Calendar
+                </Button>
+              </div>
+            )}
+
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <button

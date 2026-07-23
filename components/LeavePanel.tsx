@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useTransition } from 'react'
+import React, { useState, useTransition, useEffect } from 'react'
 import {
   createLeaveRequest, updateLeaveStatus, deleteLeaveRecord, ensureLeaveAllowances, updateLeaveAllowance
 } from '@/app/actions/leave'
@@ -188,11 +188,46 @@ interface RequestFormProps {
 }
 
 function RequestForm({ onSubmit, loading }: RequestFormProps) {
-  const [leaveType, setLeaveType] = useState<LeaveType>('CASUAL')
+  const [enabledTypes, setEnabledTypes] = useState<LeaveType[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('personal_enabled_leave_types')
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch (e) { console.error(e) }
+      }
+    }
+    return ['CASUAL', 'SICK', 'PTO', 'COMP_OFF']
+  })
+
+  useEffect(() => {
+    const cb = () => {
+      const saved = localStorage.getItem('personal_enabled_leave_types')
+      if (saved) {
+        try {
+          setEnabledTypes(JSON.parse(saved))
+        } catch (e) { console.error(e) }
+      }
+    }
+    window.addEventListener('personal_settings_changed', cb)
+    return () => window.removeEventListener('personal_settings_changed', cb)
+  }, [])
+
+  const [leaveType, setLeaveType] = useState<LeaveType>(() => enabledTypes[0] || 'CASUAL')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [notes, setNotes] = useState('')
   const [isOpen, setIsOpen] = useState(false)
+
+  // Sync default selected leaveType if enabledTypes changes
+  useEffect(() => {
+    if (enabledTypes.length > 0 && !enabledTypes.includes(leaveType)) {
+      const timer = setTimeout(() => {
+        setLeaveType(enabledTypes[0])
+      }, 0)
+      return () => clearTimeout(timer)
+    }
+  }, [enabledTypes, leaveType])
 
   const totalDays = startDate && endDate ? daysBetween(startDate, endDate) : 0
 
@@ -225,7 +260,7 @@ function RequestForm({ onSubmit, loading }: RequestFormProps) {
                 label="Leave Type"
                 value={leaveType}
                 onChange={e => setLeaveType(e.target.value as LeaveType)}
-                options={(Object.keys(LEAVE_LABELS) as LeaveType[]).map(t => ({ value: t, label: LEAVE_LABELS[t] }))}
+                options={enabledTypes.map(t => ({ value: t, label: LEAVE_LABELS[t] || t }))}
               />
             </div>
 
@@ -284,6 +319,31 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
   const [isPending, startTransition] = useTransition()
   const [submitting, setSubmitting] = useState(false)
 
+  const [enabledTypes, setEnabledTypes] = useState<LeaveType[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('personal_enabled_leave_types')
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch (e) { console.error(e) }
+      }
+    }
+    return ['CASUAL', 'SICK', 'PTO', 'COMP_OFF']
+  })
+
+  useEffect(() => {
+    const cb = () => {
+      const saved = localStorage.getItem('personal_enabled_leave_types')
+      if (saved) {
+        try {
+          setEnabledTypes(JSON.parse(saved))
+        } catch (e) { console.error(e) }
+      }
+    }
+    window.addEventListener('personal_settings_changed', cb)
+    return () => window.removeEventListener('personal_settings_changed', cb)
+  }, [])
+
   // Compute used days per leave type from APPROVED records
   const usedByType: Partial<Record<LeaveType, number>> = {}
   records.filter(r => r.status === 'APPROVED').forEach(r => {
@@ -291,8 +351,10 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
     usedByType[t] = (usedByType[t] ?? 0) + r.totalDays
   })
 
-  // Only show balance cards for leave types that have allowances
-  const trackableTypes = leaveAllowances.map(a => a.leaveType)
+  // Only show balance cards for enabled leave types that have allowances
+  const trackableTypes = leaveAllowances
+    .map(a => a.leaveType)
+    .filter(type => enabledTypes.includes(type))
 
   const handleSubmit = async (data: {
     leaveType: LeaveType; startDate: string; endDate: string; totalDays: number; notes: string
