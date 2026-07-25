@@ -24,7 +24,7 @@ interface TestAnalyzedTemplate {
   analysis: RecurrenceAnalysis
 }
 
-interface TodayDashboardProps {
+export interface TodayDashboardProps {
   analyzedTemplates: TestAnalyzedTemplate[]
   logs: ActivityLog[]
   _notes: Note[]

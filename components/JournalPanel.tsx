@@ -26,6 +26,9 @@ interface JournalEntry {
   updatedAt: Date | string
 }
 
+interface JournalPanelProps {
+  initialEntries: JournalEntry[]
+}
 
 function formatJournalDate(d: Date | string) {
   const date = typeof d === 'string' ? new Date(d) : d

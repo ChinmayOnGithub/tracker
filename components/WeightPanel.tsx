@@ -295,10 +295,10 @@ function StatsPill({ label, value, subText }: { label: string; value: string; su
 // ---------------------------------------------------------------------------
 interface LogFormProps {
   todayRecord: WeightRecord | null
-  _onLogged: (record: WeightRecord) => void
+  onLogged?: (record: WeightRecord) => void
 }
 
-function LogForm({ todayRecord, _onLogged }: LogFormProps) {
+function LogForm({ todayRecord, onLogged: _onLogged }: LogFormProps) {
   const [weight, setWeight] = useState(todayRecord ? String(todayRecord.weight) : '')
   const [notes, setNotes] = useState(todayRecord?.notes ?? '')
   const [logDate, setLogDate] = useState(todayYMD())

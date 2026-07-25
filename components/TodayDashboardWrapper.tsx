@@ -3,7 +3,7 @@
 import React, { useContext, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarDataContext } from './DashboardLayout'
-import { TodayDashboard } from './TodayDashboard'
+import { TodayDashboard, TodayDashboardProps } from './TodayDashboard'
 import { ActivityTemplate, ActivityLog, Note, TimelineItem, AnalyzedTemplate } from '@/types'
 import { useStore, JournalEntry, LeaveRecord, LeaveAllowance, WeightRecord } from '@/lib/store/store'
 import { analyzeRecurrence } from '@/lib/recurrence'
@@ -108,10 +108,10 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
       onOpenCreateActivity={onOpenCreateActivity}
       _onMarkHabitComplete={onMarkHabitComplete}
       _onEditTemplate={onEditTemplate}
-      journalEntries={state.journalEntries.length > 0 ? state.journalEntries : initialJournalEntries}
-      leaveRecords={state.leaveRecords.length > 0 ? state.leaveRecords : initialLeaveRecords}
-      leaveAllowances={state.leaveAllowances.length > 0 ? state.leaveAllowances : initialLeaveAllowances}
-      weightRecords={state.weightRecords.length > 0 ? state.weightRecords : initialWeightRecords}
+      journalEntries={(state.journalEntries.length > 0 ? state.journalEntries : initialJournalEntries) as unknown as TodayDashboardProps['journalEntries']}
+      leaveRecords={(state.leaveRecords.length > 0 ? state.leaveRecords : initialLeaveRecords) as unknown as TodayDashboardProps['leaveRecords']}
+      leaveAllowances={(state.leaveAllowances.length > 0 ? state.leaveAllowances : initialLeaveAllowances) as unknown as TodayDashboardProps['leaveAllowances']}
+      weightRecords={(state.weightRecords.length > 0 ? state.weightRecords : initialWeightRecords) as unknown as TodayDashboardProps['weightRecords']}
       onTabChange={onTabChange}
     />
   )

@@ -82,7 +82,7 @@ export async function createActivityTemplate(data: {
     eventBus.publish(EVENTS.ACTIVITY_CREATED, { template: created, userId: user.id })
 
     revalidatePath('/')
-    return { success: true }
+    return { success: true, data: created }
   } catch (error) {
     console.error('Failed to create template:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'

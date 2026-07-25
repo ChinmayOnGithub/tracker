@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useTransition, useEffect } from 'react'
-import { useStore } from '@/lib/store/store'
+import { useStore, LeaveRecord as StoreLeaveRecord, LeaveAllowance as StoreLeaveAllowance } from '@/lib/store/store'
 import {
   CalendarX, Plus, Trash2, CheckCircle2, Clock, XCircle, TrendingDown, ChevronDown
 } from 'lucide-react'
@@ -311,7 +311,7 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
   const { state, initialize, createLeaveRecordAction, updateLeaveRecordAction, deleteLeaveRecordAction, ensureLeaveAllowancesAction } = useStore()
 
   useEffect(() => {
-    initialize({ leaveRecords: initial, leaveAllowances: leaveAllowances })
+    initialize({ leaveRecords: initial as unknown as StoreLeaveRecord[], leaveAllowances: leaveAllowances as unknown as StoreLeaveAllowance[] })
   }, [initial, leaveAllowances, initialize])
 
   const records = (state.leaveRecords.length > 0 ? state.leaveRecords : initial)
@@ -346,7 +346,7 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
   // Compute used days per leave type from APPROVED records
   const usedByType: Partial<Record<LeaveType, number>> = {}
   records.filter(r => r.status === 'APPROVED').forEach(r => {
-    const t = r.leaveType
+    const t = r.leaveType as LeaveType
     usedByType[t] = (usedByType[t] ?? 0) + r.totalDays
   })
 
@@ -434,12 +434,12 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
         ) : (
           <div className="divide-y divide-[var(--color-border)]">
             {records.map(record => {
-              const sc = STATUS_CONFIG[record.status]
+              const sc = STATUS_CONFIG[record.status as LeaveStatus]
               return (
                 <div key={record.id} className="px-4 py-3 flex items-center gap-3 hover:bg-[var(--color-accent)] transition-colors group">
                   {/* Type badge */}
-                  <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0 ${LEAVE_COLORS[record.leaveType]}`}>
-                    {LEAVE_LABELS[record.leaveType]}
+                  <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border shrink-0 ${LEAVE_COLORS[record.leaveType as LeaveType]}`}>
+                    {LEAVE_LABELS[record.leaveType as LeaveType]}
                   </span>
 
                   {/* Dates */}

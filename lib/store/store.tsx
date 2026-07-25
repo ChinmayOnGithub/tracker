@@ -26,7 +26,7 @@ export interface WeightRecord {
   userId: string
   weight: number
   date: string | Date
-  note: string | null
+  notes: string | null
   createdAt: string | Date
   updatedAt: string | Date
   deletedAt?: string | Date | null
@@ -38,8 +38,9 @@ export interface LeaveRecord {
   leaveType: string
   startDate: string | Date
   endDate: string | Date
+  totalDays: number
   status: string
-  reason: string | null
+  notes: string | null
   createdAt: string | Date
   updatedAt: string | Date
   deletedAt?: string | Date | null
@@ -435,7 +436,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           // Replace the temporary ID in templates and logs
           setState(prev => ({
             ...prev,
-            templates: prev.templates.map(t => t.id === tempId ? (res.data as ActivityTemplate) : t)
+            templates: prev.templates.map(t => t.id === tempId ? (res.data as unknown as ActivityTemplate) : t)
           }))
         }
         return res
@@ -531,14 +532,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     setState(prev => {
       let updatedNotes = [...prev.notes]
-      const existing = noteId ? prev.notes.find(n => n.id === noteId) : prev.notes.find(n => n.dateStr === dateStr)
+      const existing = noteId ? prev.notes.find(n => n.id === noteId) : prev.notes.find(n => n.date === dateStr)
 
       if (existing) {
         updatedNotes = updatedNotes.map(n => n.id === existing.id ? { ...n, content, title: title || null, updatedAt: new Date() } : n)
       } else {
         updatedNotes.push({
           id: noteId || `temp-note-${Date.now()}`,
-          dateStr,
+          date: dateStr,
           title: title || null,
           content,
           createdAt: new Date(),
@@ -557,10 +558,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           return updateNote(noteId, content, title || null)
         } else {
           const res = await createNote(dateStr, content, title || null)
-          if (res.success && res.data) {
+          if (res.success && res.note) {
             setState(prev => ({
               ...prev,
-              notes: prev.notes.map(n => n.dateStr === dateStr ? (res.data as Note) : n)
+              notes: prev.notes.map(n => n.date === dateStr ? (res.note as Note) : n)
             }))
           }
           return res
@@ -601,7 +602,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       dedupKey: `leave-allowance-update-${leaveType}-${year}`,
       run: async () => {
         const { updateLeaveAllowance } = await import('@/app/actions/leave')
-        return updateLeaveAllowance(leaveType, year, val)
+        return updateLeaveAllowance(leaveType as any, year, val)
       },
       rollback: () => {
         setState(prev => ({ ...prev, leaveAllowances: previousAllowances }))
@@ -613,8 +614,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const { ensureLeaveAllowances, getLeaveAllowances } = await import('@/app/actions/leave')
     await ensureLeaveAllowances(year)
     const res = await getLeaveAllowances(year)
-    if (res.success && res.data) {
-      setState(prev => ({ ...prev, leaveAllowances: res.data as any[] }))
+    if (res.success && res.allowances) {
+      setState(prev => ({ ...prev, leaveAllowances: res.allowances as any[] }))
     }
   }
 
@@ -689,7 +690,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         userId: '',
         weight,
         date,
-        note: note || null,
+        notes: note || null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       })
@@ -740,8 +741,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           leaveType: record.leaveType,
           startDate: record.startDate,
           endDate: record.endDate,
+          totalDays: record.totalDays || 1,
           status: 'PENDING',
-          reason: record.reason || null,
+          notes: record.notes || null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         },
