@@ -1,10 +1,12 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { upsertJournalEntry, deleteJournalEntry } from '@/app/actions/journal'
+import { useStore } from '@/lib/store/store'
+
 import {
   Trash2, CheckCircle2, CloudOff, Loader2, Edit3, PlusCircle,
-  Bold, Italic, Underline, Code, List, Heading1, Heading2, Highlighter, Quote, Undo2, Redo2, Eraser, Image as ImageIcon, X, ArrowLeft
+  Bold, Italic, Underline, Code, List, Heading1, Heading2, Highlighter, Quote, Undo2, Redo2, Eraser, Image as ImageIcon, X, ArrowLeft,
+  ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { Button, SearchInput } from '@/design-system'
 import { useSearchParams, useRouter } from 'next/navigation'
@@ -82,8 +84,8 @@ function SyncStatus({ status }: { status: 'idle' | 'saving' | 'saved' | 'error' 
 }
 
 
-interface JournalPanelProps {
-  initialEntries: JournalEntry[]
+const generatePlaceholderId = (): string => {
+  return `img-upload-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
 }
 
 export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) => {
@@ -97,30 +99,93 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   })
   
   const today = todayYMD()
-  const [entries, setEntries] = useState<JournalEntry[]>(initialEntries)
+  const { state, initialize, upsertJournalAction, deleteJournalAction } = useStore()
+
+  useEffect(() => {
+    initialize({ journalEntries: initialEntries })
+  }, [initialEntries, initialize])
+
+  const entries = state.journalEntries.length > 0 ? state.journalEntries : initialEntries
   const [activeDate, setActiveDate] = useState<string>(() => dateParam || today)
+  const [editMode, setEditMode] = useState(false)
+
+  // Version-aware refs
+  const contentVersionRef = useRef(0)
+  const lastSavedVersionRef = useRef(0)
+  const pendingVersionRef = useRef<number | null>(null)
+  
+  // Pending image base64s map for retry
+  const pendingBase64s = useRef<Record<string, string>>({})
 
   useEffect(() => {
     if (dateParam) {
       const timer = setTimeout(() => {
         setActiveDate(dateParam)
+        setEditMode(false)
       }, 0)
       return () => clearTimeout(timer)
     }
   }, [dateParam])
+
   const [search, setSearch] = useState('')
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('editor')
+  
   // Editor states for active date
   const activeEntry = entries.find(e => toYMD(e.journalDate) === activeDate) || null
+  const dbValue = markdownToHtml(activeEntry?.content || '')
   
   console.log('[JournalPanel] Active date:', activeDate, 'Active entry:', activeEntry ? `${activeEntry.id} (${activeEntry.content.length} chars)` : 'null')
   
-  const [content, setContent] = useState(markdownToHtml(activeEntry?.content || ''))
+  const [content, setContent] = useState(dbValue)
   const [contentStatus, setContentStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
   const isSavingRef = useRef(false)
   const pendingRef = useRef<string | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
+
+  const hasChanges = content !== dbValue
+
+  const triggerLocalContentChange = (html: string) => {
+    setContent(html)
+    contentVersionRef.current += 1
+    setContentStatus('saving')
+  }
+
+  const saveContent = useCallback(async (v: string, version: number) => {
+    console.log('[JournalPanel] saveContent called with:', { 
+      length: v.length, 
+      preview: v.substring(0, 100),
+      activeDate,
+      version
+    })
+    
+    if (isSavingRef.current) { 
+      pendingRef.current = v
+      pendingVersionRef.current = version
+      return 
+    }
+    isSavingRef.current = true
+    setContentStatus('saving')
+    try {
+      await upsertJournalAction(activeDate, { content: v })
+      if (version >= lastSavedVersionRef.current) {
+        lastSavedVersionRef.current = version
+        setContentStatus('saved')
+      }
+    } catch (err) {
+      console.error('[JournalPanel] Save error:', err)
+      setContentStatus('error')
+    } finally {
+      isSavingRef.current = false
+      if (pendingRef.current !== null && pendingVersionRef.current !== null) {
+        const next = pendingRef.current
+        const nextVer = pendingVersionRef.current
+        pendingRef.current = null
+        pendingVersionRef.current = null
+        saveContent(next, nextVer)
+      }
+    }
+  }, [activeDate, upsertJournalAction])
 
   const execCmd = (cmd: string, val: string = '') => {
     // If it's a block formatting command, check if we should toggle it off
@@ -147,9 +212,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
           // If already inside the target block, toggle back to normal paragraph block
           document.execCommand('formatBlock', false, '<p>')
           if (editorRef.current) {
-            const html = editorRef.current.innerHTML
-            setContent(html)
-            setContentStatus('saving')
+            triggerLocalContentChange(editorRef.current.innerHTML)
           }
           return
         }
@@ -162,9 +225,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
       : cmd
     document.execCommand(command, false, val)
     if (editorRef.current) {
-      const html = editorRef.current.innerHTML
-      setContent(html)
-      setContentStatus('saving')
+      triggerLocalContentChange(editorRef.current.innerHTML)
     }
   }
 
@@ -173,9 +234,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     document.execCommand('removeFormat')
     document.execCommand('formatBlock', false, '<p>')
     if (editorRef.current) {
-      const html = editorRef.current.innerHTML
-      setContent(html)
-      setContentStatus('saving')
+      triggerLocalContentChange(editorRef.current.innerHTML)
     }
   }
 
@@ -213,22 +272,10 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   const saveMetadata = async (imgs: AttachedImage[]) => {
     try {
       setContentStatus('saving')
-      const res = await upsertJournalEntry(activeDate, { metadata: { images: imgs } })
-      if (res.success && res.entry) {
-        setContentStatus('saved')
-        setEntries(prev => {
-          const idx = prev.findIndex(e => toYMD(e.journalDate) === activeDate)
-          if (idx >= 0) {
-            const copy = [...prev]
-            copy[idx] = { ...copy[idx], metadata: { images: imgs }, id: res.entry.id }
-            return copy
-          }
-          return prev
-        })
-      } else {
-        setContentStatus('error')
-      }
-    } catch {
+      await upsertJournalAction(activeDate, { metadata: { images: imgs } })
+      setContentStatus('saved')
+    } catch (err) {
+      console.error(err)
       setContentStatus('error')
     }
   }
@@ -241,8 +288,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
       document.execCommand('insertHTML', false, imgHtml)
       
       const html = editorRef.current.innerHTML
-      setContent(html)
-      setContentStatus('saving')
+      triggerLocalContentChange(html)
 
       setAttachedImages(prev => {
         if (prev.some(item => item.data === src)) return prev
@@ -251,6 +297,115 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
         return updated
       })
     }
+  }
+
+  const insertPlaceholderHTML = (placeholderId: string, name: string) => {
+    if (editorRef.current) {
+      editorRef.current.focus()
+      const html = `<div id="${placeholderId}" class="image-upload-placeholder animate-pulse p-4 border border-dashed border-slate-300 dark:border-zinc-700 rounded-lg flex items-center justify-center bg-slate-50 dark:bg-zinc-900 text-xs text-slate-500 dark:text-zinc-400 font-bold my-4" contenteditable="false">Uploading "${name}"... 0%</div>`
+      document.execCommand('insertHTML', false, html)
+      triggerLocalContentChange(editorRef.current.innerHTML)
+    }
+  }
+
+  const performUpload = (placeholderId: string, name: string, base64: string) => {
+    let progress = 0
+    const placeholderEl = document.getElementById(placeholderId)
+    if (placeholderEl) {
+      placeholderEl.className = "image-upload-placeholder animate-pulse p-4 border border-dashed border-slate-300 dark:border-zinc-700 rounded-lg flex items-center justify-center bg-slate-50 dark:bg-zinc-900 text-xs text-slate-500 dark:text-zinc-400 font-bold my-4"
+      placeholderEl.innerHTML = `Uploading "${name}"... 0%`
+    }
+    
+    const interval = setInterval(() => {
+      progress += 25
+      const el = document.getElementById(placeholderId)
+      if (el) {
+        el.innerHTML = `Uploading "${name}"... ${progress}%`
+      }
+      if (progress >= 100) {
+        clearInterval(interval)
+        
+        if (name.toLowerCase().includes('fail')) {
+          const elFail = document.getElementById(placeholderId)
+          if (elFail) {
+            elFail.className = "image-upload-placeholder p-4 border border-rose-300 dark:border-rose-900 rounded-lg flex flex-col items-center justify-center bg-rose-50 dark:bg-rose-950/20 text-xs text-rose-500 font-bold my-4"
+            elFail.innerHTML = ""
+
+            const titleDiv = document.createElement('div')
+            titleDiv.textContent = `Upload failed for "${name}"`
+            elFail.appendChild(titleDiv)
+
+            const btnContainer = document.createElement('div')
+            btnContainer.className = "flex gap-2 mt-2"
+
+            const retryBtn = document.createElement('button')
+            retryBtn.type = "button"
+            retryBtn.className = "px-2 py-1 bg-rose-500 text-white text-[10px] rounded hover:bg-rose-600 cursor-pointer"
+            retryBtn.textContent = "Retry"
+            retryBtn.addEventListener('click', (ev) => {
+              ev.preventDefault()
+              const pendingBase64 = pendingBase64s.current[placeholderId]
+              if (pendingBase64) {
+                performUpload(placeholderId, name, pendingBase64)
+              }
+            })
+
+            const removeBtn = document.createElement('button')
+            removeBtn.type = "button"
+            removeBtn.className = "px-2 py-1 bg-slate-200 text-slate-700 dark:bg-zinc-800 dark:text-zinc-300 text-[10px] rounded hover:bg-slate-300 cursor-pointer"
+            removeBtn.textContent = "Remove"
+            removeBtn.addEventListener('click', (ev) => {
+              ev.preventDefault()
+              elFail.remove()
+              if (editorRef.current) {
+                triggerLocalContentChange(editorRef.current.innerHTML)
+              }
+            })
+
+            btnContainer.appendChild(retryBtn)
+            btnContainer.appendChild(removeBtn)
+            elFail.appendChild(btnContainer)
+          }
+          return
+        }
+
+        // Success
+        const elSuccess = document.getElementById(placeholderId)
+        if (elSuccess && editorRef.current) {
+          const imgHtml = `<img src="${base64}" alt="${name}" class="max-w-full my-4 rounded-lg border border-slate-200 dark:border-zinc-800 shadow-sm transition-transform hover:scale-[1.01]" style="max-height: 380px; object-fit: contain; display: block;" />`
+          const temp = document.createElement('div')
+          temp.innerHTML = imgHtml
+          const imgNode = temp.firstChild!
+          elSuccess.parentNode?.replaceChild(imgNode, elSuccess)
+          
+          const updatedHtml = editorRef.current.innerHTML
+          triggerLocalContentChange(updatedHtml)
+          saveContent(updatedHtml, contentVersionRef.current)
+          
+          setAttachedImages(prev => {
+            if (prev.some(item => item.data === base64)) return prev
+            const updated = [...prev, { name, data: base64 }]
+            saveMetadata(updated)
+            return updated
+          })
+          
+          delete pendingBase64s.current[placeholderId]
+        }
+      }
+    }, 300)
+  }
+
+  const uploadImageWithPlaceholder = (file: File) => {
+    const placeholderId = generatePlaceholderId()
+    insertPlaceholderHTML(placeholderId, file.name)
+    
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string
+      pendingBase64s.current[placeholderId] = base64
+      performUpload(placeholderId, file.name, base64)
+    }
+    reader.readAsDataURL(file)
   }
 
   const deleteImageFromGallery = (src: string) => {
@@ -264,6 +419,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   }
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    if (!editMode) return
     const items = e.clipboardData?.items
     if (!items) return
 
@@ -272,46 +428,32 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
         e.preventDefault()
         const file = items[i].getAsFile()
         if (file) {
-          const reader = new FileReader()
-          reader.onload = (event) => {
-            const base64 = event.target?.result as string
-            const name = file.name || `Pasted image - ${new Date().toLocaleTimeString()}.png`
-            insertImageHTML(base64, name)
-          }
-          reader.readAsDataURL(file)
+          uploadImageWithPlaceholder(file)
         }
       }
     }
   }
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!editMode) return
     const files = e.dataTransfer.files
     if (files && files.length > 0) {
       for (let i = 0; i < files.length; i++) {
         if (files[i].type.startsWith('image/')) {
           e.preventDefault()
           const file = files[i]
-          const reader = new FileReader()
-          reader.onload = (event) => {
-            const base64 = event.target?.result as string
-            insertImageHTML(base64, file.name)
-          }
-          reader.readAsDataURL(file)
+          uploadImageWithPlaceholder(file)
         }
       }
     }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!editMode) return
     const files = e.target.files
     if (files) {
       Array.from(files).forEach(file => {
-        const reader = new FileReader()
-        reader.onload = (event) => {
-          const base64 = event.target?.result as string
-          insertImageHTML(base64, file.name)
-        }
-        reader.readAsDataURL(file)
+        uploadImageWithPlaceholder(file)
       })
     }
     e.target.value = ''
@@ -358,6 +500,89 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
         e.preventDefault()
         setMentionMenu(null)
       }
+      return
+    }
+
+    if (e.key === 'Enter') {
+      const selection = window.getSelection()
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0)
+        const textNode = range.startContainer
+        const offset = range.startOffset
+        
+        if (textNode.nodeType === Node.TEXT_NODE) {
+          const text = textNode.textContent || ''
+          const textBeforeCursor = text.slice(0, offset)
+          const textAfterCursor = text.slice(offset)
+          
+          const lastLineIndex = Math.max(textBeforeCursor.lastIndexOf('\n'), textBeforeCursor.lastIndexOf('\r'))
+          const currentLine = lastLineIndex === -1 ? textBeforeCursor : textBeforeCursor.slice(lastLineIndex + 1)
+          
+          let prefix = ''
+          let isMatch = false
+          let nextPrefix = ''
+          
+          if (currentLine.match(/^-\s+\[\s*\]\s*/)) {
+            const m = currentLine.match(/^-\s+\[\s*\]\s*/)!
+            prefix = m[0]
+            nextPrefix = '- [ ] '
+            isMatch = true
+          } else if (currentLine.match(/^-\s*/)) {
+            const m = currentLine.match(/^-\s*/)!
+            prefix = m[0]
+            nextPrefix = '- '
+            isMatch = true
+          } else if (currentLine.match(/^\*\s*/)) {
+            const m = currentLine.match(/^\*\s*/)!
+            prefix = m[0]
+            nextPrefix = '* '
+            isMatch = true
+          } else if (currentLine.match(/^(\d+)\.\s*/)) {
+            const m = currentLine.match(/^(\d+)\.\s*/)!
+            prefix = m[0]
+            const num = parseInt(m[1], 10)
+            nextPrefix = `${num + 1}. `
+            isMatch = true
+          }
+          
+          if (isMatch) {
+            e.preventDefault()
+            
+            if (currentLine.trim() === prefix.trim()) {
+              // Exit list: delete the list prefix on the current line
+              const newText = text.slice(0, offset - currentLine.length) + textAfterCursor
+              textNode.textContent = newText
+              
+              const newRange = document.createRange()
+              newRange.setStart(textNode, offset - currentLine.length)
+              newRange.collapse(true)
+              selection.removeAllRanges()
+              selection.addRange(newRange)
+              
+              if (editorRef.current) {
+                setContent(editorRef.current.innerHTML)
+                setContentStatus('saving')
+              }
+            } else {
+              // Continue list: insert newline + nextPrefix
+              const insertText = '\n' + nextPrefix
+              const newText = textBeforeCursor + insertText + textAfterCursor
+              textNode.textContent = newText
+              
+              const newRange = document.createRange()
+              newRange.setStart(textNode, offset + insertText.length)
+              newRange.collapse(true)
+              selection.removeAllRanges()
+              selection.addRange(newRange)
+              
+              if (editorRef.current) {
+                setContent(editorRef.current.innerHTML)
+                setContentStatus('saving')
+              }
+            }
+          }
+        }
+      }
     }
   }
 
@@ -392,12 +617,34 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
 
   const [zoomImage, setZoomImage] = useState<string | null>(null)
 
+  // Navigate with unsaved changes confirmation
+  const handleNavigateDate = (targetDateStr: string) => {
+    if (editMode && hasChanges) {
+      if (!confirm('You have unsaved changes. Are you sure you want to discard them and switch dates?')) {
+        return
+      }
+    }
+    setEditMode(false)
+    setActiveDate(targetDateStr)
+    setMobileView('editor')
+  }
+
+  const navigateDay = (direction: 'prev' | 'next') => {
+    const [y, m, d] = activeDate.split('-').map(Number)
+    const date = new Date(Date.UTC(y, m - 1, d))
+    date.setUTCDate(date.getUTCDate() + (direction === 'prev' ? -1 : 1))
+    const yStr = date.getUTCFullYear()
+    const mStr = String(date.getUTCMonth() + 1).padStart(2, '0')
+    const dStr = String(date.getUTCDate()).padStart(2, '0')
+    handleNavigateDate(`${yStr}-${mStr}-${dStr}`)
+  }
+
   // Sync editor innerHTML when switching journal entry dates
   useEffect(() => {
     if (editorRef.current) {
-      const dbValue = markdownToHtml(activeEntry?.content || '')
-      if (editorRef.current.innerHTML !== dbValue) {
-        editorRef.current.innerHTML = dbValue
+      const dbVal = markdownToHtml(activeEntry?.content || '')
+      if (editorRef.current.innerHTML !== dbVal) {
+        editorRef.current.innerHTML = dbVal
       }
     }
   }, [activeDate, activeEntry?.content])
@@ -406,7 +653,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   const [prevActiveEntryId, setPrevActiveEntryId] = useState(activeEntry?.id)
 
   if (activeDate !== prevActiveDate || activeEntry?.id !== prevActiveEntryId) {
-    setContent(markdownToHtml(activeEntry?.content || ''))
+    setContent(dbValue)
     setAttachedImages(getMetadataImages(activeEntry))
     setMentionMenu(null)
     setContentStatus('idle')
@@ -414,74 +661,36 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     setPrevActiveEntryId(activeEntry?.id)
   }
 
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
-  const saveContent = useCallback(async (v: string) => {
-    console.log('[JournalPanel] saveContent called with:', { 
-      length: v.length, 
-      preview: v.substring(0, 100),
-      activeDate 
-    })
-    
-    if (isSavingRef.current) { pendingRef.current = v; return }
-    isSavingRef.current = true
-    setContentStatus('saving')
-    try {
-      const res = await upsertJournalEntry(activeDate, { content: v })
-      console.log('[JournalPanel] Save response:', { 
-        success: res.success, 
-        entryId: res.entry?.id,
-        savedContentLength: res.entry?.content.length 
-      })
-      
-      if (res.success && res.entry) {
-        setContentStatus('saved')
-        setEntries(prev => {
-          const idx = prev.findIndex(e => toYMD(e.journalDate) === activeDate)
-          if (idx >= 0) {
-            const copy = [...prev]
-            copy[idx] = { ...copy[idx], content: v, id: res.entry.id }
-            console.log('[JournalPanel] Updated existing entry in state:', copy[idx].id)
-            return copy
-          }
-          const newEntry = {
-            id: res.entry.id,
-            journalDate: activeDate + 'T12:00:00Z',
-            content: v, mood: null, gratitude: null, reflections: null, lessonsLearned: null, tomorrowPlan: null,
-            createdAt: new Date(), updatedAt: new Date(),
-            metadata: null
-          }
-          console.log('[JournalPanel] Created new entry in state:', newEntry.id)
-          return [newEntry, ...prev]
-        })
-      } else {
-        console.error('[JournalPanel] Save failed:', res.error)
-        setContentStatus('error')
-      }
-    } catch (err) {
-      console.error('[JournalPanel] Save error:', err)
-      setContentStatus('error')
-    } finally {
-      isSavingRef.current = false
-      if (pendingRef.current !== null) {
-        const next = pendingRef.current; pendingRef.current = null; saveContent(next)
-      }
-    }
-  }, [activeDate])
-
   // Debounced autosave
   useEffect(() => {
-    const dbValue = activeEntry?.content || ''
-    if (content === dbValue) return
-    const t = setTimeout(() => saveContent(content), 1500)
+    if (!editMode) return
+    const dbVal = markdownToHtml(activeEntry?.content || '')
+    if (content === dbVal) return
+    const t = setTimeout(() => saveContent(content, contentVersionRef.current), 1500)
     return () => clearTimeout(t)
-  }, [content, activeEntry?.content, saveContent])
+  }, [content, activeEntry?.content, saveContent, editMode])
 
   const handleDelete = async (id: string, dateStr: string) => {
     if (confirm('Are you sure you want to delete this journal entry?')) {
-      await deleteJournalEntry(id)
-      setEntries(prev => prev.filter(e => e.id !== id))
-      if (activeDate === dateStr) setActiveDate(today)
+      await deleteJournalAction(id)
+      if (activeDate === dateStr) handleNavigateDate(today)
     }
+  }
+
+  const handleSave = async () => {
+    await saveContent(content, contentVersionRef.current)
+    setEditMode(false)
+  }
+
+  const handleCancel = () => {
+    if (hasChanges && !confirm('You have unsaved changes. Are you sure you want to discard them?')) {
+      return
+    }
+    setContent(dbValue)
+    if (editorRef.current) {
+      editorRef.current.innerHTML = dbValue
+    }
+    setEditMode(false)
   }
 
   const filtered = entries.filter(e => {
@@ -503,7 +712,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-black tracking-tight text-[var(--color-text-main)]">Journal</h3>
             <Button
-              onClick={() => setActiveDate(today)}
+              onClick={() => handleNavigateDate(today)}
               variant="ghost"
               size="sm"
               icon={<Edit3 className="w-4 h-4" strokeWidth={2.5} />}
@@ -536,7 +745,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
             return (
               <div
                 key={entry.id}
-                onClick={() => { setActiveDate(dateStr); setMobileView('editor') }}
+                onClick={() => handleNavigateDate(dateStr)}
                 className={`group relative flex flex-col gap-1 px-3 py-3 rounded-lg cursor-pointer transition-all ${
                   isActive
                     ? 'bg-[var(--color-primary)] text-white shadow-sm'
@@ -573,13 +782,13 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
       </aside>
 
       {/* ── RIGHT WORKSPACE: Canvas ── */}
-      <main className={`flex-1 flex flex-col xl:flex-row bg-white dark:bg-[#09090b] relative overflow-hidden ${mobileView === 'list' ? 'hidden md:flex' : 'flex'}`}>
+      <main className={`flex-1 flex flex-col xl:flex-row bg-white dark:bg-[#09090b] relative overflow-hidden ${mobileView === 'list' ? 'hidden md:flex' : 'flex'} ${editMode ? 'max-md:fixed max-md:inset-0 max-md:z-50 max-md:h-screen max-md:w-screen' : ''}`}>
         {/* Editor Writing Area */}
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 md:px-12 py-6 sm:py-10 pb-24 border-r border-slate-100 dark:border-zinc-900/60">
           <div className="max-w-3xl mx-auto w-full flex flex-col gap-6">
             
-            {dateParam && (
-              <div className="flex">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              {dateParam ? (
                 <Button
                   variant="outline"
                   size="sm"
@@ -589,123 +798,142 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                 >
                   Back to Calendar
                 </Button>
+              ) : (
+                <div />
+              )}
+              
+              {/* Date Navigation & Picker */}
+              <div className="flex items-center gap-2 bg-slate-50 dark:bg-zinc-900/50 p-1.5 border border-[var(--color-border)] rounded-xl">
+                <Button variant="outline" size="icon-sm" onClick={() => navigateDay('prev')} icon={<ChevronLeft size={14} />} title="Previous Day" />
+                <input
+                  type="date"
+                  value={activeDate}
+                  onChange={e => handleNavigateDate(e.target.value)}
+                  className="bg-transparent border-0 font-bold text-xs text-[var(--color-text-main)] w-32 cursor-pointer focus:outline-hidden"
+                />
+                <Button variant="outline" size="icon-sm" onClick={() => navigateDay('next')} icon={<ChevronRight size={14} />} title="Next Day" />
+              </div>
+
+              {/* Read / Edit Mode controls */}
+              <div className="flex items-center gap-2">
+                <SyncStatus status={contentStatus} />
+                {!editMode ? (
+                  <Button onClick={() => setEditMode(true)} size="sm" icon={<Edit3 className="w-3.5 h-3.5" />}>Edit</Button>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <Button variant="outline" size="sm" onClick={() => handleCancel()}>Cancel</Button>
+                    <Button variant="primary" size="sm" onClick={() => handleSave()} disabled={!hasChanges}>Save</Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="border-b border-slate-100 dark:border-zinc-900/40 pb-4">
+              <h1 className="text-xl sm:text-3xl font-black text-[var(--color-text-main)] tracking-tight">
+                {formatJournalDate(activeDate + 'T12:00:00Z')}
+              </h1>
+            </div>
+
+            {/* Rich Formatting Toolbar (Only visible in Edit Mode) */}
+            {editMode && (
+              <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-50 dark:bg-zinc-900/50 border border-slate-205/65 dark:border-zinc-800/80 rounded-lg max-w-max animate-fade-in">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseDown={e => { e.preventDefault(); execCmd('undo') }}
+                  title="Undo (Ctrl+Z)"
+                  icon={<Undo2 size={13} />}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseDown={e => { e.preventDefault(); execCmd('redo') }}
+                  title="Redo (Ctrl+Y)"
+                  icon={<Redo2 size={13} />}
+                />
+                <div className="w-px h-3.5 bg-slate-200 dark:bg-zinc-800 mx-1" />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseDown={e => { e.preventDefault(); execCmd('bold') }}
+                  title="Bold (Ctrl+B)"
+                  icon={<Bold size={13} />}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseDown={e => { e.preventDefault(); execCmd('italic') }}
+                  title="Italic (Ctrl+I)"
+                  icon={<Italic size={13} />}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseDown={e => { e.preventDefault(); execCmd('underline') }}
+                  title="Underline (Ctrl+U)"
+                  icon={<Underline size={13} />}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseDown={e => { e.preventDefault(); execCmd('hiliteColor', '#fef08a') }}
+                  title="Highlight text"
+                  icon={<Highlighter size={13} />}
+                />
+                <div className="w-px h-3.5 bg-slate-200 dark:bg-zinc-800 mx-1" />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<h1>') }}
+                  title="Heading 1"
+                  icon={<Heading1 size={13} />}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<h2>') }}
+                  title="Heading 2"
+                  icon={<Heading2 size={13} />}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseDown={e => { e.preventDefault(); execCmd('insertUnorderedList') }}
+                  title="Bullet List"
+                  icon={<List size={13} />}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<blockquote>') }}
+                  title="Blockquote"
+                  icon={<Quote size={13} />}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<pre>') }}
+                  title="Code Block"
+                  icon={<Code size={13} />}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseDown={e => { e.preventDefault(); fileInputRef.current?.click() }}
+                  title="Attach Image"
+                  icon={<ImageIcon size={13} />}
+                />
+                <div className="w-px h-3.5 bg-slate-200 dark:bg-zinc-800 mx-1" />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onMouseDown={e => { e.preventDefault(); clearFormatting() }}
+                  title="Clear all formatting"
+                  icon={<Eraser size={13} />}
+                  className="hover:text-rose-500"
+                />
               </div>
             )}
-
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setMobileView('list')}
-                  className="md:hidden p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
-                  title="Back to list"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                </button>
-                <h1 className="text-xl sm:text-3xl font-black text-[var(--color-text-main)] tracking-tight">
-                  {formatJournalDate(activeDate + 'T12:00:00Z')}
-                </h1>
-              </div>
-              <SyncStatus status={contentStatus} />
-            </div>
-
-            {/* Rich Formatting Toolbar */}
-            <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-50 dark:bg-zinc-900/50 border border-slate-205/65 dark:border-zinc-800/80 rounded-lg max-w-max">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onMouseDown={e => { e.preventDefault(); execCmd('undo') }}
-                title="Undo (Ctrl+Z)"
-                icon={<Undo2 size={13} />}
-              />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onMouseDown={e => { e.preventDefault(); execCmd('redo') }}
-                title="Redo (Ctrl+Y)"
-                icon={<Redo2 size={13} />}
-              />
-              <div className="w-px h-3.5 bg-slate-200 dark:bg-zinc-800 mx-1" />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onMouseDown={e => { e.preventDefault(); execCmd('bold') }}
-                title="Bold (Ctrl+B)"
-                icon={<Bold size={13} />}
-              />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onMouseDown={e => { e.preventDefault(); execCmd('italic') }}
-                title="Italic (Ctrl+I)"
-                icon={<Italic size={13} />}
-              />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onMouseDown={e => { e.preventDefault(); execCmd('underline') }}
-                title="Underline (Ctrl+U)"
-                icon={<Underline size={13} />}
-              />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onMouseDown={e => { e.preventDefault(); execCmd('hiliteColor', '#fef08a') }}
-                title="Highlight text"
-                icon={<Highlighter size={13} />}
-              />
-              <div className="w-px h-3.5 bg-slate-200 dark:bg-zinc-800 mx-1" />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<h1>') }}
-                title="Heading 1"
-                icon={<Heading1 size={13} />}
-              />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<h2>') }}
-                title="Heading 2"
-                icon={<Heading2 size={13} />}
-              />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onMouseDown={e => { e.preventDefault(); execCmd('insertUnorderedList') }}
-                title="Bullet List"
-                icon={<List size={13} />}
-              />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<blockquote>') }}
-                title="Blockquote"
-                icon={<Quote size={13} />}
-              />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onMouseDown={e => { e.preventDefault(); execCmd('formatBlock', '<pre>') }}
-                title="Code Block"
-                icon={<Code size={13} />}
-              />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onMouseDown={e => { e.preventDefault(); fileInputRef.current?.click() }}
-                title="Attach Image"
-                icon={<ImageIcon size={13} />}
-              />
-              <div className="w-px h-3.5 bg-slate-200 dark:bg-zinc-800 mx-1" />
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onMouseDown={e => { e.preventDefault(); clearFormatting() }}
-                title="Clear all formatting"
-                icon={<Eraser size={13} />}
-                className="hover:text-rose-500"
-              />
-            </div>
 
             <input
               type="file"
@@ -718,12 +946,10 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
 
             <div
               ref={editorRef}
-              contentEditable
+              contentEditable={editMode}
               suppressContentEditableWarning
               onInput={e => {
-                const html = e.currentTarget.innerHTML
-                setContent(html)
-                setContentStatus('saving')
+                triggerLocalContentChange(e.currentTarget.innerHTML)
               }}
               onPaste={handlePaste}
               onDrop={handleDrop}

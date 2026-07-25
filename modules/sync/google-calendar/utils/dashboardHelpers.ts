@@ -1,5 +1,6 @@
 import { ActivityTemplate, ActivityLog, TimelineItem, AnalyzedTemplate } from '@/types'
 import { ParsedCalendarEvent } from '../services/GoogleCalendarService'
+import { isOccurrenceValidForDate, getTodayDateStr } from '@/lib/recurrence'
 
 export type ActivityType = 
   | 'WORKOUT'
@@ -222,10 +223,22 @@ export function generateTimeline(
   const dueTemplates = analyzedTemplates.filter(({ template, analysis }) => {
     if (!template.isActive) return false
     if (template.recurrenceType === 'milestone' || template.recurrenceType === 'yearly') return false
+    
+    // Check if the occurrence is valid for this date based on effectiveFrom
+    if (!isOccurrenceValidForDate(template, todayStr)) return false
+
     const hasLogToday = logs.some(l => l.activityId === template.id && l.date === todayStr)
 
     // Always show items that have a log for today (preserves postponed/done history)
-    if (hasLogToday) return true
+    if (hasLogToday) {
+      // Except if it is a completed task on the current day
+      if (template.type === 'TASK' && todayStr === getTodayDateStr()) {
+        const log = logs.find(l => l.activityId === template.id && l.date === todayStr)
+        const isCompleted = log && (log.status === 'done' || log.status === 'paid' || log.status === 'completed')
+        if (isCompleted) return false
+      }
+      return true
+    }
 
     // For one_time tasks: only show on exact due date (not overdue on future days)
     if (analysis.nextDueDate) {

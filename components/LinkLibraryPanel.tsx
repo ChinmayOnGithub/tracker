@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from 'react'
+import { writeQueue } from '@/lib/store/write-queue'
 import {
   FolderPlus, Grid, List, Folder, Loader2,
   ShieldAlert, Plus
@@ -223,14 +224,27 @@ export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialColle
 
   const handleDeleteCol = async (id: string) => {
     if (!confirm('Are you sure you want to delete this collection and all its links?')) return
-    const res = await deleteLinkCollection(id)
-    if (res.success) {
-      setCollections(prev => prev.filter(c => c.id !== id))
-      if (activeCollectionId === id) {
-        const remaining = collections.filter(c => c.id !== id)
-        setActiveCollectionId(remaining.length > 0 ? remaining[0].id : null)
-      }
+    
+    const previousCollections = [...collections]
+    const previousActiveId = activeCollectionId
+
+    setCollections(prev => prev.filter(c => c.id !== id))
+    if (activeCollectionId === id) {
+      const remaining = collections.filter(c => c.id !== id)
+      setActiveCollectionId(remaining.length > 0 ? remaining[0].id : null)
     }
+
+    writeQueue.add({
+      id: `col-delete-${id}-${Date.now()}`,
+      dedupKey: `col-delete-${id}`,
+      run: async () => {
+        return deleteLinkCollection(id)
+      },
+      rollback: () => {
+        setCollections(previousCollections)
+        setActiveCollectionId(previousActiveId)
+      }
+    })
   }
 
   const openAddCol = () => {
@@ -346,55 +360,95 @@ export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialColle
 
   const handleDeleteLink = async (id: string) => {
     if (!confirm('Are you sure you want to delete this link?')) return
-    const res = await deleteLink(id)
-    if (res.success) {
-      setCollections(prev => prev.map(c => c.id === activeCollectionId ? { ...c, links: c.links.filter(l => l.id !== id) } : c))
-    }
+    const previousCollections = [...collections]
+
+    setCollections(prev => prev.map(c => c.id === activeCollectionId ? { ...c, links: c.links.filter(l => l.id !== id) } : c))
+
+    writeQueue.add({
+      id: `link-delete-${id}-${Date.now()}`,
+      dedupKey: `link-delete-${id}`,
+      run: async () => {
+        return deleteLink(id)
+      },
+      rollback: () => {
+        setCollections(previousCollections)
+      }
+    })
   }
 
   const handleTogglePinLink = async (id: string) => {
-    const res = await togglePinLink(id)
-    if (res.success && res.link) {
-      setCollections(prev => prev.map(c => {
-        if (c.id === activeCollectionId) {
-          return {
-            ...c,
-            links: c.links.map(l => l.id === id ? { ...l, isPinned: res.link!.isPinned } : l)
-          }
+    const previousCollections = [...collections]
+
+    setCollections(prev => prev.map(c => {
+      if (c.id === activeCollectionId) {
+        return {
+          ...c,
+          links: c.links.map(l => l.id === id ? { ...l, isPinned: !l.isPinned } : l)
         }
-        return c
-      }))
-    }
+      }
+      return c
+    }))
+
+    writeQueue.add({
+      id: `link-pin-${id}-${Date.now()}`,
+      dedupKey: `link-pin-${id}`,
+      run: async () => {
+        return togglePinLink(id)
+      },
+      rollback: () => {
+        setCollections(previousCollections)
+      }
+    })
   }
 
   const handleTogglePrivateLink = async (id: string) => {
-    const res = await togglePrivateLink(id)
-    if (res.success && res.link) {
-      setCollections(prev => prev.map(c => {
-        if (c.id === activeCollectionId) {
-          return {
-            ...c,
-            links: c.links.map(l => l.id === id ? { ...l, isPrivate: res.link!.isPrivate } : l)
-          }
+    const previousCollections = [...collections]
+
+    setCollections(prev => prev.map(c => {
+      if (c.id === activeCollectionId) {
+        return {
+          ...c,
+          links: c.links.map(l => l.id === id ? { ...l, isPrivate: !l.isPrivate } : l)
         }
-        return c
-      }))
-    }
+      }
+      return c
+    }))
+
+    writeQueue.add({
+      id: `link-private-${id}-${Date.now()}`,
+      dedupKey: `link-private-${id}`,
+      run: async () => {
+        return togglePrivateLink(id)
+      },
+      rollback: () => {
+        setCollections(previousCollections)
+      }
+    })
   }
 
   const handleToggleArchiveLink = async (id: string) => {
-    const res = await toggleArchiveLink(id)
-    if (res.success && res.link) {
-      setCollections(prev => prev.map(c => {
-        if (c.id === activeCollectionId) {
-          return {
-            ...c,
-            links: c.links.map(l => l.id === id ? { ...l, isArchived: res.link!.isArchived } : l)
-          }
+    const previousCollections = [...collections]
+
+    setCollections(prev => prev.map(c => {
+      if (c.id === activeCollectionId) {
+        return {
+          ...c,
+          links: c.links.map(l => l.id === id ? { ...l, isArchived: !l.isArchived } : l)
         }
-        return c
-      }))
-    }
+      }
+      return c
+    }))
+
+    writeQueue.add({
+      id: `link-archive-${id}-${Date.now()}`,
+      dedupKey: `link-archive-${id}`,
+      run: async () => {
+        return toggleArchiveLink(id)
+      },
+      rollback: () => {
+        setCollections(previousCollections)
+      }
+    })
   }
 
   const handleOpenLink = (link: SavedLink) => {

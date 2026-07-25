@@ -44,41 +44,44 @@ export default async function Page() {
     templatesRaw.push(workTemplate)
   }
 
-  const [logsRaw, journalRawForNotes, journalEntriesRaw, leaveRecordsRaw, leaveAllowancesRaw, weightRecordsRaw] = await Promise.all([
-    fetchRecurrenceLogs(loggedUser.id, templatesRaw, loggedUser.username === 'admin'),
-    db.journalEntry.findMany({
-      where: { userId: loggedUser.id, deletedAt: null },
-      orderBy: { journalDate: 'desc' },
-    }),
-    db.journalEntry.findMany({
-      where: { userId: loggedUser.id, deletedAt: null },
-      orderBy: { journalDate: 'desc' },
-      take: 20,
-    }),
-    db.leaveRecord.findMany({
-      where: {
-        userId: loggedUser.id,
-        deletedAt: null,
-        startDate: {
-          gte: new Date(`${currentYear}-01-01`),
-          lte: new Date(`${currentYear}-12-31`),
-        },
+  const logsRaw = await fetchRecurrenceLogs(loggedUser.id, templatesRaw, loggedUser.username === 'admin')
+  
+  const journalRawForNotes = await db.journalEntry.findMany({
+    where: { userId: loggedUser.id, deletedAt: null },
+    orderBy: { journalDate: 'desc' },
+  })
+
+  const journalEntriesRaw = await db.journalEntry.findMany({
+    where: { userId: loggedUser.id, deletedAt: null },
+    orderBy: { journalDate: 'desc' },
+    take: 20,
+  })
+
+  const leaveRecordsRaw = await db.leaveRecord.findMany({
+    where: {
+      userId: loggedUser.id,
+      deletedAt: null,
+      startDate: {
+        gte: new Date(`${currentYear}-01-01`),
+        lte: new Date(`${currentYear}-12-31`),
       },
-      orderBy: { startDate: 'desc' },
-    }),
-    db.leaveAllowance.findMany({
-      where: { userId: loggedUser.id, year: currentYear },
-      orderBy: { leaveType: 'asc' },
-    }),
-    db.weightRecord.findMany({
-      where: {
-        userId: loggedUser.id,
-        deletedAt: null,
-        date: { gte: new Date(new Date().getTime() - 90 * 24 * 60 * 60 * 1000) },
-      },
-      orderBy: { date: 'asc' },
-    }),
-  ])
+    },
+    orderBy: { startDate: 'desc' },
+  })
+
+  const leaveAllowancesRaw = await db.leaveAllowance.findMany({
+    where: { userId: loggedUser.id, year: currentYear },
+    orderBy: { leaveType: 'asc' },
+  })
+
+  const weightRecordsRaw = await db.weightRecord.findMany({
+    where: {
+      userId: loggedUser.id,
+      deletedAt: null,
+      date: { gte: new Date(new Date().getTime() - 90 * 24 * 60 * 60 * 1000) },
+    },
+    orderBy: { date: 'asc' },
+  })
 
   const templates: ActivityTemplate[] = templatesRaw.map(t => ({
     ...t,

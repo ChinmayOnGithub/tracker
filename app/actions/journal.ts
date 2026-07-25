@@ -139,15 +139,13 @@ export async function listJournalEntries(page = 1, limit = 20) {
     const user = await requireAuth()
     const skip = (page - 1) * limit
 
-    const [entries, total] = await Promise.all([
-      db.journalEntry.findMany({
-        where: { userId: user.id, deletedAt: null },
-        orderBy: { journalDate: 'desc' },
-        skip,
-        take: limit,
-      }),
-      db.journalEntry.count({ where: { userId: user.id, deletedAt: null } }),
-    ])
+    const entries = await db.journalEntry.findMany({
+      where: { userId: user.id, deletedAt: null },
+      orderBy: { journalDate: 'desc' },
+      skip,
+      take: limit,
+    })
+    const total = await db.journalEntry.count({ where: { userId: user.id, deletedAt: null } })
 
     return { success: true, entries, total, page, limit }
   } catch (error) {

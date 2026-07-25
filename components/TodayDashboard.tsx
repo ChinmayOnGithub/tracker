@@ -1,20 +1,19 @@
 "use client"
 
 import React, { useState, useEffect } from 'react'
+import { useStore } from '@/lib/store/store'
 import { Skeleton, EmptyState, Button, Card, Input } from '@/design-system'
 import {
   ExternalLink, Check, Plus, ArrowRightCircle,
   Scale, Shield, BookOpen, CalendarX, Lock,
   FileText, FileImage, FileVideo, FileArchive, FileCode, FileSpreadsheet, File,
-  RefreshCw, Clock, Briefcase
+  RefreshCw, Clock, Briefcase, GripVertical
 } from 'lucide-react'
 import { ActivityTemplate, ActivityLog, Note, RecurrenceAnalysis, TimelineItem } from '@/types'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
 import { ParsedCalendarEvent } from '@/modules/sync/google-calendar/services/GoogleCalendarService'
 import { Icon } from './Icon'
 import { useRouter } from 'next/navigation'
-import { deleteLog, markComplete, updateLog, postponeOneTimeTask, unpostponeOneTimeTask } from '@/app/actions/log'
-import { reorderActivityTemplates, createActivityTemplate } from '@/app/actions/template'
 import { useActivityNotifications } from '@/lib/hooks/useActivityNotifications'
 import { Sparkline } from './WeightPanel'
 import { listVaultItems, VaultItem } from '@/app/actions/vault'
@@ -77,6 +76,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   onTabChange
 }) => {
   const router = useRouter()
+  const { cycleTaskStatusAction, createActivityTemplateAction, reorderActivityTemplatesAction, logWorkPresenceAction } = useStore()
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [completingHabitId, setCompletingHabitId] = useState<string | null>(null)
   const [vaultItems, setVaultItems] = useState<VaultItem[]>([])
@@ -231,6 +231,11 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     return 'cleared'
   })
 
+  const [loggingMode, setLoggingMode] = useState<'time' | 'manual'>(() => {
+    const payload = todayWorkLog?.payload as Record<string, unknown> | null
+    return (payload?.loggingMode as 'time' | 'manual') || (payload?.inTime ? 'time' : 'manual')
+  })
+
   const [inTime, setInTime] = useState(() => {
     const payload = todayWorkLog?.payload as Record<string, unknown> | null
     return (payload?.inTime as string) || '09:00'
@@ -238,14 +243,13 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   const [outTime, setOutTime] = useState(() => {
     const payload = todayWorkLog?.payload as Record<string, unknown> | null
-    return (payload?.outTime as string) || '17:30'
+    return (payload?.outTime as string) || ''
   })
 
-  const [wfhHours, setWfhHours] = useState(() => {
-    if (todayWorkLog && todayWorkLog.status === 'wfh') {
-      return todayWorkLog.amount || 8.0
-    }
-    return 8.0
+  const [manualHours, setManualHours] = useState(() => {
+    const payload = todayWorkLog?.payload as Record<string, unknown> | null
+    if (payload?.manualHours !== undefined) return Number(payload.manualHours)
+    return todayWorkLog?.amount || 8.0
   })
 
   const [isLoggingWork, setIsLoggingWork] = useState(false)
@@ -257,9 +261,10 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     if (todayWorkLog) {
       setWorkStatus(todayWorkLog.status === 'wfh' ? 'wfh' : 'office')
       const payload = todayWorkLog.payload as Record<string, unknown> | null
+      setLoggingMode((payload?.loggingMode as 'time' | 'manual') || (payload?.inTime ? 'time' : 'manual'))
       setInTime((payload?.inTime as string) || '09:00')
-      setOutTime((payload?.outTime as string) || '17:30')
-      setWfhHours(todayWorkLog.status === 'wfh' ? (todayWorkLog.amount || 8.0) : 8.0)
+      setOutTime((payload?.outTime as string) || '')
+      setManualHours(payload?.manualHours !== undefined ? Number(payload.manualHours) : (todayWorkLog.amount || 8.0))
     } else {
       setWorkStatus('cleared')
     }
@@ -272,6 +277,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   }, [])
 
   const computeOfficeHours = (inT: string, outT: string): number => {
+    if (!inT || !outT) return 0
     const [inH, inM] = inT.split(':').map(Number)
     const [outH, outM] = outT.split(':').map(Number)
     let diffMins = (outH * 60 + outM) - (inH * 60 + inM)
@@ -281,24 +287,43 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   const handleSaveWorkPresence = async () => {
     if (!workTemplateId || isLoggingWork) return
+    
+    // Validation
+    if (workStatus !== 'cleared') {
+      if (loggingMode === 'manual') {
+        if (isNaN(manualHours) || manualHours < 0 || manualHours > 24) {
+          alert('Please enter a valid number of hours between 0 and 24.')
+          return
+        }
+      } else {
+        if (!inTime) {
+          alert('Please select a start time.')
+          return
+        }
+      }
+    }
+
     setIsLoggingWork(true)
     try {
-      const computedHours = workStatus === 'office'
-        ? computeOfficeHours(inTime, outTime)
-        : workStatus === 'wfh' ? wfhHours : 0
+      let computedHours = 0
+      if (workStatus !== 'cleared') {
+        if (loggingMode === 'time') {
+          computedHours = outTime ? computeOfficeHours(inTime, outTime) : 0
+        } else {
+          computedHours = manualHours
+        }
+      }
 
-      const { logWorkPresence } = await import('@/app/actions/log')
-      const res = await logWorkPresence({
+      await logWorkPresenceAction({
         templateId: workTemplateId,
         date: todayStr,
         status: workStatus,
-        inTime: workStatus === 'office' ? inTime : null,
-        outTime: workStatus === 'office' ? outTime : null,
-        hours: computedHours
+        inTime: workStatus !== 'cleared' && loggingMode === 'time' ? inTime : null,
+        outTime: workStatus !== 'cleared' && loggingMode === 'time' ? (outTime || null) : null,
+        hours: computedHours,
+        loggingMode: workStatus !== 'cleared' ? loggingMode : null,
+        manualHours: workStatus !== 'cleared' && loggingMode === 'manual' ? manualHours : null
       })
-      if (res.success) {
-        router.refresh()
-      }
     } catch (err) {
       console.error('Failed to log work presence:', err)
     } finally {
@@ -352,33 +377,31 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   const nonOverdueTimeline = timeline.filter(o => !o.templateId || !overdueTemplateIds.has(o.templateId))
 
   const [manualOrderIds, setManualOrderIds] = useState<string[] | null>(null)
-  const [prevLogs, setPrevLogs] = useState(logs)
-  const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, { completed: boolean; status?: string }>>({})
 
   const [quickTaskTitle, setQuickTaskTitle] = useState('')
   const [isCreatingQuickTask, setIsCreatingQuickTask] = useState(false)
+  const [quickTaskColor, setQuickTaskColor] = useState<string>('blue')
+  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
+  const [allowDragIndex, setAllowDragIndex] = useState<number | null>(null)
 
   const handleCreateQuickTask = async () => {
     const title = quickTaskTitle.trim()
     if (!title || isCreatingQuickTask) return
 
     setIsCreatingQuickTask(true)
+    setQuickTaskTitle('')
     try {
-      const res = await createActivityTemplate({
+      await createActivityTemplateAction({
         name: title,
         category: 'general',
         type: 'TASK',
         priority: 'NORMAL',
         icon: 'CheckSquare',
-        color: 'blue',
+        color: quickTaskColor,
         recurrenceType: 'one_time',
         targetDate: `${todayStr}T00:00:00.000Z`
       })
-
-      if (res.success) {
-        setQuickTaskTitle('')
-        router.refresh()
-      }
     } catch (err) {
       console.error('Failed to create quick task:', err)
     } finally {
@@ -393,11 +416,6 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     }
   }
 
-  // Clear optimistic statuses when server logs are updated
-  if (logs !== prevLogs) {
-    setPrevLogs(logs)
-    setOptimisticStatuses({})
-  }
 
   // Sort: timed events first (sorted by start time), then all-day events (sorted by template sortOrder)
   const sortedTimed = nonOverdueTimeline.filter(o => !o.isAllDay).sort((a, b) => {
@@ -444,104 +462,11 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   const cycleTaskStatus = async (occurrence: TimelineItem) => {
     if (!occurrence.templateId) return
 
-    // Read current states with optimistic overrides
-    const optimisticVal = optimisticStatuses[occurrence.id]
-    const currentCompleted = optimisticVal ? optimisticVal.completed : occurrence.completed
-    const currentStatus = optimisticVal ? optimisticVal.status : occurrence.status
-
-    const isCanceled = currentStatus === 'skipped'
-    const isPostponed = currentStatus === 'postponed'
-    const isDone = currentCompleted && !isCanceled && !isPostponed
-
-    let nextCompleted = false
-    let nextStatus: string | undefined = undefined
-
-    if (!currentCompleted && !isCanceled && !isPostponed) {
-      // Cleared -> Done
-      const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-      nextCompleted = true
-      nextStatus = matched?.template.category === 'finance' ? 'paid' : 'done'
-    } else if (isDone) {
-      // Done -> Canceled
-      nextCompleted = true
-      nextStatus = 'skipped'
-    } else if (isCanceled) {
-      // Canceled -> Postponed (or Cleared if daily)
-      const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-      const isDaily = matched?.template.recurrenceType === 'daily'
-      if (isDaily) {
-        nextCompleted = false
-        nextStatus = undefined
-      } else {
-        nextCompleted = true
-        nextStatus = 'postponed'
-      }
-    } else if (isPostponed) {
-      // Postponed -> Cleared
-      nextCompleted = false
-      nextStatus = undefined
-    }
-
-    // Apply optimistic updates immediately
-    setOptimisticStatuses(prev => ({
-      ...prev,
-      [occurrence.id]: { completed: nextCompleted, status: nextStatus }
-    }))
-
     setCompletingHabitId(occurrence.templateId)
     try {
-      if (!currentCompleted && !isCanceled && !isPostponed) {
-        // Cleared -> Done
-        const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-        const status = matched?.template.category === 'finance' ? 'paid' : 'done'
-        const amount = matched?.template.amount
-        await markComplete(occurrence.templateId, todayStr, status, amount ?? null, null)
-      } else if (isDone) {
-        // Done -> Canceled
-        if (occurrence.logId) {
-          await updateLog(occurrence.logId, { status: 'skipped' })
-        } else {
-          await markComplete(occurrence.templateId, todayStr, 'skipped')
-        }
-      } else if (isCanceled) {
-        // Canceled -> Postponed (or Cleared if daily)
-        const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-        const isDaily = matched?.template.recurrenceType === 'daily'
-        const isOneTime = matched?.template.recurrenceType === 'one_time'
-        if (isDaily) {
-          if (occurrence.logId) {
-            await deleteLog(occurrence.logId)
-          }
-        } else if (isOneTime) {
-          // For one_time tasks: use dedicated action that updates targetDate
-          await postponeOneTimeTask(occurrence.templateId, todayStr, occurrence.logId)
-        } else {
-          if (occurrence.logId) {
-            await updateLog(occurrence.logId, { status: 'postponed' })
-          } else {
-            await markComplete(occurrence.templateId, todayStr, 'postponed')
-          }
-        }
-      } else if (isPostponed) {
-        // Postponed -> Cleared
-        const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-        const isOneTime = matched?.template.recurrenceType === 'one_time'
-        if (isOneTime && occurrence.logId) {
-          // For one_time tasks: revert targetDate back to today
-          await unpostponeOneTimeTask(occurrence.templateId, occurrence.logId, todayStr)
-        } else if (occurrence.logId) {
-          await deleteLog(occurrence.logId)
-        }
-      }
-      router.refresh()
+      await cycleTaskStatusAction(occurrence, todayStr)
     } catch (err) {
       console.error('Failed to cycle task status:', err)
-      // Rollback optimistic updates on failure
-      setOptimisticStatuses(prev => {
-        const copy = { ...prev }
-        delete copy[occurrence.id]
-        return copy
-      })
     } finally {
       setCompletingHabitId(null)
     }
@@ -574,7 +499,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     setManualOrderIds(localTemplateIds)
 
     try {
-      await reorderActivityTemplates(localTemplateIds)
+      await reorderActivityTemplatesAction(localTemplateIds)
     } catch (err) {
       console.error('Failed to persist template order:', err)
     }
@@ -600,6 +525,344 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   // Helper to determine semantic border and background colors
   // getCardClasses removed as it is unused
+
+  const isScheduledOnDate = (temp: ActivityTemplate, dStr: string): boolean => {
+    if (!isOccurrenceValidForDate(temp, dStr)) return false
+    if (temp.recurrenceType === 'daily') return true
+    if (temp.recurrenceType === 'one_time') return temp.targetDate ? temp.targetDate.split('T')[0] === dStr : false
+    if (temp.recurrenceType === 'weekly') {
+      const date = new Date(dStr + 'T12:00:00Z')
+      const dayOfWeek = date.getUTCDay()
+      if (!temp.recurrenceDaysOfWeek) return true
+      const days = temp.recurrenceDaysOfWeek.split(',').map(Number)
+      return days.includes(dayOfWeek)
+    }
+    if (temp.recurrenceType === 'monthly') {
+      const date = new Date(dStr + 'T12:00:00Z')
+      const dayOfMonth = date.getUTCDate()
+      return temp.recurrenceDayOfMonth ? temp.recurrenceDayOfMonth === dayOfMonth : true
+    }
+    return true
+  }
+
+  const getEffectiveFromStr = (effectiveFrom?: Date | string | null): string | null => {
+    if (!effectiveFrom) return null
+    const d = (effectiveFrom instanceof Date) ? effectiveFrom : new Date(effectiveFrom)
+    if (isNaN(d.getTime())) return null
+    const year = d.getUTCFullYear()
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(d.getUTCDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  const isOccurrenceValidForDate = (template: ActivityTemplate, dateStr: string): boolean => {
+    if (!template.effectiveFrom) return true
+    const effStr = getEffectiveFromStr(template.effectiveFrom)
+    if (!effStr) return true
+    return dateStr >= effStr
+  }
+
+  const diffUTCDays = (dateStr1: string, dateStr2: string): number => {
+    const parseUDate = (str: string) => {
+      const [year, month, day] = str.split('-').map(Number)
+      return new Date(Date.UTC(year, month - 1, day))
+    }
+    const d1 = parseUDate(dateStr1)
+    const d2 = parseUDate(dateStr2)
+    const diffTime = d1.getTime() - d2.getTime()
+    return Math.round(diffTime / (1000 * 60 * 60 * 24))
+  }
+
+  const renderTaskHistory = (templateId: string) => {
+    const matched = analyzedTemplates.find(t => t.template.id === templateId)
+    if (!matched) return null
+    const template = matched.template
+    
+    const taskLogs = logs.filter(l => l.activityId === templateId)
+    const completedLogs = taskLogs.filter(l => l.status === 'done' || l.status === 'paid')
+
+    // 1. Last Completed calculation
+    const lastCompletedLog = [...completedLogs].sort((a, b) => b.date.localeCompare(a.date))[0]
+    let lastCompletedMain = 'Never completed'
+    let lastCompletedSub = ''
+    if (lastCompletedLog) {
+      const logDateStr = lastCompletedLog.date
+      const diff = diffUTCDays(todayStr, logDateStr)
+      if (diff === 0) {
+        lastCompletedMain = '✓ Today'
+      } else if (diff === 1) {
+        lastCompletedMain = '✓ Yesterday'
+      } else {
+        lastCompletedMain = `✓ ${diff} days ago`
+      }
+      
+      const createdTime = lastCompletedLog.createdAt ? new Date(lastCompletedLog.createdAt) : null
+      if (createdTime) {
+        const dayMonth = createdTime.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+        const timeStr = createdTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+        lastCompletedSub = `(${dayMonth} • ${timeStr})`
+      }
+    }
+
+    // 2. Next Due calculation
+    const nextDueDate = matched.analysis.nextDueDate
+    let nextDueText = '—'
+    let nextDueColorClass = 'text-[var(--color-text-main)] font-semibold'
+    if (nextDueDate) {
+      const diff = diffUTCDays(nextDueDate, todayStr)
+      if (diff === 0) {
+        nextDueText = 'Today'
+      } else if (diff === 1) {
+        nextDueText = 'Tomorrow'
+      } else if (diff < 0) {
+        const overdueDays = Math.abs(diff)
+        nextDueText = `Overdue by ${overdueDays} day${overdueDays > 1 ? 's' : ''}`
+        nextDueColorClass = 'text-rose-500 font-bold'
+      } else {
+        nextDueText = `In ${diff} days`
+      }
+    }
+
+    // 3. Usually Done calculation
+    let usualTimeStr = '—'
+    let totalMinutes = 0
+    let validTimesCount = 0
+    completedLogs.forEach(l => {
+      if (l.createdAt) {
+        const d = new Date(l.createdAt)
+        const minutes = d.getHours() * 60 + d.getMinutes()
+        totalMinutes += minutes
+        validTimesCount++
+      }
+    })
+    if (validTimesCount > 0) {
+      const avgMinutes = Math.round(totalMinutes / validTimesCount)
+      const avgHours = Math.floor(avgMinutes / 60)
+      const avgMins = avgMinutes % 60
+      const ampm = avgHours >= 12 ? 'PM' : 'AM'
+      const displayHours = avgHours % 12 || 12
+      const displayMins = String(avgMins).padStart(2, '0')
+      usualTimeStr = `${displayHours}:${displayMins} ${ampm}`
+    }
+
+    // 4. Completion Rate (This Month)
+    const [currYear, currMonth] = todayStr.split('-')
+    const monthlyLogs = taskLogs.filter(l => l.date.startsWith(`${currYear}-${currMonth}`))
+    const completedMonth = monthlyLogs.filter(l => l.status === 'done' || l.status === 'paid').length
+    
+    const startOfMonthStr = `${currYear}-${currMonth}-01`
+    let expectedMonthCount = 0
+    const startMonthDate = new Date(startOfMonthStr + 'T12:00:00Z')
+    const currentDateObj = new Date(todayStr + 'T12:00:00Z')
+    const loopDate = new Date(startMonthDate)
+    while (loopDate <= currentDateObj) {
+      const dStr = loopDate.toISOString().split('T')[0]
+      if (isScheduledOnDate(template, dStr)) {
+        expectedMonthCount++
+      }
+      loopDate.setUTCDate(loopDate.getUTCDate() + 1)
+    }
+    const monthlyCompletionRate = expectedMonthCount > 0 
+      ? Math.round((completedMonth / expectedMonthCount) * 100) 
+      : 0
+
+    // Streak calculation
+    const streak = matched.analysis.streak ?? 0
+    const showStreak = template.recurrenceType !== 'one_time' && streak > 0
+    let streakText = ''
+    if (showStreak) {
+      if (template.recurrenceType === 'daily') {
+        streakText = `${streak} day streak`
+      } else if (template.recurrenceType === 'weekly') {
+        streakText = `${streak} week streak`
+      } else if (template.recurrenceType === 'monthly') {
+        streakText = `${streak} month streak`
+      }
+    }
+
+    // Recent 7 Days History
+    const recentDays: { weekday: string; symbol: string; colorClass: string; isToday: boolean; dateStr: string }[] = []
+    const todayDateObj = new Date(todayStr + 'T12:00:00Z')
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(todayDateObj)
+      d.setUTCDate(todayDateObj.getUTCDate() - i)
+      const dStr = d.toISOString().split('T')[0]
+      const weekday = d.toLocaleDateString(undefined, { weekday: 'narrow' })
+      const isToday = dStr === todayStr
+      
+      const log = taskLogs.find(l => l.date === dStr)
+      let symbol = '○'
+      let colorClass = 'text-slate-300 dark:text-zinc-700'
+      if (log) {
+        if (log.status === 'done' || log.status === 'paid') {
+          symbol = '✓'
+          colorClass = 'text-emerald-500 font-bold'
+        } else if (log.status === 'skipped') {
+          symbol = '✗'
+          colorClass = 'text-rose-500 font-bold'
+        } else if (log.status === 'postponed') {
+          symbol = '→'
+          colorClass = 'text-blue-500 font-bold'
+        }
+      } else {
+        if (isScheduledOnDate(template, dStr) && dStr < todayStr) {
+          symbol = '✗'
+          colorClass = 'text-slate-350 dark:text-zinc-650'
+        }
+      }
+      recentDays.push({ weekday, symbol, colorClass, isToday, dateStr: dStr })
+    }
+
+    // Helper to get structured log preview
+    const getLogValuePreview = (log: ActivityLog): string => {
+      if (log.amount !== null && log.amount !== undefined) {
+        const catLower = template.category.toLowerCase()
+        if (catLower.includes('finance') || template.type === 'BILL') {
+          return `$${Number(log.amount).toFixed(2)}`
+        }
+        if (template.name.toLowerCase().includes('water') || catLower.includes('water')) {
+          return `${log.amount} L`
+        }
+        return `${log.amount}`
+      }
+
+      if (log.payload) {
+        try {
+          const p = typeof log.payload === 'string' ? JSON.parse(log.payload) : log.payload
+          if (p.weight) return `${p.weight} kg`
+          if (p.amount) return `$${p.amount}`
+          if (p.liters) return `${p.liters} L`
+          if (p.exercises && Array.isArray(p.exercises)) {
+            return p.exercises.map((e: { name: string; sets?: unknown[] }) => `${e.name} (${e.sets?.length || 0} sets)`).join(', ')
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      return log.note || ''
+    }
+
+    // Last entry details
+    const lastLogWithContent = [...taskLogs]
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .find(l => (l.note && l.note.trim()) || l.amount !== null || l.payload || l.journalEntryId)
+
+    let entryLabel = ''
+    let entryText = ''
+    let entryDateStr = ''
+    
+    if (lastLogWithContent) {
+      entryDateStr = lastLogWithContent.date
+      const nameLower = template.name.toLowerCase()
+      const catLower = template.category.toLowerCase()
+      
+      if (nameLower.includes('weight') || catLower.includes('weight')) {
+        entryLabel = 'Weight'
+      } else if (nameLower.includes('journal') || catLower.includes('journal')) {
+        entryLabel = 'Journal'
+      } else if (nameLower.includes('read') || catLower.includes('read') || catLower.includes('learning')) {
+        entryLabel = 'Reading'
+      } else if (catLower.includes('finance') || catLower.includes('expense') || template.type === 'BILL') {
+        entryLabel = 'Expense'
+      } else if (nameLower.includes('water') || catLower.includes('water')) {
+        entryLabel = 'Water Intake'
+      } else {
+        entryLabel = template.name
+      }
+      
+      entryText = getLogValuePreview(lastLogWithContent)
+    }
+
+    const handleLastEntryClick = (e: React.MouseEvent) => {
+      if (!lastLogWithContent) return
+      e.stopPropagation()
+      onTabChange('journal')
+      router.push(`/?date=${lastLogWithContent.date}`)
+    }
+
+    return (
+      <div className="px-10 py-3 bg-slate-50/20 dark:bg-zinc-950/10 border-t border-[var(--color-border)]/20 text-xs text-[var(--color-text-muted)] space-y-3 transition-all duration-300">
+        {/* Row 1 — Primary Status */}
+        <div className={`grid gap-4 ${showStreak ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'}`}>
+          <div className="space-y-0.5">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Last Completed</span>
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <span className="text-xs font-semibold text-[var(--color-text-main)]">{lastCompletedMain}</span>
+              {lastCompletedSub && <span className="text-[10px] text-slate-400 dark:text-zinc-500">{lastCompletedSub}</span>}
+            </div>
+          </div>
+          
+          <div className="space-y-0.5">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Next Due</span>
+            <span className={`block text-xs ${nextDueColorClass}`}>{nextDueText}</span>
+          </div>
+
+          <div className="space-y-0.5">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Usually Done</span>
+            <span className="block text-xs font-semibold text-[var(--color-text-main)]">{usualTimeStr}</span>
+          </div>
+
+          <div className="space-y-0.5">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Completion Rate</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-xs font-semibold text-[var(--color-text-main)]">{completedMonth} / {expectedMonthCount}</span>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500">{monthlyCompletionRate}%</span>
+            </div>
+          </div>
+
+          {showStreak && (
+            <div className="space-y-0.5">
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Streak</span>
+              <span className="block text-xs font-semibold text-orange-500 dark:text-orange-400">🔥 {streakText}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Row 2 — Recent History */}
+        <div className="flex items-center gap-4 pt-1 border-t border-[var(--color-border)]/10">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">Recent</span>
+            <div className="flex items-center gap-1.5">
+              {recentDays.map((rd, i) => (
+                <div
+                  key={i}
+                  className={`flex flex-col items-center px-1.5 py-0.5 rounded text-center min-w-5 ${
+                    rd.isToday ? 'bg-slate-100 dark:bg-zinc-800 ring-1 ring-[var(--color-border)]/40 font-bold' : ''
+                  }`}
+                  title={rd.dateStr}
+                >
+                  <span className="text-[8px] font-bold text-slate-400 dark:text-zinc-650 leading-none">{rd.weekday}</span>
+                  <span className={`text-[11px] leading-tight ${rd.colorClass}`}>{rd.symbol}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Row 3 — Last Entry */}
+        {lastLogWithContent && (
+          <div className="pt-2 border-t border-[var(--color-border)]/15">
+            <button
+              type="button"
+              onClick={handleLastEntryClick}
+              className="text-left group flex items-baseline gap-2 max-w-full cursor-pointer hover:underline"
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 shrink-0">
+                {entryLabel}
+              </span>
+              <span className="text-xs text-[var(--color-text-main)] font-medium truncate block leading-tight max-w-[400px]">
+                {entryText ? `"${entryText}"` : '—'}
+              </span>
+              <span className="text-[10px] text-slate-400 dark:text-zinc-500 shrink-0 font-normal">
+                ({new Date(entryDateStr + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })})
+              </span>
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   // ── Timeline item card (unified flat style) ────────────────────────────────
   const renderTimelineItemCard = (occurrence: TimelineItem, index: number) => {
@@ -632,11 +895,9 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     }
     const colorBg = colorBgClasses[templateColor] || 'bg-zinc-500'
 
-    // Read status from optimistic state if available
-    const optimisticVal = optimisticStatuses[occurrence.id]
-    const isCanceled = optimisticVal ? optimisticVal.status === 'skipped' : occurrence.status === 'skipped'
-    const isPostponed = optimisticVal ? optimisticVal.status === 'postponed' : occurrence.status === 'postponed'
-    const isDone = optimisticVal ? (optimisticVal.completed && !isCanceled && !isPostponed) : (occurrence.completed && !isCanceled && !isPostponed)
+    const isCanceled = occurrence.status === 'skipped'
+    const isPostponed = occurrence.status === 'postponed'
+    const isDone = occurrence.completed && !isCanceled && !isPostponed
 
     // Status border color strip
     let statusIndicatorColor = colorBg
@@ -650,90 +911,117 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
       statusIndicatorColor = 'bg-[var(--color-external)]'
     }
 
+    const isExpanded = expandedTaskId === occurrence.templateId
+
     return (
-      <div
-        key={occurrence.id}
-        draggable={!isGoogleCalendar}
-        onDragStart={(e) => handleDragStart(e, index)}
-        onDragOver={handleDragOver}
-        onDrop={(e) => handleDrop(e, index)}
-        className={`flex items-center gap-3 px-3 py-1.5 transition-all duration-150 group relative hover:bg-[var(--color-accent)]/30 ${isGoogleCalendar ? '' : 'cursor-move'
-          } ${isDone ? 'opacity-65' : isCanceled || isPostponed ? 'opacity-40' : ''
-          }`}
-      >
-        {/* Left Indicator Strip inside card */}
-        <div className={`absolute left-0 top-0 bottom-0 w-1 ${statusIndicatorColor}`} />
-
-        {/* ── Custom Cycling Checkbox Component ── */}
-        <button
-          disabled={completingHabitId === occurrence.templateId}
-          onClick={() => cycleTaskStatus(occurrence)}
-          title={`Status: ${isDone ? 'Done' : isCanceled ? 'Canceled' : isPostponed ? 'Postponed' : 'Cleared'}. Click to cycle.`}
-          aria-label="Cycle task status"
-          className="shrink-0 w-6 h-6 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-90 disabled:opacity-50"
+      <div key={occurrence.id} className="flex flex-col border-b border-[var(--color-border)]/40 last:border-b-0">
+        <div
+          draggable={!isGoogleCalendar && allowDragIndex === index}
+          onDragStart={(e) => handleDragStart(e, index)}
+          onDragOver={handleDragOver}
+          onDrop={(e) => handleDrop(e, index)}
+          onClick={() => {
+            if (!isGoogleCalendar && occurrence.templateId) {
+              setExpandedTaskId(expandedTaskId === occurrence.templateId ? null : occurrence.templateId)
+            }
+          }}
+          className={`flex items-center gap-3 px-3 py-2.5 transition-all duration-150 group relative hover:bg-[var(--color-accent)]/30 ${
+            isGoogleCalendar ? '' : 'cursor-pointer'
+          } ${isDone ? 'opacity-65' : isCanceled || isPostponed ? 'opacity-40' : ''}`}
         >
-          <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-300 shadow-xs ${completingHabitId === occurrence.templateId ? 'bg-slate-100 dark:bg-zinc-800 border-[var(--color-border)]' :
-              isDone ? 'bg-[var(--color-completed)] border-[var(--color-completed)] text-white' :
-                isCanceled ? 'bg-[var(--color-overdue)] border-[var(--color-overdue)] text-white' :
-                  isPostponed ? 'bg-[var(--color-external)] border-[var(--color-external)] text-white' :
-                    'bg-[var(--color-bg-base)] border-[var(--color-border)] hover:border-[var(--color-primary)]'
-            }`}>
-            {completingHabitId === occurrence.templateId ? (
-              <span className="w-1.5 h-1.5 bg-[var(--color-primary)] rounded-full animate-ping" />
-            ) : isDone ? (
-              <Check className="w-3.5 h-3.5 animate-check-pop" />
-            ) : isCanceled ? (
-              <span className="text-[10px] font-black leading-none">✕</span>
-            ) : isPostponed ? (
-              <ArrowRightCircle className="w-3.5 h-3.5" />
-            ) : null}
-          </div>
-        </button>
+          {/* Left Indicator Strip inside card */}
+          <div className={`absolute left-0 top-0 bottom-0 w-1 ${statusIndicatorColor}`} />
 
-        {/* ── Category Icon ── */}
-        <div className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 ${isGoogleCalendar
-            ? 'bg-[var(--color-external)]/10 border-[var(--color-external)]/20 text-[var(--color-external)]'
-            : `${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`
-          }`}>
-          <Icon name={occurrence.icon || template?.icon || 'CheckSquare'} size={12} />
-        </div>
-
-        {/* ── Content ── */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-xs font-semibold leading-tight truncate ${isDone || isCanceled
-                ? 'line-through text-[var(--color-text-muted)]'
-                : 'text-[var(--color-text-main)]'
+          {/* ── Custom Cycling Checkbox Component ── */}
+          <button
+            disabled={completingHabitId === occurrence.templateId}
+            onClick={(e) => {
+              e.stopPropagation()
+              cycleTaskStatus(occurrence)
+            }}
+            title={`Status: ${isDone ? 'Done' : isCanceled ? 'Canceled' : isPostponed ? 'Postponed' : 'Cleared'}. Click to cycle.`}
+            aria-label="Cycle task status"
+            className="shrink-0 w-6 h-6 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-90 disabled:opacity-50"
+          >
+            <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-300 shadow-xs ${completingHabitId === occurrence.templateId ? 'bg-slate-100 dark:bg-zinc-800 border-[var(--color-border)]' :
+                isDone ? 'bg-[var(--color-completed)] border-[var(--color-completed)] text-white' :
+                  isCanceled ? 'bg-[var(--color-overdue)] border-[var(--color-overdue)] text-white' :
+                    isPostponed ? 'bg-[var(--color-external)] border-[var(--color-external)] text-white' :
+                      'bg-[var(--color-bg-base)] border-[var(--color-border)] hover:border-[var(--color-primary)]'
               }`}>
-              {occurrence.htmlLink ? (
-                <a href={occurrence.htmlLink} target="_blank" rel="noopener noreferrer"
-                  className="hover:underline inline-flex items-center gap-1">
-                  <span className="truncate">{occurrence.templateName}</span>
-                  <ExternalLink className="w-2.5 h-2.5 opacity-40 shrink-0" />
-                </a>
-              ) : occurrence.templateName}
-            </span>
-            {isGoogleCalendar && (
-              <span className="shrink-0 text-[8px] uppercase tracking-wider font-black px-1.5 py-0.5 rounded bg-[var(--color-external)]/10 text-[var(--color-external)] border border-[var(--color-external)]/20">
-                Google Calendar
-              </span>
-            )}
-            {isTimed && startTimeLabel && (
-              <span className={`shrink-0 text-[9px] font-mono font-bold px-1 py-0.5 rounded-sm border ${isGoogleCalendar
-                  ? 'text-[var(--color-external)] border-[var(--color-external)]/25 bg-[var(--color-external)]/5'
-                  : `${colorClasses.text} ${colorClasses.border} ${colorClasses.bg}`
-                }`}>
-                {startTimeLabel}
-                {estimatedDuration ? ` • ${estimatedDuration}m` : ''}
-              </span>
-            )}
-            {streak > 1 && !isDone && !isCanceled && (
-              <span className="shrink-0 flex items-center gap-0.5 text-[9px] font-extrabold text-orange-500 bg-orange-500/10 px-1 py-0.5 rounded-sm border border-orange-500/20" title={`${streak} day streak!`}>
-                🔥 {streak}
-              </span>
-            )}
+              {completingHabitId === occurrence.templateId ? (
+                <span className="w-1.5 h-1.5 bg-[var(--color-primary)] rounded-full animate-ping" />
+              ) : isDone ? (
+                <Check className="w-3.5 h-3.5 animate-check-pop" />
+              ) : isCanceled ? (
+                <span className="text-[10px] font-black leading-none">✕</span>
+              ) : isPostponed ? (
+                <ArrowRightCircle className="w-3.5 h-3.5" />
+              ) : null}
+            </div>
+          </button>
+
+          {/* ── Category Icon ── */}
+          <div className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 ${isGoogleCalendar
+              ? 'bg-[var(--color-external)]/10 border-[var(--color-external)]/20 text-[var(--color-external)]'
+              : `${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`
+            }`}>
+            <Icon name={occurrence.icon || template?.icon || 'CheckSquare'} size={12} />
           </div>
+
+          {/* ── Content ── */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-xs font-semibold leading-tight truncate ${isDone || isCanceled
+                  ? 'line-through text-[var(--color-text-muted)]'
+                  : 'text-[var(--color-text-main)]'
+                }`}>
+                {occurrence.htmlLink ? (
+                  <a href={occurrence.htmlLink} target="_blank" rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="hover:underline inline-flex items-center gap-1">
+                    <span className="truncate">{occurrence.templateName}</span>
+                    <ExternalLink className="w-2.5 h-2.5 opacity-40 shrink-0" />
+                  </a>
+                ) : occurrence.templateName}
+              </span>
+              {isGoogleCalendar && (
+                <span className="shrink-0 text-[8px] uppercase tracking-wider font-black px-1.5 py-0.5 rounded bg(--color-external)/10 text-[var(--color-external)] border border-[var(--color-external)]/20">
+                  Google Calendar
+                </span>
+              )}
+              {isTimed && startTimeLabel && (
+                <span className={`shrink-0 text-[9px] font-mono font-bold px-1 py-0.5 rounded-sm border ${isGoogleCalendar
+                    ? 'text-[var(--color-external)] border-[var(--color-external)]/25 bg-[var(--color-external)]/5'
+                    : `${colorClasses.text} ${colorClasses.border} ${colorClasses.bg}`
+                  }`}>
+                  {startTimeLabel}
+                  {estimatedDuration ? ` • ${estimatedDuration}m` : ''}
+                </span>
+              )}
+              {streak > 1 && !isDone && !isCanceled && (
+                <span className="shrink-0 flex items-center gap-0.5 text-[9px] font-extrabold text-orange-500 bg-orange-500/10 px-1 py-0.5 rounded-sm border border-orange-500/25" title={`${streak} day streak!`}>
+                  🔥 {streak}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* ── Reorder Grip Handle ── */}
+          {!isGoogleCalendar && (
+            <button
+              type="button"
+              onMouseEnter={() => setAllowDragIndex(index)}
+              onMouseLeave={() => setAllowDragIndex(null)}
+              onClick={(e) => e.stopPropagation()}
+              className="shrink-0 p-1 cursor-grab active:cursor-grabbing text-slate-300 dark:text-zinc-600 hover:text-slate-500 transition-colors ml-auto flex items-center"
+              title="Drag to reorder"
+            >
+              <GripVertical size={14} />
+            </button>
+          )}
         </div>
+        {isExpanded && occurrence.templateId && renderTaskHistory(occurrence.templateId)}
       </div>
     )
   }
@@ -856,6 +1144,50 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                     disabled={isCreatingQuickTask}
                   />
                 </div>
+                
+                {/* Color Picker popover */}
+                <div className="relative shrink-0 flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowColorPicker(!showColorPicker)}
+                    className={`w-5 h-5 rounded-full border border-slate-350 dark:border-zinc-700 transition-all hover:scale-110 cursor-pointer ${
+                      quickTaskColor === 'red' ? 'bg-red-500' :
+                      quickTaskColor === 'orange' ? 'bg-orange-500' :
+                      quickTaskColor === 'amber' ? 'bg-amber-500' :
+                      quickTaskColor === 'green' ? 'bg-green-500' :
+                      quickTaskColor === 'blue' ? 'bg-blue-500' :
+                      quickTaskColor === 'purple' ? 'bg-purple-500' :
+                      quickTaskColor === 'pink' ? 'bg-pink-500' :
+                      'bg-zinc-500'
+                    }`}
+                    title="Choose task color"
+                  />
+                  {showColorPicker && (
+                    <div className="absolute bottom-8 right-0 bg-[var(--color-bg-surface)] border border-[var(--color-border)] p-2 rounded-lg shadow-lg flex gap-1.5 z-50">
+                      {(['blue', 'green', 'amber', 'orange', 'red', 'purple', 'pink', 'zinc'] as const).map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => {
+                            setQuickTaskColor(c)
+                            setShowColorPicker(false)
+                          }}
+                          className={`w-4 h-4 rounded-full hover:scale-115 cursor-pointer ${
+                            c === 'red' ? 'bg-red-500' :
+                            c === 'orange' ? 'bg-orange-500' :
+                            c === 'amber' ? 'bg-amber-500' :
+                            c === 'green' ? 'bg-green-500' :
+                            c === 'blue' ? 'bg-blue-500' :
+                            c === 'purple' ? 'bg-purple-500' :
+                            c === 'pink' ? 'bg-pink-500' :
+                            'bg-zinc-500'
+                          } ${quickTaskColor === c ? 'ring-2 ring-white border border-slate-900' : ''}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <Button
                   size="sm"
                   onClick={handleCreateQuickTask}
@@ -904,51 +1236,89 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                   ))}
                 </div>
 
-                {/* Office Time Pickers */}
-                {workStatus === 'office' && (
-                  <div className="space-y-2 pt-1">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <label className="block text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">In-Time</label>
-                        <input
-                          type="time"
-                          value={inTime}
-                          onChange={(e) => setInTime(e.target.value)}
-                          className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">Out-Time</label>
-                        <input
-                          type="time"
-                          value={outTime}
-                          onChange={(e) => setOutTime(e.target.value)}
-                          className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
-                        />
-                      </div>
+                {/* Inputs based on workStatus and loggingMode */}
+                {workStatus !== 'cleared' && (
+                  <div className="space-y-3">
+                    {/* Logging Mode Selector */}
+                    <div className="flex bg-[var(--color-bg-base)] p-0.5 rounded-[9px] border border-[var(--color-border)]">
+                      {(['time', 'manual'] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => {
+                            if (mode === 'manual' && inTime && outTime) {
+                              setManualHours(computeOfficeHours(inTime, outTime))
+                            }
+                            setLoggingMode(mode)
+                          }}
+                          className={`flex-1 py-1 text-[10px] font-bold rounded-md capitalize transition-all duration-150 cursor-pointer ${
+                            loggingMode === mode
+                              ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-xs border border-[var(--color-border)]'
+                              : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                          }`}
+                        >
+                          {mode === 'time' ? 'Time-Based' : 'Manual'}
+                        </button>
+                      ))}
                     </div>
-                    <div className="text-[10px] text-right font-semibold text-[var(--color-text-muted)] pr-0.5">
-                      Calculated: <span className="text-[var(--color-text-main)] font-mono">{computeOfficeHours(inTime, outTime)}h</span>
-                    </div>
-                  </div>
-                )}
 
-                {/* WFH Hours Inputs */}
-                {workStatus === 'wfh' && (
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex justify-between items-center text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
-                      <span>WFH Hours</span>
-                      <span className="text-xs font-mono text-[var(--color-text-main)] font-bold">{wfhHours}h</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="16"
-                      step="0.5"
-                      value={wfhHours}
-                      onChange={(e) => setWfhHours(parseFloat(e.target.value))}
-                      className="w-full h-1.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                    />
+                    {/* Mode A: Time-Based Inputs */}
+                    {loggingMode === 'time' && (
+                      <div className="space-y-2 pt-1 animate-fade-in">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="block text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">Start Time</label>
+                            <input
+                              type="time"
+                              value={inTime}
+                              onChange={(e) => setInTime(e.target.value)}
+                              className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="block text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">End Time</label>
+                            <input
+                              type="time"
+                              value={outTime}
+                              onChange={(e) => setOutTime(e.target.value)}
+                              className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
+                            />
+                          </div>
+                        </div>
+                        <div className="text-[10px] text-right font-semibold text-[var(--color-text-muted)] pr-0.5 flex justify-between items-center">
+                          <span>Status:</span>
+                          {!outTime ? (
+                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 animate-pulse">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              Session Active
+                            </span>
+                          ) : (
+                            <span className="text-[var(--color-text-main)] font-mono">
+                              Calculated: {computeOfficeHours(inTime, outTime)}h
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mode B: Manual Input */}
+                    {loggingMode === 'manual' && (
+                      <div className="space-y-1.5 pt-1 animate-fade-in">
+                        <div className="flex justify-between items-center text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
+                          <span>Total Hours Worked</span>
+                          <span className="text-xs font-mono text-[var(--color-text-main)] font-bold">{manualHours}h</span>
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          max="24"
+                          step="0.5"
+                          value={manualHours}
+                          onChange={(e) => setManualHours(parseFloat(e.target.value) || 0)}
+                          className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 

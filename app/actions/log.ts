@@ -239,6 +239,8 @@ export async function logWorkPresence(data: {
   inTime?: string | null
   outTime?: string | null
   hours?: number | null
+  loggingMode?: 'time' | 'manual' | null
+  manualHours?: number | null
 }) {
   try {
     const { user } = await requireOwnership('activityTemplate', data.templateId)
@@ -267,7 +269,9 @@ export async function logWorkPresence(data: {
         inTime: data.inTime || null,
         outTime: data.outTime || null,
         isWfh: data.status === 'wfh',
-        hours: data.hours || 0
+        hours: data.hours || 0,
+        loggingMode: data.loggingMode || null,
+        manualHours: data.manualHours || null
       }
 
       await service.logActivity({

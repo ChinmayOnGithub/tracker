@@ -1,11 +1,11 @@
 "use client"
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import { useStore } from '@/lib/store/store'
 import { ActivityTemplate, ActivityLog, Note, TimelineItem, AnalyzedTemplate } from '@/types'
 import { CalendarDayDTO } from '@/modules/calendar/dto/CalendarDayDTO'
 import { analyzeRecurrence } from '@/lib/recurrence'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
-import { markComplete, updateLog, deleteLog, postponeOneTimeTask, unpostponeOneTimeTask } from '@/app/actions/log'
 import { createCalendarEventAction, updateCalendarEventAction, deleteCalendarEventAction } from '@/app/actions/calendar'
 import { Icon } from './Icon'
 import { X, Sparkles, BookOpen, Search, Plus, Clock, Check, ArrowRightCircle, Edit2, Trash2, Settings, Briefcase } from 'lucide-react'
@@ -38,6 +38,10 @@ interface DayLogsModalProps {
 
 const dayDtoCache: Record<string, CalendarDayDTO> = {}
 
+function invalidateCache(dateStr: string) {
+  delete dayDtoCache[dateStr]
+}
+
 export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   isOpen,
   onClose,
@@ -50,6 +54,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   mode = 'modal',
 }) => {
   const router = useRouter()
+  const { cycleTaskStatusAction, logWorkPresenceAction, upsertJournalAction } = useStore()
 
   // ── Compute timeline from props (instant, no API) ───────────────────────
   const analyzedTemplates: AnalyzedTemplate[] = useMemo(() => {
@@ -174,7 +179,6 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   // ── Tab / UI State ──────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<'activities' | 'notes'>(initialTab || 'activities')
   const [completingHabitId, setCompletingHabitId] = useState<string | null>(null)
-  const [optimisticStatuses, setOptimisticStatuses] = useState<Record<string, { completed: boolean; status?: string }>>({})
 
   // Scheduler form state
   const [isScheduling, setIsScheduling] = useState(false)
@@ -286,8 +290,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
         ? computeOfficeHours(inTime, outTime)
         : workStatus === 'wfh' ? wfhHours : 0
 
-      const { logWorkPresence } = await import('@/app/actions/log')
-      const res = await logWorkPresence({
+      await logWorkPresenceAction({
         templateId: workTemplateId,
         date: dateStr,
         status: workStatus,
@@ -295,11 +298,8 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
         outTime: workStatus === 'office' ? outTime : null,
         hours: computedHours
       })
-      if (res.success) {
-        setIsEditingWork(false)
-        fetchDayDetails()
-        router.refresh()
-      }
+      invalidateCache(dateStr)
+      setIsEditingWork(false)
     } catch (err) {
       console.error('Failed to log work presence:', err)
     } finally {
@@ -311,14 +311,11 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
     if (!instantContent.trim() || isSavingJournal) return
     setIsSavingJournal(true)
     try {
-      const { upsertJournalEntry } = await import('@/app/actions/journal')
-      const res = await upsertJournalEntry(dateStr, {
+      await upsertJournalAction(dateStr, {
         content: instantContent.trim()
       })
-      if (res.success) {
-        setInstantContent('')
-        router.refresh()
-      }
+      invalidateCache(dateStr)
+      setInstantContent('')
     } catch (err) {
       console.error('Failed to save instant journal:', err)
     } finally {
@@ -341,89 +338,12 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   const cycleTaskStatus = async (occurrence: TimelineItem) => {
     if (!occurrence.templateId) return
 
-    const optimisticVal = optimisticStatuses[occurrence.id]
-    const currentCompleted = optimisticVal ? optimisticVal.completed : occurrence.completed
-    const currentStatus = optimisticVal ? optimisticVal.status : occurrence.status
-
-    const isCanceled = currentStatus === 'skipped'
-    const isPostponed = currentStatus === 'postponed'
-    const isDone = currentCompleted && !isCanceled && !isPostponed
-
-    let nextCompleted = false
-    let nextStatus: string | undefined = undefined
-
-    if (!currentCompleted && !isCanceled && !isPostponed) {
-      const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-      nextCompleted = true
-      nextStatus = matched?.template.category === 'finance' ? 'paid' : 'done'
-    } else if (isDone) {
-      nextCompleted = true
-      nextStatus = 'skipped'
-    } else if (isCanceled) {
-      const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-      const isDaily = matched?.template.recurrenceType === 'daily'
-      if (isDaily) {
-        nextCompleted = false
-        nextStatus = undefined
-      } else {
-        nextCompleted = true
-        nextStatus = 'postponed'
-      }
-    } else if (isPostponed) {
-      nextCompleted = false
-      nextStatus = undefined
-    }
-
-    setOptimisticStatuses(prev => ({
-      ...prev,
-      [occurrence.id]: { completed: nextCompleted, status: nextStatus }
-    }))
-
     setCompletingHabitId(occurrence.templateId)
     try {
-      if (!currentCompleted && !isCanceled && !isPostponed) {
-        const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-        const status = matched?.template.category === 'finance' ? 'paid' : 'done'
-        const amount = matched?.template.amount
-        await markComplete(occurrence.templateId, dateStr, status, amount ?? null, null)
-      } else if (isDone) {
-        if (occurrence.logId) {
-          await updateLog(occurrence.logId, { status: 'skipped' })
-        } else {
-          await markComplete(occurrence.templateId, dateStr, 'skipped')
-        }
-      } else if (isCanceled) {
-        const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-        const isDaily = matched?.template.recurrenceType === 'daily'
-        const isOneTime = matched?.template.recurrenceType === 'one_time'
-        if (isDaily) {
-          if (occurrence.logId) await deleteLog(occurrence.logId)
-        } else if (isOneTime) {
-          await postponeOneTimeTask(occurrence.templateId, dateStr, occurrence.logId)
-        } else {
-          if (occurrence.logId) {
-            await updateLog(occurrence.logId, { status: 'postponed' })
-          } else {
-            await markComplete(occurrence.templateId, dateStr, 'postponed')
-          }
-        }
-      } else if (isPostponed) {
-        const matched = analyzedTemplates.find(t => t.template.id === occurrence.templateId)
-        const isOneTime = matched?.template.recurrenceType === 'one_time'
-        if (isOneTime && occurrence.logId) {
-          await unpostponeOneTimeTask(occurrence.templateId, occurrence.logId, dateStr)
-        } else if (occurrence.logId) {
-          await deleteLog(occurrence.logId)
-        }
-      }
-      router.refresh()
+      await cycleTaskStatusAction(occurrence, dateStr)
+      invalidateCache(dateStr)
     } catch (err) {
       console.error('Failed to cycle task status:', err)
-      setOptimisticStatuses(prev => {
-        const copy = { ...prev }
-        delete copy[occurrence.id]
-        return copy
-      })
     } finally {
       setCompletingHabitId(null)
     }
@@ -537,10 +457,9 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
     }
     const colorBg = colorBgClasses[templateColor] || 'bg-zinc-500'
 
-    const optimisticVal = optimisticStatuses[occurrence.id]
-    const isCanceled = optimisticVal ? optimisticVal.status === 'skipped' : occurrence.status === 'skipped'
-    const isPostponed = optimisticVal ? optimisticVal.status === 'postponed' : occurrence.status === 'postponed'
-    const isDone = optimisticVal ? (optimisticVal.completed && !isCanceled && !isPostponed) : (occurrence.completed && !isCanceled && !isPostponed)
+    const isCanceled = occurrence.status === 'skipped'
+    const isPostponed = occurrence.status === 'postponed'
+    const isDone = occurrence.completed && !isCanceled && !isPostponed
 
     let statusIndicatorColor = colorBg
     if (isGoogleCalendar) {

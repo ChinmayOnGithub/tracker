@@ -73,6 +73,7 @@ export interface ActivityTemplate {
   logs?: ActivityLog[]
   createdAt: Date
   updatedAt: Date
+  effectiveFrom?: Date | string
 }
 
 export interface ActivityLog {

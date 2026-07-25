@@ -1,19 +1,9 @@
 "use client"
 
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { Plus, Minus, Trash2, TrendingDown, TrendingUp } from 'lucide-react'
-import { logWeight, deleteWeightRecord } from '@/app/actions/weight'
+import { useStore, WeightRecord } from '@/lib/store/store'
 import { Input, Button, Card } from '@/design-system'
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-interface WeightRecord {
-  id: string
-  date: Date | string
-  weight: number
-  notes: string | null
-}
 
 interface WeightPanelProps {
   initialRecords: WeightRecord[]
@@ -305,10 +295,10 @@ function StatsPill({ label, value, subText }: { label: string; value: string; su
 // ---------------------------------------------------------------------------
 interface LogFormProps {
   todayRecord: WeightRecord | null
-  onLogged: (record: WeightRecord) => void
+  _onLogged: (record: WeightRecord) => void
 }
 
-function LogForm({ todayRecord, onLogged }: LogFormProps) {
+function LogForm({ todayRecord, _onLogged }: LogFormProps) {
   const [weight, setWeight] = useState(todayRecord ? String(todayRecord.weight) : '')
   const [notes, setNotes] = useState(todayRecord?.notes ?? '')
   const [logDate, setLogDate] = useState(todayYMD())
@@ -323,18 +313,22 @@ function LogForm({ todayRecord, onLogged }: LogFormProps) {
     }
   }
 
+  const { logWeightAction } = useStore()
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const w = parseFloat(weight)
     if (isNaN(w) || w <= 0) return
     setSaving(true)
-    const res = await logWeight(logDate, w, notes || null)
-    if (res.success && res.record) {
-      onLogged(res.record as WeightRecord)
+    try {
+      await logWeightAction(logDate, w, notes || null)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   return (
@@ -417,7 +411,13 @@ function LogForm({ todayRecord, onLogged }: LogFormProps) {
 // Main Panel
 // ---------------------------------------------------------------------------
 export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
-  const [records, setRecords] = useState<WeightRecord[]>(initialRecords)
+  const { state, initialize, deleteWeightAction } = useStore()
+
+  useEffect(() => {
+    initialize({ weightRecords: initialRecords })
+  }, [initialRecords, initialize])
+
+  const records = state.weightRecords.length > 0 ? state.weightRecords : initialRecords
   const [period, setPeriod] = useState<'30D' | '60D' | '90D' | 'All'>('30D')
   const [heightCm, setHeightCm] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -465,19 +465,12 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
     : bmi < 30.0 ? 'Overweight'
     : 'Obese'
 
-  const handleLogged = useCallback((record: WeightRecord) => {
-    setRecords(prev => {
-      const exists = prev.findIndex(r => toYMD(r.date) === toYMD(record.date))
-      if (exists >= 0) {
-        const copy = [...prev]; copy[exists] = record; return copy
-      }
-      return [...prev, record].sort((a, b) => toYMD(a.date).localeCompare(toYMD(b.date)))
-    })
+  const handleLogged = useCallback((_record: WeightRecord) => {
+    // No-op since store handles state updates
   }, [])
 
   const handleDelete = async (id: string) => {
-    await deleteWeightRecord(id)
-    setRecords(prev => prev.filter(r => r.id !== id))
+    await deleteWeightAction(id)
   }
 
   return (

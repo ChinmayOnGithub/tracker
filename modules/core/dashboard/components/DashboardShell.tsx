@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   CalendarDays,
@@ -44,6 +45,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
+  const router = useRouter()
 
   // Module visibility config (Safe hydration check on mount)
   const [visibleModules, setVisibleModules] = React.useState<Record<string, boolean>>(() => {
@@ -163,6 +165,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   onTabChange(item.id)
                   setIsSidebarOpen(false)
                 }}
+                onMouseEnter={() => {
+                  const route = item.id === 'today' ? '/' : `/${item.id}`
+                  router.prefetch(route)
+                }}
                 className={`w-full flex items-center gap-3 px-3 py-1.75 text-xs font-medium rounded-[var(--radius-md)] transition-all duration-[var(--motion-duration-fast)] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] ${isActive
                     ? 'bg-[var(--color-accent)] text-[var(--color-text-main)] border border-[var(--color-border)]'
                     : 'text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]/50 hover:text-[var(--color-text-main)] border border-transparent'
@@ -242,6 +248,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                 onTabChange(item.id)
                 setIsMoreOpen(false)
               }}
+              onMouseEnter={() => {
+                const route = item.id === 'today' ? '/' : `/${item.id}`
+                router.prefetch(route)
+              }}
               className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'
                 }`}
             >
@@ -292,6 +302,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                     onClick={() => {
                       onTabChange(item.id)
                       setIsMoreOpen(false)
+                    }}
+                    onMouseEnter={() => {
+                      const route = item.id === 'today' ? '/' : `/${item.id}`
+                      router.prefetch(route)
                     }}
                     icon={<IconComponent className="w-4.5 h-4.5" />}
                     className="w-full justify-start"

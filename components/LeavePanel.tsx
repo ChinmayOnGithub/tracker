@@ -1,10 +1,7 @@
 "use client"
 
 import React, { useState, useTransition, useEffect } from 'react'
-import {
-  createLeaveRequest, updateLeaveStatus, deleteLeaveRecord, ensureLeaveAllowances, updateLeaveAllowance
-} from '@/app/actions/leave'
-import { useRouter } from 'next/navigation'
+import { useStore } from '@/lib/store/store'
 import {
   CalendarX, Plus, Trash2, CheckCircle2, Clock, XCircle, TrendingDown, ChevronDown
 } from 'lucide-react'
@@ -94,7 +91,7 @@ function daysBetween(start: string, end: string) {
 function BalanceCard({
   leaveType, allowance, used, year
 }: { leaveType: LeaveType; allowance: number; used: number; year: number }) {
-  const router = useRouter()
+  const { updateLeaveAllowanceAction } = useStore()
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(String(allowance))
   const [isSaving, setIsSaving] = useState(false)
@@ -114,10 +111,7 @@ function BalanceCard({
       return
     }
     setIsSaving(true)
-    const res = await updateLeaveAllowance(leaveType, year, val)
-    if (res.success) {
-      router.refresh()
-    }
+    await updateLeaveAllowanceAction(leaveType, year, val)
     setIsSaving(false)
     setIsEditing(false)
   }
@@ -314,9 +308,14 @@ function RequestForm({ onSubmit, loading }: RequestFormProps) {
 export const LeavePanel: React.FC<LeavePanelProps> = ({
   leaveRecords: initial, leaveAllowances, currentYear
 }) => {
-  const router = useRouter()
-  const [records, setRecords] = useState<LeaveRecord[]>(initial)
-  const [isPending, startTransition] = useTransition()
+  const { state, initialize, createLeaveRecordAction, updateLeaveRecordAction, deleteLeaveRecordAction, ensureLeaveAllowancesAction } = useStore()
+
+  useEffect(() => {
+    initialize({ leaveRecords: initial, leaveAllowances: leaveAllowances })
+  }, [initial, leaveAllowances, initialize])
+
+  const records = (state.leaveRecords.length > 0 ? state.leaveRecords : initial)
+  const [isPending, _startTransition] = useTransition()
   const [submitting, setSubmitting] = useState(false)
 
   const [enabledTypes, setEnabledTypes] = useState<LeaveType[]>(() => {
@@ -360,30 +359,25 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
     leaveType: LeaveType; startDate: string; endDate: string; totalDays: number; notes: string
   }) => {
     setSubmitting(true)
-    const res = await createLeaveRequest(data as Parameters<typeof createLeaveRequest>[0])
-    if (res.success && res.record) {
-      setRecords(prev => [res.record! as LeaveRecord, ...prev])
+    try {
+      await createLeaveRecordAction(data)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSubmitting(false)
     }
-    setSubmitting(false)
   }
 
   const handleDelete = async (id: string) => {
-    await deleteLeaveRecord(id)
-    setRecords(prev => prev.filter(r => r.id !== id))
+    await deleteLeaveRecordAction(id)
   }
 
   const handleStatusChange = async (id: string, status: LeaveStatus) => {
-    startTransition(async () => {
-      const res = await updateLeaveStatus(id, status as import('@prisma/client').LeaveStatus)
-      if (res.success) {
-        setRecords(prev => prev.map(r => r.id === id ? { ...r, status } : r))
-      }
-    })
+    await updateLeaveRecordAction(id, { status })
   }
 
   const handleSeedAllowances = async () => {
-    await ensureLeaveAllowances(currentYear)
-    router.refresh()
+    await ensureLeaveAllowancesAction(currentYear)
   }
 
   return (

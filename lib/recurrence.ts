@@ -52,11 +52,38 @@ export function getTodayDateStr(): string {
   return `${year}-${month}-${day}`
 }
 
+export function getEffectiveFromStr(effectiveFrom?: Date | string | null): string | null {
+  if (!effectiveFrom) return null
+  const d = (effectiveFrom instanceof Date) ? effectiveFrom : new Date(effectiveFrom)
+  if (isNaN(d.getTime())) return null
+  return formatUTCDate(d)
+}
+
+export function isOccurrenceValidForDate(template: ActivityTemplate, dateStr: string): boolean {
+  if (!template.effectiveFrom) return true
+  const effStr = getEffectiveFromStr(template.effectiveFrom)
+  if (!effStr) return true
+  return dateStr >= effStr
+}
+
 export function analyzeRecurrence(
   template: ActivityTemplate,
   logs: ActivityLog[],
   todayStr: string = getTodayDateStr()
 ): RecurrenceAnalysis {
+  // Check if todayStr is before the effectiveFrom date
+  if (!isOccurrenceValidForDate(template, todayStr)) {
+    return {
+      lastCompletedDate: null,
+      nextDueDate: null,
+      overdue: false,
+      daysSinceLast: null,
+      monthsSinceLast: null,
+      streak: 0,
+      statusMessage: 'Not active'
+    }
+  }
+
   // Sort all logs newest first to find the latest state
   const sortedLogs = [...logs].sort((a, b) => b.date.localeCompare(a.date))
   const latestLog = sortedLogs.length > 0 ? sortedLogs[0] : null

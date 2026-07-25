@@ -16,23 +16,22 @@ export default async function Page() {
 
   const currentYear = new Date().getFullYear()
 
-  const [leaveRecordsRaw, leaveAllowancesRaw] = await Promise.all([
-    db.leaveRecord.findMany({
-      where: {
-        userId: loggedUser.id,
-        deletedAt: null,
-        startDate: {
-          gte: new Date(`${currentYear}-01-01`),
-          lte: new Date(`${currentYear}-12-31`),
-        },
+  const leaveRecordsRaw = await db.leaveRecord.findMany({
+    where: {
+      userId: loggedUser.id,
+      deletedAt: null,
+      startDate: {
+        gte: new Date(`${currentYear}-01-01`),
+        lte: new Date(`${currentYear}-12-31`),
       },
-      orderBy: { startDate: 'desc' },
-    }),
-    db.leaveAllowance.findMany({
-      where: { userId: loggedUser.id, year: currentYear },
-      orderBy: { leaveType: 'asc' },
-    }),
-  ])
+    },
+    orderBy: { startDate: 'desc' },
+  })
+
+  const leaveAllowancesRaw = await db.leaveAllowance.findMany({
+    where: { userId: loggedUser.id, year: currentYear },
+    orderBy: { leaveType: 'asc' },
+  })
 
   const leaveRecords = leaveRecordsRaw.map(r => ({
     ...r,

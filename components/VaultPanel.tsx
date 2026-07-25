@@ -34,6 +34,7 @@ import {
 } from '@/app/actions/vault'
 import type { VaultItem, VaultBreadcrumb } from '@/app/actions/vault'
 import { Modal, Input, Button, Card, EmptyState, SkeletonWidget, SearchInput } from '@/design-system'
+import { writeQueue } from '@/lib/store/write-queue'
 
 // ─── File Type Helpers (use mimeGroup from DB — no decryption needed) ─────────
 
@@ -116,7 +117,7 @@ export function VaultPanel() {
   const [renamingItem, setRenamingItem] = useState<VaultItem | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [deletingItem, setDeletingItem] = useState<VaultItem | null>(null)
-  const [actionLoading, setActionLoading] = useState(false)
+  const [actionLoading, _setActionLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   // Drag state
@@ -274,66 +275,103 @@ export function VaultPanel() {
 
   const handleCreateFolder = useCallback(async () => {
     if (!newFolderName.trim()) return
-    setActionLoading(true)
-    setErrorMessage(null)
-    try {
-      const res = await createVaultFolder(newFolderName.trim(), currentFolderId)
-      if (res.success) {
-        setNewFolderName('')
-        setShowNewFolder(false)
-        fetchItems()
-      } else {
-        setErrorMessage(res.error || 'Failed to create folder')
-      }
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Error creating folder')
-    } finally {
-      setActionLoading(false)
+    const folderName = newFolderName.trim()
+    const previousItems = [...items]
+
+    // Create optimistic folder item
+    const tempItem: VaultItem = {
+      id: `temp-f-${Date.now()}`,
+      name: folderName,
+      searchName: folderName.toLowerCase(),
+      isFolder: true,
+      parentId: currentFolderId,
+      mimeGroup: null,
+      extension: null,
+      fileSize: null,
+      isFavorite: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     }
-  }, [newFolderName, currentFolderId, fetchItems])
+
+    setItems(prev => [tempItem, ...prev])
+    setNewFolderName('')
+    setShowNewFolder(false)
+    setErrorMessage(null)
+
+    writeQueue.add({
+      id: `vault-folder-${Date.now()}`,
+      dedupKey: `vault-folder-${folderName}`,
+      run: async () => {
+        const res = await createVaultFolder(folderName, currentFolderId)
+        if (res.success) {
+          fetchItems()
+        }
+        return res
+      },
+      rollback: () => {
+        setItems(previousItems)
+        setErrorMessage('Failed to create folder')
+      }
+    })
+  }, [newFolderName, currentFolderId, items, fetchItems])
 
   // ─── Rename ───────────────────────────────────────────────────────
 
   const handleRename = useCallback(async () => {
     if (!renamingItem || !renameValue.trim()) return
-    setActionLoading(true)
+    const newName = renameValue.trim()
+    const targetId = renamingItem.id
+    const previousItems = [...items]
+
+    setItems(prev => prev.map(item => item.id === targetId ? { ...item, name: newName } : item))
+    setRenamingItem(null)
+    setRenameValue('')
     setErrorMessage(null)
-    try {
-      const res = await renameVaultItem(renamingItem.id, renameValue.trim())
-      if (res.success) {
-        setRenamingItem(null)
-        setRenameValue('')
-        fetchItems()
-      } else {
-        setErrorMessage(res.error || 'Failed to rename item')
+
+    writeQueue.add({
+      id: `vault-rename-${targetId}-${Date.now()}`,
+      dedupKey: `vault-rename-${targetId}`,
+      run: async () => {
+        const res = await renameVaultItem(targetId, newName)
+        if (res.success) {
+          fetchItems()
+        }
+        return res
+      },
+      rollback: () => {
+        setItems(previousItems)
+        setErrorMessage('Failed to rename item')
       }
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Error renaming item')
-    } finally {
-      setActionLoading(false)
-    }
-  }, [renamingItem, renameValue, fetchItems])
+    })
+  }, [renamingItem, renameValue, items, fetchItems])
 
   // ─── Delete ───────────────────────────────────────────────────────
 
   const handleDelete = useCallback(async () => {
     if (!deletingItem) return
-    setActionLoading(true)
+    const targetId = deletingItem.id
+    const previousItems = [...items]
+
+    setItems(prev => prev.filter(item => item.id !== targetId))
+    setDeletingItem(null)
     setErrorMessage(null)
-    try {
-      const res = await deleteVaultItem(deletingItem.id)
-      if (res.success) {
-        setDeletingItem(null)
-        fetchItems()
-      } else {
-        setErrorMessage(res.error || 'Failed to delete item')
+
+    writeQueue.add({
+      id: `vault-delete-${targetId}-${Date.now()}`,
+      dedupKey: `vault-delete-${targetId}`,
+      run: async () => {
+        const res = await deleteVaultItem(targetId)
+        if (res.success) {
+          fetchItems()
+        }
+        return res
+      },
+      rollback: () => {
+        setItems(previousItems)
+        setErrorMessage('Failed to delete item')
       }
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Error deleting item')
-    } finally {
-      setActionLoading(false)
-    }
-  }, [deletingItem, fetchItems])
+    })
+  }, [deletingItem, items, fetchItems])
 
   // ─── Download ─────────────────────────────────────────────────────
 

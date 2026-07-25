@@ -1,36 +1,60 @@
 "use client"
 
-import React, { useContext, ComponentProps } from 'react'
+import React, { useContext, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarDataContext } from './DashboardLayout'
 import { TodayDashboard } from './TodayDashboard'
-import { ActivityTemplate } from '@/types'
-
-type TodayDashboardProps = ComponentProps<typeof TodayDashboard>
+import { ActivityTemplate, ActivityLog, Note, TimelineItem, AnalyzedTemplate } from '@/types'
+import { useStore, JournalEntry, LeaveRecord, LeaveAllowance, WeightRecord } from '@/lib/store/store'
+import { analyzeRecurrence } from '@/lib/recurrence'
 
 interface TodayDashboardWrapperProps {
-  analyzedTemplates: TodayDashboardProps['analyzedTemplates']
-  logs: TodayDashboardProps['logs']
-  notes: TodayDashboardProps['_notes']
-  todayStr: TodayDashboardProps['todayStr']
-  journalEntries: TodayDashboardProps['journalEntries']
-  leaveRecords: TodayDashboardProps['leaveRecords']
-  leaveAllowances: TodayDashboardProps['leaveAllowances']
-  weightRecords: TodayDashboardProps['weightRecords']
+  analyzedTemplates: AnalyzedTemplate[]
+  logs: ActivityLog[]
+  notes: Note[]
+  todayStr: string
+  journalEntries: JournalEntry[]
+  leaveRecords: LeaveRecord[]
+  leaveAllowances: LeaveAllowance[]
+  weightRecords: WeightRecord[]
 }
 
 export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
-  analyzedTemplates,
-  logs,
-  notes,
+  analyzedTemplates: initialAnalyzedTemplates,
+  logs: initialLogs,
+  notes: initialNotes,
   todayStr,
-  journalEntries,
-  leaveRecords,
-  leaveAllowances,
-  weightRecords,
+  journalEntries: initialJournalEntries,
+  leaveRecords: initialLeaveRecords,
+  leaveAllowances: initialLeaveAllowances,
+  weightRecords: initialWeightRecords,
 }) => {
   const router = useRouter()
   const context = useContext(CalendarDataContext)
+  const { state, initialize, cycleTaskStatusAction } = useStore()
+
+  // Initialize store with server-fetched props
+  useEffect(() => {
+    const templates = initialAnalyzedTemplates.map(t => t.template)
+    initialize({
+      templates,
+      logs: initialLogs,
+      notes: initialNotes,
+      journalEntries: initialJournalEntries,
+      leaveRecords: initialLeaveRecords,
+      leaveAllowances: initialLeaveAllowances,
+      weightRecords: initialWeightRecords,
+    })
+  }, [
+    initialAnalyzedTemplates,
+    initialLogs,
+    initialNotes,
+    initialJournalEntries,
+    initialLeaveRecords,
+    initialLeaveAllowances,
+    initialWeightRecords,
+    initialize,
+  ])
 
   if (!context) {
     throw new Error('TodayDashboardWrapper must be rendered inside a DashboardLayout')
@@ -42,41 +66,54 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     router.push(tabId === 'today' ? '/' : `/${tabId}`)
   }
 
-  // Handle local mark complete wrapper
-  const onMarkHabitComplete = async (template: ActivityTemplate) => {
-    const status = template.category === 'finance' ? 'paid' : 'done'
-    const amount = template.amount
-    const { markComplete } = await import('@/app/actions/log')
-    await markComplete(template.id, todayStr, status, amount, null)
-
-    // Route Redirections
-    if (template.type === 'JOURNAL') {
-      router.push('/journal')
-    } else if (template.type === 'LEAVE') {
-      router.push('/leave')
-    } else if (template.type === 'PERSONAL' && (template.name.toLowerCase().includes('weight') || template.category === 'health')) {
-      router.push('/weight')
+  // Compute analyzedTemplates dynamically from the store state
+  const analyzedTemplates = useMemo(() => {
+    if (state.templates.length === 0) {
+      return initialAnalyzedTemplates
     }
-    
-    router.refresh()
+    return state.templates.map(template => {
+      const templateLogs = state.logs.filter(log => log.activityId === template.id)
+      const analysis = analyzeRecurrence(template, templateLogs, todayStr)
+      return { template, analysis }
+    })
+  }, [state.templates, state.logs, todayStr, initialAnalyzedTemplates])
+
+  // Handle local mark complete wrapper via store queue
+  const onMarkHabitComplete = async (template: ActivityTemplate) => {
+    const existingLog = state.logs.find(l => l.activityId === template.id && l.date === todayStr)
+    const occurrence: TimelineItem = {
+      id: existingLog?.id || `temp-${template.id}`,
+      templateId: template.id,
+      templateName: template.name,
+      type: template.type,
+      priority: template.priority,
+      start: new Date(),
+      end: new Date(),
+      isAllDay: true,
+      completed: !!existingLog,
+      logId: existingLog?.id,
+      status: existingLog?.status || undefined
+    }
+    await cycleTaskStatusAction(occurrence, todayStr)
   }
 
   return (
     <TodayDashboard
       analyzedTemplates={analyzedTemplates}
-      logs={logs}
-      _notes={notes}
+      logs={state.logs.length > 0 ? state.logs : initialLogs}
+      _notes={state.notes.length > 0 ? state.notes : initialNotes}
       todayStr={todayStr}
       calendarData={calendarData}
       onRefetchCalendar={fetchCalendar}
       onOpenCreateActivity={onOpenCreateActivity}
       _onMarkHabitComplete={onMarkHabitComplete}
       _onEditTemplate={onEditTemplate}
-      journalEntries={journalEntries}
-      leaveRecords={leaveRecords}
-      leaveAllowances={leaveAllowances}
-      weightRecords={weightRecords}
+      journalEntries={state.journalEntries.length > 0 ? state.journalEntries : initialJournalEntries}
+      leaveRecords={state.leaveRecords.length > 0 ? state.leaveRecords : initialLeaveRecords}
+      leaveAllowances={state.leaveAllowances.length > 0 ? state.leaveAllowances : initialLeaveAllowances}
+      weightRecords={state.weightRecords.length > 0 ? state.weightRecords : initialWeightRecords}
       onTabChange={onTabChange}
     />
   )
 }
+

@@ -375,6 +375,7 @@ model ActivityTemplate {
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   deletedAt            DateTime?
+  effectiveFrom        DateTime         @default(now())
 
   @@index([userId])
 }

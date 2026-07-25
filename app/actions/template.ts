@@ -59,6 +59,7 @@ export async function createActivityTemplate(data: {
         ...templateRest,
         recurrenceType: recurrenceType as RecurrenceType,
         targetDate: parsedTargetDate,
+        effectiveFrom: new Date(),
         metadata: templateRest.metadata as Prisma.InputJsonValue,
         notificationRules: templateRest.notificationRules as Prisma.InputJsonValue,
         sortOrder: nextSortOrder,
@@ -257,15 +258,28 @@ export async function reorderActivityTemplates(orderedIds: string[]) {
       throw new Error('Unauthorized template access or template not found')
     }
 
-    // Perform updates in a transaction
-    await db.$transaction(
-      orderedIds.map((id, index) =>
-        db.activityTemplate.update({
-          where: { id },
-          data: { sortOrder: index },
-        })
-      )
-    )
+    // Fetch all current templates and their sortOrders
+    const currentTemplates = await db.activityTemplate.findMany({
+      where: { id: { in: orderedIds } },
+      select: { id: true, sortOrder: true }
+    })
+
+    // Map new positions and filter to only those that actually changed
+    const updates = orderedIds.map((id, index) => {
+      const match = currentTemplates.find(t => t.id === id)
+      if (match && match.sortOrder === index) {
+        return null
+      }
+      return db.activityTemplate.update({
+        where: { id },
+        data: { sortOrder: index },
+      })
+    }).filter((u): u is ReturnType<typeof db.activityTemplate.update> => u !== null)
+
+    // Perform updates in a transaction only if there are actual changes
+    if (updates.length > 0) {
+      await db.$transaction(updates)
+    }
 
     revalidatePath('/')
     return { success: true }

@@ -1,5 +1,5 @@
 import { db } from '../db'
-import { analyzeRecurrence } from '../recurrence'
+import { analyzeRecurrence, isOccurrenceValidForDate, getTodayDateStr } from '../recurrence'
 import { ActivityTemplate, ActivityLog, TimelineItem, RecurrenceType, Priority } from '@/types'
 import { ParsedCalendarEvent } from '../providers'
 
@@ -151,6 +151,9 @@ export class TimelineService {
 
     // 3. Process local due activities based on recurrence analysis
     for (const template of templates) {
+      // Check if the occurrence is valid for this date based on effectiveFrom
+      if (!isOccurrenceValidForDate(template as unknown as ActivityTemplate, todayStr)) continue
+
       const templateLogsRaw = logsByActivityId[template.id] || []
       const allTemplateLogs = templateLogsRaw.map(l => ({
         ...l,
@@ -159,6 +162,12 @@ export class TimelineService {
 
       const analysis = analyzeRecurrence(template as unknown as ActivityTemplate, allTemplateLogs as unknown as ActivityLog[], todayStr)
       const log = logs.find(l => l.activityId === template.id)
+
+      // Exclude completed tasks on the current day
+      if (template.type === 'TASK' && todayStr === getTodayDateStr()) {
+        const isCompleted = log && (log.status === 'done' || log.status === 'paid' || log.status === 'completed')
+        if (isCompleted) continue
+      }
 
       // For one_time tasks: only show on the exact due date (not overdue on future days).
       // Recurring tasks: show if due today OR overdue.

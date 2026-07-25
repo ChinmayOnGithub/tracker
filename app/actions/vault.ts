@@ -518,7 +518,10 @@ export async function batchDeleteVaultItems(
   ids: string[]
 ): Promise<{ success: boolean; error?: string }> {
   if (!ids.length) return { success: true }
-  const results = await Promise.all(ids.map(id => deleteVaultItem(id)))
+  const results = []
+  for (const id of ids) {
+    results.push(await deleteVaultItem(id))
+  }
   const failed = results.find(r => !r.success)
   return failed ? { success: false, error: failed.error } : { success: true }
 }
@@ -598,14 +601,12 @@ export async function getVaultStats(): Promise<{
   try {
     const user = await requireAuth()
 
-    const [fileCount, folderCount, sizeResult] = await Promise.all([
-      db.secureDocument.count({ where: { userId: user.id, isFolder: false, deletedAt: null } }),
-      db.secureDocument.count({ where: { userId: user.id, isFolder: true, deletedAt: null } }),
-      db.secureDocument.aggregate({
-        where: { userId: user.id, isFolder: false, deletedAt: null },
-        _sum: { fileSize: true },
-      }),
-    ])
+    const fileCount = await db.secureDocument.count({ where: { userId: user.id, isFolder: false, deletedAt: null } })
+    const folderCount = await db.secureDocument.count({ where: { userId: user.id, isFolder: true, deletedAt: null } })
+    const sizeResult = await db.secureDocument.aggregate({
+      where: { userId: user.id, isFolder: false, deletedAt: null },
+      _sum: { fileSize: true },
+    })
 
     return {
       success: true,

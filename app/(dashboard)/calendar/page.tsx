@@ -44,13 +44,11 @@ export default async function Page() {
     templatesRaw.push(workTemplate)
   }
 
-  const [logsRaw, journalRaw] = await Promise.all([
-    fetchRecurrenceLogs(loggedUser.id, templatesRaw, loggedUser.username === 'admin'),
-    db.journalEntry.findMany({
-      where: { userId: loggedUser.id, deletedAt: null },
-      orderBy: { journalDate: 'desc' },
-    }),
-  ])
+  const logsRaw = await fetchRecurrenceLogs(loggedUser.id, templatesRaw, loggedUser.username === 'admin')
+  const journalRaw = await db.journalEntry.findMany({
+    where: { userId: loggedUser.id, deletedAt: null },
+    orderBy: { journalDate: 'desc' },
+  })
 
   const templates: ActivityTemplate[] = templatesRaw.map(t => ({
     ...t,

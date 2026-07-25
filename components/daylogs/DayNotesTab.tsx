@@ -3,8 +3,7 @@
 import React, { useState } from 'react'
 import { Edit2, Trash2 } from 'lucide-react'
 import { Input, Textarea, Button } from '@/design-system'
-import { createNote, updateNote, deleteNote } from '@/app/actions/note'
-import { useRouter } from 'next/navigation'
+import { useStore } from '@/lib/store/store'
 
 interface Note {
   id: string
@@ -20,7 +19,7 @@ interface DayNotesTabProps {
 }
 
 export const DayNotesTab: React.FC<DayNotesTabProps> = ({ note, dateStr }) => {
-  const router = useRouter()
+  const { upsertNoteAction, deleteNoteAction } = useStore()
   const [title, setTitle] = useState(note?.title || '')
   const [content, setContent] = useState(note?.content || '')
   const [isSaving, setIsSaving] = useState(false)
@@ -30,14 +29,8 @@ export const DayNotesTab: React.FC<DayNotesTabProps> = ({ note, dateStr }) => {
     if (!content.trim()) return
     setIsSaving(true)
     try {
-      if (note) {
-        await updateNote(note.id, content.trim(), title.trim() || null)
-        setIsEditing(false)
-      } else {
-        await createNote(dateStr, content.trim(), title.trim() || null)
-        setIsEditing(false)
-      }
-      router.refresh()
+      await upsertNoteAction(dateStr, content.trim(), title.trim() || null, note?.id)
+      setIsEditing(false)
     } catch (err) {
       console.error('Failed to save note:', err)
     } finally {
@@ -50,11 +43,10 @@ export const DayNotesTab: React.FC<DayNotesTabProps> = ({ note, dateStr }) => {
     if (confirm('Are you sure you want to delete this note?')) {
       setIsSaving(true)
       try {
-        await deleteNote(note.id)
+        await deleteNoteAction(note.id)
         setTitle('')
         setContent('')
         setIsEditing(true)
-        router.refresh()
       } catch (err) {
         console.error('Failed to delete note:', err)
       } finally {
