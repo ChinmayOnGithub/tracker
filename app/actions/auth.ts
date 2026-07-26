@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import crypto from 'crypto'
 import { cookies } from 'next/headers'
 import { signSession, verifySession } from '@/lib/session'
+import { DefaultActivitiesService } from '@/lib/services/DefaultActivitiesService'
 
 const SALT = process.env.AUTH_SALT || 'personal-dashboard-ops-salt-108-prayer-beads'
 
@@ -64,44 +65,8 @@ export async function registerUserAction(usernameInput: string, pin: string): Pr
         }
       })
 
-      // Create 3 default starter activities for new users
-      await tx.activityTemplate.createMany({
-        data: [
-          {
-            userId: u.id,
-            name: 'Reading Book',
-            category: 'personal',
-            icon: 'BookOpen',
-            color: 'green',
-            recurrenceType: 'daily',
-            sortOrder: 1,
-            notes: 'Read at least 15 pages',
-          },
-          {
-            userId: u.id,
-            name: 'Wash Hairs',
-            category: 'personal',
-            icon: 'ShowerHead',
-            color: 'blue',
-            recurrenceType: 'custom',
-            recurrenceInterval: 3,
-            sortOrder: 2,
-            notes: 'Wash and condition hair',
-          },
-          {
-            userId: u.id,
-            name: 'Netflix Subscription',
-            category: 'finance',
-            icon: 'Tv',
-            color: 'red',
-            recurrenceType: 'monthly',
-            recurrenceDayOfMonth: 15,
-            amount: 199.00,
-            sortOrder: 3,
-            notes: 'Monthly standard stream plan',
-          }
-        ]
-      })
+      // Create default starter activities for new users
+      await DefaultActivitiesService.seedDefaultActivities(u.id, tx)
       return u
     })
 

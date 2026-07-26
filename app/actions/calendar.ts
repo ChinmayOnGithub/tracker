@@ -13,6 +13,8 @@ export async function createCalendarEventAction(data: {
   allDay: boolean
   type?: CalendarEventType
   color?: string
+  trackerArtifactId?: string | null
+  trackerArtifactType?: string | null
 }) {
   try {
     const user = await getLoggedUser()
@@ -29,8 +31,8 @@ export async function createCalendarEventAction(data: {
       color: data.color || null,
       status: 'confirmed',
       description: null,
-      trackerArtifactId: null,
-      trackerArtifactType: null,
+      trackerArtifactId: data.trackerArtifactId || null,
+      trackerArtifactType: data.trackerArtifactType || null,
       externalId: null,
       externalProvider: null,
       etag: null,

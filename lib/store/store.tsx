@@ -123,7 +123,8 @@ interface StoreContextType {
   initialize: (initialData: Partial<StoreState>) => void
   
   // Calendar Actions
-  cycleTaskStatusAction: (occurrence: TimelineItem, todayStr: string) => Promise<void>
+  cycleTaskStatusAction: (occurrence: TimelineItem, todayStr: string, payload?: any) => Promise<void>
+  setTaskStatusAction: (occurrence: TimelineItem, todayStr: string, status: 'cleared' | 'done' | 'skipped' | 'postponed', payload?: any) => Promise<void>
   deleteActivityLog: (logId: string) => Promise<void>
   postponeOneTimeTaskAction: (templateId: string, date: string, logId: string | null) => Promise<void>
   unpostponeOneTimeTaskAction: (templateId: string, logId: string, originalDate: string) => Promise<void>
@@ -215,7 +216,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [])
 
   // --- CALENDAR ACTIONS ---
-  const cycleTaskStatusAction = async (occurrence: TimelineItem, todayStr: string) => {
+  const cycleTaskStatusAction = async (occurrence: TimelineItem, todayStr: string, payload?: any) => {
     if (!occurrence.templateId) return
 
     const templateId = occurrence.templateId
@@ -261,13 +262,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setState(prev => {
       let updatedLogs = [...prev.logs]
       
+      const resolvedAmount = (payload && typeof payload.value === 'number') ? payload.value : (matched?.amount || null)
+
       if (logId) {
         if (nextCompleted === false && nextStatus === undefined && isDaily) {
           // Cleared - daily deletes log
           updatedLogs = updatedLogs.filter(l => l.id !== logId)
         } else {
           updatedLogs = updatedLogs.map(l => 
-            l.id === logId ? { ...l, status: nextStatus || 'done', amount: matched?.amount || null } : l
+            l.id === logId ? { ...l, status: nextStatus || 'done', amount: resolvedAmount, payload: payload || l.payload } : l
           )
         }
       } else {
@@ -279,8 +282,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           date: todayStr,
           status: nextStatus || 'done',
           note: null,
-          amount: matched?.amount || null,
-          payload: null,
+          amount: resolvedAmount,
+          payload: payload || null,
           createdAt: new Date(),
           updatedAt: new Date()
         })
@@ -295,8 +298,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       dedupKey: `task-cycle-${templateId}-${todayStr}`,
       run: async () => {
         const { markComplete, updateLog, deleteLog, postponeOneTimeTask } = await import('@/app/actions/log')
+        const resolvedAmount = (payload && typeof payload.value === 'number') ? payload.value : (matched?.amount || null)
+        
         if (!currentCompleted && !isCanceled && !isPostponed) {
-          return markComplete(templateId, todayStr, nextStatus || 'done', matched?.amount || null, null)
+          return markComplete(templateId, todayStr, nextStatus || 'done', resolvedAmount, payload || null)
         } else if (isDone) {
           if (logId) return updateLog(logId, { status: 'skipped' })
           return markComplete(templateId, todayStr, 'skipped')
@@ -315,6 +320,128 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (logId) return deleteLog(logId)
           return { success: true }
         }
+      },
+      rollback: () => {
+        setState(prev => ({ ...prev, logs: previousLogs }))
+      }
+    })
+  }
+
+  const setTaskStatusAction = async (
+    occurrence: TimelineItem,
+    todayStr: string,
+    targetStatus: 'cleared' | 'done' | 'skipped' | 'postponed',
+    payload?: any
+  ) => {
+    if (!occurrence.templateId) return
+
+    const templateId = occurrence.templateId
+    const logId = occurrence.logId
+
+    const matched = state.templates.find(t => t.id === templateId)
+    const isDaily = matched?.recurrenceType === 'daily'
+    const isOneTime = matched?.recurrenceType === 'one_time'
+
+    let nextCompleted = false
+    let nextStatus: string | undefined = undefined
+
+    if (targetStatus === 'done') {
+      nextCompleted = true
+      nextStatus = matched?.category === 'finance' ? 'paid' : 'done'
+    } else if (targetStatus === 'skipped') {
+      nextCompleted = true
+      nextStatus = 'skipped'
+    } else if (targetStatus === 'postponed') {
+      nextCompleted = true
+      nextStatus = 'postponed'
+    } else if (targetStatus === 'cleared') {
+      nextCompleted = false
+      nextStatus = undefined
+    }
+
+    // Capture current logs state for rollback
+    const previousLogs = [...state.logs]
+
+    let tempId: string | null = null
+
+    // Apply Optimistic Update to Local State
+    setState(prev => {
+      let updatedLogs = [...prev.logs]
+      const resolvedAmount = (payload && typeof payload.value === 'number') ? payload.value : (matched?.amount || null)
+
+      if (logId) {
+        if (targetStatus === 'cleared' && isDaily) {
+          // Cleared - daily deletes log
+          updatedLogs = updatedLogs.filter(l => l.id !== logId)
+        } else {
+          updatedLogs = updatedLogs.map(l => 
+            l.id === logId ? { ...l, status: nextStatus || 'done', amount: resolvedAmount, payload: payload || l.payload } : l
+          )
+        }
+      } else if (targetStatus !== 'cleared') {
+        // Create an optimistic log
+        tempId = `temp-log-${Date.now()}`
+        updatedLogs.push({
+          id: tempId,
+          activityId: templateId,
+          date: todayStr,
+          status: nextStatus || 'done',
+          note: null,
+          amount: resolvedAmount,
+          payload: payload || null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+      }
+
+      return { ...prev, logs: updatedLogs }
+    })
+
+    // Queue background server update
+    writeQueue.add({
+      id: `task-set-${templateId}-${Date.now()}`,
+      dedupKey: `task-set-${templateId}-${todayStr}`,
+      run: async () => {
+        const { markComplete, updateLog, deleteLog, postponeOneTimeTask } = await import('@/app/actions/log')
+        const resolvedAmount = (payload && typeof payload.value === 'number') ? payload.value : (matched?.amount || null)
+        
+        let res: any
+        if (targetStatus === 'done') {
+          res = await markComplete(templateId, todayStr, nextStatus || 'done', resolvedAmount, payload || null)
+        } else if (targetStatus === 'skipped') {
+          if (logId && !logId.startsWith('temp-')) {
+            res = await updateLog(logId, { status: 'skipped' })
+          } else {
+            res = await markComplete(templateId, todayStr, 'skipped')
+          }
+        } else if (targetStatus === 'postponed') {
+          if (isOneTime) {
+            res = await postponeOneTimeTask(templateId, todayStr, (logId && !logId.startsWith('temp-')) ? logId : undefined)
+          } else {
+            if (logId && !logId.startsWith('temp-')) {
+              res = await updateLog(logId, { status: 'postponed' })
+            } else {
+              res = await markComplete(templateId, todayStr, 'postponed')
+            }
+          }
+        } else {
+          // targetStatus === 'cleared'
+          if (logId && !logId.startsWith('temp-')) {
+            res = await deleteLog(logId)
+          } else {
+            res = { success: true }
+          }
+        }
+
+        // Replace optimistic tempId with real database ID
+        if (tempId && res?.success && res?.data) {
+          setState(prev => ({
+            ...prev,
+            logs: prev.logs.map(l => l.id === tempId ? (res.data as any) : l)
+          }))
+        }
+
+        return res
       },
       rollback: () => {
         setState(prev => ({ ...prev, logs: previousLogs }))
@@ -418,7 +545,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       tags: [],
       createdAt: new Date(),
       updatedAt: new Date(),
-      effectiveFrom: new Date()
+      effectiveFrom: templateData.targetDate ? new Date(templateData.targetDate) : new Date()
     }
 
     setState(prev => ({
@@ -1040,6 +1167,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       isSyncing,
       initialize,
       cycleTaskStatusAction,
+      setTaskStatusAction,
       deleteActivityLog,
       postponeOneTimeTaskAction,
       unpostponeOneTimeTaskAction,

@@ -8,11 +8,13 @@ import { analyzeRecurrence } from '@/lib/recurrence'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
 import { createCalendarEventAction, updateCalendarEventAction, deleteCalendarEventAction } from '@/app/actions/calendar'
 import { Icon } from './Icon'
-import { X, Sparkles, BookOpen, Search, Plus, Clock, Check, ArrowRightCircle, Edit2, Trash2, Settings, Briefcase } from 'lucide-react'
+import { X, Sparkles, BookOpen, Search, Plus, Clock, Check, ArrowRightCircle, Edit2, Trash2, Settings, Briefcase, MoreVertical } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
 import { useRouter } from 'next/navigation'
 import { Button, Input } from '@/design-system'
 import { MarathiCalendarEvents } from './daylogs/MarathiCalendarEvents'
+import { CompletionService } from '@/lib/services/CompletionService'
+import { CompletionDialog } from './CompletionDialog'
 
 interface CalendarDayEvent {
   id: string
@@ -54,7 +56,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   mode = 'modal',
 }) => {
   const router = useRouter()
-  const { cycleTaskStatusAction, logWorkPresenceAction, upsertJournalAction } = useStore()
+  const { cycleTaskStatusAction, setTaskStatusAction, deleteActivityLog, logWorkPresenceAction, upsertJournalAction, logWeightAction } = useStore()
 
   // ── Compute timeline from props (instant, no API) ───────────────────────
   const analyzedTemplates: AnalyzedTemplate[] = useMemo(() => {
@@ -179,6 +181,10 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   // ── Tab / UI State ──────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<'activities' | 'notes'>(initialTab || 'activities')
   const [completingHabitId, setCompletingHabitId] = useState<string | null>(null)
+  const [activeCompletion, setActiveCompletion] = useState<{
+    template: ActivityTemplate
+    occurrence: TimelineItem
+  } | null>(null)
 
   // Scheduler form state
   const [isScheduling, setIsScheduling] = useState(false)
@@ -193,6 +199,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
 
   // Template selector
   const [activitySearch, setActivitySearch] = useState('')
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
 
   // Work Tracker state
 
@@ -338,14 +345,38 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   const cycleTaskStatus = async (occurrence: TimelineItem) => {
     if (!occurrence.templateId) return
 
-    setCompletingHabitId(occurrence.templateId)
-    try {
-      await cycleTaskStatusAction(occurrence, dateStr)
-      invalidateCache(dateStr)
-    } catch (err) {
-      console.error('Failed to cycle task status:', err)
-    } finally {
-      setCompletingHabitId(null)
+    const matchedTemplate = templates.find(t => t.id === occurrence.templateId)
+    if (!matchedTemplate) return
+
+    const isDone = occurrence.completed && occurrence.status !== 'skipped' && occurrence.status !== 'postponed'
+
+    if (isDone) {
+      setCompletingHabitId(occurrence.templateId)
+      try {
+        await setTaskStatusAction(occurrence, dateStr, 'cleared')
+        invalidateCache(dateStr)
+      } catch (err) {
+        console.error('Failed to clear task status:', err)
+      } finally {
+        setCompletingHabitId(null)
+      }
+    } else {
+      const isWeightLoggedToday = mergedDTO.weight !== null && mergedDTO.weight !== undefined
+
+      if (CompletionService.needsPrompting(matchedTemplate, isWeightLoggedToday)) {
+        setActiveCompletion({ template: matchedTemplate, occurrence })
+        return
+      }
+
+      setCompletingHabitId(occurrence.templateId)
+      try {
+        await setTaskStatusAction(occurrence, dateStr, 'done')
+        invalidateCache(dateStr)
+      } catch (err) {
+        console.error('Failed to set task status done:', err)
+      } finally {
+        setCompletingHabitId(null)
+      }
     }
   }
 
@@ -414,6 +445,42 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
       router.refresh()
     } catch (_err) {
       setErrorMsg('Something went wrong')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleQuickScheduleTemplate = async (template: ActivityTemplate) => {
+    try {
+      setIsSaving(true)
+      const isAllDay = !template.scheduledTime
+      let startIso = `${dateStr}T00:00:00.000Z`
+      let endIso = `${dateStr}T23:59:59.000Z`
+
+      if (template.scheduledTime) {
+        const dur = template.estimatedDuration || 30
+        const start = new Date(`${dateStr}T${template.scheduledTime}:00`)
+        const end = new Date(start.getTime() + dur * 60 * 1000)
+        
+        const pad = (n: number) => String(n).padStart(2, '0')
+        startIso = `${dateStr}T${pad(start.getHours())}:${pad(start.getMinutes())}:00.000`
+        endIso = `${dateStr}T${pad(end.getHours())}:${pad(end.getMinutes())}:00.000`
+      }
+
+      await createCalendarEventAction({
+        title: template.name,
+        start: startIso,
+        end: endIso,
+        allDay: isAllDay,
+        type: 'TASK',
+        color: template.color || 'zinc',
+        trackerArtifactId: template.id,
+        trackerArtifactType: 'ACTIVITY_TEMPLATE'
+      })
+      fetchDayDetails()
+      router.refresh()
+    } catch (err) {
+      console.error('Failed to quick schedule template:', err)
     } finally {
       setIsSaving(false)
     }
@@ -541,6 +608,105 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
             )}
           </div>
         </div>
+
+        {/* Three-Dot Menu button */}
+        {!isGoogleCalendar && (
+          <div className="relative shrink-0 flex items-center ml-auto mr-1">
+            <button
+              type="button"
+              title="More Actions"
+              onClick={(e) => {
+                e.stopPropagation()
+                setActiveMenuId(activeMenuId === occurrence.id ? null : occurrence.id)
+              }}
+              className="p-1 rounded-sm text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              <MoreVertical className="w-3.5 h-3.5" />
+            </button>
+
+            {activeMenuId === occurrence.id && (
+              <div className="absolute right-0 bottom-6 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg shadow-lg py-1 z-50 w-44 animate-in slide-in-from-bottom-2 duration-100">
+                <button
+                  type="button"
+                  onClick={async (e) => {
+                    e.stopPropagation()
+                    setActiveMenuId(null)
+                    await cycleTaskStatus(occurrence)
+                  }}
+                  className="w-full text-left px-3 py-1.5 text-xs text-[var(--color-text-main)] hover:bg-[var(--color-accent)]/10 font-medium transition-colors"
+                >
+                  {isDone ? 'Mark Uncompleted' : 'Mark Completed'}
+                </button>
+
+                {!isCanceled && (
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      setActiveMenuId(null)
+                      await setTaskStatusAction(occurrence, dateStr, 'skipped')
+                      invalidateCache(dateStr)
+                      fetchDayDetails()
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 font-medium transition-colors"
+                  >
+                    Skip / Cancel Today
+                  </button>
+                )}
+
+                {!isPostponed && template?.recurrenceType !== 'daily' && (
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      setActiveMenuId(null)
+                      await setTaskStatusAction(occurrence, dateStr, 'postponed')
+                      invalidateCache(dateStr)
+                      fetchDayDetails()
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 font-medium transition-colors"
+                  >
+                    Postpone to Tomorrow
+                  </button>
+                )}
+
+                {occurrence.templateId && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setActiveMenuId(null)
+                      // No template open handler directly in logs modal but let's show label anyway
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]/10 font-medium transition-colors border-t border-[var(--color-border)]/50 mt-1 pt-1"
+                  >
+                    Activity Template
+                  </button>
+                )}
+
+                {(occurrence.logId || occurrence.id.includes('temp-')) && (
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      setActiveMenuId(null)
+                      if (confirm("Are you sure you want to delete today's log?")) {
+                        if (occurrence.logId) {
+                          await deleteActivityLog(occurrence.logId)
+                          invalidateCache(dateStr)
+                          fetchDayDetails()
+                        }
+                      }
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 font-medium transition-colors border-t border-[var(--color-border)]/50 mt-1 pt-1"
+                  >
+                    Delete Today&apos;s Log
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     )
   }
@@ -935,7 +1101,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                           {filteredTemplates.map(t => {
                             const colorClasses = getTemplateColorClasses(t.color)
                             return (
-                              <button key={t.id} type="button" onClick={() => handleOpenScheduler(t)}
+                              <button key={t.id} type="button" onClick={() => handleQuickScheduleTemplate(t)}
                                 className="flex items-center gap-2 p-1.5 bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)]/20 border border-[var(--color-border)] rounded-lg transition-all cursor-pointer text-left hover:-translate-y-0.5 hover:shadow-xs group">
                                 <div className={`w-6 h-6 rounded-md flex items-center justify-center border group-hover:scale-105 transition-all ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}>
                                   <Icon name={t.icon} size={11} />
@@ -1016,6 +1182,26 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
           )}
         </div>
       </div>
+      
+      <CompletionDialog
+        key={activeCompletion ? `${activeCompletion.occurrence.id}-${activeCompletion.occurrence.templateId}` : 'closed'}
+        isOpen={!!activeCompletion}
+        onClose={() => setActiveCompletion(null)}
+        template={activeCompletion?.template || null}
+        onSave={async (payload) => {
+          if (!activeCompletion) return
+          const { template, occurrence } = activeCompletion
+          const config = CompletionService.getCompletionConfig(template)
+          
+          if (config.hook === 'weight' && typeof payload.value === 'number') {
+            await logWeightAction(dateStr, payload.value)
+          } else {
+            await cycleTaskStatusAction(occurrence, dateStr, payload)
+          }
+          invalidateCache(dateStr)
+          setActiveCompletion(null)
+        }}
+      />
     </>
   )
 

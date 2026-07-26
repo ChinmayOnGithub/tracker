@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { ActivityTemplate } from '@/types'
 import { verifyPinAction, registerUserAction, logoutAction } from '@/app/actions/auth'
 import { Layers, Sun, Moon, ShieldAlert } from 'lucide-react'
@@ -44,6 +44,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 }) => {
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const dateParam = searchParams?.get('date')
   const activeTab = pathname === '/' ? 'today' : pathname.split('/')[1] || 'today'
 
   // Modal states
@@ -99,7 +101,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     }
     setCalendarData(prev => ({ ...prev, loading: !force, error: null }))
     try {
-      const todayStr = getTodayDateStr()
+      const todayStr = dateParam || getTodayDateStr()
       const res = (await getAgendaAction(todayStr, force)) as {
         success: boolean
         connected?: boolean
@@ -131,13 +133,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         loading: false
       }))
     }
-  }, [user])
+  }, [user, dateParam])
 
   useEffect(() => {
     if (isAuthenticated) {
       fetchCalendar(false)
     }
-  }, [isAuthenticated, fetchCalendar])
+  }, [isAuthenticated, fetchCalendar, dateParam])
 
   // Load client-specific states on mount
   useEffect(() => {

@@ -7,7 +7,7 @@ import {
   ExternalLink, Check, Plus, ArrowRightCircle,
   Scale, Shield, BookOpen, CalendarX, Lock,
   FileText, FileImage, FileVideo, FileArchive, FileCode, FileSpreadsheet, File,
-  RefreshCw, Clock, Briefcase, GripVertical
+  RefreshCw, Clock, Briefcase, GripVertical, ChevronLeft, ChevronRight, MoreVertical
 } from 'lucide-react'
 import { ActivityTemplate, ActivityLog, Note, RecurrenceAnalysis, TimelineItem } from '@/types'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
@@ -18,6 +18,8 @@ import { useActivityNotifications } from '@/lib/hooks/useActivityNotifications'
 import { Sparkline } from './WeightPanel'
 import { listVaultItems, VaultItem } from '@/app/actions/vault'
 import { getTemplateColorClasses } from '@/lib/colors'
+import { CompletionService } from '@/lib/services/CompletionService'
+import { CompletionDialog } from './CompletionDialog'
 
 interface TestAnalyzedTemplate {
   template: ActivityTemplate
@@ -76,9 +78,17 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   onTabChange
 }) => {
   const router = useRouter()
-  const { cycleTaskStatusAction, createActivityTemplateAction, reorderActivityTemplatesAction, logWorkPresenceAction } = useStore()
+  const { setTaskStatusAction, deleteActivityLog, createActivityTemplateAction, reorderActivityTemplatesAction, logWorkPresenceAction, logWeightAction } = useStore()
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [completingHabitId, setCompletingHabitId] = useState<string | null>(null)
+  const [activeCompletion, setActiveCompletion] = useState<{
+    template: ActivityTemplate
+    occurrence: TimelineItem
+  } | null>(null)
+
+  // Scheduler form state
+  const [showTemplatesDropdown, setShowTemplatesDropdown] = useState(false)
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
   const [vaultItems, setVaultItems] = useState<VaultItem[]>([])
   const [vaultLoading, setVaultLoading] = useState(true)
   const [widgetsVisibility, setWidgetsVisibility] = useState<Record<string, boolean>>(() => {
@@ -402,6 +412,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         recurrenceType: 'one_time',
         targetDate: `${todayStr}T00:00:00.000Z`
       })
+      router.refresh()
     } catch (err) {
       console.error('Failed to create quick task:', err)
     } finally {
@@ -462,15 +473,43 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   const cycleTaskStatus = async (occurrence: TimelineItem) => {
     if (!occurrence.templateId) return
 
-    setCompletingHabitId(occurrence.templateId)
-    try {
-      await cycleTaskStatusAction(occurrence, todayStr)
-    } catch (err) {
-      console.error('Failed to cycle task status:', err)
-    } finally {
-      setCompletingHabitId(null)
+    const matchedTemplate = analyzedTemplates.find(t => t.template.id === occurrence.templateId)?.template
+    if (!matchedTemplate) return
+
+    const isDone = occurrence.completed && occurrence.status !== 'skipped' && occurrence.status !== 'postponed'
+    
+    if (isDone) {
+      setCompletingHabitId(occurrence.templateId)
+      try {
+        await setTaskStatusAction(occurrence, todayStr, 'cleared')
+      } catch (err) {
+        console.error('Failed to clear task status:', err)
+      } finally {
+        setCompletingHabitId(null)
+      }
+    } else {
+      const isWeightLoggedToday = weightRecords.some(r => {
+        const dStr = typeof r.date === 'string' ? r.date.split('T')[0] : r.date.toISOString().split('T')[0]
+        return dStr === todayStr
+      })
+
+      if (CompletionService.needsPrompting(matchedTemplate, isWeightLoggedToday)) {
+        setActiveCompletion({ template: matchedTemplate, occurrence })
+        return
+      }
+
+      setCompletingHabitId(occurrence.templateId)
+      try {
+        await setTaskStatusAction(occurrence, todayStr, 'done')
+      } catch (err) {
+        console.error('Failed to set task status done:', err)
+      } finally {
+        setCompletingHabitId(null)
+      }
     }
   }
+
+
 
   // ── Drag & Drop handlers ──────────────────────────────────────────────────
   const handleDragStart = (e: React.DragEvent, index: number) => {
@@ -715,10 +754,21 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
     // Helper to get structured log preview
     const getLogValuePreview = (log: ActivityLog): string => {
+      const config = CompletionService.getCompletionConfig(template)
+      const inputType = config.value?.inputType
+      const unit = config.value?.unit
+
       if (log.amount !== null && log.amount !== undefined) {
+        if (inputType === 'currency') {
+          const symbol = unit || '₹'
+          return `${symbol}${log.amount}`
+        }
+        if (unit) {
+          return `${log.amount} ${unit}`
+        }
         const catLower = template.category.toLowerCase()
         if (catLower.includes('finance') || template.type === 'BILL') {
-          return `$${Number(log.amount).toFixed(2)}`
+          return `₹${Number(log.amount)}`
         }
         if (template.name.toLowerCase().includes('water') || catLower.includes('water')) {
           return `${log.amount} L`
@@ -730,7 +780,15 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         try {
           const p = typeof log.payload === 'string' ? JSON.parse(log.payload) : log.payload
           if (p.weight) return `${p.weight} kg`
-          if (p.amount) return `$${p.amount}`
+          if (p.value !== undefined && p.value !== null) {
+            if (inputType === 'currency') {
+              const symbol = unit || '₹'
+              return `${symbol}${p.value}`
+            }
+            if (unit) return `${p.value} ${unit}`
+            return `${p.value}`
+          }
+          if (p.amount) return `₹${p.amount}`
           if (p.liters) return `${p.liters} L`
           if (p.exercises && Array.isArray(p.exercises)) {
             return p.exercises.map((e: { name: string; sets?: unknown[] }) => `${e.name} (${e.sets?.length || 0} sets)`).join(', ')
@@ -1007,6 +1065,99 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             </div>
           </div>
 
+          {/* Three-Dot Menu button */}
+          {!isGoogleCalendar && (
+            <div className="relative shrink-0 flex items-center ml-auto mr-1">
+              <button
+                type="button"
+                title="More Actions"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setActiveMenuId(activeMenuId === occurrence.id ? null : occurrence.id)
+                }}
+                className="p-1 rounded-sm text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                <MoreVertical className="w-3.5 h-3.5" />
+              </button>
+
+              {activeMenuId === occurrence.id && (
+                <div className="absolute right-0 bottom-6 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg shadow-lg py-1 z-50 w-44 animate-in slide-in-from-bottom-2 duration-100">
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      setActiveMenuId(null)
+                      await cycleTaskStatus(occurrence)
+                    }}
+                    className="w-full text-left px-3 py-1.5 text-xs text-[var(--color-text-main)] hover:bg-[var(--color-accent)]/10 font-medium transition-colors"
+                  >
+                    {isDone ? 'Mark Uncompleted' : 'Mark Completed'}
+                  </button>
+
+                  {!isCanceled && (
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        setActiveMenuId(null)
+                        await setTaskStatusAction(occurrence, todayStr, 'skipped')
+                      }}
+                      className="w-full text-left px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 font-medium transition-colors"
+                    >
+                      Skip / Cancel Today
+                    </button>
+                  )}
+
+                  {!isPostponed && template?.recurrenceType !== 'daily' && (
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        setActiveMenuId(null)
+                        await setTaskStatusAction(occurrence, todayStr, 'postponed')
+                      }}
+                      className="w-full text-left px-3 py-1.5 text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 font-medium transition-colors"
+                    >
+                      Postpone to Tomorrow
+                    </button>
+                  )}
+
+                  {occurrence.templateId && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setActiveMenuId(null)
+                        onOpenCreateActivity()
+                      }}
+                      className="w-full text-left px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]/10 font-medium transition-colors border-t border-[var(--color-border)]/50 mt-1 pt-1"
+                    >
+                      Edit Template
+                    </button>
+                  )}
+
+                  {(occurrence.logId || occurrence.id.includes('temp-')) && (
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        setActiveMenuId(null)
+                        if (confirm("Are you sure you want to delete today's log?")) {
+                          if (occurrence.logId) {
+                            await deleteActivityLog(occurrence.logId)
+                          }
+                        }
+                      }}
+                      className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 font-medium transition-colors border-t border-[var(--color-border)]/50 mt-1 pt-1"
+                    >
+                      Delete Today&apos;s Log
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── Reorder Grip Handle ── */}
           {!isGoogleCalendar && (
             <button
@@ -1070,13 +1221,50 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     ? [...weightRecords].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
     : null
 
+  const handleNavigateDate = (offset: number) => {
+    const current = new Date(todayStr + 'T12:00:00Z')
+    current.setUTCDate(current.getUTCDate() + offset)
+    const nextDateStr = current.toISOString().split('T')[0]
+    router.push(`/?date=${nextDateStr}`)
+  }
+
   return (
     <div className="w-full">
 
       {/* Header */}
       <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] pb-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-main)]">Today</h1>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleNavigateDate(-1)}
+              icon={<ChevronLeft className="w-4 h-4" />}
+              title="Yesterday"
+              className="p-1.5"
+            />
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-main)]">
+              {todayStr === new Date().toISOString().split('T')[0] ? 'Today' : 'Timeline'}
+            </h1>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleNavigateDate(1)}
+              icon={<ChevronRight className="w-4 h-4" />}
+              title="Tomorrow"
+              className="p-1.5"
+            />
+            {todayStr !== new Date().toISOString().split('T')[0] && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push('/')}
+                className="text-xs font-bold"
+              >
+                Today
+              </Button>
+            )}
+          </div>
           <p className="text-sm text-[var(--color-text-muted)] mt-1 font-normal">
             {todayLongDate} • {getContextSubtitle()}
           </p>
@@ -1133,7 +1321,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               ) : (
                 orderedItems.map((o, idx) => renderTimelineItemCard(o, idx))
               )}
-              <div className="p-2.5 bg-[var(--color-bg-subtle)]/60 border-t border-[var(--color-border)]/60 flex items-center gap-2">
+              <div className="p-2.5 bg-[var(--color-bg-subtle)]/60 border-t border-[var(--color-border)]/60 flex items-center gap-2 relative">
                 <div className="flex-1">
                   <Input
                     placeholder="+ Type a task for today and press Enter..."
@@ -1163,7 +1351,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                     title="Choose task color"
                   />
                   {showColorPicker && (
-                    <div className="absolute bottom-8 right-0 bg-[var(--color-bg-surface)] border border-[var(--color-border)] p-2 rounded-lg shadow-lg flex gap-1.5 z-50">
+                    <div className="absolute bottom-8 right-0 bg-[var(--color-bg-surface)] border border-[var(--color-border)] p-2 rounded-lg shadow-lg flex gap-1.5 z-50 animate-in fade-in duration-100">
                       {(['blue', 'green', 'amber', 'orange', 'red', 'purple', 'pink', 'zinc'] as const).map(c => (
                         <button
                           key={c}
@@ -1188,12 +1376,81 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                   )}
                 </div>
 
+                {/* Templates Selector Dropdown */}
+                <div className="relative shrink-0 flex items-center">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setShowTemplatesDropdown(!showTemplatesDropdown)
+                      setShowColorPicker(false)
+                    }}
+                    className="text-xs font-semibold shadow-xs"
+                  >
+                    Templates
+                  </Button>
+                  {showTemplatesDropdown && (
+                    <div className="absolute bottom-10 right-0 bg-[var(--color-bg-surface)] border border-[var(--color-border)] p-2 rounded-xl shadow-lg flex flex-col gap-1 z-50 w-64 max-h-60 overflow-y-auto animate-in slide-in-from-bottom-2 duration-150">
+                      <div className="text-[9px] uppercase tracking-wider font-extrabold text-[var(--color-text-muted)] border-b border-[var(--color-border)]/50 pb-1.5 mb-1.5 px-1.5">
+                        Select Activity Template
+                      </div>
+                      {analyzedTemplates.filter(at => at.template.recurrenceType !== 'one_time').length === 0 ? (
+                        <div className="text-[10px] text-slate-400 italic py-3 text-center">No templates available</div>
+                      ) : (
+                        analyzedTemplates
+                          .filter(at => at.template.recurrenceType !== 'one_time')
+                          .map(at => {
+                            const t = at.template
+                            const colorClasses = getTemplateColorClasses(t.color)
+                            return (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => {
+                                  setShowTemplatesDropdown(false)
+                                  const isWeightLogged = weightRecords.some(r => {
+                                    const dStr = typeof r.date === 'string' ? r.date.split('T')[0] : r.date.toISOString().split('T')[0]
+                                    return dStr === todayStr
+                                  })
+                                  const occ: TimelineItem = {
+                                    id: `schedule_${t.id}_${todayStr}`,
+                                    templateId: t.id,
+                                    templateName: t.name,
+                                    type: t.type,
+                                    priority: t.priority,
+                                    start: new Date(`${todayStr}T00:00:00Z`),
+                                    end: new Date(`${todayStr}T23:59:59Z`),
+                                    isAllDay: true,
+                                    completed: false,
+                                  }
+                                  if (CompletionService.needsPrompting(t, isWeightLogged)) {
+                                    setActiveCompletion({ template: t, occurrence: occ })
+                                  } else {
+                                    setCompletingHabitId(t.id)
+                                    setTaskStatusAction(occ, todayStr, 'done')
+                                      .finally(() => setCompletingHabitId(null))
+                                  }
+                                }}
+                                className="flex items-center gap-2 p-1.5 hover:bg-[var(--color-accent)]/20 rounded-lg transition-all cursor-pointer text-left w-full hover:translate-x-0.5 group"
+                              >
+                                <div className={`w-5 h-5 rounded-md flex items-center justify-center border text-[9px] group-hover:scale-105 transition-transform ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}>
+                                  <Icon name={t.icon} size={10} />
+                                </div>
+                                <span className="text-[10px] font-bold text-[var(--color-text-main)] truncate flex-1">{t.name}</span>
+                              </button>
+                            )
+                          })
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <Button
                   size="sm"
                   onClick={handleCreateQuickTask}
                   isLoading={isCreatingQuickTask}
                   disabled={!quickTaskTitle.trim() || isCreatingQuickTask}
-                  className="shrink-0 text-xs"
+                  className="shrink-0 text-xs font-bold"
                 >
                   <Plus className="w-3.5 h-3.5 mr-1" />
                   Add
@@ -1509,6 +1766,26 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
         </div>
       </div>
+      
+      <CompletionDialog
+        key={activeCompletion ? `${activeCompletion.occurrence.id}-${activeCompletion.occurrence.templateId}` : 'closed'}
+        isOpen={!!activeCompletion}
+        onClose={() => setActiveCompletion(null)}
+        template={activeCompletion?.template || null}
+        onSave={async (payload) => {
+          if (!activeCompletion) return
+          const { template, occurrence } = activeCompletion
+          const config = CompletionService.getCompletionConfig(template)
+          
+          if (config.hook === 'weight' && typeof payload.value === 'number') {
+            await logWeightAction(todayStr, payload.value)
+          } else {
+            await setTaskStatusAction(occurrence, todayStr, 'done', payload)
+          }
+          setActiveCompletion(null)
+          router.refresh()
+        }}
+      />
     </div>
   )
 }

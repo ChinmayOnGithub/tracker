@@ -8,7 +8,10 @@ import { getLoggedUser } from '@/app/actions/auth'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export default async function Page() {
+export default async function Page(props: { searchParams: Promise<{ date?: string }> }) {
+  const searchParams = await props.searchParams
+  const dateParam = searchParams.date
+  
   const loggedUser = await getLoggedUser()
   if (!loggedUser) {
     return null
@@ -96,7 +99,7 @@ export default async function Page() {
     payload: l.payload,
   }))
 
-  const todayStr = getTodayDateStr()
+  const todayStr = dateParam || getTodayDateStr()
 
   const analyzedTemplates = templates.map(template => {
     const templateLogs = logs.filter(log => log.activityId === template.id)

@@ -80,6 +80,50 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     return meta.startTime ?? '09:00'
   })
 
+  // Completion Engine configurations
+  const [completionMethod, setCompletionMethod] = useState<'CHECKBOX' | 'VALUE' | 'FORM'>(() => {
+    if (!templateToEdit) return 'CHECKBOX'
+    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
+    return meta.completion?.method || 'CHECKBOX'
+  })
+  const [completionHook, setCompletionHook] = useState(() => {
+    if (!templateToEdit) return 'none'
+    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
+    return meta.completion?.hook || 'none'
+  })
+  const [valueLabel, setValueLabel] = useState(() => {
+    if (!templateToEdit) return ''
+    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
+    return meta.completion?.value?.label || ''
+  })
+  const [valueInputType, setValueInputType] = useState(() => {
+    if (!templateToEdit) return 'number'
+    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
+    return meta.completion?.value?.inputType || 'number'
+  })
+  const [valueUnit, setValueUnit] = useState(() => {
+    if (!templateToEdit) return ''
+    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
+    return meta.completion?.value?.unit || ''
+  })
+  const [valueRequired, setValueRequired] = useState(() => {
+    if (!templateToEdit) return false
+    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
+    return meta.completion?.value?.required ?? false
+  })
+  const [valueMinimum, setValueMinimum] = useState(() => {
+    if (!templateToEdit) return ''
+    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
+    const min = meta.completion?.value?.minimum
+    return min !== undefined && min !== null ? String(min) : ''
+  })
+  const [valueMaximum, setValueMaximum] = useState(() => {
+    if (!templateToEdit) return ''
+    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
+    const max = meta.completion?.value?.maximum
+    return max !== undefined && max !== null ? String(max) : ''
+  })
+
   // Advanced section
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [priority, setPriority] = useState<Priority>(templateToEdit?.priority || 'NORMAL')
@@ -146,6 +190,17 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         ? JSON.parse(templateToEdit.notificationRules)
         : templateToEdit.notificationRules
       setHasReminder(Array.isArray(rules) && rules.length > 0)
+
+      setCompletionMethod(meta.completion?.method || 'CHECKBOX')
+      setCompletionHook(meta.completion?.hook || 'none')
+      setValueLabel(meta.completion?.value?.label || '')
+      setValueInputType(meta.completion?.value?.inputType || 'number')
+      setValueUnit(meta.completion?.value?.unit || '')
+      setValueRequired(meta.completion?.value?.required ?? false)
+      const min = meta.completion?.value?.minimum
+      setValueMinimum(min !== undefined && min !== null ? String(min) : '')
+      const max = meta.completion?.value?.maximum
+      setValueMaximum(max !== undefined && max !== null ? String(max) : '')
     } else {
       setName('')
       setCategory('personal')
@@ -167,6 +222,15 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       setCalendarProvider('NONE')
       setHasReminder(false)
       setShowAdvanced(false)
+
+      setCompletionMethod('CHECKBOX')
+      setCompletionHook('none')
+      setValueLabel('')
+      setValueInputType('number')
+      setValueUnit('')
+      setValueRequired(false)
+      setValueMinimum('')
+      setValueMaximum('')
     }
     setErrorMsg('')
     setIconSearch('')
@@ -195,6 +259,8 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         return `Repeats monthly on day ${recurrenceDayOfMonth}`
       case 'one_time':
         return `Once on ${targetDate}`
+      case 'milestone':
+        return 'Custom / Ad-hoc (Unscheduled, added manually)'
       default:
         return 'No repeat'
     }
@@ -224,10 +290,41 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       .map(t => t.trim())
       .filter(t => t.length > 0)
 
-    const meta = {
+    const meta: {
+      startTime: string
+      isAllDay: boolean
+      location: string
+      completion: {
+        method: 'CHECKBOX' | 'VALUE' | 'FORM'
+        hook: string
+        value?: {
+          label: string
+          inputType: string
+          unit: string | null
+          required: boolean
+          minimum: number | null
+          maximum: number | null
+        }
+      }
+    } = {
       startTime,
       isAllDay,
-      location
+      location,
+      completion: {
+        method: completionMethod,
+        hook: completionHook,
+      }
+    }
+
+    if (completionMethod === 'VALUE') {
+      meta.completion.value = {
+        label: valueLabel.trim() || name.trim(),
+        inputType: valueInputType,
+        unit: valueUnit.trim() || null,
+        required: valueRequired,
+        minimum: valueMinimum.trim() !== '' ? parseFloat(valueMinimum) : null,
+        maximum: valueMaximum.trim() !== '' ? parseFloat(valueMaximum) : null,
+      }
     }
 
     const payload = {
@@ -370,36 +467,38 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         </div>
 
         {/* Time Settings */}
-        <div className="grid grid-cols-2 gap-4 border border-[var(--color-border)] p-3 rounded-[var(--radius-md)] bg-[var(--color-bg-base)]">
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="isAllDay"
-              checked={isAllDay}
-              onChange={e => setIsAllDay(e.target.checked)}
-              className="w-4 h-4 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
-            />
-            <label htmlFor="isAllDay" className="text-xs font-semibold text-[var(--color-text-main)] cursor-pointer">
-              Anytime / All Day
-            </label>
-          </div>
-
-          {!isAllDay && (
+        {recurrenceType !== 'milestone' && (
+          <div className="grid grid-cols-2 gap-4 border border-[var(--color-border)] p-3 rounded-[var(--radius-md)] bg-[var(--color-bg-base)]">
             <div className="flex items-center gap-2">
-              <Input
-                type="time"
-                label="Start Time"
-                value={startTime}
-                onChange={e => setStartTime(e.target.value)}
+              <input
+                type="checkbox"
+                id="isAllDay"
+                checked={isAllDay}
+                onChange={e => setIsAllDay(e.target.checked)}
+                className="w-4 h-4 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
               />
+              <label htmlFor="isAllDay" className="text-xs font-semibold text-[var(--color-text-main)] cursor-pointer">
+                Anytime / All Day
+              </label>
             </div>
-          )}
-        </div>
+
+            {!isAllDay && (
+              <div className="flex items-center gap-2">
+                <Input
+                  type="time"
+                  label="Start Time"
+                  value={startTime}
+                  onChange={e => setStartTime(e.target.value)}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         </div>
 
         {/* Repeat Recurrence Builder */}
-        <div className="space-y-3 pt-2">
+        <div className="space-y-4 pb-2">
           <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)]/40 pb-1.5">
             Schedule & Recurrence
           </h4>
@@ -412,7 +511,8 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
               { value: 'daily', label: 'Daily' },
               { value: 'weekly', label: 'Weekly' },
               { value: 'monthly', label: 'Monthly' },
-              { value: 'one_time', label: 'Once (No Repeat)' },
+              { value: 'milestone', label: 'Custom / Ad-hoc (Unscheduled)' },
+              { value: 'one_time', label: 'Once (Scheduled Date)' },
             ]}
           />
 
@@ -524,6 +624,141 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                 onChange={e => setAmount(e.target.value)}
                 placeholder="e.g. 500"
               />
+
+              {/* Completion Engine Configuration UI */}
+              <div className="border border-[var(--color-border)] p-3 rounded-[var(--radius-md)] space-y-3 bg-[var(--color-bg-base)]">
+                <h5 className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-primary)]">Completion Method</h5>
+                
+                <Select
+                  label="Method"
+                  value={completionMethod}
+                  onChange={e => setCompletionMethod(e.target.value as 'CHECKBOX' | 'VALUE' | 'FORM')}
+                  options={[
+                    { value: 'CHECKBOX', label: 'Checkbox Only' },
+                    { value: 'VALUE', label: 'Value Prompt' },
+                    { value: 'FORM', label: 'Custom Form (Disabled)' },
+                  ]}
+                />
+
+                <Select
+                  label="Domain Hook"
+                  value={completionHook}
+                  onChange={e => setCompletionHook(e.target.value)}
+                  options={[
+                    { value: 'none', label: 'None' },
+                    { value: 'weight', label: 'Weight Tracking' },
+                  ]}
+                />
+
+                {completionMethod === 'VALUE' && (
+                  <div className="space-y-3 pt-2 border-t border-dashed border-[var(--color-border)]">
+                    <Input
+                      label="Value Label"
+                      value={valueLabel}
+                      onChange={e => setValueLabel(e.target.value)}
+                      placeholder="e.g. Fuel Amount, Pages Read"
+                    />
+
+                    <Select
+                      label="Input Type"
+                      value={valueInputType}
+                      onChange={e => {
+                        const nextType = e.target.value
+                        setValueInputType(nextType)
+                        if (nextType === 'currency' && !valueUnit) {
+                          setValueUnit('₹')
+                        } else if (!['number', 'decimal', 'currency', 'percentage'].includes(nextType)) {
+                          setValueUnit('')
+                        }
+                      }}
+                      options={[
+                        { value: 'number', label: 'Number' },
+                        { value: 'decimal', label: 'Decimal' },
+                        { value: 'currency', label: 'Currency' },
+                        { value: 'text', label: 'Text' },
+                        { value: 'duration', label: 'Duration' },
+                        { value: 'percentage', label: 'Percentage' },
+                      ]}
+                    />
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {valueInputType === 'currency' ? (
+                        <div className="space-y-2">
+                          <Select
+                            label="Currency"
+                            value={['₹', '$', '€', '£', '¥'].includes(valueUnit) ? valueUnit : 'custom'}
+                            onChange={e => {
+                              const val = e.target.value
+                              if (val !== 'custom') {
+                                setValueUnit(val)
+                              } else {
+                                setValueUnit('')
+                              }
+                            }}
+                            options={[
+                              { value: '₹', label: '₹ (INR - Rupees)' },
+                              { value: '$', label: '$ (USD - Dollars)' },
+                              { value: '€', label: '€ (EUR - Euros)' },
+                              { value: '£', label: '£ (GBP - Pounds)' },
+                              { value: '¥', label: '¥ (JPY - Yen)' },
+                              { value: 'custom', label: 'Other / Custom' },
+                            ]}
+                          />
+                          {!['₹', '$', '€', '£', '¥'].includes(valueUnit) && (
+                            <Input
+                              label="Custom Currency Symbol"
+                              value={valueUnit}
+                              onChange={e => setValueUnit(e.target.value)}
+                              placeholder="e.g. CAD, AUD"
+                            />
+                          )}
+                        </div>
+                      ) : ['number', 'decimal', 'percentage'].includes(valueInputType) ? (
+                        <Input
+                          label="Unit Label"
+                          value={valueUnit}
+                          onChange={e => setValueUnit(e.target.value)}
+                          placeholder="e.g. L, kg, ml"
+                        />
+                      ) : (
+                        <div />
+                      )}
+
+                      <div className={`flex items-center gap-2 ${['number', 'decimal', 'currency', 'percentage'].includes(valueInputType) ? 'pt-5' : 'pt-2'}`}>
+                        <input
+                          type="checkbox"
+                          id="valueRequired"
+                          checked={valueRequired}
+                          onChange={e => setValueRequired(e.target.checked)}
+                          className="w-4 h-4 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
+                        />
+                        <label htmlFor="valueRequired" className="text-xs font-semibold text-[var(--color-text-main)] cursor-pointer">
+                          Value Required
+                        </label>
+                      </div>
+                    </div>
+
+                    {valueInputType !== 'text' && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <Input
+                          type="number"
+                          label="Min Value"
+                          value={valueMinimum}
+                          onChange={e => setValueMinimum(e.target.value)}
+                          placeholder="None"
+                        />
+                        <Input
+                          type="number"
+                          label="Max Value"
+                          value={valueMaximum}
+                          onChange={e => setValueMaximum(e.target.value)}
+                          placeholder="None"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div className="grid grid-cols-2 gap-4 border border-[var(--color-border)] p-3 rounded-[var(--radius-md)] bg-[var(--color-bg-base)]">
                 <div className="flex items-center gap-2">

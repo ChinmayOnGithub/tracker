@@ -5,3 +5,6 @@ export { InsightsService } from './InsightsService'
 export { SearchService } from './SearchService'
 export { AuditService } from './AuditService'
 export { NotificationService } from './NotificationService'
+export { CompletionService } from './CompletionService'
+export { DefaultActivitiesService } from './DefaultActivitiesService'
+

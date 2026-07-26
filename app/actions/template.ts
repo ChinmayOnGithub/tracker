@@ -59,7 +59,7 @@ export async function createActivityTemplate(data: {
         ...templateRest,
         recurrenceType: recurrenceType as RecurrenceType,
         targetDate: parsedTargetDate,
-        effectiveFrom: new Date(),
+        effectiveFrom: parsedTargetDate || new Date(),
         metadata: templateRest.metadata as Prisma.InputJsonValue,
         notificationRules: templateRest.notificationRules as Prisma.InputJsonValue,
         sortOrder: nextSortOrder,
