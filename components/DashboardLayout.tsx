@@ -180,10 +180,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       lg: '16px',
     }
 
-    const radiusConfig: Record<string, { sm: string; md: string; lg: string }> = {
-      none: { sm: '0px', md: '0px', lg: '0px' },
-      md: { sm: '2px', md: '4px', lg: '6px' },
-      full: { sm: '6px', md: '12px', lg: '20px' },
+    const radiusConfig: Record<string, { xs: string; sm: string; md: string; lg: string; xl: string; '2xl': string; '3xl': string }> = {
+      none: { xs: '0px', sm: '0px', md: '0px', lg: '0px', xl: '0px', '2xl': '0px', '3xl': '0px' },
+      md: { xs: '2px', sm: '2px', md: '4px', lg: '6px', xl: '8px', '2xl': '12px', '3xl': '16px' },
+      full: { xs: '4px', sm: '6px', md: '12px', lg: '20px', xl: '24px', '2xl': '32px', '3xl': '40px' },
     }
 
     const activeRadius = radiusConfig[rounded] || radiusConfig.md
@@ -200,9 +200,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       :root {
         --color-primary: ${match.primary} !important;
         --color-primary-hover: ${match.hover} !important;
+        --radius-xs: ${activeRadius.xs} !important;
         --radius-sm: ${activeRadius.sm} !important;
         --radius-md: ${activeRadius.md} !important;
         --radius-lg: ${activeRadius.lg} !important;
+        --radius-xl: ${activeRadius.xl} !important;
+        --radius-2xl: ${activeRadius['2xl']} !important;
+        --radius-3xl: ${activeRadius['3xl']} !important;
         --card-radius: ${activeRadius.lg} !important;
         font-size: ${fontSizes[fontSize] || fontSizes.md} !important;
       }
