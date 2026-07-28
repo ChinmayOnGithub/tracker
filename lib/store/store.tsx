@@ -202,6 +202,42 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [])
 
+  // Load offline data into store on startup
+  useEffect(() => {
+    const loadLocalData = async () => {
+      try {
+        const { ActivityTemplateRepository, ActivityLogRepository } = await import('@/modules/activities/repository/ActivityRepository');
+        const { JournalRepository } = await import('@/modules/journal/repository/JournalRepository');
+        const { WeightRepository } = await import('@/modules/weight/repository/WeightRepository');
+        const { LeaveRepository } = await import('@/modules/leave/repository/LeaveRepository');
+        
+        const templateRepo = new ActivityTemplateRepository();
+        const logRepo = new ActivityLogRepository();
+        const journalRepo = new JournalRepository();
+        const weightRepo = new WeightRepository();
+        const leaveRepo = new LeaveRepository();
+
+        const localTemplates = await templateRepo.getAll();
+        const localLogs = await logRepo.getAll();
+        const localJournals = await journalRepo.getAll();
+        const localWeights = await weightRepo.getAll();
+        const localLeaves = await leaveRepo.getAll();
+
+        setState(prev => ({
+          ...prev,
+          templates: localTemplates.length > 0 ? localTemplates : prev.templates,
+          logs: localLogs.length > 0 ? localLogs : prev.logs,
+          journalEntries: localJournals.length > 0 ? localJournals : prev.journalEntries,
+          weightRecords: localWeights.length > 0 ? localWeights : prev.weightRecords,
+          leaveRecords: localLeaves.length > 0 ? localLeaves : prev.leaveRecords
+        }));
+      } catch (err) {
+        console.error('Failed to load offline data into store:', err);
+      }
+    };
+    loadLocalData();
+  }, []);
+
   const initialize = useCallback((initialData: Partial<StoreState>) => {
     setState(prev => {
       const next = { ...prev }
@@ -233,7 +269,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const matched = state.templates.find(t => t.id === templateId)
     const isDaily = matched?.recurrenceType === 'daily'
-    const isOneTime = matched?.recurrenceType === 'one_time'
 
     // Cycle state logic
     if (!currentCompleted && !isCanceled && !isPostponed) {
@@ -255,18 +290,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       nextStatus = undefined
     }
 
-    // Capture current logs state for rollback
     const previousLogs = [...state.logs]
+    const resolvedAmount = (payload && typeof payload.value === 'number') ? payload.value : (matched?.amount || null)
 
-    // Apply Optimistic Update to Local State
+    const finalLogId = logId || `log-${Date.now()}`
+
+    // Optimistic Update
     setState(prev => {
       let updatedLogs = [...prev.logs]
-      
-      const resolvedAmount = (payload && typeof payload.value === 'number') ? payload.value : (matched?.amount || null)
-
       if (logId) {
         if (nextCompleted === false && nextStatus === undefined && isDaily) {
-          // Cleared - daily deletes log
           updatedLogs = updatedLogs.filter(l => l.id !== logId)
         } else {
           updatedLogs = updatedLogs.map(l => 
@@ -274,10 +307,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           )
         }
       } else {
-        // Create an optimistic log
-        const tempId = `temp-log-${Date.now()}`
         updatedLogs.push({
-          id: tempId,
+          id: finalLogId,
           activityId: templateId,
           date: todayStr,
           status: nextStatus || 'done',
@@ -288,43 +319,43 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           updatedAt: new Date()
         })
       }
-
       return { ...prev, logs: updatedLogs }
     })
 
-    // Queue background server update
-    writeQueue.add({
-      id: `task-cycle-${templateId}-${Date.now()}`,
-      dedupKey: `task-cycle-${templateId}-${todayStr}`,
-      run: async () => {
-        const { markComplete, updateLog, deleteLog, postponeOneTimeTask } = await import('@/app/actions/log')
-        const resolvedAmount = (payload && typeof payload.value === 'number') ? payload.value : (matched?.amount || null)
-        
-        if (!currentCompleted && !isCanceled && !isPostponed) {
-          return markComplete(templateId, todayStr, nextStatus || 'done', resolvedAmount, payload || null)
-        } else if (isDone) {
-          if (logId) return updateLog(logId, { status: 'skipped' })
-          return markComplete(templateId, todayStr, 'skipped')
-        } else if (isCanceled) {
-          if (isDaily) {
-            if (logId) return deleteLog(logId)
-            return { success: true }
-          } else if (isOneTime) {
-            return postponeOneTimeTask(templateId, todayStr, logId || undefined)
-          } else {
-            if (logId) return updateLog(logId, { status: 'postponed' })
-            return markComplete(templateId, todayStr, 'postponed')
-          }
+    try {
+      const { ActivityLogRepository } = await import('@/modules/activities/repository/ActivityRepository')
+      const logRepo = new ActivityLogRepository()
+
+      if (logId) {
+        if (nextCompleted === false && nextStatus === undefined && isDaily) {
+          await logRepo.delete(logId)
         } else {
-          // Postponed -> Cleared
-          if (logId) return deleteLog(logId)
-          return { success: true }
+          const log = await logRepo.getById(logId)
+          if (log) {
+            log.status = nextStatus || 'done'
+            log.amount = resolvedAmount
+            log.payload = payload || log.payload
+            log.updatedAt = new Date()
+            await logRepo.save(log)
+          }
         }
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, logs: previousLogs }))
+      } else {
+        await logRepo.save({
+          id: finalLogId,
+          activityId: templateId,
+          date: todayStr,
+          status: nextStatus || 'done',
+          note: null,
+          amount: resolvedAmount,
+          payload: payload || null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
       }
-    })
+    } catch (err) {
+      console.error('Cycle task status transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, logs: previousLogs }))
+    }
   }
 
   const setTaskStatusAction = async (
@@ -340,7 +371,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const matched = state.templates.find(t => t.id === templateId)
     const isDaily = matched?.recurrenceType === 'daily'
-    const isOneTime = matched?.recurrenceType === 'one_time'
 
     let nextCompleted = false
     let nextStatus: string | undefined = undefined
@@ -359,19 +389,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       nextStatus = undefined
     }
 
-    // Capture current logs state for rollback
     const previousLogs = [...state.logs]
+    const resolvedAmount = (payload && typeof payload.value === 'number') ? payload.value : (matched?.amount || null)
+    const finalLogId = logId || `log-${Date.now()}`
 
-    let tempId: string | null = null
-
-    // Apply Optimistic Update to Local State
+    // Optimistic Update
     setState(prev => {
       let updatedLogs = [...prev.logs]
-      const resolvedAmount = (payload && typeof payload.value === 'number') ? payload.value : (matched?.amount || null)
-
       if (logId) {
         if (targetStatus === 'cleared' && isDaily) {
-          // Cleared - daily deletes log
           updatedLogs = updatedLogs.filter(l => l.id !== logId)
         } else {
           updatedLogs = updatedLogs.map(l => 
@@ -379,10 +405,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           )
         }
       } else if (targetStatus !== 'cleared') {
-        // Create an optimistic log
-        tempId = `temp-log-${Date.now()}`
         updatedLogs.push({
-          id: tempId,
+          id: finalLogId,
           activityId: templateId,
           date: todayStr,
           status: nextStatus || 'done',
@@ -393,130 +417,125 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           updatedAt: new Date()
         })
       }
-
       return { ...prev, logs: updatedLogs }
     })
 
-    // Queue background server update
-    writeQueue.add({
-      id: `task-set-${templateId}-${Date.now()}`,
-      dedupKey: `task-set-${templateId}-${todayStr}`,
-      run: async () => {
-        const { markComplete, updateLog, deleteLog, postponeOneTimeTask } = await import('@/app/actions/log')
-        const resolvedAmount = (payload && typeof payload.value === 'number') ? payload.value : (matched?.amount || null)
-        
-        let res: any
-        if (targetStatus === 'done') {
-          res = await markComplete(templateId, todayStr, nextStatus || 'done', resolvedAmount, payload || null)
-        } else if (targetStatus === 'skipped') {
-          if (logId && !logId.startsWith('temp-')) {
-            res = await updateLog(logId, { status: 'skipped' })
-          } else {
-            res = await markComplete(templateId, todayStr, 'skipped')
-          }
-        } else if (targetStatus === 'postponed') {
-          if (isOneTime) {
-            res = await postponeOneTimeTask(templateId, todayStr, (logId && !logId.startsWith('temp-')) ? logId : undefined)
-          } else {
-            if (logId && !logId.startsWith('temp-')) {
-              res = await updateLog(logId, { status: 'postponed' })
-            } else {
-              res = await markComplete(templateId, todayStr, 'postponed')
-            }
-          }
+    try {
+      const { ActivityLogRepository } = await import('@/modules/activities/repository/ActivityRepository')
+      const logRepo = new ActivityLogRepository()
+
+      if (logId) {
+        if (targetStatus === 'cleared' && isDaily) {
+          await logRepo.delete(logId)
         } else {
-          // targetStatus === 'cleared'
-          if (logId && !logId.startsWith('temp-')) {
-            res = await deleteLog(logId)
-          } else {
-            res = { success: true }
+          const log = await logRepo.getById(logId)
+          if (log) {
+            log.status = nextStatus || 'done'
+            log.amount = resolvedAmount
+            log.payload = payload || log.payload
+            log.updatedAt = new Date()
+            await logRepo.save(log)
           }
         }
-
-        // Replace optimistic tempId with real database ID
-        if (tempId && res?.success && res?.data) {
-          setState(prev => ({
-            ...prev,
-            logs: prev.logs.map(l => l.id === tempId ? (res.data as any) : l)
-          }))
-        }
-
-        return res
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, logs: previousLogs }))
+      } else if (targetStatus !== 'cleared') {
+        await logRepo.save({
+          id: finalLogId,
+          activityId: templateId,
+          date: todayStr,
+          status: nextStatus || 'done',
+          note: null,
+          amount: resolvedAmount,
+          payload: payload || null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
       }
-    })
+    } catch (err) {
+      console.error('Set task status transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, logs: previousLogs }))
+    }
   }
 
   const deleteActivityLog = async (logId: string) => {
     const previousLogs = [...state.logs]
     setState(prev => ({ ...prev, logs: prev.logs.filter(l => l.id !== logId) }))
 
-    writeQueue.add({
-      id: `log-delete-${logId}`,
-      dedupKey: `log-delete-${logId}`,
-      run: async () => {
-        const { deleteLog } = await import('@/app/actions/log')
-        return deleteLog(logId)
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, logs: previousLogs }))
-      }
-    })
+    try {
+      const { ActivityLogRepository } = await import('@/modules/activities/repository/ActivityRepository')
+      const logRepo = new ActivityLogRepository()
+      await logRepo.delete(logId)
+    } catch (err) {
+      console.error('Delete log transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, logs: previousLogs }))
+    }
   }
 
   const postponeOneTimeTaskAction = async (templateId: string, date: string, logId: string | null) => {
     const previousLogs = [...state.logs]
     const previousTemplates = [...state.templates]
 
-    setState(prev => {
-      // Find and update template targetDate (postpone to tomorrow)
-      const tomorrow = new Date()
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      const tomorrowStr = tomorrow.toISOString().split('T')[0]
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const tomorrowStr = tomorrow.toISOString().split('T')[0]
 
-      return {
-        ...prev,
-        templates: prev.templates.map(t => t.id === templateId ? { ...t, targetDate: tomorrowStr } : t),
-        logs: logId ? prev.logs.filter(l => l.id !== logId) : prev.logs
-      }
-    })
+    // Optimistic Update
+    setState(prev => ({
+      ...prev,
+      templates: prev.templates.map(t => t.id === templateId ? { ...t, targetDate: tomorrowStr } : t),
+      logs: logId ? prev.logs.filter(l => l.id !== logId) : prev.logs
+    }))
 
-    writeQueue.add({
-      id: `postpone-ot-${templateId}`,
-      dedupKey: `postpone-ot-${templateId}`,
-      run: async () => {
-        const { postponeOneTimeTask } = await import('@/app/actions/log')
-        return postponeOneTimeTask(templateId, date, logId || undefined)
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, logs: previousLogs, templates: previousTemplates }))
+    try {
+      const { ActivityTemplateRepository, ActivityLogRepository } = await import('@/modules/activities/repository/ActivityRepository')
+      const templateRepo = new ActivityTemplateRepository()
+      const logRepo = new ActivityLogRepository()
+
+      const template = await templateRepo.getById(templateId)
+      if (template) {
+        template.targetDate = tomorrowStr
+        await templateRepo.save(template)
       }
-    })
+      if (logId) {
+        await logRepo.delete(logId)
+      }
+    } catch (err) {
+      console.error('Postpone transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, logs: previousLogs, templates: previousTemplates }))
+    }
   }
 
   const unpostponeOneTimeTaskAction = async (templateId: string, logId: string, originalDate: string) => {
     const previousLogs = [...state.logs]
-    setState(prev => ({ ...prev, logs: prev.logs.filter(l => l.id !== logId) }))
+    const previousTemplates = [...state.templates]
 
-    writeQueue.add({
-      id: `unpostpone-ot-${templateId}`,
-      dedupKey: `unpostpone-ot-${templateId}`,
-      run: async () => {
-        const { unpostponeOneTimeTask } = await import('@/app/actions/log')
-        return unpostponeOneTimeTask(templateId, logId, originalDate)
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, logs: previousLogs }))
+    // Optimistic Update
+    setState(prev => ({
+      ...prev,
+      templates: prev.templates.map(t => t.id === templateId ? { ...t, targetDate: originalDate } : t),
+      logs: prev.logs.filter(l => l.id !== logId)
+    }))
+
+    try {
+      const { ActivityTemplateRepository, ActivityLogRepository } = await import('@/modules/activities/repository/ActivityRepository')
+      const templateRepo = new ActivityTemplateRepository()
+      const logRepo = new ActivityLogRepository()
+
+      const template = await templateRepo.getById(templateId)
+      if (template) {
+        template.targetDate = originalDate
+        await templateRepo.save(template)
       }
-    })
+      await logRepo.delete(logId)
+    } catch (err) {
+      console.error('Unpostpone transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, logs: previousLogs, templates: previousTemplates }))
+    }
   }
 
   const createActivityTemplateAction = async (templateData: any) => {
     const previousTemplates = [...state.templates]
-    const tempId = `temp-template-${Date.now()}`
-    
+    const tempId = templateData.id || `temp-template-${Date.now()}`
+
     const newTemplate: ActivityTemplate = {
       id: tempId,
       name: templateData.name,
@@ -531,8 +550,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       icon: templateData.icon || 'CheckSquare',
       color: templateData.color || 'blue',
       isActive: true,
-      notes: null,
-      amount: null,
+      notes: templateData.notes || null,
+      amount: templateData.amount || null,
       sortOrder: state.templates.length,
       recurrenceType: templateData.recurrenceType || 'one_time',
       recurrenceInterval: null,
@@ -553,25 +572,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       templates: [...prev.templates, newTemplate]
     }))
 
-    writeQueue.add({
-      id: `template-create-${tempId}`,
-      dedupKey: `template-create-${tempId}`,
-      run: async () => {
-        const { createActivityTemplate } = await import('@/app/actions/template')
-        const res = await createActivityTemplate(templateData)
-        if (res.success && res.data) {
-          // Replace the temporary ID in templates and logs
-          setState(prev => ({
-            ...prev,
-            templates: prev.templates.map(t => t.id === tempId ? (res.data as unknown as ActivityTemplate) : t)
-          }))
-        }
-        return res
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, templates: previousTemplates }))
-      }
-    })
+    try {
+      const { ActivityTemplateRepository } = await import('@/modules/activities/repository/ActivityRepository')
+      const templateRepo = new ActivityTemplateRepository()
+      await templateRepo.save(newTemplate)
+    } catch (err) {
+      console.error('Create template transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, templates: previousTemplates }))
+    }
   }
 
   const reorderActivityTemplatesAction = async (orderedIds: string[]) => {
@@ -588,17 +596,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       })
     }))
 
-    writeQueue.add({
-      id: `templates-reorder-${Date.now()}`,
-      dedupKey: `templates-reorder-unique`,
-      run: async () => {
-        const { reorderActivityTemplates } = await import('@/app/actions/template')
-        return reorderActivityTemplates(orderedIds)
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, templates: previousTemplates }))
-      }
-    })
+    try {
+      const { ActivityTemplateRepository } = await import('@/modules/activities/repository/ActivityRepository')
+      const templateRepo = new ActivityTemplateRepository()
+      await templateRepo.reorder(orderedIds)
+    } catch (err) {
+      console.error('Reorder templates transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, templates: previousTemplates }))
+    }
   }
 
   const logWorkPresenceAction = async (fields: any) => {
@@ -750,18 +755,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const upsertJournalAction = async (date: string, fields: any) => {
     const previousJournal = [...state.journalEntries]
 
-    setState(prev => {
-      const existing = prev.journalEntries.find(e => {
-        const entryDate = typeof e.journalDate === 'string' ? e.journalDate.split('T')[0] : e.journalDate.toISOString().split('T')[0]
-        return entryDate === date
-      })
+    const existing = state.journalEntries.find(e => {
+      const entryDate = typeof e.journalDate === 'string' ? e.journalDate.split('T')[0] : e.journalDate.toISOString().split('T')[0]
+      return entryDate === date
+    })
 
+    const finalId = existing ? existing.id : `journal-entry-${Date.now()}`
+
+    // Optimistic Update
+    setState(prev => {
       let updated = [...prev.journalEntries]
       if (existing) {
         updated = updated.map(e => e.id === existing.id ? { ...e, ...fields, updatedAt: new Date().toISOString() } : e)
       } else {
         updated.push({
-          id: `temp-jr-${Date.now()}`,
+          id: finalId,
           journalDate: new Date(`${date}T12:00:00.000Z`).toISOString(),
           content: fields.content || '',
           mood: fields.mood || null,
@@ -776,82 +784,107 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return { ...prev, journalEntries: updated }
     })
 
-    writeQueue.add({
-      id: `journal-upsert-${date}-${Date.now()}`,
-      dedupKey: `journal-upsert-${date}`,
-      run: async () => {
-        const { upsertJournalEntry } = await import('@/app/actions/journal')
-        return upsertJournalEntry(date, fields)
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, journalEntries: previousJournal }))
+    try {
+      const { JournalRepository } = await import('@/modules/journal/repository/JournalRepository')
+      const journalRepo = new JournalRepository()
+
+      const payload: JournalEntry = {
+        id: finalId,
+        journalDate: new Date(`${date}T12:00:00.000Z`).toISOString(),
+        content: fields.content || (existing ? existing.content : ''),
+        mood: fields.mood !== undefined ? fields.mood : (existing ? existing.mood : null),
+        gratitude: fields.gratitude !== undefined ? fields.gratitude : (existing ? existing.gratitude : null),
+        reflections: fields.reflections !== undefined ? fields.reflections : (existing ? existing.reflections : null),
+        lessonsLearned: fields.lessonsLearned !== undefined ? fields.lessonsLearned : (existing ? existing.lessonsLearned : null),
+        tomorrowPlan: fields.tomorrowPlan !== undefined ? fields.tomorrowPlan : (existing ? existing.tomorrowPlan : null),
+        createdAt: existing ? (typeof existing.createdAt === 'string' ? existing.createdAt : existing.createdAt.toISOString()) : new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       }
-    })
+
+      await journalRepo.save(payload)
+    } catch (err) {
+      console.error('Upsert journal entry transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, journalEntries: previousJournal }))
+    }
   }
 
   const deleteJournalAction = async (id: string) => {
     const previousJournal = [...state.journalEntries]
     setState(prev => ({ ...prev, journalEntries: prev.journalEntries.filter(e => e.id !== id) }))
 
-    writeQueue.add({
-      id: `journal-delete-${id}`,
-      dedupKey: `journal-delete-${id}`,
-      run: async () => {
-        const { deleteJournalEntry } = await import('@/app/actions/journal')
-        return deleteJournalEntry(id)
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, journalEntries: previousJournal }))
-      }
-    })
+    try {
+      const { JournalRepository } = await import('@/modules/journal/repository/JournalRepository')
+      const journalRepo = new JournalRepository()
+      await journalRepo.delete(id)
+    } catch (err) {
+      console.error('Delete journal entry transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, journalEntries: previousJournal }))
+    }
   }
 
   // --- WEIGHT ACTIONS ---
   const logWeightAction = async (date: string, weight: number, note?: string | null) => {
     const previousWeight = [...state.weightRecords]
 
-    setState(prev => {
-      const nextRecords = [...prev.weightRecords]
-      nextRecords.push({
-        id: `temp-wt-${Date.now()}`,
-        userId: '',
-        weight,
-        date,
-        notes: note || null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      })
-      return { ...prev, weightRecords: nextRecords }
+    const existing = state.weightRecords.find(r => {
+      const recDate = typeof r.date === 'string' ? r.date.split('T')[0] : r.date.toISOString().split('T')[0]
+      return recDate === date
     })
 
-    writeQueue.add({
-      id: `weight-log-${Date.now()}`,
-      dedupKey: `weight-log-${date}`,
-      run: async () => {
-        const { logWeight } = await import('@/app/actions/weight')
-        return logWeight(date, weight, note)
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, weightRecords: previousWeight }))
+    const finalId = existing ? existing.id : `weight-${Date.now()}`
+
+    // Optimistic Update
+    setState(prev => {
+      let updated = [...prev.weightRecords]
+      if (existing) {
+        updated = updated.map(r => r.id === existing.id ? { ...r, weight, notes: note ?? r.notes, updatedAt: new Date().toISOString() } : r)
+      } else {
+        updated.push({
+          id: finalId,
+          userId: '',
+          weight,
+          date,
+          notes: note || null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
       }
+      return { ...prev, weightRecords: updated }
     })
+
+    try {
+      const { WeightRepository } = await import('@/modules/weight/repository/WeightRepository')
+      const weightRepo = new WeightRepository()
+
+      const payload: WeightRecord = {
+        id: finalId,
+        userId: existing ? existing.userId : '',
+        weight,
+        date: new Date(`${date}T12:00:00.000Z`).toISOString(),
+        notes: note !== undefined ? note : (existing ? existing.notes : null),
+        createdAt: existing ? (typeof existing.createdAt === 'string' ? existing.createdAt : existing.createdAt?.toISOString()) : new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+
+      await weightRepo.save(payload)
+    } catch (err) {
+      console.error('Log weight transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, weightRecords: previousWeight }))
+    }
   }
 
   const deleteWeightAction = async (id: string) => {
     const previousWeight = [...state.weightRecords]
     setState(prev => ({ ...prev, weightRecords: prev.weightRecords.filter(r => r.id !== id) }))
 
-    writeQueue.add({
-      id: `weight-delete-${id}`,
-      dedupKey: `weight-delete-${id}`,
-      run: async () => {
-        const { deleteWeightRecord } = await import('@/app/actions/weight')
-        return deleteWeightRecord(id)
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, weightRecords: previousWeight }))
-      }
-    })
+    try {
+      const { WeightRepository } = await import('@/modules/weight/repository/WeightRepository')
+      const weightRepo = new WeightRepository()
+      await weightRepo.delete(id)
+    } catch (err) {
+      console.error('Delete weight transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, weightRecords: previousWeight }))
+    }
   }
 
   // --- LEAVE ACTIONS ---
@@ -859,6 +892,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const previousLeaves = [...state.leaveRecords]
     const tempId = `temp-lv-${Date.now()}`
 
+    // Optimistic Update
     setState(prev => ({
       ...prev,
       leaveRecords: [
@@ -878,17 +912,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ]
     }))
 
-    writeQueue.add({
-      id: `leave-create-${tempId}`,
-      dedupKey: `leave-create-${tempId}`,
-      run: async () => {
-        const { createLeaveRequest } = await import('@/app/actions/leave')
-        return createLeaveRequest(record)
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, leaveRecords: previousLeaves }))
+    try {
+      const { LeaveRepository } = await import('@/modules/leave/repository/LeaveRepository')
+      const leaveRepo = new LeaveRepository()
+
+      const payload: LeaveRecord = {
+        id: tempId,
+        userId: '',
+        leaveType: record.leaveType,
+        startDate: new Date(`${record.startDate}T12:00:00.000Z`).toISOString(),
+        endDate: new Date(`${record.endDate}T12:00:00.000Z`).toISOString(),
+        totalDays: record.totalDays || 1,
+        status: 'PENDING',
+        notes: record.notes || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       }
-    })
+
+      await leaveRepo.save(payload)
+    } catch (err) {
+      console.error('Create leave transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, leaveRecords: previousLeaves }))
+    }
   }
 
   const updateLeaveRecordAction = async (id: string, status: any) => {
@@ -899,17 +944,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       leaveRecords: prev.leaveRecords.map(l => l.id === id ? { ...l, status } : l)
     }))
 
-    writeQueue.add({
-      id: `leave-update-${id}`,
-      dedupKey: `leave-update-${id}`,
-      run: async () => {
-        const { updateLeaveStatus } = await import('@/app/actions/leave')
-        return updateLeaveStatus(id, status)
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, leaveRecords: previousLeaves }))
+    try {
+      const { LeaveRepository } = await import('@/modules/leave/repository/LeaveRepository')
+      const leaveRepo = new LeaveRepository()
+      const existing = await leaveRepo.getById(id)
+      if (existing) {
+        const payload: LeaveRecord = {
+          ...existing,
+          status,
+          updatedAt: new Date().toISOString()
+        }
+        await leaveRepo.save(payload)
       }
-    })
+    } catch (err) {
+      console.error('Update leave status transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, leaveRecords: previousLeaves }))
+    }
   }
 
   const deleteLeaveRecordAction = async (id: string) => {
@@ -920,17 +970,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       leaveRecords: prev.leaveRecords.filter(l => l.id !== id)
     }))
 
-    writeQueue.add({
-      id: `leave-delete-${id}`,
-      dedupKey: `leave-delete-${id}`,
-      run: async () => {
-        const { deleteLeaveRecord } = await import('@/app/actions/leave')
-        return deleteLeaveRecord(id)
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, leaveRecords: previousLeaves }))
-      }
-    })
+    try {
+      const { LeaveRepository } = await import('@/modules/leave/repository/LeaveRepository')
+      const leaveRepo = new LeaveRepository()
+      await leaveRepo.delete(id)
+    } catch (err) {
+      console.error('Delete leave transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, leaveRecords: previousLeaves }))
+    }
   }
 
   // --- LINKS ACTIONS ---

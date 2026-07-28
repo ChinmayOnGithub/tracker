@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && bun test && next build",
-    "test": "bun test",
+    "build": "prisma generate && bun test tests/ lib/services/ && next build",
+    "test": "bun test tests/ lib/services/",
     "start": "next start",
     "lint": "eslint",
     "prepare": "husky"

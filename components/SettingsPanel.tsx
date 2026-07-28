@@ -9,9 +9,11 @@ import {
 } from 'lucide-react'
 import { checkGoogleConnection, disconnectGoogleAccount } from '@/modules/sync/google-calendar/actions'
 import { getUserProfileAction, setPasscodeAction } from '@/app/actions/auth'
+import { BackupService } from '@/lib/database/local/BackupService'
+import { OfflineDebugPanel } from './OfflineDebugPanel'
 
 export const SettingsPanel: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'advanced' | 'leave'>('profile')
+  const [activeSection, setActiveSection] = useState<'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave'>('profile')
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
   const [lastSync, setLastSync] = useState<string | null>(null)
@@ -25,6 +27,11 @@ export const SettingsPanel: React.FC = () => {
   const [passcodeError, setPasscodeError] = useState<string | null>(null)
   const [passcodeSuccess, setPasscodeSuccess] = useState<string | null>(null)
   const [passcodeActionLoading, setPasscodeActionLoading] = useState(false)
+
+  // Backup & Recovery States
+  const [backupError, setBackupError] = useState<string | null>(null)
+  const [backupSuccess, setBackupSuccess] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
 
   // 1. Profile States
   const [displayName, setDisplayName] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_display_name') || '' : '')
@@ -241,6 +248,61 @@ export const SettingsPanel: React.FC = () => {
     setPasscodeActionLoading(false)
   }
 
+  const handleExportBackup = async () => {
+    setBackupError(null)
+    setBackupSuccess(null)
+    try {
+      const json = await BackupService.exportBackup()
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `tracker-backup-${new Date().toISOString().split('T')[0]}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      setBackupSuccess('Backup exported successfully!')
+    } catch (err) {
+      setBackupError(err instanceof Error ? err.message : 'Failed to export backup.')
+    }
+  }
+
+  const handleImportBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setBackupError(null)
+    setBackupSuccess(null)
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!confirm('WARNING: Importing this backup will overwrite ALL local Tracker data. This action is irreversible. Do you want to proceed?')) {
+      e.target.value = ''
+      return
+    }
+
+    setImporting(true)
+    const reader = new FileReader()
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string
+        const payload = JSON.parse(text)
+        await BackupService.restoreBackup(payload)
+        setBackupSuccess('Database restored successfully! Reloading page...')
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
+      } catch (err) {
+        setBackupError(err instanceof Error ? err.message : 'Invalid backup file structure.')
+      } finally {
+        setImporting(false)
+        e.target.value = ''
+      }
+    }
+    reader.onerror = () => {
+      setBackupError('Failed to read backup file.')
+      setImporting(false)
+      e.target.value = ''
+    }
+    reader.readAsText(file)
+  }
+
   const handleResetSettings = () => {
     if (confirm('Are you sure you want to reset all configurations to their default settings?')) {
       localStorage.clear()
@@ -270,6 +332,7 @@ export const SettingsPanel: React.FC = () => {
             { id: 'notifications', label: 'Notifications', icon: Bell },
             { id: 'integrations', label: 'Integrations', icon: RefreshCw },
             { id: 'security', label: 'Security', icon: Lock },
+            { id: 'backup', label: 'Backup & Recovery', icon: Database },
             { id: 'advanced', label: 'Advanced', icon: Settings2 },
           ] as const).map(section => {
             const Icon = section.icon
@@ -874,6 +937,57 @@ export const SettingsPanel: React.FC = () => {
                 )}
               </CardBody>
             </Card>
+          )}
+
+          {activeSection === 'backup' && (
+            <div className="space-y-6 animate-fade-in">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Database className="w-4.5 h-4.5 text-[var(--color-primary)]" />
+                    <span className="text-xs font-black text-[var(--color-text-main)] uppercase tracking-wider">Backup & Restore Workspace</span>
+                  </div>
+                </CardHeader>
+                <CardBody className="space-y-4">
+                  <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
+                    Export your complete local database state to a JSON backup file, or upload an existing backup file to restore your settings, activity templates, logs, and preferences.
+                  </p>
+
+                  {backupSuccess && (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-250 dark:border-emerald-900 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-semibold animate-fade-in">
+                      {backupSuccess}
+                    </div>
+                  )}
+
+                  {backupError && (
+                    <div className="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-250 dark:border-rose-900 text-rose-500 rounded-lg text-xs font-semibold animate-fade-in">
+                      {backupError}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-4 pt-2">
+                    <Button variant="primary" size="sm" onClick={handleExportBackup}>
+                      Export Backup (JSON)
+                    </Button>
+
+                    <Button variant="outline" size="sm" onClick={() => document.getElementById('backup-upload-input')?.click()} isLoading={importing} disabled={importing}>
+                      Import Backup (JSON)
+                    </Button>
+                    <input
+                      type="file"
+                      accept=".json"
+                      id="backup-upload-input"
+                      onChange={handleImportBackup}
+                      className="hidden"
+                      disabled={importing}
+                    />
+                  </div>
+                </CardBody>
+              </Card>
+
+              {/* Diagnostics Console */}
+              <OfflineDebugPanel />
+            </div>
           )}
 
           {activeSection === 'advanced' && (
