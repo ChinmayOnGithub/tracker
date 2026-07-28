@@ -29,10 +29,12 @@ export class SyncEngine {
     this.dbEngine = IndexedDBEngine.getInstance();
     this.connMonitor = ConnectivityMonitor.getInstance();
     
-    // Subscribe to connectivity changes
+    // Subscribe to connectivity changes.
+    // Delay the initial sync to the next tick so the DB has time to open
+    // before processQueue() is invoked (avoids unhandled rejection on cold start).
     this.connMonitor.subscribe((isOnline) => {
       if (isOnline) {
-        this.triggerSync();
+        setTimeout(() => this.triggerSync(), 0);
       } else {
         this.stopBackoffTimer();
       }
@@ -280,12 +282,14 @@ export class SyncEngine {
 
     try {
       const res = await handler(item.operationType, item.payload);
-      if (res.success) {
+      // Safely check success — handlers may return void, unknown, or { success }
+      const result = res as { success?: boolean; error?: string } | null | undefined;
+      if (result?.success !== false) {
         // resolved: delete from local queue
         await this.dbEngine.delete('sync_queue', item.id);
         return true;
       } else {
-        console.error(`[SyncEngine] Server rejected queue item ${item.id}:`, res.error);
+        console.error(`[SyncEngine] Server rejected queue item ${item.id}:`, result.error);
         return await this.handleItemFailure(item);
       }
     } catch (err) {

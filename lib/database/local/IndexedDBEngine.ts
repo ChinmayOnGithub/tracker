@@ -37,12 +37,24 @@ export class IndexedDBEngine {
       const request = window.indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onerror = () => {
+        // Clear promise so the next call can retry instead of permanently failing
+        this.dbPromise = null;
         reject(request.error || new Error('Failed to open IndexedDB database.'));
       };
 
       request.onsuccess = () => {
         this.db = request.result;
-        resolve(request.result);
+        // Clear promise — this.db fast-path will be used from now on
+        this.dbPromise = null;
+
+        // Handle unexpected connection loss (e.g. browser deletes DB externally)
+        this.db.onclose = () => {
+          this.db = null;
+          this.dbPromise = null;
+          console.warn('[IndexedDBEngine] Database connection closed unexpectedly. Will reopen on next access.');
+        };
+
+        resolve(this.db);
       };
 
       request.onupgradeneeded = (event) => {

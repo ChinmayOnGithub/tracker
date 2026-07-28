@@ -64,6 +64,33 @@ export class BaseRepository<T extends { id: string }> implements IRepository<T> 
     const existing = await this.getById(entity.id);
     const op = existing ? 'UPDATE' : 'CREATE';
 
+    // Check if a pending/failed item for this entity already exists in the queue.
+    // If so, update its payload in-place to avoid duplicate server writes on reconnect.
+    const engine = IndexedDBEngine.getInstance();
+    const allQueued = await engine.getAll<{
+      id: string;
+      module: string;
+      operationType: string;
+      payload: unknown;
+      syncStatus: string;
+    }>('sync_queue');
+    const existingQueueItem = allQueued.find(
+      (q) =>
+        q.module === this.moduleName &&
+        (q.syncStatus === 'PENDING' || q.syncStatus === 'FAILED') &&
+        (q.payload as { id?: string })?.id === entity.id
+    );
+
+    if (existingQueueItem) {
+      // Update the existing queue entry with the latest payload
+      existingQueueItem.payload = entity;
+      existingQueueItem.operationType = op;
+      await engine.put('sync_queue', existingQueueItem);
+      await this.local.save(entity);
+      SyncEngine.getInstance().triggerSync();
+      return;
+    }
+
     const queueItemId = crypto.randomUUID();
     const queueItem = {
       id: queueItemId,

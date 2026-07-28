@@ -61,6 +61,7 @@ describe('Activities & Templates Offline Domain Tests', () => {
       const db = IndexedDBEngine.getInstance();
       db.putAtomic = mock(async () => {});
       db.get = mock(async () => null);
+      db.getAll = mock(async () => []) as unknown as <T>(storeName: string) => Promise<T[]>;
 
       const template: ActivityTemplate = {
         id: 'tpl-1',
@@ -103,6 +104,7 @@ describe('Activities & Templates Offline Domain Tests', () => {
       const logRepo = new ActivityLogRepository();
       const db = IndexedDBEngine.getInstance();
       db.get = mock(async () => null);
+      db.getAll = mock(async () => []) as unknown as <T>(storeName: string) => Promise<T[]>;
       db.putAtomic = mock(async (_store: string, item: unknown) => {
         const logItem = item as { id?: string };
         if (logItem && logItem.id === 'trigger-rollback-id') {

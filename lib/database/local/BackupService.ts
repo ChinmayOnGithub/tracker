@@ -14,15 +14,19 @@ export class BackupService {
   private static APP_VERSION = '1.0.0';
   private static FORMAT_VERSION = 1;
 
+  // Operational stores that must NOT be included in user backups
+  private static EXCLUDED_STORES = new Set(['sync_queue', 'sync_metadata']);
+
   /**
    * Exports all IndexedDB data into a single JSON string.
+   * Operational stores (sync_queue, sync_metadata) are excluded.
    */
   public static async exportBackup(): Promise<string> {
     const engine = IndexedDBEngine.getInstance();
     const data: Record<string, unknown[]> = {};
 
     for (const store of STORES) {
-      // Don't back up temporary caches (if any are designated, though here we back up all configured persistent stores)
+      if (this.EXCLUDED_STORES.has(store.name)) continue;
       const records = await engine.getAll<unknown>(store.name);
       data[store.name] = records;
     }
