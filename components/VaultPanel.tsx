@@ -16,7 +16,7 @@ import {
   Pencil,
   ChevronRight,
   Shield,
-  HardDrive,
+  HardDrive as _HardDrive,
   X,
   Check,
   AlertTriangle,
@@ -50,7 +50,7 @@ import {
   updateVaultItemCategory
 } from '@/app/actions/vault'
 import type { VaultItem, VaultBreadcrumb, QuickInfoFieldDTO } from '@/app/actions/vault'
-import { Modal, Input, Button, Card, EmptyState, SkeletonWidget, SearchInput, Badge } from '@/design-system'
+import { Modal, Input, Button, Card, EmptyState, SkeletonWidget, SearchInput } from '@/design-system'
 import { useToast } from '@/design-system'
 import { writeQueue } from '@/lib/store/write-queue'
 
@@ -85,7 +85,7 @@ function getFileColor(mimeGroup: string | null, isFolder: boolean): string {
 }
 
 function formatFileSize(bytes: number | null): string {
-  if (bytes === null || bytes === 0) return '—'
+  if (bytes === null || bytes === 0) return 'â€”'
   const units = ['B', 'KB', 'MB', 'GB']
   let size = bytes
   let unitIndex = 0
@@ -111,6 +111,8 @@ function formatDate(isoString: string): string {
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined })
 }
 
+type SortField = 'name' | 'date' | 'size'
+type SortDir = 'asc' | 'desc'
 type InfoCategory = 'IDENTITY' | 'BANKING' | 'PERSONAL' | 'OTHER'
 
 // --- Main Component -----------------------------------------------------------
@@ -122,7 +124,7 @@ export function VaultPanel() {
   const [items, setItems] = useState<VaultItem[]>([])
   const [_breadcrumbs, setBreadcrumbs] = useState<VaultBreadcrumb[]>([{ id: null, name: 'Vault' }])
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
-  const [stats, setStats] = useState({ totalFiles: 0, totalFolders: 0, totalSize: 0 })
+  const [_stats, setStats] = useState({ totalFiles: 0, totalFolders: 0, totalSize: 0 })
   const [loading, setLoading] = useState(true)
   const [_uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
@@ -734,7 +736,7 @@ export function VaultPanel() {
       const formData = new FormData()
       formData.append('file', file)
       if (currentFolderId) formData.append('parentId', currentFolderId)
-      formData.append('category', selectedCat || docCategoryFilter === 'All' ? 'Other' : docCategoryFilter)
+      formData.append('category', selectedCat || _docCategoryFilter === 'All' ? 'Other' : _docCategoryFilter)
 
       try {
         const response = await fetch('/api/vault/upload', {
@@ -767,7 +769,7 @@ export function VaultPanel() {
       toast(`${completed} file(s) uploaded successfully`, { variant: 'success' })
       fetchItems()
     }
-  }, [currentFolderId, fetchItems])
+  }, [currentFolderId, fetchItems, _docCategoryFilter])
 
   const _handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -929,7 +931,7 @@ export function VaultPanel() {
     }
   }, [])
 
-  // (filteredItems and toggleSort removed — the new layout uses categoryItems computed below)
+  // (filteredItems and toggleSort removed â€” the new layout uses categoryItems computed below)
 
   // Helper: open upload modal pre-filled for a quick-info field document link
   const openUploadForField = (fieldId: string, fieldLabel: string) => {
@@ -982,9 +984,27 @@ export function VaultPanel() {
     return { count, summary: names ? `${names}${docs.length > 3 ? '...' : ''}` : 'No documents yet' }
   }
 
+  // Compute items for the active category view
+  const categoryItems = selectedCategory === null ? [] : items.filter(item => {
+    if (item.isFolder) return false
+    if (item.metadata?.category !== selectedCategory) return false
+    if (selectedSubCategory && selectedSubCategory !== 'All') {
+      const sub = item.metadata?.subCategory || item.metadata?.educationLevel || item.metadata?.documentType
+      if (sub !== selectedSubCategory) return false
+    }
+    if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase())) return false
+    return true
+  })
+
+  // Compute recent documents (last 5 files by date)
+  const recentDocuments = items
+    .filter(i => !i.isFolder)
+    .sort((a, b) => new Date(b.updatedAt ?? b.createdAt).getTime() - new Date(a.updatedAt ?? a.createdAt).getTime())
+    .slice(0, 5)
+
   return (
     <div
-      className="space-y-6 relative pb-10"
+      className="space-y-5 relative pb-10"
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
@@ -996,34 +1016,36 @@ export function VaultPanel() {
           <div className="bg-[var(--color-bg-surface)] border-2 border-dashed border-[var(--color-primary)] rounded-[var(--radius-lg)] p-12 text-center shadow-2xl">
             <Upload className="w-12 h-12 text-[var(--color-primary)] mx-auto mb-3" />
             <p className="text-sm font-bold text-[var(--color-text-main)]">Drop files to upload</p>
-            <p className="text-xs text-[var(--color-text-muted)] mt-1">Files will be classified and encrypted securely</p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1">Files will be classified and encrypted</p>
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border)]/50 pb-4">
+      {/* PAGE HEADER */}
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 flex items-center justify-center">
             <Shield className="w-5 h-5 text-[var(--color-primary)]" />
           </div>
           <div>
-            <h1 className="text-lg font-black text-[var(--color-text-main)] tracking-tight leading-tight">Secure Vault</h1>
-            <p className="text-xs font-semibold text-[var(--color-text-muted)] flex items-center gap-2 mt-0.5">
-              <HardDrive className="w-3.5 h-3.5" />
-              {stats.totalFiles} files &middot; {formatFileSize(stats.totalSize)}
-            </p>
+            <h1 className="text-xl font-black text-[var(--color-text-main)] tracking-tight leading-tight">Secure Vault</h1>
+            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Your encrypted documents and important information</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
+          <button
             onClick={() => setShowQuickSettings(v => !v)}
-            icon={<Settings className={`w-4 h-4 transition-transform duration-300 ${showQuickSettings ? 'rotate-90' : ''}`} />}
-            className={showQuickSettings ? 'bg-[var(--color-accent)] border-[var(--color-primary)]' : ''}
-          />
-          <Button variant="outline" size="sm" onClick={() => refreshAll()} icon={<RefreshCw className="w-4 h-4" />} disabled={loading} />
+            className="w-9 h-9 flex items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)] transition-colors cursor-pointer"
+          >
+            <Settings className={`w-4 h-4 text-[var(--color-text-muted)] transition-transform duration-300 ${showQuickSettings ? 'rotate-90' : ''}`} />
+          </button>
+          <button
+            onClick={() => void refreshAll()}
+            disabled={loading}
+            className="w-9 h-9 flex items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)] transition-colors cursor-pointer disabled:opacity-40"
+          >
+            <RefreshCw className={`w-4 h-4 text-[var(--color-text-muted)] ${loading ? 'animate-spin' : ''}`} />
+          </button>
           <Button
             variant="primary"
             size="sm"
@@ -1043,7 +1065,7 @@ export function VaultPanel() {
         </div>
       </div>
 
-      {/* Quick Settings Panel */}
+      {/* Quick Settings */}
       {showQuickSettings && (
         <Card className="border border-[var(--color-border)] p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1061,10 +1083,7 @@ export function VaultPanel() {
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">Accent Color</label>
               <div className="flex gap-1.5 flex-wrap">
-                {[
-                  {id:'blue',color:'#007aff'},{id:'purple',color:'#a855f7'},
-                  {id:'green',color:'#22c55e'},{id:'orange',color:'#f97316'},{id:'indigo',color:'#818cf8'}
-                ].map(opt => (
+                {[{id:'blue',color:'#007aff'},{id:'purple',color:'#a855f7'},{id:'green',color:'#22c55e'},{id:'orange',color:'#f97316'},{id:'indigo',color:'#818cf8'}].map(opt => (
                   <button key={opt.id} onClick={() => updateAccentColorSetting(opt.id)}
                     className={`px-3 py-1.5 text-xs font-bold rounded-[var(--radius-sm)] border transition-all cursor-pointer flex items-center gap-1.5 ${
                       currentAccent===opt.id ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]' : 'border-[var(--color-border)] text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]'
@@ -1088,7 +1107,7 @@ export function VaultPanel() {
         </div>
       )}
 
-      {/* Error Notification */}
+      {/* Error */}
       {errorMessage && (
         <div className="bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-[var(--radius-md)] px-3 py-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-sm font-semibold">
@@ -1102,72 +1121,91 @@ export function VaultPanel() {
       )}
 
       {selectedCategory === null ? (
-        /* ====== DASHBOARD VIEW ====== */
-        <div className="space-y-6">
+        /* DASHBOARD VIEW */
+        <div className="space-y-5">
 
-          {/* Quick Access Info Cards */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-muted)] flex items-center gap-1.5">
+          {/* QUICK ACCESS INFORMATION */}
+          <div className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-bg-surface)] overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+              <div className="flex items-center gap-2">
                 <Maximize className="w-3.5 h-3.5 text-[var(--color-primary)]" />
-                Quick Access Info
-              </h2>
-              <Button variant="ghost" size="sm" onClick={() => setShowNewCustomField(true)} icon={<Plus className="w-3.5 h-3.5" />}>
-                Add Field
-              </Button>
+                <span className="text-[11px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">Quick Access Information</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowNewCustomField(true)}
+                  className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] px-2 py-1 rounded-[var(--radius-sm)] hover:bg-[var(--color-accent)] transition-colors cursor-pointer">
+                  <Plus className="w-3.5 h-3.5" /> Add Field
+                </button>
+                <button onClick={() => setShowQuickSettings(v => !v)}
+                  className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] px-2 py-1 rounded-[var(--radius-sm)] hover:bg-[var(--color-accent)] transition-colors cursor-pointer">
+                  <Settings className="w-3.5 h-3.5" /> Customize
+                </button>
+              </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
               {quickInfoFields.map(field => {
                 const isSensitive = ['identity_aadhaar','identity_pan','banking_account_number','personal_phone','personal_email'].includes(field.id) || field.id.startsWith('custom_')
-                const showLinkDoc = ['identity_aadhaar','identity_pan','banking_account_number'].includes(field.id)
+                const showDownload = ['identity_aadhaar','identity_pan','banking_account_number'].includes(field.id)
                 return (
-                  <div key={field.id} className="group border border-[var(--color-border)] bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)]/30 hover:border-[var(--color-primary)]/30 p-3.5 flex flex-col justify-between h-[105px] transition-all duration-200 rounded-[var(--radius-md)] shadow-sm">
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center text-[10px] font-black text-[var(--color-text-muted)] uppercase tracking-wider">
-                        <span>{field.label}</span>
-                        {isSensitive && <span className="text-[9px] text-[var(--color-primary)]/70 font-mono font-bold">AES-256</span>}
-                      </div>
-                      <div className="text-sm font-mono font-bold text-[var(--color-text-main)] flex items-center justify-between gap-2">
-                        <span className="truncate select-all">
-                          {isSensitive && !revealedSecrets[field.id] ? field.maskedValue : (revealedSecrets[field.id] || field.maskedValue || '—')}
+                  <div key={field.id}
+                    className="border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-bg-base)] flex flex-col p-3 gap-2 hover:border-[var(--color-primary)]/40 hover:shadow-sm transition-all duration-150">
+                    {/* Label + AES badge */}
+                    <div className="flex items-start justify-between gap-1">
+                      <span className="text-[11px] font-semibold text-[var(--color-text-main)] leading-tight">{field.label}</span>
+                      {isSensitive && (
+                        <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                          AES-256
                         </span>
-                        {isSensitive && field.hasValue && (
-                          <button onClick={() => handleToggleReveal(field.id)} disabled={revealingFieldId === field.id}
-                            className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] cursor-pointer transition-colors">
-                            {revealingFieldId === field.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : revealedSecrets[field.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
-                    <div className="flex items-center justify-between pt-2 border-t border-[var(--color-border)]/40 mt-auto">
-                      <button onClick={() => handleCopySecret(field.id, field.label)} disabled={!field.hasValue}
-                        className="text-[10px] font-bold text-[var(--color-text-muted)] hover:text-[var(--color-primary)] flex items-center gap-1 transition-colors disabled:opacity-30 cursor-pointer">
-                        <Copy className="w-3 h-3" />
-                        Copy
-                      </button>
-                      <div className="flex items-center gap-1">
-                        {showLinkDoc && (
-                          field.documentId ? (
-                            <button onClick={() => { const a=document.createElement('a'); a.href=`/api/vault/download/${field.documentId}`; document.body.appendChild(a); a.click(); setTimeout(()=>document.body.removeChild(a),100) }}
-                              className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-accent)] cursor-pointer" title="Download document">
-                              <Download className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <button onClick={() => openUploadForField(field.id, field.label)}
-                              className="text-[10px] font-bold text-[var(--color-primary)] hover:underline cursor-pointer">+ Link Doc</button>
-                          )
-                        )}
-                        <button
-                          onClick={() => {
-                            setEditingField(field)
-                            if (field.hasValue) {
-                              getVaultSecretValue(field.id, 'reveal').then(r => { if (r.success) setEditValue(r.value || '') })
-                            } else setEditValue('')
-                          }}
-                          className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Pencil className="w-3 h-3" />
+                    {/* Value */}
+                    <div className="flex items-center gap-1.5 min-h-[24px]">
+                      <p className="font-mono text-sm font-semibold text-[var(--color-text-main)] truncate flex-1 select-all">
+                        {field.hasValue
+                          ? (isSensitive && !revealedSecrets[field.id]
+                              ? field.maskedValue
+                              : (revealedSecrets[field.id] || field.maskedValue))
+                          : <span className="text-[var(--color-text-muted)]">&mdash;</span>
+                        }
+                      </p>
+                      {isSensitive && field.hasValue && (
+                        <button onClick={() => handleToggleReveal(field.id)} disabled={revealingFieldId === field.id}
+                          className="w-6 h-6 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] cursor-pointer transition-colors shrink-0">
+                          {revealingFieldId === field.id ? <Loader2 className="w-3 h-3 animate-spin" /> : revealedSecrets[field.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
                         </button>
-                      </div>
+                      )}
+                    </div>
+                    {/* Actions always visible */}
+                    <div className="flex items-center gap-px pt-1.5 border-t border-[var(--color-border)]/50 mt-auto">
+                      <button onClick={() => handleCopySecret(field.id, field.label)} disabled={!field.hasValue}
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] rounded-l transition-colors disabled:opacity-30 cursor-pointer touch-manipulation">
+                        <Copy className="w-3 h-3" /> Copy
+                      </button>
+                      <div className="w-px h-4 bg-[var(--color-border)]" />
+                      {showDownload && field.documentId ? (
+                        <button onClick={() => { const a=document.createElement('a'); a.href=`/api/vault/download/${field.documentId}`; document.body.appendChild(a); a.click(); setTimeout(()=>document.body.removeChild(a),100) }}
+                          className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] transition-colors cursor-pointer touch-manipulation">
+                          <Download className="w-3 h-3" /> Download
+                        </button>
+                      ) : showDownload ? (
+                        <button onClick={() => openUploadForField(field.id, field.label)}
+                          className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 transition-colors cursor-pointer touch-manipulation">
+                          <Download className="w-3 h-3" /> Download
+                        </button>
+                      ) : (
+                        <div className="flex-1" />
+                      )}
+                      <div className="w-px h-4 bg-[var(--color-border)]" />
+                      <button
+                        onClick={() => {
+                          setEditingField(field)
+                          if (field.hasValue) {
+                            getVaultSecretValue(field.id, 'reveal').then(r => { if (r.success) setEditValue(r.value || '') })
+                          } else setEditValue('')
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] rounded-r transition-colors cursor-pointer touch-manipulation">
+                        <Pencil className="w-3 h-3" /> Edit
+                      </button>
                     </div>
                   </div>
                 )
@@ -1175,59 +1213,69 @@ export function VaultPanel() {
             </div>
           </div>
 
-          {/* Document Cabinets + Assets */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-3">
-              <h2 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-muted)] flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5 text-amber-500" />
-                Document Cabinets
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {(['Identity','Academics','Career','Financial','Other Important'] as const).map(catName => {
-                  const s = getCategoryStats(catName)
+          {/* BOTTOM 3-COLUMN GRID */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+            {/* 1. DOCUMENT CABINETS */}
+            <div className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-bg-surface)] overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+                <Folder className="w-3.5 h-3.5 text-amber-500" />
+                <span className="text-[11px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">Document Cabinets</span>
+              </div>
+              <div className="divide-y divide-[var(--color-border)]">
+                {([
+                  { name: 'Identity',        Color: 'text-emerald-500', Bg: 'bg-emerald-500/10' },
+                  { name: 'Academics',       Color: 'text-amber-500',   Bg: 'bg-amber-500/10' },
+                  { name: 'Career',          Color: 'text-blue-500',    Bg: 'bg-blue-500/10' },
+                  { name: 'Financial',       Color: 'text-green-500',   Bg: 'bg-green-500/10' },
+                  { name: 'Other Important', Color: 'text-violet-500',  Bg: 'bg-violet-500/10' },
+                ]).map(cat => {
+                  const s = getCategoryStats(cat.name)
                   return (
-                    <div key={catName}
+                    <button key={cat.name}
                       onClick={() => {
-                        setSelectedCategory(catName)
-                        if (catName==='Academics') setSelectedSubCategory('10th')
-                        else if (catName==='Career') setSelectedSubCategory('Resumes')
-                        else if (catName==='Financial') setSelectedSubCategory('Bank Documents')
+                        setSelectedCategory(cat.name)
+                        if (cat.name==='Academics') setSelectedSubCategory('10th')
+                        else if (cat.name==='Career') setSelectedSubCategory('Resumes')
+                        else if (cat.name==='Financial') setSelectedSubCategory('Bank Documents')
                         else setSelectedSubCategory('All')
                       }}
-                      className="border border-[var(--color-border)] border-l-2 border-l-[var(--color-primary)] bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)]/20 p-4 flex flex-col justify-between h-[105px] transition-all duration-200 rounded-[var(--radius-md)] cursor-pointer shadow-sm group">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-sm font-bold text-[var(--color-text-main)] group-hover:text-[var(--color-primary)] transition-colors">{catName}</h3>
-                          <p className="text-[10px] font-mono text-[var(--color-text-muted)]">{s.count} files</p>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-[var(--color-text-muted)] opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-accent)]/40 transition-colors cursor-pointer text-left group touch-manipulation">
+                      <div className={`w-8 h-8 rounded-[var(--radius-sm)] ${cat.Bg} flex items-center justify-center shrink-0`}>
+                        <Folder className={`w-4 h-4 ${cat.Color}`} />
                       </div>
-                      <p className="text-[10px] text-[var(--color-text-muted)]/80 truncate italic border-t border-[var(--color-border)]/35 pt-1.5">{s.summary}</p>
-                    </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-[var(--color-text-main)] group-hover:text-[var(--color-primary)] transition-colors">{cat.name}</p>
+                        <p className="text-[11px] text-[var(--color-text-muted)]">{s.count} document{s.count !== 1 ? 's' : ''}</p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-[var(--color-text-muted)] opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0" />
+                    </button>
                   )
                 })}
               </div>
             </div>
 
-            {/* Official Assets Sidebar */}
-            <div className="space-y-3">
-              <h2 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-muted)]">Official Assets</h2>
-              <div className="border border-[var(--color-border)] bg-[var(--color-bg-surface)] rounded-[var(--radius-md)] p-4 space-y-4 shadow-sm">
-
+            {/* 2. OFFICIAL ASSETS */}
+            <div className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-bg-surface)] overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+                <Upload className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                <span className="text-[11px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">Official Assets</span>
+              </div>
+              <div className="p-4 space-y-4">
                 {/* Signature */}
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span className="text-[var(--color-text-main)]">Official Signature</span>
-                    <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-[var(--radius-sm)] ${signatureDocId ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                      {signatureDocId ? 'ACTIVE' : 'MISSING'}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-[var(--color-text-main)]">Official Signature</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[var(--radius-sm)] ${signatureDocId ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-500'}`}>
+                      {signatureDocId ? 'Active' : 'Missing'}
                     </span>
                   </div>
-                  <div className="h-16 bg-zinc-950/40 rounded-[var(--radius-sm)] border border-[var(--color-border)] flex items-center justify-center overflow-hidden relative">
-                    {signatureUrl ? <img src={signatureUrl} alt="Signature" className="h-full object-contain p-2 max-w-full" /> : <span className="text-[10px] text-[var(--color-text-muted)] italic">No signature uploaded</span>}
+                  <div className="h-[80px] bg-zinc-950 rounded-[var(--radius-md)] border border-[var(--color-border)] flex items-center justify-center overflow-hidden relative">
+                    {signatureUrl ? <img src={signatureUrl} alt="Signature" className="h-full object-contain p-2 max-w-full" /> : <span className="text-[10px] text-zinc-600 italic">No signature</span>}
                     {uploadingAssetType==='signature' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Loader2 className="w-5 h-5 text-[var(--color-primary)] animate-spin" /></div>}
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => signatureInputRef.current?.click()} disabled={uploadingAssetType!==null}>Upload</Button>
+                    <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => signatureInputRef.current?.click()} disabled={uploadingAssetType!==null}>Upload Signature</Button>
                     {signatureDocId && (
                       <>
                         <Button variant="outline" size="sm" onClick={() => openExportModal('signature')} icon={<Download className="w-3.5 h-3.5" />} />
@@ -1237,21 +1285,20 @@ export function VaultPanel() {
                     <input ref={signatureInputRef} type="file" accept="image/*" onChange={e => handleSpecialAssetChange('signature', e)} className="hidden" />
                   </div>
                 </div>
-
                 {/* Photo */}
-                <div className="space-y-2 pt-3 border-t border-[var(--color-border)]/40">
-                  <div className="flex items-center justify-between text-[11px] font-bold">
-                    <span className="text-[var(--color-text-main)]">Passport Photo</span>
-                    <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded-[var(--radius-sm)] ${photoDocId ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                      {photoDocId ? 'ACTIVE' : 'MISSING'}
+                <div className="space-y-2 pt-3 border-t border-[var(--color-border)]/50">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-[var(--color-text-main)]">Official Photo</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-[var(--radius-sm)] ${photoDocId ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-500'}`}>
+                      {photoDocId ? 'Active' : 'Missing'}
                     </span>
                   </div>
-                  <div className="h-20 bg-zinc-950/40 rounded-[var(--radius-sm)] border border-[var(--color-border)] flex items-center justify-center overflow-hidden relative">
-                    {photoUrl ? <img src={photoUrl} alt="Photo" className="h-full object-cover p-1 max-w-full" /> : <span className="text-[10px] text-[var(--color-text-muted)] italic">No photo uploaded</span>}
+                  <div className="h-[90px] bg-zinc-950 rounded-[var(--radius-md)] border border-[var(--color-border)] flex items-center justify-center overflow-hidden relative">
+                    {photoUrl ? <img src={photoUrl} alt="Photo" className="h-full object-cover p-1 max-w-full" /> : <span className="text-[10px] text-zinc-600 italic">No photo</span>}
                     {uploadingAssetType==='photo' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Loader2 className="w-5 h-5 text-[var(--color-primary)] animate-spin" /></div>}
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => photoInputRef.current?.click()} disabled={uploadingAssetType!==null}>Upload</Button>
+                    <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => photoInputRef.current?.click()} disabled={uploadingAssetType!==null}>Upload Photo</Button>
                     {photoDocId && (
                       <>
                         <Button variant="outline" size="sm" onClick={() => openExportModal('photo')} icon={<Download className="w-3.5 h-3.5" />} />
@@ -1261,13 +1308,65 @@ export function VaultPanel() {
                     <input ref={photoInputRef} type="file" accept="image/*" onChange={e => handleSpecialAssetChange('photo', e)} className="hidden" />
                   </div>
                 </div>
-
               </div>
             </div>
+
+            {/* 3. RECENT DOCUMENTS */}
+            <div className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-bg-surface)] overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)]">
+                <RefreshCw className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                <span className="text-[11px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">Recent Documents</span>
+              </div>
+              {loading ? (
+                <div className="p-4 space-y-3">
+                  {[1,2,3,4,5].map(i => <SkeletonWidget key={i} />)}
+                </div>
+              ) : recentDocuments.length === 0 ? (
+                <div className="p-8 flex flex-col items-center gap-2 text-center">
+                  <FileText className="w-8 h-8 text-[var(--color-text-muted)]/30" />
+                  <p className="text-xs text-[var(--color-text-muted)]">No documents uploaded yet</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-[var(--color-border)]">
+                  {recentDocuments.map(item => {
+                    const IconComp = getFileIcon(item.mimeGroup, false)
+                    const iconCol = getFileColor(item.mimeGroup, false)
+                    return (
+                      <div key={item.id} className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-accent)]/30 transition-colors group">
+                        <div className="w-8 h-8 rounded-[var(--radius-sm)] bg-[var(--color-accent)] flex items-center justify-center shrink-0">
+                          <IconComp className={`w-4 h-4 ${iconCol}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-[var(--color-text-main)] truncate">{item.name}</p>
+                          <p className="text-[10px] text-[var(--color-text-muted)]">
+                            {item.metadata?.category || 'Vault'} &bull; {item.mimeGroup?.toUpperCase() || 'FILE'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-[10px] text-[var(--color-text-muted)] whitespace-nowrap hidden sm:block">
+                            {formatDate(item.updatedAt ?? item.createdAt)}
+                          </span>
+                          <button onClick={() => handleDownload(item)}
+                            className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-accent)] transition-all cursor-pointer">
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <button
+                    onClick={() => { setSelectedCategory('Identity'); setSelectedSubCategory('All') }}
+                    className="w-full px-4 py-3 text-xs font-semibold text-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 transition-colors cursor-pointer text-left">
+                    View all documents &rarr;
+                  </button>
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
       ) : (
-        /* ====== CATEGORY VIEW ====== */
+        /* CATEGORY VIEW */
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" onClick={() => { setSelectedCategory(null); setSearchQuery('') }}>
@@ -1279,7 +1378,6 @@ export function VaultPanel() {
             </h2>
           </div>
 
-          {/* Sub-category tabs */}
           {['Academics','Career','Financial'].includes(selectedCategory) && (
             <div className="flex flex-wrap gap-1 border-b border-[var(--color-border)]/50 pb-2">
               {(selectedCategory==='Academics'
@@ -1320,28 +1418,24 @@ export function VaultPanel() {
               }
             />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
               {categoryItems.map(item => {
                 const IconComponent = getFileIcon(item.mimeGroup, item.isFolder)
                 const iconColor = getFileColor(item.mimeGroup, item.isFolder)
                 return (
-                  <Card key={item.id} className="p-3.5 border border-[var(--color-border)] bg-[var(--color-bg-surface)]/60 flex flex-col gap-3 group relative transition-all hover:scale-[1.01] hover:-translate-y-0.5 hover:shadow-md rounded-[var(--radius-lg)]">
-                    <div className="flex items-start gap-3">
+                  <Card key={item.id} className="p-3 border border-[var(--color-border)] bg-[var(--color-bg-surface)]/60 flex flex-col gap-2 relative transition-all hover:shadow-md rounded-[var(--radius-lg)]">
+                    <div className="flex items-center gap-2.5">
                       <div className="w-9 h-9 rounded-[var(--radius-md)] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/10 flex items-center justify-center shrink-0">
                         <IconComponent className={`w-4 h-4 ${iconColor}`} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-[var(--color-text-main)] truncate">{item.name}</p>
-                        <p className="text-[10px] font-mono text-[var(--color-text-muted)] mt-0.5">{formatFileSize(item.fileSize)} &middot; {formatDate(item.createdAt)}</p>
-                        <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                          {item.metadata?.documentType && <Badge variant="info" className="text-[9px] px-1.5 py-0 font-bold font-mono uppercase">{item.metadata.documentType}</Badge>}
-                          {item.metadata?.educationLevel && <Badge variant="muted" className="text-[9px] px-1.5 py-0 font-mono">{item.metadata.educationLevel}</Badge>}
-                        </div>
+                        <p className="text-[10px] font-mono text-[var(--color-text-muted)]">{formatFileSize(item.fileSize)} &middot; {formatDate(item.createdAt)}</p>
                       </div>
                     </div>
                     <div className="flex gap-1.5 pt-2 border-t border-[var(--color-border)]/40">
-                      <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => handleDownload(item)} icon={<Download className="w-3.5 h-3.5" />}>Download</Button>
-                      <Button variant="ghost" size="sm" className="px-2 text-rose-500 hover:bg-rose-500/10" onClick={() => setDeletingItem(item)} icon={<Trash2 className="w-3.5 h-3.5" />} />
+                      <Button variant="outline" size="sm" className="flex-1 text-xs min-h-[40px] touch-manipulation" onClick={() => handleDownload(item)} icon={<Download className="w-3.5 h-3.5" />}>Download</Button>
+                      <Button variant="ghost" size="sm" className="px-3 min-h-[40px] text-rose-500 hover:bg-rose-500/10 touch-manipulation" onClick={() => setDeletingItem(item)} icon={<Trash2 className="w-3.5 h-3.5" />} />
                     </div>
                   </Card>
                 )
