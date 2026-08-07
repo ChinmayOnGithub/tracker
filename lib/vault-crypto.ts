@@ -219,3 +219,51 @@ export function decryptMimeType(encrypted: string): string {
 
 export const VAULT_MAX_FILE_SIZE = 50 * 1024 * 1024 // 50 MB
 export { IV_LENGTH, TAG_LENGTH }
+
+export function maskValue(id: string, value: string): string {
+  if (!value) return ''
+  const trimmed = value.trim()
+  if (id.includes('aadhaar')) {
+    const digitsOnly = trimmed.replace(/\s/g, '')
+    if (digitsOnly.length >= 4) {
+      return `XXXX XXXX ${digitsOnly.slice(-4)}`
+    }
+    return 'XXXX XXXX XXXX'
+  }
+  if (id.includes('pan')) {
+    if (trimmed.length >= 10) {
+      return `${trimmed.slice(0, 5)}••••${trimmed.slice(-1)}`
+    }
+    return '••••••••••'
+  }
+  if (id.includes('account_number')) {
+    if (trimmed.length >= 4) {
+      return `••••••••${trimmed.slice(-4)}`
+    }
+    return '••••••••'
+  }
+  if (id.includes('passport') || id.includes('dl') || id.includes('voter')) {
+    if (trimmed.length >= 4) {
+      return `••••••••${trimmed.slice(-4)}`
+    }
+    return '••••••••'
+  }
+  if (id.includes('phone') || id.includes('email') || id.includes('dob') || id.includes('address') || id.includes('holder_name') || id.includes('full_name')) {
+    if (trimmed.includes('@')) {
+      const [local, domain] = trimmed.split('@')
+      if (local.length > 2) {
+        return `${local.slice(0, 2)}••••@${domain}`
+      }
+      return `••••@${domain}`
+    }
+    if (trimmed.length >= 4) {
+      return `••••${trimmed.slice(-4)}`
+    }
+    return '••••'
+  }
+  if (trimmed.length >= 4) {
+    return `••••••••${trimmed.slice(-4)}`
+  }
+  return '••••••••'
+}
+

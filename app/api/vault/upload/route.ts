@@ -36,10 +36,23 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     const parentId = (formData.get('parentId') as string | null) || null
-
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
+
+    const category = (formData.get('category') as string | null) || 'Other'
+    const educationLevel = formData.get('educationLevel') as string | null
+    const careerSub = formData.get('careerSub') as string | null
+    const financialSub = formData.get('financialSub') as string | null
+    const documentType = formData.get('documentType') as string | null
+    const associateWithInfoField = formData.get('associateWithInfoField') as string | null
+
+    const metadata: Record<string, string> = { category }
+    if (educationLevel) metadata.educationLevel = educationLevel
+    if (careerSub) metadata.careerSub = careerSub
+    if (financialSub) metadata.financialSub = financialSub
+    if (documentType) metadata.documentType = documentType
+    if (associateWithInfoField) metadata.associateWithInfoField = associateWithInfoField
 
     if (!file.name || file.name.trim().length === 0) {
       return NextResponse.json({ error: 'Invalid file name' }, { status: 400 })
@@ -133,6 +146,7 @@ export async function POST(request: NextRequest) {
           fileSize: file.size,
           isFolder: false,
           parentId: parentId,
+          metadata: metadata,
         },
       })
     } catch (error) {
@@ -158,6 +172,7 @@ export async function POST(request: NextRequest) {
         parentId: doc.parentId,
         createdAt: doc.createdAt.toISOString(),
         updatedAt: doc.updatedAt.toISOString(),
+        metadata: doc.metadata,
       },
     })
   } catch (error) {
