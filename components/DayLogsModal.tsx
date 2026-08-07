@@ -555,7 +555,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
           onClick={() => cycleTaskStatus(occurrence)}
           title={`Status: ${isDone ? 'Done' : isCanceled ? 'Canceled' : isPostponed ? 'Postponed' : 'Cleared'}. Click to cycle.`}
           aria-label="Cycle task status"
-          className="shrink-0 w-6 h-6 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-90 disabled:opacity-50"
+          className="shrink-0 w-11 h-11 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-90 disabled:opacity-50 -ml-2.5 -mr-2.5"
         >
           <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-300 shadow-xs ${
             completingHabitId === occurrence.templateId ? 'bg-slate-100 dark:bg-zinc-800 border-[var(--color-border)]' :
@@ -619,7 +619,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                 e.stopPropagation()
                 setActiveMenuId(activeMenuId === occurrence.id ? null : occurrence.id)
               }}
-              className="p-1 rounded-sm text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              className="w-11 h-11 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer -mr-3.5"
             >
               <MoreVertical className="w-3.5 h-3.5" />
             </button>

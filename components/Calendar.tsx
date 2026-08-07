@@ -8,6 +8,7 @@ import { Card, Button } from '@/design-system'
 import { CalendarMonthSummaryDTO } from '@/modules/calendar/dto/CalendarMonthSummaryDTO'
 import { CalendarWeekDTO, CalendarWeekEventDTO } from '@/modules/calendar/dto/CalendarWeekDTO'
 import { checkGoogleConnection, syncCalendarAction } from '@/modules/sync/google-calendar/actions'
+import { getWeekDates } from '@/lib/recurrence'
 
 interface TestAnalyzedTemplate {
   template: ActivityTemplate
@@ -208,8 +209,15 @@ export const Calendar: React.FC<CalendarProps> = ({
       const endLabel = weekDaysList[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       rangeLabel = `${startLabel} – ${endLabel}`
     } else {
-      targetDates = cells.map(c => c.dateStr).filter((d): d is string => !!d)
-      rangeLabel = `${currentDate.toLocaleString('default', { month: 'short' })} ${year}`
+      const baseDateStr = selectedDateStr || todayStr
+      targetDates = getWeekDates(baseDateStr, startOfWeekPref)
+      const [y1, m1, d1] = targetDates[0].split('-').map(Number)
+      const [y2, m2, d2] = targetDates[6].split('-').map(Number)
+      const startD = new Date(y1, m1 - 1, d1)
+      const endD = new Date(y2, m2 - 1, d2)
+      const startLabel = startD.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      const endLabel = endD.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      rangeLabel = `${startLabel} – ${endLabel}`
     }
     
     const rangeLogs = logs.filter(l => l.activityId === workTemplateId && targetDates.includes(l.date))
@@ -219,8 +227,8 @@ export const Calendar: React.FC<CalendarProps> = ({
     const remaining = Math.max(0, weeklyGoal - officeHours)
     const goalMet = officeHours >= weeklyGoal
     
-    return { officeHours, wfhHours, rangeLabel, remaining, goalMet, settingsVer }
-  }, [logs, _templates, view, weekDaysList, cells, currentDate, year, settingsVer])
+    return { officeHours, wfhHours, rangeLabel, remaining, goalMet, weeklyGoal, settingsVer }
+  }, [logs, _templates, view, weekDaysList, selectedDateStr, todayStr, startOfWeekPref, settingsVer])
 
   // Helper to map event elements to absolute timeline grid offsets
   const getEventPosition = (event: CalendarWeekEventDTO) => {
@@ -264,7 +272,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                   setView(v)
                   localStorage.setItem('calendar_default_view', v)
                 }}
-                className={`px-3.5 py-1.5 text-[11px] font-bold rounded-md transition-all duration-200 capitalize ${
+                className={`px-3.5 py-2.5 md:py-1.5 text-[11px] font-bold rounded-md transition-all duration-200 capitalize ${
                   view === v 
                     ? 'bg-white dark:bg-zinc-700 text-black dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
                     : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300'
@@ -297,8 +305,8 @@ export const Calendar: React.FC<CalendarProps> = ({
               Today
             </Button>
             <div className="flex bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg p-0.5 shadow-xs">
-              <Button variant="ghost" size="sm" onClick={handlePrev} className="p-1"><ChevronLeft size={16} /></Button>
-              <Button variant="ghost" size="sm" onClick={handleNext} className="p-1"><ChevronRight size={16} /></Button>
+              <Button variant="ghost" size="sm" onClick={handlePrev} className="p-0 w-11 h-11 md:w-auto md:h-auto md:p-1 flex items-center justify-center"><ChevronLeft size={16} /></Button>
+              <Button variant="ghost" size="sm" onClick={handleNext} className="p-0 w-11 h-11 md:w-auto md:h-auto md:p-1 flex items-center justify-center"><ChevronRight size={16} /></Button>
             </div>
           </div>
         </div>
@@ -310,7 +318,7 @@ export const Calendar: React.FC<CalendarProps> = ({
           <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
             <Briefcase size={14} className="shrink-0" />
             <span>
-              Work Summary ({workStats.rangeLabel}): Office <span className="font-extrabold">{workStats.officeHours}h</span> / 27h
+              Work Summary ({workStats.rangeLabel}): Office <span className="font-extrabold">{workStats.officeHours}h</span> / {workStats.weeklyGoal}h
               {workStats.wfhHours > 0 && <> + WFH <span className="font-extrabold">{workStats.wfhHours}h</span></>}
             </span>
           </div>
@@ -321,7 +329,7 @@ export const Calendar: React.FC<CalendarProps> = ({
             <div className="w-24 h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden shrink-0">
               <div
                 className={`h-full ${workStats.goalMet ? 'bg-emerald-500' : 'bg-blue-500'} rounded-full`}
-                style={{ width: `${Math.min(100, (workStats.officeHours / 27) * 100)}%` }}
+                style={{ width: `${Math.min(100, (workStats.officeHours / workStats.weeklyGoal) * 100)}%` }}
               />
             </div>
           </div>

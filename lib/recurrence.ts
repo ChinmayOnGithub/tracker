@@ -313,3 +313,27 @@ export function analyzeRecurrence(
     statusMessage,
   }
 }
+
+export function getWeekDates(dateStr: string, startOfWeekPref: 'monday' | 'sunday' = 'monday'): string[] {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const current = new Date(Date.UTC(y, m - 1, d))
+  const day = current.getUTCDay()
+  
+  let diff = 0
+  if (startOfWeekPref === 'monday') {
+    diff = day === 0 ? -6 : 1 - day
+  } else {
+    diff = -day
+  }
+  
+  const start = new Date(current)
+  start.setUTCDate(current.getUTCDate() + diff)
+  
+  const dates: string[] = []
+  for (let i = 0; i < 7; i++) {
+    const temp = new Date(start)
+    temp.setUTCDate(start.getUTCDate() + i)
+    dates.push(formatUTCDate(temp))
+  }
+  return dates
+}

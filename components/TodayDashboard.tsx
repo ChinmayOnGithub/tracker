@@ -20,6 +20,7 @@ import { listVaultItems, VaultItem } from '@/app/actions/vault'
 import { getTemplateColorClasses } from '@/lib/colors'
 import { CompletionService } from '@/lib/services/CompletionService'
 import { CompletionDialog } from './CompletionDialog'
+import { getWeekDates } from '@/lib/recurrence'
 
 interface TestAnalyzedTemplate {
   template: ActivityTemplate
@@ -170,25 +171,6 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   }
 
   // collapsed state removed as it is unused
-
-  // Compute start and end dates of the current week (Mon to Sun) based on todayStr
-  const getWeekDates = (dateStr: string) => {
-    const [y, m, d] = dateStr.split('-').map(Number)
-    const current = new Date(Date.UTC(y, m - 1, d))
-    const day = current.getUTCDay()
-    const monDiff = day === 0 ? -6 : 1 - day // Adjust for Monday start
-
-    const mon = new Date(current)
-    mon.setUTCDate(current.getUTCDate() + monDiff)
-
-    const dates: string[] = []
-    for (let i = 0; i < 7; i++) {
-      const temp = new Date(mon)
-      temp.setUTCDate(mon.getUTCDate() + i)
-      dates.push(temp.toISOString().split('T')[0])
-    }
-    return dates
-  }
 
   const weekDates = getWeekDates(todayStr)
 
@@ -999,7 +981,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             }}
             title={`Status: ${isDone ? 'Done' : isCanceled ? 'Canceled' : isPostponed ? 'Postponed' : 'Cleared'}. Click to cycle.`}
             aria-label="Cycle task status"
-            className="shrink-0 w-6 h-6 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-90 disabled:opacity-50"
+            className="shrink-0 w-11 h-11 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-90 disabled:opacity-50 -ml-2.5 -mr-2.5"
           >
             <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-300 shadow-xs ${completingHabitId === occurrence.templateId ? 'bg-slate-100 dark:bg-zinc-800 border-[var(--color-border)]' :
                 isDone ? 'bg-[var(--color-completed)] border-[var(--color-completed)] text-white' :
@@ -1075,7 +1057,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                   e.stopPropagation()
                   setActiveMenuId(activeMenuId === occurrence.id ? null : occurrence.id)
                 }}
-                className="p-1 rounded-sm text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                className="w-11 h-11 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer -mr-3.5"
               >
                 <MoreVertical className="w-3.5 h-3.5" />
               </button>
@@ -1241,7 +1223,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               onClick={() => handleNavigateDate(-1)}
               icon={<ChevronLeft className="w-4 h-4" />}
               title="Yesterday"
-              className="p-1.5"
+              className="p-0 w-11 h-11 md:w-auto md:h-auto md:p-1.5 flex items-center justify-center"
             />
             <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-main)]">
               {todayStr === new Date().toISOString().split('T')[0] ? 'Today' : 'Timeline'}
@@ -1252,7 +1234,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               onClick={() => handleNavigateDate(1)}
               icon={<ChevronRight className="w-4 h-4" />}
               title="Tomorrow"
-              className="p-1.5"
+              className="p-0 w-11 h-11 md:w-auto md:h-auto md:p-1.5 flex items-center justify-center"
             />
             {todayStr !== new Date().toISOString().split('T')[0] && (
               <Button
@@ -1483,7 +1465,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                       key={status}
                       type="button"
                       onClick={() => setWorkStatus(status)}
-                      className={`flex-1 py-1 text-[10px] font-bold rounded-md capitalize transition-all duration-150 cursor-pointer ${workStatus === status
+                      className={`flex-1 py-2.5 md:py-1 text-[10px] font-bold rounded-md capitalize transition-all duration-150 cursor-pointer ${workStatus === status
                           ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-xs border border-[var(--color-border)]'
                           : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
                         }`}
@@ -1508,7 +1490,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                             }
                             setLoggingMode(mode)
                           }}
-                          className={`flex-1 py-1 text-[10px] font-bold rounded-md capitalize transition-all duration-150 cursor-pointer ${
+                          className={`flex-1 py-2.5 md:py-1 text-[10px] font-bold rounded-md capitalize transition-all duration-150 cursor-pointer ${
                             loggingMode === mode
                               ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-xs border border-[var(--color-border)]'
                               : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'

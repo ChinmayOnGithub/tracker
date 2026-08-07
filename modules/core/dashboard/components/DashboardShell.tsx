@@ -209,7 +209,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Navigation Header */}
-        <header className="h-14 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] flex items-center justify-between px-4 lg:px-6 z-30 shrink-0">
+        <header className="hidden lg:flex h-14 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] items-center justify-between px-4 lg:px-6 z-30 shrink-0">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setIsSidebarOpen(true)}
