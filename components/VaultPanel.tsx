@@ -801,7 +801,7 @@ export function VaultPanel() {
       toast(`${completed} file(s) uploaded successfully`, { variant: 'success' })
       fetchItems()
     }
-  }, [currentFolderId, fetchItems, _docCategoryFilter])
+  }, [currentFolderId, fetchItems, _docCategoryFilter, toast])
 
   const _handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -883,7 +883,7 @@ export function VaultPanel() {
         toast('Failed to create folder', { variant: 'error' })
       }
     })
-  }, [newFolderName, currentFolderId, items, fetchItems])
+  }, [newFolderName, currentFolderId, items, fetchItems, toast])
 
   const handleRename = useCallback(async () => {
     if (!renamingItem || !renameValue.trim()) return
@@ -911,7 +911,7 @@ export function VaultPanel() {
         toast('Failed to rename item', { variant: 'error' })
       }
     })
-  }, [renamingItem, renameValue, items, fetchItems])
+  }, [renamingItem, renameValue, items, fetchItems, toast])
 
   const handleDelete = useCallback(async () => {
     if (!deletingItem) return
@@ -938,7 +938,7 @@ export function VaultPanel() {
         toast('Failed to delete item', { variant: 'error' })
       }
     })
-  }, [deletingItem, items, fetchItems, fetchDashboardData])
+  }, [deletingItem, items, fetchItems, fetchDashboardData, toast])
 
   const handleDownload = useCallback(async (item: VaultItem) => {
     if (item.isFolder) return
@@ -998,7 +998,7 @@ export function VaultPanel() {
       console.error('Download/decryption error:', error)
       toast(error instanceof Error ? error.message : 'Failed to download and decrypt file', { variant: 'error' })
     }
-  }, [vaultKey])
+  }, [vaultKey, toast])
 
   // (filteredItems and toggleSort removed â€” the new layout uses categoryItems computed below)
 
@@ -1340,6 +1340,7 @@ export function VaultPanel() {
                     </span>
                   </div>
                   <div className="h-[80px] bg-zinc-950 rounded-[var(--radius-md)] border border-[var(--color-border)] flex items-center justify-center overflow-hidden relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     {signatureUrl ? <img src={signatureUrl} alt="Signature" className="h-full object-contain p-2 max-w-full" /> : <span className="text-[10px] text-zinc-600 italic">No signature</span>}
                     {uploadingAssetType==='signature' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Loader2 className="w-5 h-5 text-[var(--color-primary)] animate-spin" /></div>}
                   </div>
@@ -1363,6 +1364,7 @@ export function VaultPanel() {
                     </span>
                   </div>
                   <div className="h-[90px] bg-zinc-950 rounded-[var(--radius-md)] border border-[var(--color-border)] flex items-center justify-center overflow-hidden relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     {photoUrl ? <img src={photoUrl} alt="Photo" className="h-full object-cover p-1 max-w-full" /> : <span className="text-[10px] text-zinc-600 italic">No photo</span>}
                     {uploadingAssetType==='photo' && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Loader2 className="w-5 h-5 text-[var(--color-primary)] animate-spin" /></div>}
                   </div>
@@ -1697,11 +1699,13 @@ export function VaultPanel() {
                 {(cropPreset==='id_photo'||cropPreset==='profile') && <div className="absolute w-[200px] h-[200px] border-2 border-dashed border-emerald-500 pointer-events-none z-10 shadow-[0_0_0_9999px_rgba(0,0,0,0.65)]" />}
                 {cropPreset==='original' && <div className="absolute inset-2 border-2 border-dashed border-white/40 pointer-events-none z-10" />}
                 {exportingAssetType==='signature' && signatureUrl && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
                   <img ref={imageRef} src={signatureUrl} alt="Source" draggable={false}
                     className="absolute max-w-none max-h-none pointer-events-none select-none transition-none"
                     style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom})`,transformOrigin:'center',width:'256px',height:'auto'}} />
                 )}
                 {exportingAssetType==='photo' && photoUrl && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
                   <img ref={imageRef} src={photoUrl} alt="Source" draggable={false}
                     className="absolute max-w-none max-h-none pointer-events-none select-none transition-none"
                     style={{transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom})`,transformOrigin:'center',height:'300px',width:'auto'}} />

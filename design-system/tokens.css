@@ -4,42 +4,49 @@
   /* Light Mode Palette (Apple HIG inspired depth) */
   --color-bg-base: #f2f2f7;        /* System Grouped Background */
   --color-bg-surface: #ffffff;
-  --color-border: rgba(0, 0, 0, 0.1); /* Slightly visible iOS-like border */
-  --color-text-main: #000000;         /* Pure black for high contrast */
-  --color-text-muted: #8e8e93;        /* System gray */
-  --color-primary: #007aff;           /* iOS Blue */
-  --color-primary-hover: #0056b3;     
-  --color-accent: rgba(0, 0, 0, 0.05); /* Soft highlight */
+  --color-bg-subtle: #f7f7fa;      /* Mid-level surface between base and surface */
+  --color-border: rgba(0, 0, 0, 0.1);
+  --color-text-main: #000000;
+  --color-text-muted: #8e8e93;
+  --color-primary: #007aff;
+  --color-primary-hover: #0056b3;
+  --color-accent: rgba(0, 0, 0, 0.05);
 
-  /* Semantic Colors - Color by meaning, not category */
-  --color-external: #3b82f6;          /* Blue-500 for external calendar events */
-  --color-completed: #10b981;         /* Emerald-500 for completed items */
-  --color-warning: #f59e0b;           /* Amber-500 for warnings */
-  --color-overdue: #ef4444;           /* Red-500 for overdue items */
-  --color-personal: #8b5cf6;          /* Violet-500 for personal items */
-  --color-archived: #6b7280;          /* Gray-500 for archived items */
+  /* Semantic Colors */
+  --color-external: #3b82f6;
+  --color-completed: #10b981;
+  --color-warning: #f59e0b;
+  --color-overdue: #ef4444;
+  --color-personal: #8b5cf6;
+  --color-archived: #6b7280;
 
   /* Unified Card Design Tokens */
-  --card-radius: 6px;                /* Consistent radius for all cards */
-  --card-border-width: 1px;           /* Consistent border thickness */
-  --card-padding: 16px;               /* Consistent padding (spacing-4) */
-  --card-header-spacing: 12px;        /* Consistent header spacing (spacing-3) */
-  --card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); /* Subtle shadow */
-  --card-hover-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); /* Hover elevation */
-  --card-transition: all var(--motion-duration-normal) var(--motion-ease-standard); /* Consistent animation */
+  --card-radius: 6px;
+  --card-border-width: 1px;
+  --card-padding: 16px;
+  --card-header-spacing: 12px;
+  --card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --card-hover-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --card-transition: all var(--motion-duration-normal) var(--motion-ease-standard);
 
-  /* Borders & Spacing Grid */
+  /* Border Radius Scale */
   --radius-sm: 2px;
   --radius-md: 4px;
   --radius-lg: 6px;
+  --radius-xl: 12px;               /* Modals, sheets, large cards */
+  --radius-pill: 9999px;           /* Status badges, tags */
 
-  /* 8-Point Spacing scale */
+  /* 8-Point Spacing Scale */
   --spacing-1: 4px;
   --spacing-2: 8px;
   --spacing-3: 12px;
   --spacing-4: 16px;
+  --spacing-5: 20px;               /* Fills gap between 4 and 6 */
   --spacing-6: 24px;
   --spacing-8: 32px;
+
+  /* Typography */
+  --font-size-xs2: 10px;           /* Micro labels, timestamps */
 
   /* Motion and Durations */
   --motion-duration-fast: 150ms;
@@ -49,19 +56,20 @@
   --motion-ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
 
   /* Click target sizing */
-  --click-target-min: 44px;          /* Minimum 44px for accessibility */
+  --click-target-min: 44px;
 }
 
 .dark {
   /* Dark Mode Palette */
   --color-bg-base: #09090b;        /* Zinc-950 */
   --color-bg-surface: #18181b;     /* Zinc-900 */
-  --color-border: rgba(255, 255, 255, 0.1); /* Soft transparent border instead of flat gray */
-  --color-text-main: #f4f4f5;       /* Zinc-100 */
-  --color-text-muted: #a1a1aa;      /* Zinc-400 */
-  --color-primary: #818cf8;         /* Indigo-400 */
-  --color-primary-hover: #6366f1;   /* Indigo-500 */
-  --color-accent: rgba(255, 255, 255, 0.05); /* Soft highlight */
+  --color-bg-subtle: #1c1c1f;      /* Between base and surface */
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-text-main: #f4f4f5;
+  --color-text-muted: #a1a1aa;
+  --color-primary: #818cf8;
+  --color-primary-hover: #6366f1;
+  --color-accent: rgba(255, 255, 255, 0.05);
 
   /* Semantic Colors - Dark Mode */
   --color-external: #60a5fa;          /* Blue-400 */

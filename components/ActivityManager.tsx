@@ -4,9 +4,9 @@ import React, { useState, useMemo } from 'react'
 import { ActivityTemplate, RecurrenceAnalysis } from '@/types'
 import { deleteActivityTemplate, duplicateActivityTemplate, updateActivityTemplate, reorderActivityTemplates } from '@/app/actions/template'
 import { Icon } from './Icon'
-import { Plus, ArrowUp, ArrowDown, Edit2, Copy, Check, Trash2, EyeOff, Search } from 'lucide-react'
+import { Plus, ArrowUp, ArrowDown, Edit2, Copy, Check, Trash2, EyeOff } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
-import { Button, EmptyState } from '@/design-system'
+import { Button, EmptyState, IconButton, SearchInput } from '@/design-system'
 
 interface ActivityManagerProps {
   analyzedTemplates: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]
@@ -140,14 +140,11 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
       
       {/* TOP BAR: Search + New Activity + Archive toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
-          <input
-            type="text"
+        <div className="flex-1 max-w-md">
+          <SearchInput
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search activities..."
-            className="w-full bg-transparent pl-9 pr-4 py-2 text-sm text-[var(--color-text-main)] placeholder-slate-400 dark:placeholder-zinc-500 focus:outline-hidden font-bold border-b border-[var(--color-border)]/60"
+            onValueChange={setSearchQuery}
+            placeholder="Search activities…"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -313,68 +310,59 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                   <div className="flex items-center gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150 shrink-0">
                     {/* Ordering (manual sortOrder) */}
                     {isTemplateActive && !showArchived && (
-                      <div className="flex bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded p-0.5">
-                        <button
-                          type="button"
-                          onClick={() => handleMove(idx, 'up')}
+                      <div className="flex bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] p-0.5 gap-0.5">
+                        <IconButton
+                          icon={<ArrowUp size={11} />}
+                          label="Move Up"
+                          variant="ghost"
+                          size="sm"
                           disabled={isFirst || isProcessing !== null}
-                          className="p-1 hover:text-[var(--color-text-main)] text-slate-400 rounded hover:bg-[var(--color-accent)] disabled:opacity-20 cursor-pointer"
-                          title="Move Up"
-                          aria-label="Move Up"
-                        >
-                          <ArrowUp size={11} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMove(idx, 'down')}
+                          onClick={() => handleMove(idx, 'up')}
+                        />
+                        <IconButton
+                          icon={<ArrowDown size={11} />}
+                          label="Move Down"
+                          variant="ghost"
+                          size="sm"
                           disabled={isLast || isProcessing !== null}
-                          className="p-1 hover:text-[var(--color-text-main)] text-slate-400 rounded hover:bg-[var(--color-accent)] disabled:opacity-20 cursor-pointer"
-                          title="Move Down"
-                          aria-label="Move Down"
-                        >
-                          <ArrowDown size={11} />
-                        </button>
+                          onClick={() => handleMove(idx, 'down')}
+                        />
                       </div>
                     )}
 
-                    <div className="flex items-center gap-0.5 bg-[var(--color-bg-surface)] p-0.5 border border-[var(--color-border)] rounded">
-                      <button
-                        type="button"
+                    <div className="flex items-center gap-0.5 bg-[var(--color-bg-surface)] p-0.5 border border-[var(--color-border)] rounded-[var(--radius-md)]">
+                      <IconButton
+                        icon={<Edit2 size={11} />}
+                        label="Edit Template"
+                        variant="ghost"
+                        size="sm"
+                        disabled={isProcessing !== null}
                         onClick={() => onEditTemplate(template)}
+                      />
+                      <IconButton
+                        icon={<Copy size={11} />}
+                        label="Duplicate Template"
+                        variant="ghost"
+                        size="sm"
                         disabled={isProcessing !== null}
-                        className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] rounded hover:bg-[var(--color-accent)] transition-colors cursor-pointer"
-                        title="Edit Template"
-                        aria-label="Edit Template"
-                      >
-                        <Edit2 size={11} />
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => handleDuplicate(template.id)}
+                      />
+                      <IconButton
+                        icon={isTemplateActive ? <EyeOff size={11} /> : <Check size={11} />}
+                        label={isTemplateActive ? 'Archive' : 'Restore'}
+                        variant="ghost"
+                        size="sm"
                         disabled={isProcessing !== null}
-                        className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] rounded hover:bg-[var(--color-accent)] transition-colors cursor-pointer"
-                        title="Duplicate Template"
-                      >
-                        <Copy size={11} />
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => handleToggleArchive(template)}
+                      />
+                      <IconButton
+                        icon={<Trash2 size={11} />}
+                        label="Delete Template"
+                        variant="danger"
+                        size="sm"
                         disabled={isProcessing !== null}
-                        className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] rounded hover:bg-[var(--color-accent)] transition-colors cursor-pointer"
-                        title={isTemplateActive ? 'Archive' : 'Restore'}
-                      >
-                        {isTemplateActive ? <EyeOff size={11} /> : <Check size={11} />}
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => handleDelete(template.id, template.name)}
-                        disabled={isProcessing !== null}
-                        className="p-1 text-[var(--color-text-muted)] hover:text-rose-500 rounded hover:bg-rose-500/10 transition-colors cursor-pointer"
-                        title="Delete Template"
-                      >
-                        <Trash2 size={11} />
-                      </button>
+                      />
                     </div>
                   </div>
                 </div>

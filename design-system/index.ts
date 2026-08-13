@@ -12,3 +12,11 @@ export type { DropdownItem, DropdownSeparator, DropdownOption } from './componen
 export { Tabs, TabsList, Tab, TabsContent } from './components/Tabs'
 export { ToastProvider, useToast } from './components/Toast'
 export type { ToastVariant, ToastItem } from './components/Toast'
+
+// UI Grammar Primitives
+export { PageContainer } from './components/PageContainer'
+export { PageHeader } from './components/PageHeader'
+export { Section } from './components/Section'
+export { ListRow } from './components/ListRow'
+export { IconButton } from './components/IconButton'
+export { StatusBadge } from './components/StatusBadge'
