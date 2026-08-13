@@ -1,5 +1,6 @@
 import { IndexedDBEngine } from '../local/IndexedDBEngine';
 import { ConnectivityMonitor } from './ConnectivityMonitor';
+import { WorkSession } from '@/modules/work/types';
 
 export interface SyncQueueItem {
   id: string;
@@ -159,7 +160,7 @@ export class SyncEngine {
     this.registerHandler('work_sessions', async (op, payload) => {
       const { RemoteWorkSessionRepository } = await import('@/modules/work/repository/RemoteWorkSessionRepository');
       const remote = new RemoteWorkSessionRepository();
-      const session = payload as any;
+      const session = payload as WorkSession;
       
       try {
         if (op === 'CREATE') {

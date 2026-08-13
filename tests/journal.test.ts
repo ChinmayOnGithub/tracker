@@ -63,7 +63,7 @@ describe('Journal Domain Query Tests', () => {
       const repo = new JournalRepository();
       const db = IndexedDBEngine.getInstance();
       
-      const mockEntries: any[] = [
+      const mockEntries: JournalEntry[] = [
         {
           id: 'j-1',
           userId: 'user-1',
@@ -79,7 +79,8 @@ describe('Journal Domain Query Tests', () => {
         }
       ];
 
-      db.queryIndex = mock(async () => mockEntries);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      db.queryIndex = mock(async () => mockEntries) as any;
 
       const result = await repo.getJournalByDate('user-1', '2026-08-14');
       expect(result).not.toBeNull();
@@ -91,7 +92,7 @@ describe('Journal Domain Query Tests', () => {
       const repo = new JournalRepository();
       const db = IndexedDBEngine.getInstance();
       
-      const mockEntries: any[] = [
+      const mockEntries: JournalEntry[] = [
         {
           id: 'j-1',
           userId: 'user-1',
@@ -120,7 +121,8 @@ describe('Journal Domain Query Tests', () => {
         }
       ];
 
-      db.queryIndex = mock(async () => mockEntries);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      db.queryIndex = mock(async () => mockEntries) as any;
 
       const result = await repo.getJournalRange('user-1', '2026-08-14', '2026-08-15');
       expect(result.length).toBe(2);

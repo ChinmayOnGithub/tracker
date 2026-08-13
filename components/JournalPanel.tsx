@@ -96,11 +96,6 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   const router = useRouter()
   const dateParam = searchParams?.get('date')
 
-  console.log('[JournalPanel] Initialized with entries:', initialEntries.length)
-  initialEntries.forEach(e => {
-    console.log(`  - ${e.id}: ${e.journalDate}, content length: ${e.content.length}`)
-  })
-  
   const today = todayYMD()
   const { state, initialize, upsertJournalAction, deleteJournalAction } = useStore()
 
@@ -137,8 +132,6 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   const activeEntry = entries.find(e => toYMD(e.journalDate) === activeDate) || null
   const dbValue = markdownToHtml(activeEntry?.content || '')
   
-  console.log('[JournalPanel] Active date:', activeDate, 'Active entry:', activeEntry ? `${activeEntry.id} (${activeEntry.content.length} chars)` : 'null')
-  
   const [content, setContent] = useState(dbValue)
   const [contentStatus, setContentStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
@@ -155,13 +148,6 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   }
 
   const saveContent = useCallback(async (v: string, version: number) => {
-    console.log('[JournalPanel] saveContent called with:', { 
-      length: v.length, 
-      preview: v.substring(0, 100),
-      activeDate,
-      version
-    })
-    
     if (isSavingRef.current) { 
       pendingRef.current = v
       pendingVersionRef.current = version

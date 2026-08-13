@@ -1,4 +1,3 @@
-import { TaskOccurrenceState } from './TaskStateMachine';
 
 export class TaskOccurrenceService {
   /**

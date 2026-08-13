@@ -10,7 +10,7 @@ export class Telemetry {
     if (!this.isBrowser) return;
     try {
       window.performance.mark(`${name}-start`);
-    } catch (e) {
+    } catch (_e) {
       // Ignore performance measurement errors
     }
   }
@@ -36,7 +36,7 @@ export class Telemetry {
         window.performance.clearMeasures(name);
         return duration;
       }
-    } catch (e) {
+    } catch (_e) {
       // Ignore performance measurement errors
     }
     return 0;

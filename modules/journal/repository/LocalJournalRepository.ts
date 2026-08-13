@@ -13,7 +13,7 @@ export class LocalJournalRepository
   public async getJournalByDate(userId: string, dateStr: string): Promise<JournalEntry | null> {
     const range = typeof IDBKeyRange !== 'undefined' 
       ? IDBKeyRange.bound(dateStr, dateStr + '\uffff')
-      : (dateStr as any);
+      : (dateStr as unknown as IDBKeyRange);
     const results = await this.engine.queryIndex<JournalEntry>(this.storeName, 'journalDate', range);
     const matched = results.filter(e => e.userId === userId && !e.deletedAt);
     return matched[0] || null;
@@ -22,7 +22,7 @@ export class LocalJournalRepository
   public async getJournalRange(userId: string, startDateStr: string, endDateStr: string): Promise<JournalEntry[]> {
     const range = typeof IDBKeyRange !== 'undefined' 
       ? IDBKeyRange.bound(startDateStr, endDateStr + '\uffff')
-      : (startDateStr as any);
+      : (startDateStr as unknown as IDBKeyRange);
     const results = await this.engine.queryIndex<JournalEntry>(this.storeName, 'journalDate', range);
     return results.filter(e => e.userId === userId && !e.deletedAt);
   }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifySession } from '@/lib/session'
 import { db } from '@/lib/db'
-import { decryptTitle, decryptMimeType, decryptBuffer } from '@/lib/vault-crypto'
+
 import path from 'path'
 import fs from 'fs/promises'
 

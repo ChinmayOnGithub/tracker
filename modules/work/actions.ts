@@ -3,12 +3,19 @@
 import { requireAuth } from '@/lib/auth-guards';
 import { WorkSessionService } from './services/WorkSessionService';
 import { revalidatePath } from 'next/cache';
+import { WorkSession } from './types';
 
-export async function createWorkSession(session: any) {
+export async function createWorkSession(session: Partial<WorkSession>) {
   try {
     const user = await requireAuth();
+    if (!session.date || !session.mode) {
+      throw new Error('Missing required session fields: date or mode');
+    }
     let record;
     if (session.loggingMode === 'manual') {
+      if (session.durationMinutes === undefined) {
+        throw new Error('durationMinutes is required for manual sessions');
+      }
       record = await WorkSessionService.createManualSession({
         id: session.id,
         userId: user.id,
@@ -32,7 +39,7 @@ export async function createWorkSession(session: any) {
   }
 }
 
-export async function updateWorkSession(id: string, session: any) {
+export async function updateWorkSession(id: string, session: Partial<WorkSession>) {
   try {
     const user = await requireAuth();
     let record;

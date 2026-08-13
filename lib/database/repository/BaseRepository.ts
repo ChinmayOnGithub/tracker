@@ -67,7 +67,17 @@ export class BaseRepository<T extends { id: string }> implements IRepository<T> 
     // Check if a pending/failed item for this entity already exists in the queue.
     // If so, update its payload in-place to avoid duplicate server writes on reconnect.
     const engine = IndexedDBEngine.getInstance();
-    let existingQueueItem: any = null;
+    let existingQueueItem: {
+      id: string;
+      module: string;
+      operationType: string;
+      payload: unknown;
+      entityId: string;
+      syncStatus: string;
+      createdAt: string;
+      retryCount: number;
+      lastAttempt: string | null;
+    } | null = null;
 
     try {
       const queuedItems = await engine.queryIndex<{
