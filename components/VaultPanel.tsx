@@ -115,12 +115,44 @@ type SortField = 'name' | 'date' | 'size'
 type SortDir = 'asc' | 'desc'
 type InfoCategory = 'IDENTITY' | 'BANKING' | 'PERSONAL' | 'OTHER'
 
+async function decryptBufferClientSide(
+  encryptedArrayBuffer: ArrayBuffer,
+  keyHex: string,
+  ivHex: string,
+  tagHex: string
+): Promise<ArrayBuffer> {
+  const rawKey = new Uint8Array(keyHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+  const cryptoKey = await window.crypto.subtle.importKey(
+    "raw",
+    rawKey,
+    { name: "AES-GCM" },
+    false,
+    ["decrypt"]
+  );
+
+  const iv = new Uint8Array(ivHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+  const tag = new Uint8Array(tagHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+
+  const combined = new Uint8Array(encryptedArrayBuffer.byteLength + tag.byteLength);
+  combined.set(new Uint8Array(encryptedArrayBuffer), 0);
+  combined.set(tag, encryptedArrayBuffer.byteLength);
+
+  const decrypted = await window.crypto.subtle.decrypt(
+    { name: "AES-GCM", iv, tagLength: 128 },
+    cryptoKey,
+    combined
+  );
+
+  return decrypted;
+}
+
 // --- Main Component -----------------------------------------------------------
 
 export function VaultPanel() {
   const { toast } = useToast()
 
   // --- State --------------------------------------------------------
+  const [vaultKey, setVaultKey] = useState<string | null>(null)
   const [items, setItems] = useState<VaultItem[]>([])
   const [_breadcrumbs, setBreadcrumbs] = useState<VaultBreadcrumb[]>([{ id: null, name: 'Vault' }])
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
@@ -908,13 +940,47 @@ export function VaultPanel() {
     })
   }, [deletingItem, items, fetchItems, fetchDashboardData])
 
-  const handleDownload = useCallback((item: VaultItem) => {
+  const handleDownload = useCallback(async (item: VaultItem) => {
     if (item.isFolder) return
     setErrorMessage(null)
     
     try {
+      let key = vaultKey
+      if (!key) {
+        const { getVaultKeyAction } = await import('@/app/actions/vault')
+        const res = await getVaultKeyAction()
+        if (res.success && res.key) {
+          key = res.key
+          setVaultKey(res.key)
+        } else {
+          throw new Error(res.error || 'Could not retrieve encryption key.')
+        }
+      }
+
+      // Fetch the raw encrypted bytes from the API
+      const response = await fetch(`/api/vault/download/${item.id}`)
+      if (!response.ok) {
+        throw new Error('Failed to download encrypted file.')
+      }
+
+      const ivHex = response.headers.get('x-iv-hex')
+      const tagHex = response.headers.get('x-tag-hex')
+      
+      if (!ivHex || !tagHex) {
+        throw new Error('Missing encryption metadata headers.')
+      }
+
+      const encryptedBuffer = await response.arrayBuffer()
+
+      // Decrypt client-side
+      const decryptedBuffer = await decryptBufferClientSide(encryptedBuffer, key, ivHex, tagHex)
+
+      // Download file in browser
+      const blob = new Blob([decryptedBuffer], { type: 'application/octet-stream' })
+      const url = URL.createObjectURL(blob)
+      
       const link = document.createElement('a')
-      link.href = `/api/vault/download/${item.id}`
+      link.href = url
       link.download = item.name
       link.style.display = 'none'
       document.body.appendChild(link)
@@ -922,14 +988,17 @@ export function VaultPanel() {
       
       setTimeout(() => {
         document.body.removeChild(link)
+        URL.revokeObjectURL(url)
       }, 100)
 
       // Log Audit Log
       logVaultAuditAction('VAULT_DOCUMENT_DOWNLOADED', item.id, 'VAULT_DOCUMENT')
-    } catch (_error) {
-      toast('Failed to initiate download', { variant: 'error' })
+      toast('File decrypted and downloaded successfully', { variant: 'success' })
+    } catch (error) {
+      console.error('Download/decryption error:', error)
+      toast(error instanceof Error ? error.message : 'Failed to download and decrypt file', { variant: 'error' })
     }
-  }, [])
+  }, [vaultKey])
 
   // (filteredItems and toggleSort removed â€” the new layout uses categoryItems computed below)
 

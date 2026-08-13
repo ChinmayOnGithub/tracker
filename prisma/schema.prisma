@@ -109,6 +109,7 @@ model User {
   linkTags          LinkTag[]
   calendarEvents    CalendarEvent[]
   calendarSyncStates CalendarSyncState[]
+  workSessions      WorkSession[]
 }
 
 model GoogleCredential {
@@ -396,6 +397,8 @@ model ActivityLog {
   leaveRecord    LeaveRecord?  @relation(fields: [leaveRecordId], references: [id], onDelete: SetNull)
   journalEntryId String?       @unique
   journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+  workSessionId  String?       @unique
+  workSession    WorkSession?  @relation(fields: [workSessionId], references: [id], onDelete: SetNull)
 
   userId    String?
   user      User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -541,4 +544,25 @@ model CalendarSyncState {
   updatedAt         DateTime          @updatedAt
 
   @@unique([userId, provider])
+}
+
+model WorkSession {
+  id              String       @id @default(uuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date            String       // YYYY-MM-DD
+  mode            String       // "office" | "wfh"
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationMinutes Int          @default(0)
+  loggingMode     String       // "timer" | "manual"
+  manualMinutes   Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  deletedAt       DateTime?
+
+  activityLog     ActivityLog?
+
+  @@index([userId])
+  @@index([date])
 }

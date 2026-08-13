@@ -34,7 +34,8 @@ mock.module('../ActivityService', () => ({
       deletedAt: null,
       journalEntryId: null,
       weightRecordId: null,
-      leaveRecordId: null
+      leaveRecordId: null,
+      workSessionId: null
     })),
     updateLog: mock(async (userId: string, id: string, data: { note?: string | null; status?: string; amount?: number | null; payload?: unknown }): Promise<ActivityLog> => ({
       id,
@@ -50,7 +51,8 @@ mock.module('../ActivityService', () => ({
       deletedAt: null,
       journalEntryId: null,
       weightRecordId: null,
-      leaveRecordId: null
+      leaveRecordId: null,
+      workSessionId: null
     })),
     deleteLog: mock(() => Promise.resolve(undefined)),
     getOrCreateDefaultTemplate: mock(() => Promise.resolve({
@@ -299,7 +301,8 @@ describe('SyncedActivityService - Memory Leaks', () => {
           deletedAt: null,
           journalEntryId: null,
           weightRecordId: null,
-          leaveRecordId: null
+          leaveRecordId: null,
+          workSessionId: null
         }
       })
 

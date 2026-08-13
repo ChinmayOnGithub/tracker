@@ -19,6 +19,10 @@ function getVaultKey(): Buffer {
   return cachedKey
 }
 
+export function getVaultKeyHex(): string {
+  return getVaultKey().toString('hex')
+}
+
 // ─── Text Encryption (filenames, MIME types) ──────────────────────────────────
 
 export interface EncryptedText {

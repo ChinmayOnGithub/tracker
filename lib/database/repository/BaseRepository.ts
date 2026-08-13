@@ -67,26 +67,33 @@ export class BaseRepository<T extends { id: string }> implements IRepository<T> 
     // Check if a pending/failed item for this entity already exists in the queue.
     // If so, update its payload in-place to avoid duplicate server writes on reconnect.
     const engine = IndexedDBEngine.getInstance();
-    const allQueued = await engine.getAll<{
-      id: string;
-      module: string;
-      operationType: string;
-      payload: unknown;
-      syncStatus: string;
-    }>('sync_queue');
-    const existingQueueItem = allQueued.find(
-      (q) =>
-        q.module === this.moduleName &&
-        (q.syncStatus === 'PENDING' || q.syncStatus === 'FAILED') &&
-        (q.payload as { id?: string })?.id === entity.id
-    );
+    let existingQueueItem: any = null;
+
+    try {
+      const queuedItems = await engine.queryIndex<{
+        id: string;
+        module: string;
+        operationType: string;
+        payload: unknown;
+        entityId: string;
+        syncStatus: string;
+        createdAt: string;
+        retryCount: number;
+        lastAttempt: string | null;
+      }>('sync_queue', 'module_entityId', [this.moduleName, entity.id]);
+
+      existingQueueItem = queuedItems.find(
+        (q) => q.syncStatus === 'PENDING' || q.syncStatus === 'FAILED'
+      ) || null;
+    } catch (err) {
+      console.warn('[BaseRepository] Failed to query index module_entityId:', err);
+    }
 
     if (existingQueueItem) {
       // Update the existing queue entry with the latest payload
       existingQueueItem.payload = entity;
       existingQueueItem.operationType = op;
-      await engine.put('sync_queue', existingQueueItem);
-      await this.local.save(entity);
+      await this.local.saveAtomic(entity, existingQueueItem);
       SyncEngine.getInstance().triggerSync();
       return;
     }
@@ -97,6 +104,7 @@ export class BaseRepository<T extends { id: string }> implements IRepository<T> 
       module: this.moduleName,
       operationType: op,
       payload: entity,
+      entityId: entity.id,
       createdAt: new Date().toISOString(),
       retryCount: 0,
       lastAttempt: null,
@@ -114,6 +122,7 @@ export class BaseRepository<T extends { id: string }> implements IRepository<T> 
       module: this.moduleName,
       operationType: 'DELETE',
       payload: { id },
+      entityId: id,
       createdAt: new Date().toISOString(),
       retryCount: 0,
       lastAttempt: null,

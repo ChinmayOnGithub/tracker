@@ -6,6 +6,7 @@ export interface SyncQueueItem {
   module: string;
   operationType: 'CREATE' | 'UPDATE' | 'DELETE';
   payload: unknown;
+  entityId: string;
   createdAt: string;
   retryCount: number;
   lastAttempt: string | null;
@@ -153,6 +154,28 @@ export class SyncEngine {
         return { success: false, error: err instanceof Error ? err.message : 'Remote leave sync failed.' };
       }
     });
+
+    // Register sync handler for work sessions
+    this.registerHandler('work_sessions', async (op, payload) => {
+      const { RemoteWorkSessionRepository } = await import('@/modules/work/repository/RemoteWorkSessionRepository');
+      const remote = new RemoteWorkSessionRepository();
+      const session = payload as any;
+      
+      try {
+        if (op === 'CREATE') {
+          const res = await remote.create(session);
+          return res as { success: boolean; error?: string; data?: unknown };
+        } else if (op === 'UPDATE') {
+          const res = await remote.update(session.id, session);
+          return res as { success: boolean; error?: string; data?: unknown };
+        } else {
+          await remote.delete(session.id);
+          return { success: true };
+        }
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Remote work session sync failed.' };
+      }
+    });
   }
 
   public static getInstance(): SyncEngine {
@@ -174,11 +197,13 @@ export class SyncEngine {
    * Enqueues an operation to the sync queue in IndexedDB.
    */
   public async enqueue(moduleName: string, operationType: 'CREATE' | 'UPDATE' | 'DELETE', payload: unknown): Promise<void> {
+    const entityId = (payload as { id?: string })?.id || '';
     const item: SyncQueueItem = {
       id: crypto.randomUUID(),
       module: moduleName,
       operationType,
       payload,
+      entityId,
       createdAt: new Date().toISOString(),
       retryCount: 0,
       lastAttempt: null,

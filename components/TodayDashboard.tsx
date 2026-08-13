@@ -114,6 +114,8 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     return defaults
   })
 
+  const [isTodayHydrated, setIsTodayHydrated] = useState(false)
+
   useEffect(() => {
     async function loadVault() {
       try {
@@ -143,6 +145,12 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     window.addEventListener('personal_settings_changed', handleSettingsUpdate)
     return () => window.removeEventListener('personal_settings_changed', handleSettingsUpdate)
   }, [])
+
+  useEffect(() => {
+    if (!calendarData.loading && !vaultLoading) {
+      setIsTodayHydrated(true)
+    }
+  }, [calendarData.loading, vaultLoading])
 
   const getVaultIcon = (mimeGroup: string | null) => {
     switch (mimeGroup) {
@@ -324,8 +332,19 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   }
 
   const calendarEvents = calendarData.agenda?.today || []
-  const timeline = generateTimeline(analyzedTemplates, logs, todayStr, calendarEvents)
-  useActivityNotifications(timeline, analyzedTemplates)
+  const [debouncedTimeline, setDebouncedTimeline] = useState<TimelineItem[]>(() =>
+    generateTimeline(analyzedTemplates, logs, todayStr, calendarEvents)
+  )
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const freshTimeline = generateTimeline(analyzedTemplates, logs, todayStr, calendarEvents)
+      setDebouncedTimeline(freshTimeline)
+    }, 150)
+    return () => clearTimeout(t)
+  }, [analyzedTemplates, logs, todayStr, calendarEvents])
+
+  useActivityNotifications(debouncedTimeline, analyzedTemplates)
 
   const overdueTemplates = analyzedTemplates.filter(t => t.analysis.overdue && t.template.isActive)
   const overdueOccurrences: TimelineItem[] = overdueTemplates.map(t => {
@@ -346,7 +365,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     }
   })
 
-  const activeTimeline = timeline.filter(o => !o.completed)
+  const activeTimeline = debouncedTimeline.filter(o => !o.completed)
   const activeOverdue = overdueOccurrences.filter(o => !o.completed)
   const timed = activeTimeline.filter(o => !o.isAllDay)
 
@@ -366,7 +385,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   // groupedTimeline removed as it is unused
 
   const overdueTemplateIds = new Set(overdueOccurrences.map(o => o.templateId).filter(Boolean))
-  const nonOverdueTimeline = timeline.filter(o => !o.templateId || !overdueTemplateIds.has(o.templateId))
+  const nonOverdueTimeline = debouncedTimeline.filter(o => !o.templateId || !overdueTemplateIds.has(o.templateId))
 
   const [manualOrderIds, setManualOrderIds] = useState<string[] | null>(null)
 
@@ -1160,8 +1179,8 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   }
 
   // ── Stats ─────────────────────────────────────────────────────────────────
-  const totalActivities = timeline.length
-  const completedCount = timeline.filter(t => t.completed && t.status !== 'skipped').length
+  const totalActivities = debouncedTimeline.length
+  const completedCount = debouncedTimeline.filter(t => t.completed && t.status !== 'skipped').length
   const progressPct = totalActivities > 0 ? Math.round((completedCount / totalActivities) * 100) : 0
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -1292,9 +1311,9 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
           )}
 
           {/* Flat List Container */}
-          {calendarData.loading ? (
-            <div className="space-y-1.5">
-              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-10 w-full rounded-md" />)}
+          {!isTodayHydrated ? (
+            <div className="space-y-1.5" style={{ minHeight: '200px' }}>
+              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-12 w-full rounded-md" />)}
             </div>
           ) : (
             <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-md divide-y divide-[var(--color-border)]/40 overflow-hidden shadow-xs">

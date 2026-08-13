@@ -1,12 +1,15 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Card, CardHeader, CardBody, Button } from '@/design-system';
+import { Card, CardHeader, CardBody } from '@/design-system/components/Card';
+import { Button } from '@/design-system/components/Button';
 import { IndexedDBEngine } from '@/lib/database/local/IndexedDBEngine';
 import { ConnectivityMonitor } from '@/lib/database/sync/ConnectivityMonitor';
 import { SyncEngine, SyncQueueItem } from '@/lib/database/sync/SyncEngine';
 import { STORES } from '@/lib/database/local/schema';
 import { DB_VERSION } from '@/lib/database/local/migrations';
+import { SeedService } from '@/lib/database/local/SeedService';
+import { Telemetry } from '@/lib/telemetry';
 
 export const OfflineDebugPanel: React.FC = () => {
   const [isOnline, setIsOnline] = useState(false);
@@ -16,9 +19,12 @@ export const OfflineDebugPanel: React.FC = () => {
   const [lastSync, setLastSync] = useState<string>('Never');
   const [activeSync, setActiveSync] = useState<string>('Idle');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [seedingProgress, setSeedingProgress] = useState<number | null>(null);
+  const [seedResult, setSeedResult] = useState<{ duration: number; count: number } | null>(null);
 
   const refreshStats = async () => {
     setIsRefreshing(true);
+    Telemetry.start('refresh-stats');
     try {
       const engine = IndexedDBEngine.getInstance();
       
@@ -65,6 +71,7 @@ export const OfflineDebugPanel: React.FC = () => {
       console.error('Failed to load debug statistics:', err);
     } finally {
       setIsRefreshing(false);
+      Telemetry.end('refresh-stats', 'OfflineDebugPanel');
     }
   };
 
@@ -75,7 +82,7 @@ export const OfflineDebugPanel: React.FC = () => {
       refreshStats();
     });
 
-    const interval = setInterval(refreshStats, 5000);
+    const interval = setInterval(refreshStats, 10000);
 
     return () => {
       unsubscribe();
@@ -86,6 +93,33 @@ export const OfflineDebugPanel: React.FC = () => {
   const triggerForceSync = () => {
     SyncEngine.getInstance().triggerSync();
     refreshStats();
+  };
+
+  const handleSeedLargeDataset = async () => {
+    setSeedResult(null);
+    try {
+      const res = await SeedService.seedLargeDataset((progress) => {
+        setSeedingProgress(progress);
+      });
+      setSeedResult({ duration: res.durationMs, count: res.recordsAdded });
+    } catch (err) {
+      console.error('Failed to seed large dataset:', err);
+    } finally {
+      setSeedingProgress(null);
+      refreshStats();
+    }
+  };
+
+  const handleClearAllData = async () => {
+    if (confirm('Are you sure you want to clear ALL local database records?')) {
+      try {
+        await SeedService.clearAllLocalData();
+        setSeedResult(null);
+        refreshStats();
+      } catch (err) {
+        console.error('Failed to clear local data:', err);
+      }
+    }
   };
 
   return (
@@ -159,8 +193,39 @@ export const OfflineDebugPanel: React.FC = () => {
             ))}
           </div>
         </div>
+
+        {/* Performance Hardening Actions */}
+        <div className="pt-2 border-t border-[var(--color-border)]/20 space-y-2">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            Hardening & Load Testing
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSeedLargeDataset}
+              isLoading={seedingProgress !== null}
+            >
+              {seedingProgress !== null ? `Seeding ${seedingProgress}%` : 'Seed 3-Year Dataset (10k+)'}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleClearAllData}
+              className="text-rose-500 border-rose-500/20 hover:bg-rose-500/10"
+            >
+              Clear Local Data
+            </Button>
+          </div>
+          {seedResult && (
+            <div className="text-[10px] text-emerald-500 font-medium">
+              Seeded {seedResult.count} records in {seedResult.duration.toFixed(0)}ms!
+            </div>
+          )}
+        </div>
       </CardBody>
     </Card>
   );
 };
+
 export default OfflineDebugPanel;

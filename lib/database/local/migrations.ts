@@ -4,7 +4,7 @@ export interface MigrationCallback {
   (db: IDBDatabase, transaction: IDBTransaction): void;
 }
 
-export const DB_VERSION = 1;
+export const DB_VERSION = 4;
 
 export const MIGRATIONS: Record<number, MigrationCallback> = {
   1: (db) => {
@@ -24,6 +24,57 @@ export const MIGRATIONS: Record<number, MigrationCallback> = {
       }
     }
   },
+  2: (db, transaction) => {
+    // Version 2 adds indexes to activity_logs, secure_vault_metadata, and sync_queue
+    if (db.objectStoreNames.contains('activity_logs')) {
+      const store = transaction.objectStore('activity_logs');
+      if (!store.indexNames.contains('updatedAt')) {
+        store.createIndex('updatedAt', 'updatedAt', { unique: false });
+      }
+      if (!store.indexNames.contains('user_logDate')) {
+        store.createIndex('user_logDate', ['userId', 'logDate'], { unique: false });
+      }
+      if (!store.indexNames.contains('logDate_status')) {
+        store.createIndex('logDate_status', ['logDate', 'status'], { unique: false });
+      }
+    }
+    if (db.objectStoreNames.contains('secure_vault_metadata')) {
+      const store = transaction.objectStore('secure_vault_metadata');
+      if (!store.indexNames.contains('parentId')) {
+        store.createIndex('parentId', 'parentId', { unique: false });
+      }
+    }
+    if (db.objectStoreNames.contains('sync_queue')) {
+      const store = transaction.objectStore('sync_queue');
+      if (!store.indexNames.contains('entityId')) {
+        store.createIndex('entityId', 'entityId', { unique: false });
+      }
+      if (!store.indexNames.contains('module_entityId')) {
+        store.createIndex('module_entityId', ['module', 'entityId'], { unique: false });
+      }
+    }
+  },
+  3: (db) => {
+    // Version 3 adds the work_sessions store
+    if (!db.objectStoreNames.contains('work_sessions')) {
+      const store = db.createObjectStore('work_sessions', {
+        keyPath: 'id',
+        autoIncrement: false,
+      });
+      store.createIndex('userId', 'userId', { unique: false });
+      store.createIndex('date', 'date', { unique: false });
+      store.createIndex('deletedAt', 'deletedAt', { unique: false });
+    }
+  },
+  4: (db, transaction) => {
+    // Version 4 adds updatedAt index to journal_entries
+    if (db.objectStoreNames.contains('journal_entries')) {
+      const store = transaction.objectStore('journal_entries');
+      if (!store.indexNames.contains('updatedAt')) {
+        store.createIndex('updatedAt', 'updatedAt', { unique: false });
+      }
+    }
+  }
 };
 
 /**

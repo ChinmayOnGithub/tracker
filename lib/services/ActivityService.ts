@@ -7,6 +7,7 @@ export class ActivityService {
    * Log an activity occurrence. This is the single writer to ActivityLog.
    */
   static async logActivity(params: {
+    id?: string
     userId: string
     templateId: string
     date: string // YYYY-MM-DD
@@ -17,19 +18,27 @@ export class ActivityService {
     weightRecordId?: string | null
     leaveRecordId?: string | null
     journalEntryId?: string | null
+    workSessionId?: string | null
   }) {
-    const { userId, templateId, date, status, note, amount, payload, weightRecordId, leaveRecordId, journalEntryId } = params
+    const { id, userId, templateId, date, status, note, amount, payload, weightRecordId, leaveRecordId, journalEntryId, workSessionId } = params
     const logDate = new Date(`${date}T12:00:00.000Z`)
 
-    // Check for existing log for this date and template
-    let existing = await db.activityLog.findFirst({
-      where: {
-        userId,
-        activityId: templateId,
-        logDate,
-        deletedAt: null
-      }
-    })
+    // First check if a log with this exact ID already exists
+    let existing = id ? await db.activityLog.findUnique({
+      where: { id }
+    }) : null
+
+    // Check for existing log for this date and template if not found by ID
+    if (!existing) {
+      existing = await db.activityLog.findFirst({
+        where: {
+          userId,
+          activityId: templateId,
+          logDate,
+          deletedAt: null
+        }
+      })
+    }
 
     // If no existing log by date/template, but we have a journalEntryId, check if there's already a log for it
     if (!existing && journalEntryId) {
@@ -60,12 +69,14 @@ export class ActivityService {
           weightRecordId: weightRecordId !== undefined ? weightRecordId : existing.weightRecordId,
           leaveRecordId: leaveRecordId !== undefined ? leaveRecordId : existing.leaveRecordId,
           journalEntryId: journalEntryId !== undefined ? journalEntryId : existing.journalEntryId,
+          workSessionId: workSessionId !== undefined ? workSessionId : existing.workSessionId,
           deletedAt: null // Un-delete if it was soft-deleted
         }
       })
     } else {
       log = await db.activityLog.create({
         data: {
+          id: id ?? undefined,
           userId,
           activityId: templateId,
           logDate,
@@ -75,7 +86,8 @@ export class ActivityService {
           payload: payload !== undefined ? (payload as Prisma.InputJsonValue) : Prisma.DbNull,
           weightRecordId: weightRecordId ?? null,
           leaveRecordId: leaveRecordId ?? null,
-          journalEntryId: journalEntryId ?? null
+          journalEntryId: journalEntryId ?? null,
+          workSessionId: workSessionId ?? null
         }
       })
     }
@@ -160,6 +172,12 @@ export class ActivityService {
     if (existing.leaveRecordId) {
       await db.leaveRecord.update({
         where: { id: existing.leaveRecordId },
+        data: { deletedAt: new Date() }
+      })
+    }
+    if (existing.workSessionId) {
+      await db.workSession.update({
+        where: { id: existing.workSessionId },
         data: { deletedAt: new Date() }
       })
     }

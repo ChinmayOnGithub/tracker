@@ -32,7 +32,6 @@ export class LocalActivityLogRepository
   }
 
   public async getLogsForDate(dateStr: string): Promise<ActivityLog[]> {
-    const all = await this.getAll();
-    return all.filter(l => l.date === dateStr);
+    return this.engine.queryIndex<ActivityLog>(this.storeName, 'logDate', dateStr);
   }
 }

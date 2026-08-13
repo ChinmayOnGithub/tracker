@@ -66,6 +66,7 @@ export class RemoteActivityLogRepository
 
   public async create(log: ActivityLog): Promise<unknown> {
     return createLog({
+      id: log.id,
       activityId: log.activityId,
       date: log.date,
       status: log.status,

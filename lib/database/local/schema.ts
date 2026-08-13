@@ -26,7 +26,10 @@ export const STORES: StoreConfig[] = [
       { name: 'activityId', keyPath: 'activityId' },
       { name: 'logDate', keyPath: 'logDate' },
       { name: 'status', keyPath: 'status' },
-      { name: 'deletedAt', keyPath: 'deletedAt' }
+      { name: 'deletedAt', keyPath: 'deletedAt' },
+      { name: 'updatedAt', keyPath: 'updatedAt' },
+      { name: 'user_logDate', keyPath: ['userId', 'logDate'] },
+      { name: 'logDate_status', keyPath: ['logDate', 'status'] }
     ]
   },
   {
@@ -35,6 +38,7 @@ export const STORES: StoreConfig[] = [
     indexes: [
       { name: 'userId', keyPath: 'userId' },
       { name: 'journalDate', keyPath: 'journalDate' },
+      { name: 'updatedAt', keyPath: 'updatedAt' },
       { name: 'deletedAt', keyPath: 'deletedAt' }
     ]
   },
@@ -65,7 +69,8 @@ export const STORES: StoreConfig[] = [
       { name: 'userId', keyPath: 'userId' },
       { name: 'mimeGroup', keyPath: 'mimeGroup' },
       { name: 'isFolder', keyPath: 'isFolder' },
-      { name: 'deletedAt', keyPath: 'deletedAt' }
+      { name: 'deletedAt', keyPath: 'deletedAt' },
+      { name: 'parentId', keyPath: 'parentId' }
     ]
   },
   {
@@ -77,12 +82,23 @@ export const STORES: StoreConfig[] = [
     ]
   },
   {
+    name: 'work_sessions',
+    keyPath: 'id',
+    indexes: [
+      { name: 'userId', keyPath: 'userId' },
+      { name: 'date', keyPath: 'date' },
+      { name: 'deletedAt', keyPath: 'deletedAt' }
+    ]
+  },
+  {
     name: 'sync_queue',
     keyPath: 'id',
     indexes: [
       { name: 'syncStatus', keyPath: 'syncStatus' },
       { name: 'createdAt', keyPath: 'createdAt' },
-      { name: 'module', keyPath: 'module' }
+      { name: 'module', keyPath: 'module' },
+      { name: 'entityId', keyPath: 'entityId' },
+      { name: 'module_entityId', keyPath: ['module', 'entityId'] }
     ]
   },
   {

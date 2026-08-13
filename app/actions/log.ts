@@ -10,6 +10,7 @@ import { isFeatureEnabled } from '@/lib/feature-flags'
 import { SyncedActivityService } from '@/lib/services/SyncedActivityService'
 
 export async function createLog(data: {
+  id?: string
   activityId: string
   date: string // YYYY-MM-DD
   status: string
@@ -26,6 +27,7 @@ export async function createLog(data: {
       : ActivityService
 
     const log = await service.logActivity({
+      id: data.id,
       userId: user.id,
       templateId: data.activityId,
       date: data.date,

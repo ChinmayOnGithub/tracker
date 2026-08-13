@@ -72,40 +72,6 @@ export async function GET(
       return NextResponse.json({ error: 'Encrypted file is empty' }, { status: 500 })
     }
 
-    // ─── Decrypt ──────────────────────────────────────────────────────
-    let decryptedBuffer: Buffer
-    try {
-      decryptedBuffer = decryptBuffer(encryptedBuffer, doc.iv, doc.tag)
-    } catch (error) {
-      console.error('Decryption failed:', error)
-      return NextResponse.json({ error: 'Failed to decrypt file' }, { status: 500 })
-    }
-
-    // Verify decrypted size matches expected size
-    if (doc.fileSize && decryptedBuffer.length !== doc.fileSize) {
-      console.error(`Size mismatch: expected ${doc.fileSize}, got ${decryptedBuffer.length}`)
-      return NextResponse.json({ error: 'File integrity check failed' }, { status: 500 })
-    }
-
-    // ─── Decrypt metadata for response headers ────────────────────────
-    let fileName = 'download'
-    try {
-      fileName = decryptTitle(doc.encryptedTitle)
-    } catch (error) {
-      console.warn('Failed to decrypt filename:', error)
-      // fallback to safe default
-    }
-
-    let mimeType = 'application/octet-stream'
-    if (doc.encryptedType) {
-      try {
-        mimeType = decryptMimeType(doc.encryptedType)
-      } catch (error) {
-        console.warn('Failed to decrypt MIME type:', error)
-        // fallback to safe default
-      }
-    }
-
     // Update access tracking (async, don't wait)
     db.secureDocument.update({
       where: { id: doc.id },
@@ -115,16 +81,19 @@ export async function GET(
       },
     }).catch(err => console.error('Failed to update access tracking:', err))
 
-    // ─── Stream response ──────────────────────────────────────────────
-    const body = new Uint8Array(decryptedBuffer)
+    // ─── Stream raw encrypted response ────────────────────────────────────────
+    const body = new Uint8Array(encryptedBuffer)
     return new NextResponse(body, {
       status: 200,
       headers: {
-        'Content-Type': mimeType,
-        'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,
+        'Content-Type': 'application/octet-stream',
         'Content-Length': body.length.toString(),
         'Cache-Control': 'no-store, no-cache, must-revalidate',
         'X-Content-Type-Options': 'nosniff',
+        'x-iv-hex': doc.iv || '',
+        'x-tag-hex': doc.tag || '',
+        'x-filename-enc': doc.encryptedTitle || '',
+        'x-mimetype-enc': doc.encryptedType || '',
       },
     })
   } catch (error) {

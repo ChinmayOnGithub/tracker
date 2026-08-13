@@ -7,6 +7,7 @@ import {
   encryptTitle,
   decryptTitle,
   maskValue,
+  getVaultKeyHex
 } from '@/lib/vault-crypto'
 import path from 'path'
 import fs from 'fs/promises'
@@ -1209,6 +1210,16 @@ export async function updateVaultItemCategory(
   } catch (error) {
     console.error('Update item category error:', error)
     return { success: false, error: error instanceof Error ? error.message : 'Update failed' }
+  }
+}
+
+export async function getVaultKeyAction(): Promise<{ success: boolean; key?: string; error?: string }> {
+  try {
+    await requireAuth()
+    return { success: true, key: getVaultKeyHex() }
+  } catch (error) {
+    console.error('getVaultKeyAction error:', error)
+    return { success: false, error: 'Failed to retrieve vault key' }
   }
 }
 

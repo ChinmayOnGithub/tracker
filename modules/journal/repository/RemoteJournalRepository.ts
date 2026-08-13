@@ -42,5 +42,17 @@ export class RemoteJournalRepository extends BaseRemoteRepository<JournalEntry> 
   public async delete(id: string): Promise<unknown> {
     return deleteJournalEntry(id);
   }
+
+  public async getJournalByDate(_userId: string, _dateStr: string): Promise<JournalEntry | null> {
+    return null;
+  }
+
+  public async getJournalRange(_userId: string, _startDateStr: string, _endDateStr: string): Promise<JournalEntry[]> {
+    return [];
+  }
+
+  public async searchJournal(_userId: string, _query: string): Promise<JournalEntry[]> {
+    return [];
+  }
 }
 export default RemoteJournalRepository;
