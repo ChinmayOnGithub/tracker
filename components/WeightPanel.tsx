@@ -4,6 +4,8 @@ import React, { useState, useCallback, useEffect } from 'react'
 import { Plus, Minus, Trash2, TrendingDown, TrendingUp } from 'lucide-react'
 import { useStore, WeightRecord } from '@/lib/store/store'
 import { Input, Button, Card } from '@/design-system'
+import { notify } from '@/lib/notifications'
+import { todayYMD, toYMD, fmtDateShort, fmtDateMed } from '@/lib/dateUtils'
 
 interface WeightPanelProps {
   initialRecords: WeightRecord[]
@@ -12,23 +14,6 @@ interface WeightPanelProps {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function todayYMD() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
-function fmtDate(d: Date | string) {
-  const date = typeof d === 'string' ? new Date(d) : d
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function toYMD(d: Date | string) {
-  const date = typeof d === 'string' ? new Date(d) : d
-  const y = date.getUTCFullYear()
-  const m = String(date.getUTCMonth() + 1).padStart(2, '0')
-  const dy = String(date.getUTCDate()).padStart(2, '0')
-  return `${y}-${m}-${dy}`
-}
 
 // ---------------------------------------------------------------------------
 // Premium SVG Chart (no external dependencies)
@@ -132,8 +117,7 @@ export function Sparkline({ data, width = 600, height = 160 }: SparklineProps) {
 
         {/* X-axis Date labels */}
         {dateTicks.map((pt, idx) => {
-          const d = new Date(pt.date)
-          const label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+          const label = fmtDateMed(pt.date)
           return (
             <text
               key={idx}
@@ -250,7 +234,7 @@ export function Sparkline({ data, width = 600, height = 160 }: SparklineProps) {
             {pts[hoveredIdx].weight.toFixed(1)} kg
           </div>
           <div className="text-[8px] text-[var(--color-text-muted)] font-semibold mt-0.5">
-            {new Date(pts[hoveredIdx].date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+            {fmtDateShort(pts[hoveredIdx].date)}
           </div>
         </div>
       )}
@@ -303,7 +287,6 @@ function LogForm({ todayRecord, onLogged: _onLogged }: LogFormProps) {
   const [notes, setNotes] = useState(todayRecord?.notes ?? '')
   const [logDate, setLogDate] = useState(todayYMD())
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
 
   const handleDateChange = (newDate: string) => {
     setLogDate(newDate)
@@ -322,10 +305,10 @@ function LogForm({ todayRecord, onLogged: _onLogged }: LogFormProps) {
     setSaving(true)
     try {
       await logWeightAction(logDate, w, notes || null)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
+      notify.saved('Weight record')
     } catch (err) {
       console.error(err)
+      notify.error('Failed to save weight record')
     } finally {
       setSaving(false)
     }
@@ -400,7 +383,7 @@ function LogForm({ todayRecord, onLogged: _onLogged }: LogFormProps) {
           isLoading={saving}
           className="w-full"
         >
-          {saved ? '✓ Saved!' : 'Save Weight Record'}
+          Save Weight Record
         </Button>
       </Card>
     </form>
@@ -525,7 +508,7 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
                 Weight Trend
               </h2>
               <span className="text-[10px] text-[var(--color-text-muted)]">
-                {fmtDate(chartData[0].date)} → {fmtDate(chartData[chartData.length - 1].date)}
+                {fmtDateShort(chartData[0].date)} → {fmtDateShort(chartData[chartData.length - 1].date)}
               </span>
             </div>
             <div className="flex bg-slate-100 dark:bg-zinc-900/60 p-0.5 rounded-[9px] shadow-inner text-[10px] self-start">
@@ -589,7 +572,7 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
                       )}
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-[var(--color-text-muted)]">{fmtDate(record.date)}</span>
+                      <span className="text-[10px] text-[var(--color-text-muted)]">{fmtDateShort(record.date)}</span>
                       {record.notes && (
                         <span className="text-[10px] text-[var(--color-text-muted)] truncate">· {record.notes}</span>
                       )}

@@ -4,10 +4,9 @@ import { db } from '@/lib/db'
 import { Prisma, RecurrenceType, ActivityType, Priority, CalendarProvider, ActivityTemplate } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { CalendarService } from '@/modules/calendar/services/CalendarService'
-
 import { eventBus, EVENTS } from '@/lib/events'
-
 import { requireAuth, requireOwnership } from '@/lib/auth-guards'
+import { createTemplateSchema, updateTemplateSchema } from '@/lib/validations'
 
 export async function createActivityTemplate(data: {
   name: string
@@ -34,6 +33,12 @@ export async function createActivityTemplate(data: {
   metadata?: unknown
   scheduledTime?: string | null
 }) {
+  const parsed = createTemplateSchema.safeParse(data)
+  if (!parsed.success) {
+    const message = parsed.error.issues.map((i) => i.message).join('; ')
+    return { success: false, error: message }
+  }
+
   try {
     const user = await requireAuth()
     const { tagNames = [], ...rest } = data
@@ -119,6 +124,12 @@ export async function updateActivityTemplate(
     scheduledTime?: string | null
   }
 ) {
+  const parsed = updateTemplateSchema.safeParse(data)
+  if (!parsed.success) {
+    const message = parsed.error.issues.map((i) => i.message).join('; ')
+    return { success: false, error: message }
+  }
+
   try {
     const { user } = await requireOwnership('activityTemplate', id)
     const { tagNames, ...rest } = data

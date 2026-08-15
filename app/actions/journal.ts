@@ -4,8 +4,8 @@ import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { requireAuth, requireOwnership } from '@/lib/auth-guards'
-
 import { ActivityService } from '@/lib/services/ActivityService'
+import { upsertJournalSchema } from '@/lib/validations'
 
 /** Converts any JSON-like value or null to the type Prisma requires for nullable JSON columns. */
 function toJsonField(v: unknown): Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue {
@@ -17,7 +17,7 @@ function toJsonField(v: unknown): Prisma.NullableJsonNullValueInput | Prisma.Inp
  * Structured fields are optional — pass only what changed.
  */
 export async function upsertJournalEntry(
-  date: string, // YYYY-MM-DD
+  date: string,
   fields: {
     content?: string
     mood?: string | null
@@ -28,6 +28,12 @@ export async function upsertJournalEntry(
     metadata?: Record<string, unknown> | null
   }
 ) {
+  const parsed = upsertJournalSchema.safeParse({ date, ...fields })
+  if (!parsed.success) {
+    const message = parsed.error.issues.map((i) => i.message).join('; ')
+    return { success: false, error: message }
+  }
+
   console.log(`[Journal] upsertJournalEntry called for date ${date}, fields:`, {
     hasContent: !!fields.content,
     contentLength: fields.content?.length || 0,

@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 import { ActivityTemplate, ActivityLog, Tag, RecurrenceAnalysis } from '@/types'
 import { markComplete, deleteLog } from '@/app/actions/log'
-import { getTodayDateStr, addUTCDays, parseUTCDate, formatUTCDate } from '@/lib/recurrence'
+import { getTodayDateStr, addUTCDays, parseUTCDate, formatUTCDate, diffUTCDays } from '@/lib/recurrence'
 import { Icon } from './Icon'
 import { Search, Flame, Calendar, RefreshCcw, Check, Sparkles, Scissors, ShieldAlert, X } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
@@ -121,12 +121,6 @@ export const DashboardPanel: React.FC<DashboardPanelProps> = ({
     }
 
     return 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 border border-slate-200 dark:border-zinc-700'
-  }
-
-  function diffUTCDays(dateStr1: string, dateStr2: string): number {
-    const d1 = parseUTCDate(dateStr1)
-    const d2 = parseUTCDate(dateStr2)
-    return Math.round((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24))
   }
 
   const uniqueCategories = Array.from(new Set(analyzedTemplates.map(t => t.template.category)))

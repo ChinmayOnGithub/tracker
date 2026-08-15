@@ -1,19 +1,15 @@
 import { BaseRemoteRepository } from '@/lib/database/repository/BaseRepository';
 import { WeightRecord } from '@/lib/store/store';
 import { logWeight, deleteWeightRecord } from '@/app/actions/weight';
+import { toYMD, todayYMD } from '@/lib/dateUtils';
 
 export class RemoteWeightRepository extends BaseRemoteRepository<WeightRecord> {
   public async create(entity: WeightRecord): Promise<unknown> {
-    const dateStr = typeof entity.date === 'string' 
-      ? entity.date.split('T')[0]
-      : new Date(entity.date).toISOString().split('T')[0];
-    return logWeight(dateStr, entity.weight, entity.notes);
+    return logWeight(toYMD(entity.date), entity.weight, entity.notes);
   }
 
   public async update(_id: string, entity: Partial<WeightRecord>): Promise<unknown> {
-    const dateStr = entity.date
-      ? (typeof entity.date === 'string' ? entity.date.split('T')[0] : new Date(entity.date).toISOString().split('T')[0])
-      : new Date().toISOString().split('T')[0];
+    const dateStr = entity.date ? toYMD(entity.date) : todayYMD();
     const weightVal = entity.weight !== undefined ? entity.weight : 0;
     return logWeight(dateStr, weightVal, entity.notes);
   }

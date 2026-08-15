@@ -1,10 +1,11 @@
 "use client"
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { Check, ArrowRightCircle, ExternalLink, MoreVertical } from 'lucide-react'
 import { TimelineItem, ActivityLog, AnalyzedTemplate } from '@/types'
 import { Button, Input, Skeleton, EmptyState, ListRow, IconButton, StatusBadge, Section, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, ConfirmDialog } from '@/design-system'
 import { getTemplateColorClasses } from '@/lib/colors'
+import { SortableTaskList, DragHandle } from './SortableTaskList'
 
 interface TodayTasksProps {
   timeline: TimelineItem[]
@@ -35,9 +36,13 @@ interface TaskRowProps {
   onOpenCreateActivity: () => void
   todayStr: string
   analyzedTemplates: AnalyzedTemplate[]
-  handleDragStart: (e: React.DragEvent, idx: number) => void
-  handleDragOver: (e: React.DragEvent) => void
-  handleDrop: (e: React.DragEvent, idx: number) => void
+  isDragOverlay?: boolean
+  // Injected by SortableItem via cloneElement
+  _dragHandleRef?: (el: HTMLElement | null) => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  _dragHandleListeners?: Record<string, any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  _dragHandleAttributes?: Record<string, any>
 }
 
 // ── Task Checkbox ──
@@ -149,11 +154,12 @@ const TaskContextMenu: React.FC<{
 
 // ── Task Row ──
 export const TaskRow: React.FC<TaskRowProps> = ({
-  occurrence, index,
+  occurrence, index: _index,
   completingHabitId, activeMenuId: _activeMenuId, setActiveMenuId: _setActiveMenuId,
   cycleTaskStatus, setTaskStatusAction, deleteActivityLog,
   onOpenCreateActivity, todayStr, analyzedTemplates,
-  handleDragStart, handleDragOver, handleDrop,
+  isDragOverlay,
+  _dragHandleRef, _dragHandleListeners, _dragHandleAttributes,
 }) => {
   const isTimed = !occurrence.isAllDay
   const startTimeLabel = isTimed && occurrence.start
@@ -243,14 +249,23 @@ export const TaskRow: React.FC<TaskRowProps> = ({
   return (
     <ListRow
       left={
-        <TaskCheckbox
-          occurrence={occurrence}
-          completingHabitId={completingHabitId}
-          isDone={isDone}
-          isCanceled={isCanceled}
-          isPostponed={isPostponed}
-          onCycle={() => cycleTaskStatus(occurrence)}
-        />
+        <div className="flex items-center">
+          {!isGoogleCalendar && (
+            <DragHandle
+              dragHandleRef={_dragHandleRef}
+              dragHandleListeners={_dragHandleListeners}
+              dragHandleAttributes={_dragHandleAttributes}
+            />
+          )}
+          <TaskCheckbox
+            occurrence={occurrence}
+            completingHabitId={completingHabitId}
+            isDone={isDone}
+            isCanceled={isCanceled}
+            isPostponed={isPostponed}
+            onCycle={() => cycleTaskStatus(occurrence)}
+          />
+        </div>
       }
       title={titleNode}
       subtitle={metaParts.length > 0 ? (
@@ -259,14 +274,10 @@ export const TaskRow: React.FC<TaskRowProps> = ({
         </div>
       ) : undefined}
       right={rightSlot}
-      onClick={!isGoogleCalendar ? undefined : undefined}
       accentColor={accentColor}
       strikethrough={isDone || isCanceled}
       dimmed={isCanceled || isPostponed}
-      draggable={!isGoogleCalendar}
-      onDragStart={(e) => handleDragStart(e, index)}
-      onDragOver={handleDragOver}
-      onDrop={(e) => handleDrop(e, index)}
+      className={isDragOverlay ? 'shadow-lg opacity-95 bg-[var(--color-bg-surface)]' : undefined}
     />
   )
 }
@@ -369,22 +380,29 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
     }
   }
 
-  const handleDragStart = (e: React.DragEvent, index: number) => {
-    e.dataTransfer.setData('text/plain', String(index))
-  }
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault() }
-  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
-    e.preventDefault()
-    const dragIndex = Number(e.dataTransfer.getData('text/plain'))
-    if (isNaN(dragIndex) || dragIndex === dropIndex) return
-    const reordered = [...sortedTimeline]
-    const [moved] = reordered.splice(dragIndex, 1)
-    reordered.splice(dropIndex, 0, moved)
-    const ids = reordered.map(i => i.templateId).filter((id): id is string => !!id)
-    setManualOrderIds(ids)
-    try { await reorderActivityTemplatesAction(ids) }
+  const handleReorder = useCallback(async (orderedIds: string[]) => {
+    setManualOrderIds(orderedIds)
+    try { await reorderActivityTemplatesAction(orderedIds) }
     catch (err) { console.error('Failed to persist order:', err) }
-  }
+  }, [reorderActivityTemplatesAction])
+
+  const renderTask = useCallback((occurrence: TimelineItem, opts: { isDragOverlay?: boolean }) => (
+    <TaskRow
+      key={occurrence.id}
+      occurrence={occurrence}
+      index={0}
+      completingHabitId={completingHabitId}
+      activeMenuId={activeMenuId}
+      setActiveMenuId={setActiveMenuId}
+      cycleTaskStatus={cycleTaskStatus}
+      setTaskStatusAction={setTaskStatusAction}
+      deleteActivityLog={async (id) => setDeletingLogId(id)}
+      onOpenCreateActivity={onOpenCreateActivity}
+      todayStr={todayStr}
+      analyzedTemplates={analyzedTemplates}
+      isDragOverlay={opts.isDragOverlay}
+    />
+  ), [completingHabitId, activeMenuId, setActiveMenuId, cycleTaskStatus, setTaskStatusAction, onOpenCreateActivity, todayStr, analyzedTemplates])
 
   const COLORS = ['blue', 'green', 'amber', 'orange', 'red', 'purple', 'pink', 'zinc'] as const
   const colorToBg: Record<string, string> = {
@@ -410,25 +428,11 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
           {sortedTimeline.length === 0 ? (
             <EmptyState title="Day is clear 🎉" description="No activities scheduled for today." />
           ) : (
-            sortedTimeline.map((o, idx) => (
-              <TaskRow
-                key={o.id}
-                occurrence={o}
-                index={idx}
-                completingHabitId={completingHabitId}
-                activeMenuId={activeMenuId}
-                setActiveMenuId={setActiveMenuId}
-                cycleTaskStatus={cycleTaskStatus}
-                setTaskStatusAction={setTaskStatusAction}
-                deleteActivityLog={async (id) => setDeletingLogId(id)}
-                onOpenCreateActivity={onOpenCreateActivity}
-                todayStr={todayStr}
-                analyzedTemplates={analyzedTemplates}
-                handleDragStart={handleDragStart}
-                handleDragOver={handleDragOver}
-                handleDrop={handleDrop}
-              />
-            ))
+            <SortableTaskList
+              items={sortedTimeline}
+              onReorder={handleReorder}
+              renderItem={renderTask}
+            />
           )}
 
           <ConfirmDialog

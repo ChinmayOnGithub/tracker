@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { requireAuth, requireOwnership } from '@/lib/auth-guards'
 import { LeaveType, LeaveStatus } from '@prisma/client'
 import { ActivityService } from '@/lib/services/ActivityService'
+import { createLeaveSchema, updateLeaveStatusSchema, updateLeaveAllowanceSchema } from '@/lib/validations'
 
 /** Get leave allowances for a given year for the current user. */
 export async function getLeaveAllowances(year: number) {
@@ -55,6 +56,12 @@ export async function createLeaveRequest(data: {
   notes?: string
   status?: LeaveStatus
 }) {
+  const parsed = createLeaveSchema.safeParse(data)
+  if (!parsed.success) {
+    const message = parsed.error.issues.map((i) => i.message).join('; ')
+    return { success: false, error: message }
+  }
+
   try {
     const user = await requireAuth()
     const record = await db.leaveRecord.create({
@@ -109,6 +116,12 @@ export async function createLeaveRequest(data: {
 
 /** Update the status of an existing leave record. */
 export async function updateLeaveStatus(id: string, status: LeaveStatus) {
+  const parsed = updateLeaveStatusSchema.safeParse({ id, status })
+  if (!parsed.success) {
+    const message = parsed.error.issues.map((i) => i.message).join('; ')
+    return { success: false, error: message }
+  }
+
   try {
     await requireOwnership('leaveRecord', id)
 
@@ -190,6 +203,12 @@ export async function ensureLeaveAllowances(year: number) {
 
 /** Update an allowance amount for a specific leave type and year. */
 export async function updateLeaveAllowance(leaveType: LeaveType, year: number, allowance: number) {
+  const parsed = updateLeaveAllowanceSchema.safeParse({ leaveType, year, allowance })
+  if (!parsed.success) {
+    const message = parsed.error.issues.map((i) => i.message).join('; ')
+    return { success: false, error: message }
+  }
+
   try {
     const user = await requireAuth()
     const updated = await db.leaveAllowance.upsert({

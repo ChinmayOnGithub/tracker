@@ -6,6 +6,7 @@ import {
   CalendarX, Plus, Trash2, CheckCircle2, Clock, XCircle, TrendingDown, ChevronDown
 } from 'lucide-react'
 import { Input, Select, Button, Card } from '@/design-system'
+import { toYMD, fmtDateShort, inclusiveDays } from '@/lib/dateUtils'
 
 // ---------------------------------------------------------------------------
 // Types (mirroring Prisma enums / model shape)
@@ -65,24 +66,6 @@ const STATUS_CONFIG: Record<LeaveStatus, { icon: React.ReactNode; label: string;
     icon: <XCircle className="w-3 h-3" />,
     label: 'Rejected', cls: 'text-red-600 dark:text-red-400',
   },
-}
-
-function fmt(d: Date | string) {
-  const date = typeof d === 'string' ? new Date(d) : d
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function toYMD(d: Date | string) {
-  const date = typeof d === 'string' ? new Date(d) : d
-  const y = date.getUTCFullYear()
-  const m = String(date.getUTCMonth() + 1).padStart(2, '0')
-  const dy = String(date.getUTCDate()).padStart(2, '0')
-  return `${y}-${m}-${dy}`
-}
-
-function daysBetween(start: string, end: string) {
-  const a = new Date(start), b = new Date(end)
-  return Math.max(1, Math.round((b.getTime() - a.getTime()) / 86400000) + 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -223,7 +206,7 @@ function RequestForm({ onSubmit, loading }: RequestFormProps) {
     }
   }, [enabledTypes, leaveType])
 
-  const totalDays = startDate && endDate ? daysBetween(startDate, endDate) : 0
+  const totalDays = startDate && endDate ? inclusiveDays(startDate, endDate) : 0
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -445,8 +428,8 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
                   {/* Dates */}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-[var(--color-text-main)]">
-                      {fmt(record.startDate)}
-                      {toYMD(record.startDate) !== toYMD(record.endDate) && ` → ${fmt(record.endDate)}`}
+                      {fmtDateShort(record.startDate)}
+                      {toYMD(record.startDate) !== toYMD(record.endDate) && ` → ${fmtDateShort(record.endDate)}`}
                       <span className="ml-2 text-[var(--color-text-muted)] font-normal">
                         {record.totalDays} day{record.totalDays !== 1 ? 's' : ''}
                       </span>

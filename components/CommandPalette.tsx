@@ -1,17 +1,29 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react'
-import { Search, Calendar, FileText, CheckSquare, Scale, Briefcase } from 'lucide-react'
+/**
+ * Tracker Command Palette
+ *
+ * Powered by cmdk underneath — all cmdk API is contained here.
+ * External consumers use the same CommandPaletteProps interface as before.
+ *
+ * Keyboard shortcut: Cmd/Ctrl + K
+ * Mobile: open via the button rendered in DashboardLayout's mobile header.
+ *
+ * Rule: do NOT add business logic here. Every command calls an existing
+ * action prop passed in from DashboardLayout.
+ */
 
-interface CommandItem {
-  id: string
-  label: string
-  shortcut?: string
-  icon: React.ReactNode
-  action: () => void
-}
+import React, { useEffect } from 'react'
+import { Command } from 'cmdk'
+import {
+  Calendar, FileText, CheckSquare, Scale, Briefcase,
+  Plus, Settings, LayoutDashboard, BookOpen, Link,
+  LogIn, LogOut, Timer,
+} from 'lucide-react'
 
-interface CommandPaletteProps {
+// ─── Public interface (unchanged — DashboardLayout is unaffected) ─────────────
+
+export interface CommandPaletteProps {
   isOpen: boolean
   onClose: () => void
   onNewActivity: () => void
@@ -19,234 +31,250 @@ interface CommandPaletteProps {
   onShowPlaceholder: (title: string, message: string) => void
 }
 
-export const CommandPalette: React.FC<CommandPaletteProps> = ({
-  isOpen,
-  onClose,
-  onNewActivity,
-  onNavigate,
-  onShowPlaceholder
-}) => {
-  const [search, setSearch] = useState('')
-  const [activeIndex, setActiveIndex] = useState(0)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
+// ─── Command definitions ──────────────────────────────────────────────────────
 
-  const commands: CommandItem[] = [
-    {
-      id: 'new-activity',
-      label: 'New Activity',
-      shortcut: 'A',
-      icon: <PlusIcon />,
-      action: () => {
-        onNewActivity()
-        onClose()
-      }
-    },
-    {
-      id: 'go-calendar',
-      label: 'Go to Calendar',
-      shortcut: 'C',
-      icon: <Calendar className="w-4 h-4 text-blue-500" />,
-      action: () => {
-        onNavigate('calendar')
-        onClose()
-      }
-    },
-    {
-      id: 'go-journal',
-      label: 'Go to Journal',
-      shortcut: 'J',
-      icon: <FileText className="w-4 h-4 text-teal-500" />,
-      action: () => {
-        onNavigate('journal')
-        onClose()
-      }
-    },
-    {
-      id: 'log-weight',
-      label: 'Log Weight',
-      shortcut: 'W',
-      icon: <Scale className="w-4 h-4 text-indigo-500" />,
-      action: () => {
-        onNavigate('weight')
-        onClose()
-      }
-    },
-    {
-      id: 'request-leave',
-      label: 'Request Leave',
-      shortcut: 'L',
-      icon: <Briefcase className="w-4 h-4 text-purple-500" />,
-      action: () => {
-        onNavigate('leave')
-        onClose()
-      }
-    },
-    {
-      id: 'search-activities',
-      label: 'Search Activities',
-      shortcut: 'S',
-      icon: <CheckSquare className="w-4 h-4 text-amber-500" />,
-      action: () => {
-        onNavigate('activities')
-        onClose()
-      }
-    },
-    {
-      id: 'search-docs',
-      label: 'Search Documents',
-      shortcut: 'D',
-      icon: <FileText className="w-4 h-4 text-slate-500" />,
-      action: () => {
-        onShowPlaceholder('Search Documents', 'Secure Vault document search remains Decoupled. You can search documents under the Secure Vault tab.')
-        onClose()
-      }
-    }
-  ]
+interface TrackerCommand {
+  id: string
+  label: string
+  group: string
+  icon: React.ReactNode
+  keywords?: string
+  action: (props: CommandPaletteProps) => void
+}
 
-  // Filter based on search query
-  const filtered = commands.filter(cmd => 
-    cmd.label.toLowerCase().includes(search.toLowerCase())
-  )
+const COMMANDS: TrackerCommand[] = [
+  // Navigation
+  {
+    id: 'go-today',
+    label: 'Go to Today',
+    group: 'Navigation',
+    icon: <LayoutDashboard className="w-4 h-4 text-[var(--color-primary)]" />,
+    keywords: 'home dashboard today',
+    action: ({ onNavigate, onClose }) => { onNavigate('today'); onClose() },
+  },
+  {
+    id: 'go-calendar',
+    label: 'Go to Calendar',
+    group: 'Navigation',
+    icon: <Calendar className="w-4 h-4 text-blue-500" />,
+    keywords: 'calendar schedule events',
+    action: ({ onNavigate, onClose }) => { onNavigate('calendar'); onClose() },
+  },
+  {
+    id: 'go-activities',
+    label: 'Go to Activities',
+    group: 'Navigation',
+    icon: <CheckSquare className="w-4 h-4 text-amber-500" />,
+    keywords: 'activities tasks habits',
+    action: ({ onNavigate, onClose }) => { onNavigate('activities'); onClose() },
+  },
+  {
+    id: 'go-journal',
+    label: 'Go to Journal',
+    group: 'Navigation',
+    icon: <BookOpen className="w-4 h-4 text-teal-500" />,
+    keywords: 'journal diary notes',
+    action: ({ onNavigate, onClose }) => { onNavigate('journal'); onClose() },
+  },
+  {
+    id: 'go-work',
+    label: 'Go to Work Tracker',
+    group: 'Navigation',
+    icon: <Timer className="w-4 h-4 text-green-500" />,
+    keywords: 'work hours tracker sessions',
+    action: ({ onNavigate, onClose }) => { onNavigate('work'); onClose() },
+  },
+  {
+    id: 'go-leave',
+    label: 'Go to Time Off',
+    group: 'Navigation',
+    icon: <Briefcase className="w-4 h-4 text-purple-500" />,
+    keywords: 'leave vacation time off pto sick',
+    action: ({ onNavigate, onClose }) => { onNavigate('leave'); onClose() },
+  },
+  {
+    id: 'go-weight',
+    label: 'Go to Weight',
+    group: 'Navigation',
+    icon: <Scale className="w-4 h-4 text-indigo-500" />,
+    keywords: 'weight health bmi',
+    action: ({ onNavigate, onClose }) => { onNavigate('weight'); onClose() },
+  },
+  {
+    id: 'go-links',
+    label: 'Go to Links',
+    group: 'Navigation',
+    icon: <Link className="w-4 h-4 text-cyan-500" />,
+    keywords: 'links bookmarks library',
+    action: ({ onNavigate, onClose }) => { onNavigate('links'); onClose() },
+  },
+  {
+    id: 'go-vault',
+    label: 'Go to Vault',
+    group: 'Navigation',
+    icon: <FileText className="w-4 h-4 text-rose-500" />,
+    keywords: 'vault documents secure files',
+    action: ({ onNavigate, onClose }) => { onNavigate('documents'); onClose() },
+  },
+  {
+    id: 'go-settings',
+    label: 'Open Settings',
+    group: 'Navigation',
+    icon: <Settings className="w-4 h-4 text-[var(--color-text-muted)]" />,
+    keywords: 'settings preferences config profile',
+    action: ({ onNavigate, onClose }) => { onNavigate('settings'); onClose() },
+  },
+  // Actions
+  {
+    id: 'new-activity',
+    label: 'Create Activity',
+    group: 'Actions',
+    icon: <Plus className="w-4 h-4 text-emerald-500" />,
+    keywords: 'new create activity task habit template',
+    action: ({ onNewActivity, onClose }) => { onNewActivity(); onClose() },
+  },
+  {
+    id: 'new-journal',
+    label: 'Open Journal for Today',
+    group: 'Actions',
+    icon: <BookOpen className="w-4 h-4 text-teal-500" />,
+    keywords: 'write journal entry today new',
+    action: ({ onNavigate, onClose }) => { onNavigate('journal'); onClose() },
+  },
+  {
+    id: 'log-weight',
+    label: 'Log Weight',
+    group: 'Actions',
+    icon: <Scale className="w-4 h-4 text-indigo-500" />,
+    keywords: 'log weight track health',
+    action: ({ onNavigate, onClose }) => { onNavigate('weight'); onClose() },
+  },
+  {
+    id: 'request-leave',
+    label: 'Request Time Off',
+    group: 'Actions',
+    icon: <LogOut className="w-4 h-4 text-purple-500" />,
+    keywords: 'request leave time off vacation sick pto',
+    action: ({ onNavigate, onClose }) => { onNavigate('leave'); onClose() },
+  },
+  {
+    id: 'start-work',
+    label: 'Log Work Presence',
+    group: 'Actions',
+    icon: <LogIn className="w-4 h-4 text-green-500" />,
+    keywords: 'start work log hours presence office wfh',
+    action: ({ onNavigate, onClose }) => { onNavigate('today'); onClose() },
+  },
+]
 
-  // Listen to keyboard trigger (Ctrl + K)
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
+  const { isOpen, onClose } = props
+
+  // Cmd/Ctrl + K toggle — handled here as well as in DashboardLayout for resilience
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault()
         if (isOpen) onClose()
-        else inputRef.current?.focus()
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
   }, [isOpen, onClose])
-
-  // Focus input on mount/open
-  useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => {
-        setSearch('')
-        setActiveIndex(0)
-        inputRef.current?.focus()
-      }, 50)
-    }
-  }, [isOpen])
-
-  // Keyboard navigation inside list
-  const handleListKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      onClose()
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setActiveIndex(prev => (prev + 1) % filtered.length)
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setActiveIndex(prev => (prev - 1 + filtered.length) % filtered.length)
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      if (filtered[activeIndex]) {
-        filtered[activeIndex].action()
-      }
-    }
-  }
-
-  // Scroll active item into view
-  useEffect(() => {
-    const activeEl = listRef.current?.children[activeIndex] as HTMLElement
-    if (activeEl) {
-      activeEl.scrollIntoView({ block: 'nearest' })
-    }
-  }, [activeIndex])
 
   if (!isOpen) return null
 
+  // Group commands
+  const groups = Array.from(new Set(COMMANDS.map(c => c.group)))
+
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 bg-slate-900/40 dark:bg-black/70 backdrop-blur-md animate-in fade-in duration-300">
-      {/* Backdrop Close Click */}
-      <div className="fixed inset-0 cursor-default" onClick={onClose} />
-      
-      {/* Main Command Input Box */}
-      <div 
-        className="w-full max-w-lg bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl shadow-2xl overflow-hidden flex flex-col relative max-h-[360px] animate-in fade-in zoom-in-[0.98] slide-in-from-top-4 duration-300 ease-out"
-        onKeyDown={handleListKeyDown}
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 bg-slate-900/40 dark:bg-black/70 backdrop-blur-md"
+      aria-label="Command palette overlay"
+    >
+      {/* Backdrop */}
+      <div className="fixed inset-0 cursor-default" onClick={onClose} aria-hidden />
+
+      {/* cmdk dialog */}
+      <Command
+        label="Command palette"
+        className={[
+          'relative w-full max-w-lg overflow-hidden',
+          'bg-[var(--color-bg-surface)] border border-[var(--color-border)]',
+          'rounded-xl shadow-2xl flex flex-col',
+          'max-h-[420px]',
+          'animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-200',
+        ].join(' ')}
+        // Dismiss on Escape
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') { e.preventDefault(); onClose() }
+        }}
       >
-        <div className="flex items-center gap-3 px-4 border-b border-[var(--color-border)] dark:border-zinc-855 h-12 shrink-0">
-          <Search className="w-4 h-4 text-slate-400 dark:text-zinc-500 shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Type a command or search..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              setActiveIndex(0)
-            }}
-            className="flex-1 bg-transparent text-xs font-bold text-[var(--color-text-main)] placeholder-slate-400 focus:outline-hidden"
+        {/* Search input */}
+        <div className="flex items-center gap-3 px-4 border-b border-[var(--color-border)] h-12 shrink-0">
+          <svg
+            className="w-4 h-4 text-[var(--color-text-muted)] shrink-0"
+            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            aria-hidden
+          >
+            <circle cx="11" cy="11" r="8" strokeWidth="2" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <Command.Input
+            autoFocus
+            placeholder="Type a command or search…"
+            className={[
+              'flex-1 bg-transparent text-xs font-bold',
+              'text-[var(--color-text-main)]',
+              'placeholder:text-[var(--color-text-muted)]',
+              'focus:outline-none',
+            ].join(' ')}
           />
-          <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[9px] font-bold text-slate-400 dark:text-zinc-500 bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800 rounded font-mono">
+          <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-[9px] font-bold font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded">
             ESC
           </kbd>
         </div>
 
-        {/* Results List */}
-        <div ref={listRef} className="flex-1 overflow-y-auto py-2 px-1.5 space-y-0.5">
-          {filtered.length === 0 ? (
-            <div className="text-center py-6 text-xs text-[var(--color-text-muted)] font-medium italic">
-              No matching commands found.
-            </div>
-          ) : (
-            filtered.map((cmd, idx) => {
-              const isActive = idx === activeIndex
-              return (
-                <button
-                  key={cmd.id}
-                  onClick={cmd.action}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-bold transition-all text-left cursor-pointer ${
-                    isActive 
-                      ? 'bg-[var(--color-primary)] text-white' 
-                      : 'text-[var(--color-text-main)] hover:bg-slate-100/60 dark:hover:bg-zinc-900/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className={isActive ? 'text-white' : ''}>{cmd.icon}</span>
-                    <span className="truncate">{cmd.label}</span>
-                  </div>
-                  {cmd.shortcut && (
-                    <kbd className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${
-                      isActive 
-                        ? 'bg-white/20 text-white border-transparent' 
-                        : 'text-slate-400 dark:text-zinc-500 bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800'
-                    }`}>
-                      {cmd.shortcut}
-                    </kbd>
-                  )}
-                </button>
-              )
-            })
-          )}
-        </div>
-      </div>
+        {/* Results */}
+        <Command.List className="flex-1 overflow-y-auto py-2 px-1.5 space-y-3">
+          <Command.Empty className="py-8 text-center text-xs text-[var(--color-text-muted)] font-medium italic">
+            No matching commands found.
+          </Command.Empty>
+
+          {groups.map(group => {
+            const groupCmds = COMMANDS.filter(c => c.group === group)
+            return (
+              <Command.Group
+                key={group}
+                heading={group}
+                className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-[var(--color-text-muted)]"
+              >
+                {groupCmds.map(cmd => (
+                  <Command.Item
+                    key={cmd.id}
+                    value={`${cmd.label} ${cmd.keywords ?? ''}`}
+                    onSelect={() => cmd.action(props)}
+                    className={[
+                      'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
+                      'text-xs font-semibold text-[var(--color-text-main)]',
+                      'cursor-pointer select-none',
+                      'transition-colors duration-[var(--motion-duration-fast)]',
+                      'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
+                      '[&_svg]:aria-selected:text-white',
+                      'hover:bg-[var(--color-accent)]',
+                    ].join(' ')}
+                  >
+                    <span className="shrink-0">{cmd.icon}</span>
+                    <span className="flex-1 truncate">{cmd.label}</span>
+                  </Command.Item>
+                ))}
+              </Command.Group>
+            )
+          })}
+        </Command.List>
+      </Command>
     </div>
   )
 }
-
-const PlusIcon = () => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width="16" 
-    height="16" 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2.5" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className="w-4 h-4 text-emerald-500"
-  >
-    <line x1="12" y1="5" x2="12" y2="19"></line>
-    <line x1="5" y1="12" x2="19" y2="12"></line>
-  </svg>
-)
-

@@ -27,6 +27,7 @@ import { TableCell as TiptapTableCell } from '@tiptap/extension-table-cell'
 
 import { JournalContentAdapter } from '@/modules/journal/editor/JournalContentAdapter'
 import { JournalExportService, ExportSummary } from '@/modules/journal/JournalExportService'
+import { toYMD, todayYMD, fmtDateFull, fmtDateMed } from '@/lib/dateUtils'
 
 const CustomImage = ImageExtension.extend({
   addAttributes() {
@@ -62,31 +63,6 @@ interface JournalEntry {
 
 interface JournalPanelProps {
   initialEntries: JournalEntry[]
-}
-
-function formatJournalDate(d: Date | string) {
-  const date = typeof d === 'string' ? new Date(d) : d
-  return date.toLocaleDateString(undefined, {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  })
-}
-
-function shortDate(d: Date | string) {
-  const date = typeof d === 'string' ? new Date(d) : d
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
-function toYMD(d: Date | string) {
-  const date = typeof d === 'string' ? new Date(d) : d
-  const y = date.getUTCFullYear()
-  const m = String(date.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(date.getUTCDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-function todayYMD() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function SyncStatus({ status }: { status: 'idle' | 'saving' | 'saved' | 'error' }) {
@@ -716,7 +692,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                     {hasMood && (
                       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-white/70' : 'bg-[var(--color-primary)]'}`} />
                     )}
-                    {shortDate(entry.journalDate)}
+                    {fmtDateMed(entry.journalDate)}
                   </span>
                   <span className={`text-[10px] font-semibold tabular-nums shrink-0 ${isActive ? 'text-white/60' : 'text-[var(--color-text-muted)]'}`}>
                     {wc > 0 ? `${wc}w` : ''}
@@ -799,7 +775,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
 
             <div className="border-b border-slate-100 dark:border-zinc-900/40 pb-4">
               <h1 className="text-xl sm:text-3xl font-black text-[var(--color-text-main)] tracking-tight">
-                {formatJournalDate(activeDate + 'T12:00:00Z')}
+                {fmtDateFull(activeDate + 'T12:00:00Z')}
               </h1>
             </div>
 
@@ -974,7 +950,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                 </div>
                 <div>
                   <p className="text-base font-bold text-[var(--color-text-main)]">Nothing written yet</p>
-                  <p className="text-sm text-[var(--color-text-muted)] mt-1">Capture your thoughts for {formatJournalDate(activeDate + 'T12:00:00Z')}</p>
+                  <p className="text-sm text-[var(--color-text-muted)] mt-1">Capture your thoughts for {fmtDateFull(activeDate + 'T12:00:00Z')}</p>
                 </div>
                 <Button
                   onClick={() => setEditMode(true)}

@@ -3,6 +3,7 @@
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
 import { requireAuth, requireOwnership } from '@/lib/auth-guards'
+import { logWeightSchema } from '@/lib/validations'
 
 import { ActivityService } from '@/lib/services/ActivityService'
 
@@ -11,6 +12,12 @@ import { ActivityService } from '@/lib/services/ActivityService'
  * Uses upsert-by-date pattern to avoid duplicates.
  */
 export async function logWeight(date: string, weight: number, notes?: string | null) {
+  const parsed = logWeightSchema.safeParse({ date, weight, notes })
+  if (!parsed.success) {
+    const message = parsed.error.issues.map((i) => i.message).join('; ')
+    return { success: false, error: message }
+  }
+
   try {
     const user = await requireAuth()
     // Normalize to noon UTC to avoid timezone boundary issues

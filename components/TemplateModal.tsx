@@ -1,11 +1,14 @@
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useForm, Controller } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { ActivityTemplate, Tag, RecurrenceType, ActivityType, Priority, CalendarProvider } from '@/types'
 import { createActivityTemplate, updateActivityTemplate } from '@/app/actions/template'
 import { ICON_OPTIONS, Icon } from './Icon'
 import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
-import { Modal, Input, Textarea, Select, Button } from '@/design-system'
+import { Modal, Input, Select, Button } from '@/design-system'
+import { templateFormSchema, type TemplateFormValues } from '@/lib/validations'
 
 interface TemplateModalProps {
   isOpen: boolean
@@ -15,24 +18,24 @@ interface TemplateModalProps {
 }
 
 const COLOR_OPTIONS = [
-  { value: 'zinc', bgClass: 'bg-zinc-500', borderClass: 'border-zinc-500', textClass: 'text-zinc-650' },
-  { value: 'red', bgClass: 'bg-red-500', borderClass: 'border-red-500', textClass: 'text-red-650' },
-  { value: 'orange', bgClass: 'bg-orange-500', borderClass: 'border-orange-500', textClass: 'text-orange-650' },
-  { value: 'amber', bgClass: 'bg-amber-500', borderClass: 'border-amber-500', textClass: 'text-amber-650' },
-  { value: 'green', bgClass: 'bg-green-500', borderClass: 'border-green-500', textClass: 'text-green-650' },
-  { value: 'blue', bgClass: 'bg-blue-500', borderClass: 'border-blue-500', textClass: 'text-blue-500' },
-  { value: 'purple', bgClass: 'bg-purple-500', borderClass: 'border-purple-500', textClass: 'text-purple-650' },
-  { value: 'pink', bgClass: 'bg-pink-500', borderClass: 'border-pink-500', textClass: 'text-pink-655' },
+  { value: 'zinc',   bgClass: 'bg-zinc-500' },
+  { value: 'red',    bgClass: 'bg-red-500' },
+  { value: 'orange', bgClass: 'bg-orange-500' },
+  { value: 'amber',  bgClass: 'bg-amber-500' },
+  { value: 'green',  bgClass: 'bg-green-500' },
+  { value: 'blue',   bgClass: 'bg-blue-500' },
+  { value: 'purple', bgClass: 'bg-purple-500' },
+  { value: 'pink',   bgClass: 'bg-pink-500' },
 ]
 
 const CATEGORIES = [
   { value: 'personal', label: 'Personal' },
-  { value: 'work', label: 'Work' },
-  { value: 'health', label: 'Health' },
-  { value: 'fitness', label: 'Fitness' },
-  { value: 'finance', label: 'Finance' },
-  { value: 'chores', label: 'Chores' },
-  { value: 'custom', label: 'Custom' },
+  { value: 'work',     label: 'Work' },
+  { value: 'health',   label: 'Health' },
+  { value: 'fitness',  label: 'Fitness' },
+  { value: 'finance',  label: 'Finance' },
+  { value: 'chores',   label: 'Chores' },
+  { value: 'custom',   label: 'Custom' },
 ]
 
 const WEEKDAYS = [
@@ -45,250 +48,156 @@ const WEEKDAYS = [
   { value: 6, label: 'Sa' },
 ]
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function parseMeta(template: ActivityTemplate | null) {
+  if (!template) return {}
+  return typeof template.metadata === 'string'
+    ? JSON.parse(template.metadata || '{}')
+    : (template.metadata ?? {})
+}
+
+function parseRules(template: ActivityTemplate | null) {
+  if (!template) return []
+  return typeof template.notificationRules === 'string'
+    ? JSON.parse(template.notificationRules || '[]')
+    : (template.notificationRules ?? [])
+}
+
+function buildDefaultValues(template: ActivityTemplate | null): TemplateFormValues {
+  const meta = parseMeta(template)
+  const rules = parseRules(template)
+
+  return {
+    name:                 template?.name ?? '',
+    category:             template?.category ?? 'personal',
+    icon:                 template?.icon ?? 'CheckSquare',
+    color:                template?.color ?? 'zinc',
+    recurrenceType:       (template?.recurrenceType as RecurrenceType) ?? 'daily',
+    selectedWeekdays:     template?.recurrenceDaysOfWeek
+                            ? template.recurrenceDaysOfWeek.split(',').map(Number)
+                            : [],
+    recurrenceDayOfMonth: template?.recurrenceDayOfMonth ? String(template.recurrenceDayOfMonth) : '15',
+    targetDate:           template?.targetDate
+                            ? template.targetDate.split('T')[0]
+                            : new Date().toISOString().split('T')[0],
+    isAllDay:             meta.isAllDay ?? true,
+    startTime:            meta.startTime ?? '09:00',
+    completionMethod:     meta.completion?.method ?? 'CHECKBOX',
+    completionHook:       meta.completion?.hook ?? 'none',
+    valueLabel:           meta.completion?.value?.label ?? '',
+    valueInputType:       meta.completion?.value?.inputType ?? 'number',
+    valueUnit:            meta.completion?.value?.unit ?? '',
+    valueRequired:        meta.completion?.value?.required ?? false,
+    valueMinimum:         meta.completion?.value?.minimum != null
+                            ? String(meta.completion.value.minimum)
+                            : '',
+    valueMaximum:         meta.completion?.value?.maximum != null
+                            ? String(meta.completion.value.maximum)
+                            : '',
+    priority:             (template?.priority as Priority) ?? 'NORMAL',
+    type:                 (template?.type as ActivityType) ?? 'PERSONAL',
+    notes:                template?.notes ?? '',
+    location:             meta.location ?? '',
+    amount:               template?.amount != null ? String(template.amount) : '',
+    tagsInput:            template?.tags ? template.tags.map((t: Tag) => t.name).join(', ') : '',
+    estimatedDuration:    template?.estimatedDuration ? String(template.estimatedDuration) : '30',
+    calendarProvider:     (template?.calendarProvider as CalendarProvider) ?? 'NONE',
+    hasReminder:          Array.isArray(rules) && rules.length > 0,
+  }
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 export const TemplateModal: React.FC<TemplateModalProps> = ({
   isOpen,
   onClose,
-  templateToEdit
+  templateToEdit,
 }) => {
-  // Derive default fields from templateToEdit on mount
-  const [name, setName] = useState(templateToEdit?.name || '')
-  const [category, setCategory] = useState(templateToEdit?.category || 'personal')
-  const [icon, setIcon] = useState(templateToEdit?.icon || 'CheckSquare')
-  const [color, setColor] = useState(templateToEdit?.color || 'zinc')
-  const [recurrenceType, setRecurrenceType] = useState<RecurrenceType>(templateToEdit?.recurrenceType || 'daily')
-  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>(() => 
-    templateToEdit?.recurrenceDaysOfWeek ? templateToEdit.recurrenceDaysOfWeek.split(',').map(Number) : []
-  )
-  const [recurrenceDayOfMonth, setRecurrenceDayOfMonth] = useState(() => 
-    templateToEdit?.recurrenceDayOfMonth ? String(templateToEdit.recurrenceDayOfMonth) : '15'
-  )
-  const [targetDate, setTargetDate] = useState(() => 
-    templateToEdit?.targetDate ? templateToEdit.targetDate.split('T')[0] : new Date().toISOString().split('T')[0]
-  )
-  const [isAllDay, setIsAllDay] = useState(() => {
-    if (!templateToEdit) return true
-    const meta = typeof templateToEdit.metadata === 'string' 
-      ? JSON.parse(templateToEdit.metadata) 
-      : templateToEdit.metadata || {}
-    return meta.isAllDay ?? true
-  })
-  const [startTime, setStartTime] = useState(() => {
-    if (!templateToEdit) return '09:00'
-    const meta = typeof templateToEdit.metadata === 'string' 
-      ? JSON.parse(templateToEdit.metadata) 
-      : templateToEdit.metadata || {}
-    return meta.startTime ?? '09:00'
-  })
-
-  // Completion Engine configurations
-  const [completionMethod, setCompletionMethod] = useState<'CHECKBOX' | 'VALUE' | 'FORM'>(() => {
-    if (!templateToEdit) return 'CHECKBOX'
-    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
-    return meta.completion?.method || 'CHECKBOX'
-  })
-  const [completionHook, setCompletionHook] = useState(() => {
-    if (!templateToEdit) return 'none'
-    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
-    return meta.completion?.hook || 'none'
-  })
-  const [valueLabel, setValueLabel] = useState(() => {
-    if (!templateToEdit) return ''
-    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
-    return meta.completion?.value?.label || ''
-  })
-  const [valueInputType, setValueInputType] = useState(() => {
-    if (!templateToEdit) return 'number'
-    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
-    return meta.completion?.value?.inputType || 'number'
-  })
-  const [valueUnit, setValueUnit] = useState(() => {
-    if (!templateToEdit) return ''
-    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
-    return meta.completion?.value?.unit || ''
-  })
-  const [valueRequired, setValueRequired] = useState(() => {
-    if (!templateToEdit) return false
-    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
-    return meta.completion?.value?.required ?? false
-  })
-  const [valueMinimum, setValueMinimum] = useState(() => {
-    if (!templateToEdit) return ''
-    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
-    const min = meta.completion?.value?.minimum
-    return min !== undefined && min !== null ? String(min) : ''
-  })
-  const [valueMaximum, setValueMaximum] = useState(() => {
-    if (!templateToEdit) return ''
-    const meta = typeof templateToEdit.metadata === 'string' ? JSON.parse(templateToEdit.metadata) : templateToEdit.metadata || {}
-    const max = meta.completion?.value?.maximum
-    return max !== undefined && max !== null ? String(max) : ''
-  })
-
-  // Advanced section
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [priority, setPriority] = useState<Priority>(templateToEdit?.priority || 'NORMAL')
-  const [type, setType] = useState<ActivityType>(templateToEdit?.type || 'PERSONAL')
-  const [notes, setNotes] = useState(templateToEdit?.notes || '')
-  const [location, setLocation] = useState(() => {
-    if (!templateToEdit) return ''
-    const meta = typeof templateToEdit.metadata === 'string' 
-      ? JSON.parse(templateToEdit.metadata) 
-      : templateToEdit.metadata || {}
-    return meta.location ?? ''
-  })
-  const [amount, setAmount] = useState(() => 
-    templateToEdit?.amount !== null && templateToEdit?.amount !== undefined ? String(templateToEdit.amount) : ''
-  )
-  const [tagsInput, setTagsInput] = useState(() => 
-    templateToEdit?.tags ? templateToEdit.tags.map(t => t.name).join(', ') : ''
-  )
-  const [estimatedDuration, setEstimatedDuration] = useState(() => 
-    templateToEdit?.estimatedDuration ? String(templateToEdit.estimatedDuration) : '30'
-  )
-  const [calendarProvider, setCalendarProvider] = useState<CalendarProvider>(templateToEdit?.calendarProvider || 'NONE')
-  const [hasReminder, setHasReminder] = useState(() => {
-    if (!templateToEdit) return false
-    const rules = typeof templateToEdit.notificationRules === 'string'
-      ? JSON.parse(templateToEdit.notificationRules)
-      : templateToEdit.notificationRules
-    return Array.isArray(rules) && rules.length > 0
-  })
-
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [errorMsg, setErrorMsg] = useState('')
   const [iconSearch, setIconSearch] = useState('')
+  const [serverError, setServerError] = useState('')
 
-  // Also support resetting state if props change without unmounting (rare but safe)
-  const [prevTemplateToEdit, setPrevTemplateToEdit] = useState(templateToEdit)
-  if (templateToEdit !== prevTemplateToEdit) {
-    setPrevTemplateToEdit(templateToEdit)
-    if (templateToEdit) {
-      setName(templateToEdit.name)
-      setCategory(templateToEdit.category)
-      setIcon(templateToEdit.icon)
-      setColor(templateToEdit.color)
-      setRecurrenceType(templateToEdit.recurrenceType)
-      setSelectedWeekdays(templateToEdit.recurrenceDaysOfWeek ? templateToEdit.recurrenceDaysOfWeek.split(',').map(Number) : [])
-      setRecurrenceDayOfMonth(templateToEdit.recurrenceDayOfMonth ? String(templateToEdit.recurrenceDayOfMonth) : '15')
-      setTargetDate(templateToEdit.targetDate ? templateToEdit.targetDate.split('T')[0] : new Date().toISOString().split('T')[0])
-      setPriority(templateToEdit.priority)
-      setType(templateToEdit.type)
-      setNotes(templateToEdit.notes || '')
-      setAmount(templateToEdit.amount !== null && templateToEdit.amount !== undefined ? String(templateToEdit.amount) : '')
-      setTagsInput(templateToEdit.tags ? templateToEdit.tags.map(t => t.name).join(', ') : '')
-      setCalendarProvider(templateToEdit.calendarProvider)
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    reset,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<TemplateFormValues>({
+    resolver: zodResolver(templateFormSchema),
+    defaultValues: buildDefaultValues(templateToEdit),
+  })
 
-      const meta = typeof templateToEdit.metadata === 'string' 
-        ? JSON.parse(templateToEdit.metadata) 
-        : templateToEdit.metadata || {}
-      setIsAllDay(meta.isAllDay ?? true)
-      setStartTime(meta.startTime ?? '09:00')
-      setLocation(meta.location ?? '')
-      setEstimatedDuration(templateToEdit.estimatedDuration ? String(templateToEdit.estimatedDuration) : '30')
-
-      const rules = typeof templateToEdit.notificationRules === 'string'
-        ? JSON.parse(templateToEdit.notificationRules)
-        : templateToEdit.notificationRules
-      setHasReminder(Array.isArray(rules) && rules.length > 0)
-
-      setCompletionMethod(meta.completion?.method || 'CHECKBOX')
-      setCompletionHook(meta.completion?.hook || 'none')
-      setValueLabel(meta.completion?.value?.label || '')
-      setValueInputType(meta.completion?.value?.inputType || 'number')
-      setValueUnit(meta.completion?.value?.unit || '')
-      setValueRequired(meta.completion?.value?.required ?? false)
-      const min = meta.completion?.value?.minimum
-      setValueMinimum(min !== undefined && min !== null ? String(min) : '')
-      const max = meta.completion?.value?.maximum
-      setValueMaximum(max !== undefined && max !== null ? String(max) : '')
-    } else {
-      setName('')
-      setCategory('personal')
-      setIcon('CheckSquare')
-      setColor('zinc')
-      setRecurrenceType('daily')
-      setSelectedWeekdays([])
-      setRecurrenceDayOfMonth('15')
-      setTargetDate(new Date().toISOString().split('T')[0])
-      setIsAllDay(true)
-      setStartTime('09:00')
-      setPriority('NORMAL')
-      setType('PERSONAL')
-      setNotes('')
-      setLocation('')
-      setAmount('')
-      setTagsInput('')
-      setEstimatedDuration('30')
-      setCalendarProvider('NONE')
-      setHasReminder(false)
+  // Reset the form whenever the modal opens with a new (or null) template
+  useEffect(() => {
+    if (isOpen) {
+      reset(buildDefaultValues(templateToEdit))
       setShowAdvanced(false)
-
-      setCompletionMethod('CHECKBOX')
-      setCompletionHook('none')
-      setValueLabel('')
-      setValueInputType('number')
-      setValueUnit('')
-      setValueRequired(false)
-      setValueMinimum('')
-      setValueMaximum('')
+      setIconSearch('')
+      setServerError('')
     }
-    setErrorMsg('')
-    setIconSearch('')
-  }
+  }, [isOpen, templateToEdit, reset])
+
+  // eslint-disable-next-line react-hooks/incompatible-library -- RHF watch() is not memoizable by design; intentional
+  const recurrenceType  = watch('recurrenceType')
+  const isAllDay        = watch('isAllDay')
+  const completionMethod = watch('completionMethod')
+  const valueInputType  = watch('valueInputType')
+  const selectedWeekdays = watch('selectedWeekdays')
+  const icon            = watch('icon')
+  const color           = watch('color')
+  const targetDate      = watch('targetDate')
+  const recurrenceDayOfMonth = watch('recurrenceDayOfMonth')
+  const valueUnit       = watch('valueUnit')
 
   if (!isOpen) return null
 
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
   const handleWeekdayToggle = (day: number) => {
-    setSelectedWeekdays(prev =>
-      prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day].sort()
-    )
+    const current = selectedWeekdays ?? []
+    const next = current.includes(day)
+      ? current.filter((d) => d !== day)
+      : [...current, day].sort()
+    setValue('selectedWeekdays', next)
   }
 
   const getNaturalRecurrenceText = () => {
     switch (recurrenceType) {
-      case 'daily':
-        return 'Repeats daily'
-      case 'weekly':
-        if (selectedWeekdays.length === 0) return 'Repeats weekly'
-        const days = selectedWeekdays.map(d => {
-          const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-          return names[d]
-        })
-        return `Repeats weekly on ${days.join(', ')}`
-      case 'monthly':
-        return `Repeats monthly on day ${recurrenceDayOfMonth}`
-      case 'one_time':
-        return `Once on ${targetDate}`
-      case 'milestone':
-        return 'Custom / Ad-hoc (Unscheduled, added manually)'
-      default:
-        return 'No repeat'
+      case 'daily':    return 'Repeats daily'
+      case 'weekly': {
+        if (!selectedWeekdays?.length) return 'Repeats weekly'
+        const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+        return `Repeats weekly on ${selectedWeekdays.map((d) => names[d]).join(', ')}`
+      }
+      case 'monthly':  return `Repeats monthly on day ${recurrenceDayOfMonth}`
+      case 'one_time': return `Once on ${targetDate}`
+      case 'milestone': return 'Custom / Ad-hoc (Unscheduled, added manually)'
+      default:         return 'No repeat'
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) {
-      setErrorMsg('Please specify an activity name')
-      return
-    }
+  const onSubmit = async (values: TemplateFormValues) => {
+    setServerError('')
 
-    setIsSubmitting(true)
-    setErrorMsg('')
+    const parsedAmount        = values.amount.trim() !== '' ? parseFloat(values.amount) : null
+    const parsedDaysOfWeek    = values.recurrenceType === 'weekly' && values.selectedWeekdays.length > 0
+                                  ? values.selectedWeekdays.join(',')
+                                  : null
+    const parsedDayOfMonth    = values.recurrenceType === 'monthly'
+                                  ? parseInt(values.recurrenceDayOfMonth) || 15
+                                  : null
+    const parsedTargetDate    = values.recurrenceType === 'one_time' && values.targetDate
+                                  ? `${values.targetDate}T00:00:00.000Z`
+                                  : null
 
-    const parsedAmount = amount.trim() !== '' ? parseFloat(amount) : null
-    const parsedDaysOfWeek = recurrenceType === 'weekly' && selectedWeekdays.length > 0
-      ? selectedWeekdays.join(',')
-      : null
-    const parsedDayOfMonth = ['monthly'].includes(recurrenceType)
-      ? parseInt(recurrenceDayOfMonth) || 15
-      : null
-    const parsedTargetDate = recurrenceType === 'one_time' && targetDate ? `${targetDate}T00:00:00.000Z` : null
-
-    const tagNames = tagsInput
+    const tagNames = values.tagsInput
       .split(',')
-      .map(t => t.trim())
-      .filter(t => t.length > 0)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0)
 
     const meta: {
       startTime: string
@@ -307,70 +216,65 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         }
       }
     } = {
-      startTime,
-      isAllDay,
-      location,
-      completion: {
-        method: completionMethod,
-        hook: completionHook,
-      }
+      startTime:  values.startTime,
+      isAllDay:   values.isAllDay,
+      location:   values.location,
+      completion: { method: values.completionMethod, hook: values.completionHook },
     }
 
-    if (completionMethod === 'VALUE') {
+    if (values.completionMethod === 'VALUE') {
       meta.completion.value = {
-        label: valueLabel.trim() || name.trim(),
-        inputType: valueInputType,
-        unit: valueUnit.trim() || null,
-        required: valueRequired,
-        minimum: valueMinimum.trim() !== '' ? parseFloat(valueMinimum) : null,
-        maximum: valueMaximum.trim() !== '' ? parseFloat(valueMaximum) : null,
+        label:     values.valueLabel.trim() || values.name.trim(),
+        inputType: values.valueInputType,
+        unit:      values.valueUnit.trim() || null,
+        required:  values.valueRequired,
+        minimum:   values.valueMinimum.trim() !== '' ? parseFloat(values.valueMinimum) : null,
+        maximum:   values.valueMaximum.trim() !== '' ? parseFloat(values.valueMaximum) : null,
       }
     }
 
     const payload = {
-      name: name.trim(),
-      category,
-      type,
-      priority,
-      estimatedDuration: isAllDay ? 0 : parseInt(estimatedDuration) || 0,
-      scheduledTime: isAllDay ? null : startTime,
-      calendarProvider,
-      notificationRules: hasReminder ? [{ channel: 'PUSH', offsetMinutes: -15 }] : [],
-      icon,
-      color,
-      notes: notes.trim() || null,
-      amount: parsedAmount,
-      recurrenceType,
-      recurrenceInterval: 1,
+      name:                 values.name.trim(),
+      category:             values.category,
+      type:                 values.type as ActivityType,
+      priority:             values.priority as Priority,
+      estimatedDuration:    values.isAllDay ? 0 : parseInt(values.estimatedDuration) || 0,
+      scheduledTime:        values.isAllDay ? null : values.startTime,
+      calendarProvider:     values.calendarProvider as CalendarProvider,
+      notificationRules:    values.hasReminder ? [{ channel: 'PUSH', offsetMinutes: -15 }] : [],
+      icon:                 values.icon,
+      color:                values.color,
+      notes:                values.notes.trim() || null,
+      amount:               parsedAmount,
+      recurrenceType:       values.recurrenceType,
+      recurrenceInterval:   1,
       recurrenceDaysOfWeek: parsedDaysOfWeek,
       recurrenceDayOfMonth: parsedDayOfMonth,
-      recurrenceMonth: null,
-      targetDate: parsedTargetDate,
-      remindBeforeDays: null,
+      recurrenceMonth:      null,
+      targetDate:           parsedTargetDate,
+      remindBeforeDays:     null,
       tagNames,
-      metadata: meta,
+      metadata:             meta,
     }
 
-    let result
-    if (templateToEdit) {
-      result = await updateActivityTemplate(templateToEdit.id, payload)
-    } else {
-      result = await createActivityTemplate(payload)
-    }
+    const result = templateToEdit
+      ? await updateActivityTemplate(templateToEdit.id, payload)
+      : await createActivityTemplate(payload)
 
     if (result.success) {
-      setIsSubmitting(false)
       onClose()
     } else {
-      setIsSubmitting(false)
-      setErrorMsg(result.error || 'Something went wrong saving the activity.')
+      setServerError(result.error || 'Something went wrong saving the activity.')
     }
   }
 
-  const filteredIcons = ICON_OPTIONS.filter(opt =>
-    opt.label.toLowerCase().includes(iconSearch.toLowerCase()) ||
-    opt.name.toLowerCase().includes(iconSearch.toLowerCase())
+  const filteredIcons = ICON_OPTIONS.filter(
+    (opt) =>
+      opt.label.toLowerCase().includes(iconSearch.toLowerCase()) ||
+      opt.name.toLowerCase().includes(iconSearch.toLowerCase())
   )
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <Modal
@@ -379,191 +283,194 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       title={templateToEdit ? 'Edit Activity' : 'New Activity'}
       size="lg"
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {errorMsg && (
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+
+        {/* Server-level error banner */}
+        {serverError && (
           <div className="p-2.5 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-500 rounded-lg flex items-center gap-2 text-xs font-semibold">
             <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span>{errorMsg}</span>
+            <span>{serverError}</span>
           </div>
         )}
 
-        {/* Basic Details Section */}
+        {/* ── Basic Details ──────────────────────────────────────────────── */}
         <div className="space-y-4 pb-2">
           <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)]/40 pb-1.5">
             Basic Details
           </h4>
 
-          {/* Name input */}
-        <Input
-          label="Activity Name"
-          value={name}
-          onChange={e => setName(e.target.value)}
-          placeholder="e.g. Daily Reflection, Workout, Study session"
-          required
-        />
+          <Input
+            label="Activity Name"
+            placeholder="e.g. Daily Reflection, Workout, Study session"
+            error={errors.name?.message}
+            {...register('name')}
+          />
 
-        {/* Category */}
-        <Select
-          label="Category"
-          value={category}
-          onChange={e => setCategory(e.target.value)}
-          options={CATEGORIES}
-        />
-
-        {/* Icon Selector — Notion-style visual grid with Search */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-[var(--color-text-muted)]">Icon</label>
-            <input
-              type="text"
-              placeholder="Search icons..."
-              value={iconSearch}
-              onChange={e => setIconSearch(e.target.value)}
-              className="text-xs px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-base)] focus:outline-hidden focus:ring-1 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] w-44"
-            />
-          </div>
-          <div className="max-h-48 overflow-y-auto pr-1 grid grid-cols-6 sm:grid-cols-8 gap-2 border border-[var(--color-border)]/50 p-2 rounded-xl bg-slate-50/50 dark:bg-zinc-900/30">
-            {filteredIcons.map(opt => (
-              <Button
-                key={opt.name}
-                type="button"
-                variant={icon === opt.name ? 'primary' : 'outline'}
-                onClick={() => setIcon(opt.name)}
-                className={`flex flex-col items-center justify-center gap-1 p-2.5 ${
-                  icon === opt.name ? 'ring-1 ring-[var(--color-primary)]/30' : ''
-                }`}
-                title={opt.label}
-              >
-                <Icon name={opt.name} size={18} />
-                <span className="text-[8px] font-bold leading-none truncate w-full text-center">{opt.label.split('/')[0]}</span>
-              </Button>
-            ))}
-            {filteredIcons.length === 0 && (
-              <div className="col-span-full py-6 text-center text-xs text-[var(--color-text-muted)] font-medium">
-                No matching icons found.
-              </div>
+          <Controller
+            name="category"
+            control={control}
+            render={({ field }) => (
+              <Select
+                label="Category"
+                options={CATEGORIES}
+                error={errors.category?.message}
+                {...field}
+              />
             )}
-          </div>
-        </div>
+          />
 
-        {/* Color Tags */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-[var(--color-text-muted)]">Color Tag</label>
-          <div className="flex gap-2 flex-wrap">
-            {COLOR_OPTIONS.map(opt => (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setColor(opt.value)}
-                className={`w-6 h-6 rounded-full border transition-all cursor-pointer ${opt.bgClass} ${
-                  color === opt.value
-                    ? 'ring-2 ring-[var(--color-primary)] ring-offset-2 scale-105'
-                    : 'hover:scale-105'
-                }`}
-                title={opt.value}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Time Settings */}
-        {recurrenceType !== 'milestone' && (
-          <div className="grid grid-cols-2 gap-4 border border-[var(--color-border)] p-3 rounded-[var(--radius-md)] bg-[var(--color-bg-base)]">
-            <div className="flex items-center gap-2">
+          {/* Icon Selector */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-[var(--color-text-muted)]">Icon</label>
               <input
-                type="checkbox"
-                id="isAllDay"
-                checked={isAllDay}
-                onChange={e => setIsAllDay(e.target.checked)}
-                className="w-4 h-4 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
+                type="text"
+                placeholder="Search icons..."
+                value={iconSearch}
+                onChange={(e) => setIconSearch(e.target.value)}
+                className="text-xs px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-base)] focus:outline-hidden focus:ring-1 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] w-44"
               />
-              <label htmlFor="isAllDay" className="text-xs font-semibold text-[var(--color-text-main)] cursor-pointer">
-                Anytime / All Day
-              </label>
             </div>
+            <div className="max-h-48 overflow-y-auto pr-1 grid grid-cols-6 sm:grid-cols-8 gap-2 border border-[var(--color-border)]/50 p-2 rounded-xl bg-slate-50/50 dark:bg-zinc-900/30">
+              {filteredIcons.map((opt) => (
+                <Button
+                  key={opt.name}
+                  type="button"
+                  variant={icon === opt.name ? 'primary' : 'outline'}
+                  onClick={() => setValue('icon', opt.name)}
+                  className={`flex flex-col items-center justify-center gap-1 p-2.5 ${icon === opt.name ? 'ring-1 ring-[var(--color-primary)]/30' : ''}`}
+                  title={opt.label}
+                >
+                  <Icon name={opt.name} size={18} />
+                  <span className="text-[8px] font-bold leading-none truncate w-full text-center">
+                    {opt.label.split('/')[0]}
+                  </span>
+                </Button>
+              ))}
+              {filteredIcons.length === 0 && (
+                <div className="col-span-full py-6 text-center text-xs text-[var(--color-text-muted)] font-medium">
+                  No matching icons found.
+                </div>
+              )}
+            </div>
+          </div>
 
-            {!isAllDay && (
+          {/* Color Tags */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-[var(--color-text-muted)]">Color Tag</label>
+            <div className="flex gap-2 flex-wrap">
+              {COLOR_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setValue('color', opt.value)}
+                  className={`w-6 h-6 rounded-full border transition-all cursor-pointer ${opt.bgClass} ${
+                    color === opt.value
+                      ? 'ring-2 ring-[var(--color-primary)] ring-offset-2 scale-105'
+                      : 'hover:scale-105'
+                  }`}
+                  title={opt.value}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Time Settings */}
+          {recurrenceType !== 'milestone' && (
+            <div className="grid grid-cols-2 gap-4 border border-[var(--color-border)] p-3 rounded-[var(--radius-md)] bg-[var(--color-bg-base)]">
               <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="isAllDay"
+                  className="w-4 h-4 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
+                  {...register('isAllDay')}
+                />
+                <label htmlFor="isAllDay" className="text-xs font-semibold text-[var(--color-text-main)] cursor-pointer">
+                  Anytime / All Day
+                </label>
+              </div>
+              {!isAllDay && (
                 <Input
                   type="time"
                   label="Start Time"
-                  value={startTime}
-                  onChange={e => setStartTime(e.target.value)}
+                  {...register('startTime')}
                 />
-              </div>
-            )}
-          </div>
-        )}
-
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Repeat Recurrence Builder */}
+        {/* ── Schedule & Recurrence ──────────────────────────────────────── */}
         <div className="space-y-4 pb-2">
           <h4 className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primary)] border-b border-[var(--color-border)]/40 pb-1.5">
             Schedule & Recurrence
           </h4>
           <div className="border border-[var(--color-border)] p-3.5 rounded-[var(--radius-md)] space-y-3 bg-[var(--color-bg-base)]">
-          <Select
-            label="Repeat Interval"
-            value={recurrenceType}
-            onChange={e => setRecurrenceType(e.target.value as RecurrenceType)}
-            options={[
-              { value: 'daily', label: 'Daily' },
-              { value: 'weekly', label: 'Weekly' },
-              { value: 'monthly', label: 'Monthly' },
-              { value: 'milestone', label: 'Custom / Ad-hoc (Unscheduled)' },
-              { value: 'one_time', label: 'Once (Scheduled Date)' },
-            ]}
-          />
+            <Controller
+              name="recurrenceType"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  label="Repeat Interval"
+                  options={[
+                    { value: 'daily',     label: 'Daily' },
+                    { value: 'weekly',    label: 'Weekly' },
+                    { value: 'monthly',   label: 'Monthly' },
+                    { value: 'milestone', label: 'Custom / Ad-hoc (Unscheduled)' },
+                    { value: 'one_time',  label: 'Once (Scheduled Date)' },
+                  ]}
+                  {...field}
+                />
+              )}
+            />
 
-          {recurrenceType === 'weekly' && (
-            <div className="flex justify-between gap-1 pt-1.5 font-sans">
-              {WEEKDAYS.map(day => {
-                const isSelected = selectedWeekdays.includes(day.value)
-                return (
-                  <button
-                    key={day.value}
-                    type="button"
-                    onClick={() => handleWeekdayToggle(day.value)}
-                    className={`w-7 h-7 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-[var(--color-primary)] text-white font-black'
-                        : 'bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-slate-350'
-                    }`}
-                  >
-                    {day.label}
-                  </button>
-                )
-              })}
+            {recurrenceType === 'weekly' && (
+              <div className="flex justify-between gap-1 pt-1.5 font-sans">
+                {WEEKDAYS.map((day) => {
+                  const isSelected = (selectedWeekdays ?? []).includes(day.value)
+                  return (
+                    <button
+                      key={day.value}
+                      type="button"
+                      onClick={() => handleWeekdayToggle(day.value)}
+                      className={`w-7 h-7 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-[var(--color-primary)] text-white font-black'
+                          : 'bg-[var(--color-bg-surface)] border border-[var(--color-border)] text-[var(--color-text-muted)] hover:border-slate-350'
+                      }`}
+                    >
+                      {day.label}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {recurrenceType === 'monthly' && (
+              <Input
+                type="number"
+                min="1"
+                max="31"
+                label="Day of Month"
+                {...register('recurrenceDayOfMonth')}
+              />
+            )}
+
+            {recurrenceType === 'one_time' && (
+              <Input
+                type="date"
+                label="Date"
+                {...register('targetDate')}
+              />
+            )}
+
+            <div className="text-[10px] font-bold text-[var(--color-text-muted)] italic pt-0.5">
+              {getNaturalRecurrenceText()}
             </div>
-          )}
-
-          {recurrenceType === 'monthly' && (
-            <Input
-              type="number"
-              min="1"
-              max="31"
-              label="Day of Month"
-              value={recurrenceDayOfMonth}
-              onChange={e => setRecurrenceDayOfMonth(e.target.value)}
-            />
-          )}
-
-          {recurrenceType === 'one_time' && (
-            <Input
-              type="date"
-              label="Date"
-              value={targetDate}
-              onChange={e => setTargetDate(e.target.value)}
-            />
-          )}
-
-          <div className="text-[10px] font-bold text-[var(--color-text-muted)] italic pt-0.5">
-            {getNaturalRecurrenceText()}
           </div>
         </div>
-        </div>
-        {/* Collapsible Advanced Section */}
+
+        {/* ── Advanced Options ───────────────────────────────────────────── */}
         <div className="border-t border-[var(--color-border)] pt-3 mt-4">
           <button
             type="button"
@@ -576,109 +483,124 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
           {showAdvanced && (
             <div className="space-y-4 pt-3.5 border-t border-dashed border-[var(--color-border)] mt-2">
-              <Select
-                label="Activity Sub-Type"
-                value={type}
-                onChange={e => setType(e.target.value as ActivityType)}
-                options={[
-                  { value: 'PERSONAL', label: 'Personal Task' },
-                  { value: 'WORKOUT', label: 'Workout Session' },
-                  { value: 'MEETING', label: 'Meeting Event' },
-                  { value: 'BILL', label: 'Financial Bill' },
-                  { value: 'MEDICINE', label: 'Medicine Intake' },
-                  { value: 'LEAVE', label: 'Leave Holiday' },
-                  { value: 'JOURNAL', label: 'Journal Log' },
-                  { value: 'LEARNING', label: 'Study Learning' },
-                  { value: 'REMINDER', label: 'Custom Alert' },
-                ]}
+              <Controller
+                name="type"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    label="Activity Sub-Type"
+                    options={[
+                      { value: 'PERSONAL',  label: 'Personal Task' },
+                      { value: 'WORKOUT',   label: 'Workout Session' },
+                      { value: 'MEETING',   label: 'Meeting Event' },
+                      { value: 'BILL',      label: 'Financial Bill' },
+                      { value: 'MEDICINE',  label: 'Medicine Intake' },
+                      { value: 'LEAVE',     label: 'Leave Holiday' },
+                      { value: 'JOURNAL',   label: 'Journal Log' },
+                      { value: 'LEARNING',  label: 'Study Learning' },
+                      { value: 'REMINDER',  label: 'Custom Alert' },
+                    ]}
+                    {...field}
+                  />
+                )}
               />
-
 
               {!isAllDay && (
                 <Input
                   type="number"
                   label="Duration (Minutes)"
-                  value={estimatedDuration}
-                  onChange={e => setEstimatedDuration(e.target.value)}
+                  {...register('estimatedDuration')}
                 />
               )}
 
               <Input
                 label="Location / Meeting URL"
-                value={location}
-                onChange={e => setLocation(e.target.value)}
                 placeholder="e.g. Zoom Link, Local Gym, Office"
+                {...register('location')}
               />
 
               <Input
                 label="Tags (Comma Separated)"
-                value={tagsInput}
-                onChange={e => setTagsInput(e.target.value)}
                 placeholder="e.g. gym, wellness, finance"
+                {...register('tagsInput')}
               />
 
               <Input
                 type="number"
                 label="Billing Amount (₹)"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
                 placeholder="e.g. 500"
+                {...register('amount')}
               />
 
-              {/* Completion Engine Configuration UI */}
+              {/* Completion Engine */}
               <div className="border border-[var(--color-border)] p-3 rounded-[var(--radius-md)] space-y-3 bg-[var(--color-bg-base)]">
                 <h5 className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-primary)]">Completion Method</h5>
-                
-                <Select
-                  label="Method"
-                  value={completionMethod}
-                  onChange={e => setCompletionMethod(e.target.value as 'CHECKBOX' | 'VALUE' | 'FORM')}
-                  options={[
-                    { value: 'CHECKBOX', label: 'Checkbox Only' },
-                    { value: 'VALUE', label: 'Value Prompt' },
-                    { value: 'FORM', label: 'Custom Form (Disabled)' },
-                  ]}
+
+                <Controller
+                  name="completionMethod"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      label="Method"
+                      options={[
+                        { value: 'CHECKBOX', label: 'Checkbox Only' },
+                        { value: 'VALUE',    label: 'Value Prompt' },
+                        { value: 'FORM',     label: 'Custom Form (Disabled)' },
+                      ]}
+                      {...field}
+                    />
+                  )}
                 />
 
-                <Select
-                  label="Domain Hook"
-                  value={completionHook}
-                  onChange={e => setCompletionHook(e.target.value)}
-                  options={[
-                    { value: 'none', label: 'None' },
-                    { value: 'weight', label: 'Weight Tracking' },
-                  ]}
+                <Controller
+                  name="completionHook"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      label="Domain Hook"
+                      options={[
+                        { value: 'none',   label: 'None' },
+                        { value: 'weight', label: 'Weight Tracking' },
+                      ]}
+                      {...field}
+                    />
+                  )}
                 />
 
                 {completionMethod === 'VALUE' && (
                   <div className="space-y-3 pt-2 border-t border-dashed border-[var(--color-border)]">
                     <Input
                       label="Value Label"
-                      value={valueLabel}
-                      onChange={e => setValueLabel(e.target.value)}
                       placeholder="e.g. Fuel Amount, Pages Read"
+                      {...register('valueLabel')}
                     />
 
-                    <Select
-                      label="Input Type"
-                      value={valueInputType}
-                      onChange={e => {
-                        const nextType = e.target.value
-                        setValueInputType(nextType)
-                        if (nextType === 'currency' && !valueUnit) {
-                          setValueUnit('₹')
-                        } else if (!['number', 'decimal', 'currency', 'percentage'].includes(nextType)) {
-                          setValueUnit('')
-                        }
-                      }}
-                      options={[
-                        { value: 'number', label: 'Number' },
-                        { value: 'decimal', label: 'Decimal' },
-                        { value: 'currency', label: 'Currency' },
-                        { value: 'text', label: 'Text' },
-                        { value: 'duration', label: 'Duration' },
-                        { value: 'percentage', label: 'Percentage' },
-                      ]}
+                    <Controller
+                      name="valueInputType"
+                      control={control}
+                      render={({ field }) => (
+                        <Select
+                          label="Input Type"
+                          options={[
+                            { value: 'number',     label: 'Number' },
+                            { value: 'decimal',    label: 'Decimal' },
+                            { value: 'currency',   label: 'Currency' },
+                            { value: 'text',       label: 'Text' },
+                            { value: 'duration',   label: 'Duration' },
+                            { value: 'percentage', label: 'Percentage' },
+                          ]}
+                          {...field}
+                          onChange={(e) => {
+                            const nextType = e.target.value
+                            field.onChange(e)
+                            if (nextType === 'currency' && !valueUnit) {
+                              setValue('valueUnit', '₹')
+                            } else if (!['number', 'decimal', 'currency', 'percentage'].includes(nextType)) {
+                              setValue('valueUnit', '')
+                            }
+                          }}
+                        />
+                      )}
                     />
 
                     <div className="grid grid-cols-2 gap-3">
@@ -687,128 +609,103 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                           <Select
                             label="Currency"
                             value={['₹', '$', '€', '£', '¥'].includes(valueUnit) ? valueUnit : 'custom'}
-                            onChange={e => {
+                            onChange={(e) => {
                               const val = e.target.value
-                              if (val !== 'custom') {
-                                setValueUnit(val)
-                              } else {
-                                setValueUnit('')
-                              }
+                              setValue('valueUnit', val !== 'custom' ? val : '')
                             }}
                             options={[
-                              { value: '₹', label: '₹ (INR - Rupees)' },
-                              { value: '$', label: '$ (USD - Dollars)' },
-                              { value: '€', label: '€ (EUR - Euros)' },
-                              { value: '£', label: '£ (GBP - Pounds)' },
-                              { value: '¥', label: '¥ (JPY - Yen)' },
+                              { value: '₹',      label: '₹ (INR - Rupees)' },
+                              { value: '$',      label: '$ (USD - Dollars)' },
+                              { value: '€',      label: '€ (EUR - Euros)' },
+                              { value: '£',      label: '£ (GBP - Pounds)' },
+                              { value: '¥',      label: '¥ (JPY - Yen)' },
                               { value: 'custom', label: 'Other / Custom' },
                             ]}
                           />
                           {!['₹', '$', '€', '£', '¥'].includes(valueUnit) && (
                             <Input
                               label="Custom Currency Symbol"
-                              value={valueUnit}
-                              onChange={e => setValueUnit(e.target.value)}
                               placeholder="e.g. CAD, AUD"
+                              {...register('valueUnit')}
                             />
                           )}
                         </div>
                       ) : ['number', 'decimal', 'percentage'].includes(valueInputType) ? (
                         <Input
                           label="Unit Label"
-                          value={valueUnit}
-                          onChange={e => setValueUnit(e.target.value)}
                           placeholder="e.g. L, kg, ml"
+                          {...register('valueUnit')}
                         />
                       ) : (
-                        <div />
+                        <div /> /* spacer */
                       )}
 
-                      <div className={`flex items-center gap-2 ${['number', 'decimal', 'currency', 'percentage'].includes(valueInputType) ? 'pt-5' : 'pt-2'}`}>
+                      <div className="flex items-center gap-2 pt-5">
                         <input
                           type="checkbox"
                           id="valueRequired"
-                          checked={valueRequired}
-                          onChange={e => setValueRequired(e.target.checked)}
-                          className="w-4 h-4 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
+                          className="w-4 h-4 cursor-pointer"
+                          {...register('valueRequired')}
                         />
                         <label htmlFor="valueRequired" className="text-xs font-semibold text-[var(--color-text-main)] cursor-pointer">
-                          Value Required
+                          Required
                         </label>
                       </div>
                     </div>
 
-                    {valueInputType !== 'text' && (
-                      <div className="grid grid-cols-2 gap-3">
-                        <Input
-                          type="number"
-                          label="Min Value"
-                          value={valueMinimum}
-                          onChange={e => setValueMinimum(e.target.value)}
-                          placeholder="None"
-                        />
-                        <Input
-                          type="number"
-                          label="Max Value"
-                          value={valueMaximum}
-                          onChange={e => setValueMaximum(e.target.value)}
-                          placeholder="None"
-                        />
-                      </div>
-                    )}
+                    <div className="grid grid-cols-2 gap-3">
+                      <Input
+                        type="number"
+                        label="Minimum Value"
+                        placeholder="Optional"
+                        {...register('valueMinimum')}
+                      />
+                      <Input
+                        type="number"
+                        label="Maximum Value"
+                        placeholder="Optional"
+                        {...register('valueMaximum')}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4 border border-[var(--color-border)] p-3 rounded-[var(--radius-md)] bg-[var(--color-bg-base)]">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="hasReminder"
-                    checked={hasReminder}
-                    onChange={e => setHasReminder(e.target.checked)}
-                    className="w-4 h-4 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
-                  />
-                  <label htmlFor="hasReminder" className="text-xs font-semibold text-[var(--color-text-main)] cursor-pointer">
-                    Enable Reminders
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="googleSync"
-                    checked={calendarProvider === 'GOOGLE'}
-                    onChange={e => setCalendarProvider(e.target.checked ? 'GOOGLE' : 'NONE')}
-                    className="w-4 h-4 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
-                  />
-                  <label htmlFor="googleSync" className="text-xs font-semibold text-[var(--color-text-main)] cursor-pointer">
-                    Sync to Google Calendar
-                  </label>
-                </div>
+              {/* Reminder */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="hasReminder"
+                  className="w-4 h-4 cursor-pointer"
+                  {...register('hasReminder')}
+                />
+                <label htmlFor="hasReminder" className="text-xs font-semibold text-[var(--color-text-main)] cursor-pointer">
+                  Enable Reminder (15 min before)
+                </label>
               </div>
-
-              <Textarea
-                label="Notes / Instructions"
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                placeholder="Write bullet points or reference notes..."
-              />
             </div>
           )}
         </div>
 
-        {/* Footer buttons */}
-        <div className="flex items-center justify-end gap-2 border-t border-[var(--color-border)] pt-4 mt-4">
-          <Button variant="outline" type="button" onClick={onClose} disabled={isSubmitting}>
+        {/* ── Submit ─────────────────────────────────────────────────────── */}
+        <div className="flex gap-3 pt-2 border-t border-[var(--color-border)]">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            className="flex-1"
+          >
             Cancel
           </Button>
-          <Button variant="primary" type="submit" isLoading={isSubmitting}>
-            Save Activity
+          <Button
+            type="submit"
+            isLoading={isSubmitting}
+            className="flex-1"
+          >
+            {templateToEdit ? 'Save Changes' : 'Create Activity'}
           </Button>
         </div>
       </form>
     </Modal>
   )
 }
-

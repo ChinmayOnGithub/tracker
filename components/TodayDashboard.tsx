@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useStore } from '@/lib/store/store'
 import { useRouter } from 'next/navigation'
 import { TodayHeader } from './today/TodayHeader'
@@ -13,6 +13,24 @@ import { LeaveWidget } from './today/LeaveWidget'
 import { WeightWidget } from './today/WeightWidget'
 import { CompletionDialog } from './CompletionDialog'
 import { CompletionService } from '@/lib/services/CompletionService'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { GripVertical } from 'lucide-react'
 import { ActivityTemplate, ActivityLog, TimelineItem, AnalyzedTemplate } from '@/types'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
 import { getWeekDates } from '@/lib/recurrence'
@@ -35,6 +53,107 @@ const WIDGET_REGISTRY: WidgetDefinition[] = [
   { id: 'weight', title: 'Weight Tracker', description: 'Log and monitor body weight stats', category: 'Health', defaultEnabled: true },
   { id: 'recentDocuments', title: 'Recent Vault Documents', description: 'Quick access to recently decrypted files', category: 'Vault', defaultEnabled: true },
 ]
+
+// ─── Sortable widget row (used inside the customizer dialog) ──────────────────
+
+function SortableWidgetRow({
+  widgetId,
+  index,
+  total,
+  isHidden,
+  onMoveUp,
+  onMoveDown,
+  onToggleHidden,
+}: {
+  widgetId: string
+  index: number
+  total: number
+  isHidden: boolean
+  onMoveUp: () => void
+  onMoveDown: () => void
+  onToggleHidden: () => void
+}) {
+  const widget = WIDGET_REGISTRY.find(w => w.id === widgetId)
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: widgetId })
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : undefined,
+  }
+
+  if (!widget) return null
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center justify-between p-3 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-[var(--radius-lg)]"
+    >
+      {/* Drag handle */}
+      <button
+        ref={setActivatorNodeRef}
+        {...listeners}
+        {...attributes}
+        type="button"
+        aria-label="Drag to reorder widget"
+        className="shrink-0 mr-2 text-[var(--color-border)] hover:text-[var(--color-text-muted)] cursor-grab active:cursor-grabbing touch-none focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]/50 rounded-sm"
+      >
+        <GripVertical className="w-4 h-4" aria-hidden />
+      </button>
+
+      {/* Label */}
+      <div className="flex-1 min-w-0">
+        <span className="block text-xs font-bold text-[var(--color-text-main)]">{widget.title}</span>
+        <span className="block text-[10px] text-[var(--color-text-muted)] truncate">{widget.description}</span>
+      </div>
+
+      {/* Accessible fallback controls */}
+      <div className="flex items-center gap-1.5 ml-2">
+        <button
+          type="button"
+          disabled={index === 0}
+          onClick={onMoveUp}
+          aria-label={`Move ${widget.title} up`}
+          className="w-6 h-6 flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] disabled:opacity-30 rounded transition-colors"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          disabled={index === total - 1}
+          onClick={onMoveDown}
+          aria-label={`Move ${widget.title} down`}
+          className="w-6 h-6 flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] disabled:opacity-30 rounded transition-colors"
+        >
+          ▼
+        </button>
+        <button
+          type="button"
+          onClick={onToggleHidden}
+          className="text-xs font-bold px-2 py-1 rounded-[var(--radius-sm)] transition-colors"
+          aria-label={`Toggle ${widget.title} visibility`}
+        >
+          <span className={`px-2 py-0.5 rounded-[var(--radius-sm)] text-[10px] font-bold ${
+            isHidden
+              ? 'bg-rose-500/10 text-[var(--color-overdue)]'
+              : 'bg-emerald-500/10 text-[var(--color-completed)]'
+          }`}>
+            {isHidden ? 'Hidden' : 'Visible'}
+          </span>
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export interface TodayDashboardProps {
   analyzedTemplates: AnalyzedTemplate[]
@@ -125,6 +244,24 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   }, [widgetsConfig])
 
   const [isCustomizing, setIsCustomizing] = useState(false)
+
+  // dnd-kit sensors for widget customizer
+  const widgetSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  const handleWidgetDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = widgetsConfig.order.indexOf(String(active.id))
+    const newIndex = widgetsConfig.order.indexOf(String(over.id))
+    if (oldIndex === -1 || newIndex === -1) return
+    setWidgetsConfig(prev => ({
+      ...prev,
+      order: arrayMove(prev.order, oldIndex, newIndex),
+    }))
+  }, [widgetsConfig.order])
 
   // Weekly goal — isomorphic hydration
   const [weeklyGoal, setWeeklyGoal] = useState(27)
@@ -414,66 +551,45 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
           </DialogHeader>
           <div className="p-5 space-y-4">
             <div className="space-y-2.5">
-              {widgetsConfig.order.map((widgetId, index) => {
-                const widget = WIDGET_REGISTRY.find(w => w.id === widgetId)
-                if (!widget) return null
-                const isHidden = widgetsConfig.hidden.includes(widgetId)
-
-                return (
-                  <div key={widgetId} className="flex items-center justify-between p-3 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-[var(--radius-lg)]">
-                    <div className="min-w-0">
-                      <span className="block text-xs font-bold text-[var(--color-text-main)]">{widget.title}</span>
-                      <span className="block text-[10px] text-[var(--color-text-muted)] truncate">{widget.description}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={index === 0}
-                        onClick={() => {
+              <DndContext
+                sensors={widgetSensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleWidgetDragEnd}
+              >
+                <SortableContext
+                  items={widgetsConfig.order}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {widgetsConfig.order.map((widgetId, index) => {
+                    const isHidden = widgetsConfig.hidden.includes(widgetId)
+                    return (
+                      <SortableWidgetRow
+                        key={widgetId}
+                        widgetId={widgetId}
+                        index={index}
+                        total={widgetsConfig.order.length}
+                        isHidden={isHidden}
+                        onMoveUp={() => {
                           const newOrder = [...widgetsConfig.order]
-                          const temp = newOrder[index]
-                          newOrder[index] = newOrder[index - 1]
-                          newOrder[index - 1] = temp
+                          ;[newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]]
                           setWidgetsConfig(prev => ({ ...prev, order: newOrder }))
                         }}
-                      >
-                        ▲
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={index === widgetsConfig.order.length - 1}
-                        onClick={() => {
+                        onMoveDown={() => {
                           const newOrder = [...widgetsConfig.order]
-                          const temp = newOrder[index]
-                          newOrder[index] = newOrder[index + 1]
-                          newOrder[index + 1] = temp
+                          ;[newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
                           setWidgetsConfig(prev => ({ ...prev, order: newOrder }))
                         }}
-                      >
-                        ▼
-                      </Button>
-                      <button
-                        type="button"
-                        onClick={() => {
+                        onToggleHidden={() => {
                           const newHidden = isHidden
                             ? widgetsConfig.hidden.filter(id => id !== widgetId)
                             : [...widgetsConfig.hidden, widgetId]
                           setWidgetsConfig(prev => ({ ...prev, hidden: newHidden }))
                         }}
-                        className={`text-xs font-bold px-2 py-1 rounded-[var(--radius-sm)] ${
-                          isHidden
-                            ? 'bg-rose-500/10 text-[var(--color-overdue)]'
-                            : 'bg-emerald-500/10 text-[var(--color-completed)]'
-                        }`}
-                      >
-                        {isHidden ? 'Hidden' : 'Visible'}
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
+                      />
+                    )
+                  })}
+                </SortableContext>
+              </DndContext>
             </div>
           </div>
           <DialogFooter>

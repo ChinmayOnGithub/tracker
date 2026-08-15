@@ -51,8 +51,9 @@ import {
 } from '@/app/actions/vault'
 import type { VaultItem, VaultBreadcrumb, QuickInfoFieldDTO } from '@/app/actions/vault'
 import { Modal, Input, Button, Card, EmptyState, SkeletonWidget, SearchInput } from '@/design-system'
-import { useToast } from '@/design-system'
+import { notify } from '@/lib/notifications'
 import { writeQueue } from '@/lib/store/write-queue'
+import { VaultUploader } from './vault/VaultUploader'
 
 // --- File Type & Layout Helpers --------------------------------------------------
 
@@ -149,8 +150,6 @@ async function decryptBufferClientSide(
 // --- Main Component -----------------------------------------------------------
 
 export function VaultPanel() {
-  const { toast } = useToast()
-
   // --- State --------------------------------------------------------
   const [vaultKey, setVaultKey] = useState<string | null>(null)
   const [items, setItems] = useState<VaultItem[]>([])
@@ -171,7 +170,6 @@ export function VaultPanel() {
 
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false)
-  const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null)
   const [uploadDocName, setUploadDocName] = useState('')
   const [uploadCategory, setUploadCategory] = useState<string>('Identity')
   const [uploadSubCategory, setUploadSubCategory] = useState<string>('')
@@ -347,7 +345,7 @@ export function VaultPanel() {
       if (res.success && res.value) {
         if (navigator.clipboard) {
           await navigator.clipboard.writeText(res.value)
-          toast(`Copied ${label} to clipboard`, { variant: 'success' })
+          notify.success(`Copied ${label} to clipboard`)
         } else {
           throw new Error('Clipboard API not supported')
         }
@@ -356,7 +354,7 @@ export function VaultPanel() {
       }
     } catch (err) {
       console.error(err)
-      toast(err instanceof Error ? err.message : 'Copy failed', { variant: 'error' })
+      notify.error(err instanceof Error ? err.message : 'Copy failed')
     }
   }
 
@@ -374,10 +372,10 @@ export function VaultPanel() {
         if (res.success && res.value) {
           setRevealedSecrets(prev => ({ ...prev, [fieldId]: res.value! }))
         } else {
-          toast(res.error || 'Failed to reveal value', { variant: 'error' })
+          notify.error(res.error || 'Failed to reveal value')
         }
       } catch (_err) {
-        toast('Decryption error', { variant: 'error' })
+        notify.error('Decryption error')
       } finally {
         setRevealingFieldId(null)
       }
@@ -390,15 +388,15 @@ export function VaultPanel() {
     try {
       const res = await saveVaultQuickInfoField(editingField.id, editingField.category, editingField.label, editValue)
       if (res.success) {
-        toast(`${editingField.label} updated`, { variant: 'success' })
+        notify.success(`${editingField.label} updated`)
         setEditingField(null)
         setEditValue('')
         fetchDashboardData()
       } else {
-        toast(res.error || 'Save failed', { variant: 'error' })
+        notify.error(res.error || 'Save failed')
       }
     } catch (_err) {
-      toast('Failed to save', { variant: 'error' })
+      notify.error('Failed to save')
     } finally {
       setActionLoading(false)
     }
@@ -411,16 +409,16 @@ export function VaultPanel() {
     try {
       const res = await saveVaultQuickInfoField(customId, customFieldCategory, customFieldLabel.trim(), customFieldValue.trim())
       if (res.success) {
-        toast(`Custom field "${customFieldLabel}" added`, { variant: 'success' })
+        notify.success(`Custom field "${customFieldLabel}" added`)
         setShowNewCustomField(false)
         setCustomFieldLabel('')
         setCustomFieldValue('')
         fetchDashboardData()
       } else {
-        toast(res.error || 'Failed to save custom field', { variant: 'error' })
+        notify.error(res.error || 'Failed to save custom field')
       }
     } catch (_err) {
-      toast('Failed to create field', { variant: 'error' })
+      notify.error('Failed to create field')
     } finally {
       setActionLoading(false)
     }
@@ -431,13 +429,13 @@ export function VaultPanel() {
     try {
       const res = await deleteVaultQuickInfoField(fieldId)
       if (res.success) {
-        toast(`Field deleted`, { variant: 'success' })
+        notify.success('Field deleted')
         fetchDashboardData()
       } else {
-        toast(res.error || 'Delete failed', { variant: 'error' })
+        notify.error(res.error || 'Delete failed')
       }
     } catch (_err) {
-      toast('Error deleting field', { variant: 'error' })
+      notify.error('Error deleting field')
     }
   }
 
@@ -448,12 +446,12 @@ export function VaultPanel() {
       if (res.success) {
         setQuickActions(_tempActions)
         _setShowCustomizeActions(false)
-        toast('Quick actions updated', { variant: 'success' })
+        notify.success('Quick actions updated')
       } else {
-        toast(res.error || 'Save failed', { variant: 'error' })
+        notify.error(res.error || 'Save failed')
       }
     } catch (_err) {
-      toast('Error saving order', { variant: 'error' })
+      notify.error('Error saving order')
     } finally {
       setActionLoading(false)
     }
@@ -464,13 +462,13 @@ export function VaultPanel() {
     try {
       const res = await toggleVaultPin(doc.id, !isPinned)
       if (res.success) {
-        toast(!isPinned ? 'Pinned to Quick Access' : 'Unpinned from Quick Access', { variant: 'success' })
+        notify.success(!isPinned ? 'Pinned to Quick Access' : 'Unpinned from Quick Access')
         fetchDashboardData()
       } else {
-        toast(res.error || 'Pin operation failed', { variant: 'error' })
+        notify.error(res.error || 'Pin operation failed')
       }
     } catch (_err) {
-      toast('Pin operation failed', { variant: 'error' })
+      notify.error('Pin operation failed')
     }
   }
 
@@ -478,13 +476,13 @@ export function VaultPanel() {
     try {
       const res = await updateVaultItemCategory(docId, cat)
       if (res.success) {
-        toast('Category updated', { variant: 'success' })
+        notify.success('Category updated')
         fetchItems()
       } else {
-        toast(res.error || 'Failed to update category', { variant: 'error' })
+        notify.error(res.error || 'Failed to update category')
       }
     } catch (_err) {
-      toast('Failed to update category', { variant: 'error' })
+      notify.error('Failed to update category')
     }
   }
 
@@ -505,16 +503,16 @@ export function VaultPanel() {
       if (!response.ok) {
         throw new Error(result.error || 'Upload failed')
       }
-      
+
       const setRes = await setVaultSpecialAsset(type, result.document.id)
       if (setRes.success) {
-        toast(`${type === 'signature' ? 'Signature' : 'Photo'} updated`, { variant: 'success' })
+        notify.success(`${type === 'signature' ? 'Signature' : 'Photo'} updated`)
         fetchDashboardData()
       } else {
         throw new Error(setRes.error || 'Association failed')
       }
     } catch (_err) {
-      toast(_err instanceof Error ? _err.message : 'Upload failed', { variant: 'error' })
+      notify.error(_err instanceof Error ? _err.message : 'Upload failed')
     } finally {
       setUploadingAssetType(null)
     }
@@ -532,13 +530,13 @@ export function VaultPanel() {
     try {
       const res = await setVaultSpecialAsset(type, null)
       if (res.success) {
-        toast(`${type === 'signature' ? 'Signature' : 'Photo'} deleted`, { variant: 'success' })
+        notify.success(`${type === 'signature' ? 'Signature' : 'Photo'} deleted`)
         fetchDashboardData()
       } else {
-        toast(res.error || 'Deletion failed', { variant: 'error' })
+        notify.error(res.error || 'Deletion failed')
       }
     } catch (_err) {
-      toast('Error deleting asset', { variant: 'error' })
+      notify.error('Error deleting asset')
     }
   }
 
@@ -701,7 +699,7 @@ export function VaultPanel() {
       ctx.drawImage(img, Xstart, Ystart, Wsrc, Hsrc, 0, 0, exportWidth, exportHeight)
       triggerCanvasDownload(canvas)
     } catch (_err) {
-      toast('Draw image failed. Zoom too far or offsets out of bounds.', { variant: 'error' })
+      notify.error('Draw image failed. Zoom too far or offsets out of bounds.')
     }
   }
 
@@ -723,7 +721,7 @@ export function VaultPanel() {
         // Log Audit Event
         const assetId = exportingAssetType === 'signature' ? signatureDocId : photoDocId
         logVaultAuditAction('VAULT_ASSET_DOWNLOADED', assetId || 'none', 'VAULT_ASSET')
-        toast('Download started', { variant: 'success' })
+        notify.success('Download started')
         setExportingAssetType(null)
       }
     }, mime, quality)
@@ -798,10 +796,10 @@ export function VaultPanel() {
     }
     
     if (completed > 0) {
-      toast(`${completed} file(s) uploaded successfully`, { variant: 'success' })
+      notify.success(`${completed} file(s) uploaded successfully`)
       fetchItems()
     }
-  }, [currentFolderId, fetchItems, _docCategoryFilter, toast])
+  }, [currentFolderId, fetchItems, _docCategoryFilter])
 
   const _handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -880,10 +878,10 @@ export function VaultPanel() {
       },
       rollback: () => {
         setItems(previousItems)
-        toast('Failed to create folder', { variant: 'error' })
+        notify.error('Failed to create folder')
       }
     })
-  }, [newFolderName, currentFolderId, items, fetchItems, toast])
+  }, [newFolderName, currentFolderId, items, fetchItems])
 
   const handleRename = useCallback(async () => {
     if (!renamingItem || !renameValue.trim()) return
@@ -908,10 +906,10 @@ export function VaultPanel() {
       },
       rollback: () => {
         setItems(previousItems)
-        toast('Failed to rename item', { variant: 'error' })
+        notify.error('Failed to rename item')
       }
     })
-  }, [renamingItem, renameValue, items, fetchItems, toast])
+  }, [renamingItem, renameValue, items, fetchItems])
 
   const handleDelete = useCallback(async () => {
     if (!deletingItem) return
@@ -935,10 +933,10 @@ export function VaultPanel() {
       },
       rollback: () => {
         setItems(previousItems)
-        toast('Failed to delete item', { variant: 'error' })
+        notify.error('Failed to delete item')
       }
     })
-  }, [deletingItem, items, fetchItems, fetchDashboardData, toast])
+  }, [deletingItem, items, fetchItems, fetchDashboardData])
 
   const handleDownload = useCallback(async (item: VaultItem) => {
     if (item.isFolder) return
@@ -993,52 +991,23 @@ export function VaultPanel() {
 
       // Log Audit Log
       logVaultAuditAction('VAULT_DOCUMENT_DOWNLOADED', item.id, 'VAULT_DOCUMENT')
-      toast('File decrypted and downloaded successfully', { variant: 'success' })
+      notify.success('File decrypted and downloaded successfully')
     } catch (error) {
       console.error('Download/decryption error:', error)
-      toast(error instanceof Error ? error.message : 'Failed to download and decrypt file', { variant: 'error' })
+      notify.error(error instanceof Error ? error.message : 'Failed to download and decrypt file')
     }
-  }, [vaultKey, toast])
+  }, [vaultKey])
 
   // (filteredItems and toggleSort removed â€” the new layout uses categoryItems computed below)
 
   // Helper: open upload modal pre-filled for a quick-info field document link
   const openUploadForField = (fieldId: string, fieldLabel: string) => {
-    setSelectedUploadFile(null)
     setUploadDocName(fieldLabel + ' Document')
     setUploadCategory('Identity')
     setUploadSubCategory('')
     setUploadDocType('Other')
     setUploadAssociateField(fieldId)
     setShowUploadModal(true)
-  }
-
-  // Helper: upload via modal submit
-  const handleModalUpload = async () => {
-    if (!selectedUploadFile || !uploadDocName.trim()) return
-    setActionLoading(true)
-    const formData = new FormData()
-    formData.append('file', selectedUploadFile)
-    formData.append('name', uploadDocName.trim())
-    formData.append('category', uploadCategory)
-    if (uploadSubCategory) formData.append('subCategory', uploadSubCategory)
-    if (uploadDocType) formData.append('documentType', uploadDocType)
-    if (uploadAssociateField) formData.append('associateWithInfoField', uploadAssociateField)
-    try {
-      const res = await fetch('/api/vault/upload', { method: 'POST', body: formData })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || 'Upload failed')
-      toast(`Uploaded: ${uploadDocName}`, { variant: 'success' })
-      setShowUploadModal(false)
-      setSelectedUploadFile(null)
-      setUploadDocName('')
-      fetchItems()
-      fetchDashboardData()
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Upload failed', { variant: 'error' })
-    } finally {
-      setActionLoading(false)
-    }
   }
 
   // Settings stubs (would persist to user preferences in a real impl)
@@ -1119,7 +1088,6 @@ export function VaultPanel() {
             variant="primary"
             size="sm"
             onClick={() => {
-              setSelectedUploadFile(null)
               setUploadDocName('')
               setUploadCategory(selectedCategory || 'Identity')
               setUploadSubCategory(selectedSubCategory !== 'All' ? selectedSubCategory : '')
@@ -1480,8 +1448,8 @@ export function VaultPanel() {
               icon={<Upload className="w-6 h-6" />}
               action={
                 <Button variant="primary" size="sm"
-                  onClick={() => {
-                    setSelectedUploadFile(null); setUploadDocName(''); setUploadCategory(selectedCategory)
+              onClick={() => {
+              setUploadDocName(''); setUploadCategory(selectedCategory)
                     setUploadSubCategory(selectedSubCategory!=='All' ? selectedSubCategory : '')
                     setUploadDocType('Other'); setUploadAssociateField(''); setShowUploadModal(true)
                   }}
@@ -1525,20 +1493,8 @@ export function VaultPanel() {
       {/* Upload Document Modal */}
       <Modal isOpen={showUploadModal} onClose={() => setShowUploadModal(false)} title="Upload Document" size="md">
         <div className="space-y-4 pt-1">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">Select File</label>
-            <input type="file"
-              onChange={e => {
-                if (e.target.files?.[0]) {
-                  const f = e.target.files[0]
-                  setSelectedUploadFile(f)
-                  if (!uploadDocName) setUploadDocName(f.name.replace(/\.[^.]+$/, ''))
-                }
-              }}
-              className="text-xs text-[var(--color-text-muted)] file:mr-3 file:py-1.5 file:px-3 file:rounded-[var(--radius-sm)] file:border-0 file:text-xs file:font-semibold file:bg-[var(--color-accent)] file:text-[var(--color-text-main)] file:cursor-pointer"
-            />
-            {selectedUploadFile && <span className="text-xs font-mono text-[var(--color-text-muted)]">{selectedUploadFile.name} ({formatFileSize(selectedUploadFile.size)})</span>}
-          </div>
+
+          {/* Metadata fields — filled before upload starts */}
           <Input type="text" label="Document Name" placeholder="e.g. Aadhaar Card" value={uploadDocName} onChange={e => setUploadDocName(e.target.value)} />
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">Category</label>
@@ -1595,9 +1551,36 @@ export function VaultPanel() {
               <option value="banking_account_number">Bank Account</option>
             </select>
           </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-[var(--color-border)]">
-            <Button variant="outline" size="sm" onClick={() => setShowUploadModal(false)}>Cancel</Button>
-            <Button variant="primary" size="sm" disabled={actionLoading || !selectedUploadFile || !uploadDocName.trim()} isLoading={actionLoading} onClick={handleModalUpload}>Save & Upload</Button>
+
+          {/* Uppy-powered file picker — replaces manual <input> + handleModalUpload */}
+          <div className="border-t border-[var(--color-border)] pt-4">
+            <VaultUploader
+              key={`vault-uploader-${showUploadModal}`}
+              extraFields={{
+                name:           uploadDocName.trim(),
+                category:       uploadCategory,
+                ...(uploadSubCategory ? { subCategory: uploadSubCategory } : {}),
+                documentType:   uploadDocType,
+                ...(uploadAssociateField ? { associateWithInfoField: uploadAssociateField } : {}),
+                ...(currentFolderId ? { parentId: currentFolderId } : {}),
+              }}
+              onFileSuccess={(fileName, _docId) => {
+                notify.uploaded(fileName)
+              }}
+              onFileError={(fileName, error) => {
+                notify.error(`Failed to upload "${fileName}"`, error)
+              }}
+              onAllComplete={() => {
+                setShowUploadModal(false)
+                setUploadDocName('')
+                fetchItems()
+                fetchDashboardData()
+              }}
+            />
+          </div>
+
+          <div className="flex justify-end pt-1">
+            <Button variant="outline" size="sm" onClick={() => setShowUploadModal(false)}>Close</Button>
           </div>
         </div>
       </Modal>
