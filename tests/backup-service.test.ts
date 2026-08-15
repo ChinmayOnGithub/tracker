@@ -39,12 +39,18 @@ const mockIndexedDB = {
 
 describe('Backup & Restore Service Tests', () => {
   beforeEach(() => {
+    const instance = IndexedDBEngine.getInstance() as any;
+    instance.db = null;
+    instance.dbPromise = null;
     global.window = {
       indexedDB: mockIndexedDB,
     } as unknown as Window & typeof globalThis;
   });
 
   afterEach(() => {
+    const instance = IndexedDBEngine.getInstance() as any;
+    instance.db = null;
+    instance.dbPromise = null;
     delete (global as unknown as { window?: unknown }).window;
   });
 

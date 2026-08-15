@@ -6,53 +6,17 @@ import { JournalRepository } from '@/modules/journal/repository/JournalRepositor
 import { WeightRepository } from '@/modules/weight/repository/WeightRepository';
 import { LeaveRepository } from '@/modules/leave/repository/LeaveRepository';
 
-const mockIndexedDB = {
-  open: mock(() => {
-    const request = {
-      onsuccess: null as (() => void) | null,
-      onerror: null as (() => void) | null,
-      result: {
-        transaction: mock((stores: string[], _mode: string) => {
-          const storeMocks: Record<string, { put: unknown; get: unknown; delete: unknown; getAll: unknown }> = {};
-          for (const s of stores) {
-            storeMocks[s] = {
-              put: mock(() => {}),
-              get: mock(() => ({ onsuccess: null })),
-              delete: mock(() => {}),
-              getAll: mock(() => ({ onsuccess: null })),
-            };
-          }
-          return {
-            objectStore: mock((name: string) => storeMocks[name]),
-            abort: mock(() => {}),
-            oncomplete: null as (() => void) | null,
-            onerror: null as (() => void) | null,
-            onabort: null as (() => void) | null,
-          };
-        }),
-      },
-    };
-    setTimeout(() => {
-      if (request.onsuccess) request.onsuccess();
-    }, 0);
-    return request;
-  }),
-};
+import { setupMockIndexedDB } from './helpers/mockIndexedDB';
 
 describe('Cross-Module Integration & Hardening Tests', () => {
+  let dbMock: any = null;
+
   beforeEach(() => {
-    global.window = {
-      indexedDB: mockIndexedDB,
-      addEventListener: mock(() => {}),
-      removeEventListener: mock(() => {}),
-      navigator: {
-        onLine: true,
-      },
-    } as unknown as Window & typeof globalThis;
+    dbMock = setupMockIndexedDB();
   });
 
   afterEach(() => {
-    delete (global as unknown as { window?: unknown }).window;
+    if (dbMock) dbMock.restore();
   });
 
   it('should support atomic enqueues across multiple domain repositories', async () => {

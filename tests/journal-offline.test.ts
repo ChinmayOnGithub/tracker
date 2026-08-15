@@ -2,57 +2,17 @@ import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { IndexedDBEngine } from '@/lib/database/local/IndexedDBEngine';
 import { JournalRepository } from '@/modules/journal/repository/JournalRepository';
 import { JournalEntry } from '@/lib/store/store';
-
-const mockIndexedDB = {
-  open: mock(() => {
-    const request = {
-      onsuccess: null as (() => void) | null,
-      onerror: null as (() => void) | null,
-      result: {
-        transaction: mock((stores: string[], _mode: string) => {
-          const storeMocks: Record<string, { put: unknown; get: unknown; delete: unknown }> = {};
-          for (const s of stores) {
-            storeMocks[s] = {
-              put: mock((item: { id?: string } | null) => {
-                if (item && item.id === 'trigger-rollback-id') {
-                  throw new Error('Database transaction abort test.');
-                }
-              }),
-              get: mock(() => ({ onsuccess: null })),
-              delete: mock(() => {}),
-            };
-          }
-          return {
-            objectStore: mock((name: string) => storeMocks[name]),
-            abort: mock(() => {}),
-            oncomplete: null as (() => void) | null,
-            onerror: null as (() => void) | null,
-            onabort: null as (() => void) | null,
-          };
-        }),
-      },
-    };
-    setTimeout(() => {
-      if (request.onsuccess) request.onsuccess();
-    }, 0);
-    return request;
-  }),
-};
+import { setupMockIndexedDB } from './helpers/mockIndexedDB';
 
 describe('Journal Offline Domain Tests', () => {
+  let dbMock: any = null;
+
   beforeEach(() => {
-    global.window = {
-      indexedDB: mockIndexedDB,
-      addEventListener: mock(() => {}),
-      removeEventListener: mock(() => {}),
-      navigator: {
-        onLine: true,
-      },
-    } as unknown as Window & typeof globalThis;
+    dbMock = setupMockIndexedDB();
   });
 
   afterEach(() => {
-    delete (global as unknown as { window?: unknown }).window;
+    if (dbMock) dbMock.restore();
   });
 
   describe('JournalRepository', () => {
