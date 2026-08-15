@@ -96,47 +96,58 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     return () => clearInterval(timer)
   }, [])
 
-  // Widget config state
-  const [widgetsConfig, setWidgetsConfig] = useState<{ order: string[]; hidden: string[] }>(() => {
-    const defaults = {
-      order: ['journal', 'workHours', 'leaveBalance', 'weight', 'recentDocuments'],
-      hidden: []
-    }
-    if (typeof window !== 'undefined') {
+  // Widget config — standard Next.js isomorphic hydration approach
+  const WIDGET_DEFAULTS = {
+    order: ['journal', 'workHours', 'leaveBalance', 'weight', 'recentDocuments'] as string[],
+    hidden: [] as string[],
+  }
+  const [widgetsConfig, setWidgetsConfig] = useState<{ order: string[]; hidden: string[] }>(WIDGET_DEFAULTS)
+
+  // Load config client-side only after mounting
+  useEffect(() => {
+    try {
       const saved = localStorage.getItem('personal_dashboard_config')
       if (saved) {
-        try {
-          return { ...defaults, ...JSON.parse(saved) }
-        } catch (e) {
-          console.error(e)
-        }
+        const parsed = JSON.parse(saved)
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setWidgetsConfig(prev => ({ ...prev, ...parsed }))
       }
+    } catch (e) {
+      console.error('[TodayDashboard] Failed to load widget config:', e)
     }
-    return defaults
-  })
+  }, [])
 
-  const [isCustomizing, setIsCustomizing] = useState(false)
-
+  // Persist widgetsConfig when changed
   useEffect(() => {
+    // Check if the current widgetsConfig is the default one; we only write if it's customized
+    // or we're on the client. But simple write is fine.
     localStorage.setItem('personal_dashboard_config', JSON.stringify(widgetsConfig))
   }, [widgetsConfig])
 
-  const [weeklyGoal, setWeeklyGoal] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const val = localStorage.getItem('personal_weekly_goal')
-      if (val) return Number(val)
-    }
-    return 27
-  })
+  const [isCustomizing, setIsCustomizing] = useState(false)
+
+  // Weekly goal — isomorphic hydration
+  const [weeklyGoal, setWeeklyGoal] = useState(27)
 
   useEffect(() => {
+    const val = localStorage.getItem('personal_weekly_goal')
+    if (val) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setWeeklyGoal(Number(val))
+    }
+
     const handleSettingsChange = () => {
-      const val = localStorage.getItem('personal_weekly_goal')
-      if (val) setWeeklyGoal(Number(val))
+      const v = localStorage.getItem('personal_weekly_goal')
+      if (v) {
+        setWeeklyGoal(Number(v))
+      }
     }
     window.addEventListener('personal_settings_changed', handleSettingsChange)
     return () => window.removeEventListener('personal_settings_changed', handleSettingsChange)
   }, [])
+
+
+
 
   const weekDates = getWeekDates(todayStr)
   const workTemplateObj = analyzedTemplates.find(t => t.template.name === 'Work Tracker')?.template

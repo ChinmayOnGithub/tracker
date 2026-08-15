@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store/store'
 import {
   Trash2, CheckCircle2, CloudOff, Loader2, Edit3, PlusCircle,
   Bold, Italic, Underline, Code, List, Heading1, Heading2, Highlighter, Quote, Undo2, Redo2, Eraser, Image as ImageIcon, X, ArrowLeft,
-  ChevronLeft, ChevronRight, MoreVertical, Table as TableIcon
+  ChevronLeft, ChevronRight, MoreVertical, Table as TableIcon, SortAsc, Upload
 } from 'lucide-react'
 import { Button, SearchInput, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, IconButton } from '@/design-system'
 import { useSearchParams, useRouter } from 'next/navigation'
@@ -108,6 +108,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   const pendingRevisionRef = useRef<number | null>(null)
 
   const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<'newest' | 'oldest' | 'longest' | 'shortest'>('newest')
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('editor')
 
   interface AttachedImage {
@@ -493,22 +494,46 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     e.target.value = ''
   }
 
-  const filtered = entries.filter(e => {
-    if (!search.trim()) return true
-    const q = search.toLowerCase()
-    return (
-      (e.content || '').toLowerCase().includes(q) ||
-      (e.mood || '').toLowerCase().includes(q) ||
-      (e.reflections || '').toLowerCase().includes(q)
-    )
-  })
+  // Helper: count words in content (strips HTML tags)
+  const wordCount = (html: string) => {
+    const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+    return text ? text.split(' ').length : 0
+  }
+
+  const sortLabels: Record<string, string> = {
+    newest: 'Newest first',
+    oldest: 'Oldest first',
+    longest: 'Longest',
+    shortest: 'Shortest',
+  }
+
+  const filtered = entries
+    .filter(e => {
+      if (!search.trim()) return true
+      const q = search.toLowerCase()
+      return (
+        (e.content || '').toLowerCase().includes(q) ||
+        (e.mood || '').toLowerCase().includes(q) ||
+        (e.reflections || '').toLowerCase().includes(q) ||
+        (e.gratitude || '').toLowerCase().includes(q) ||
+        (e.lessonsLearned || '').toLowerCase().includes(q) ||
+        (e.tomorrowPlan || '').toLowerCase().includes(q)
+      )
+    })
+    .sort((a, b) => {
+      if (sort === 'oldest') return new Date(a.journalDate).getTime() - new Date(b.journalDate).getTime()
+      if (sort === 'longest') return wordCount(b.content || '') - wordCount(a.content || '')
+      if (sort === 'shortest') return wordCount(a.content || '') - wordCount(b.content || '')
+      // newest (default)
+      return new Date(b.journalDate).getTime() - new Date(a.journalDate).getTime()
+    })
 
   return (
     <div className="flex flex-col md:flex-row h-full min-h-[70vh] bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg overflow-hidden shadow-xs">
       
       {/* ── LEFT SIDEBAR: History ── */}
       <aside className={`w-full md:w-72 md:shrink-0 flex flex-col bg-slate-50/50 dark:bg-zinc-900/40 border-b md:border-b-0 md:border-r border-slate-200 dark:border-zinc-800 ${mobileView === 'editor' ? 'hidden md:flex' : 'flex'}`}>
-        <div className="p-4 flex flex-col gap-4">
+        <div className="p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-black tracking-tight text-[var(--color-text-main)]">Journal</h3>
             <div className="flex items-center gap-1">
@@ -540,9 +565,41 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
           <SearchInput
             value={search}
             onValueChange={setSearch}
-            placeholder="Search journal..."
+            placeholder="Search all entries..."
             onClear={() => setSearch('')}
           />
+
+          {/* Sort control */}
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] transition-colors px-2 py-1 rounded-md hover:bg-slate-200/50 dark:hover:bg-zinc-800/60"
+                >
+                  <SortAsc className="w-3 h-3" />
+                  {sortLabels[sort]}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-40">
+                {(['newest', 'oldest', 'longest', 'shortest'] as const).map(opt => (
+                  <DropdownMenuItem
+                    key={opt}
+                    onClick={() => setSort(opt)}
+                    className={sort === opt ? 'font-bold text-[var(--color-primary)]' : ''}
+                  >
+                    {sortLabels[opt]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {search.trim() && (
+              <span className="text-[10px] font-semibold text-[var(--color-text-muted)] ml-auto">
+                {filtered.length} result{filtered.length !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto pb-4 px-2 space-y-0.5">
@@ -550,20 +607,28 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
             const dateStr = toYMD(entry.journalDate)
             const isActive = activeDate === dateStr
             const preview = JournalContentAdapter.toDatabase(entry.content).plainText || 'No text written.'
+            const wc = wordCount(entry.content || '')
+            const hasMood = !!entry.mood
 
             return (
               <div
                 key={entry.id}
                 onClick={() => handleNavigateDate(dateStr)}
-                className={`group relative flex flex-col gap-1 px-3 py-3 rounded-lg cursor-pointer transition-all ${
+                className={`group relative flex flex-col gap-1.5 px-3 py-3 rounded-lg cursor-pointer transition-all duration-150 ${
                   isActive
                     ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                    : 'text-[var(--color-text-main)] hover:bg-slate-200/50 dark:hover:bg-zinc-800/60'
+                    : 'text-[var(--color-text-main)] hover:bg-slate-200/50 dark:hover:bg-zinc-800/60 hover:translate-x-0.5'
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <span className={`text-[13px] font-bold ${isActive ? 'text-white' : 'text-[var(--color-text-main)]'}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`text-[13px] font-bold flex items-center gap-1.5 ${isActive ? 'text-white' : 'text-[var(--color-text-main)]'}`}>
+                    {hasMood && (
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-white/70' : 'bg-[var(--color-primary)]'}`} />
+                    )}
                     {shortDate(entry.journalDate)}
+                  </span>
+                  <span className={`text-[10px] font-semibold tabular-nums shrink-0 ${isActive ? 'text-white/60' : 'text-[var(--color-text-muted)]'}`}>
+                    {wc > 0 ? `${wc}w` : ''}
                   </span>
                 </div>
                 <p className={`text-xs line-clamp-2 leading-relaxed ${isActive ? 'text-white/80' : 'text-[var(--color-text-muted)]'}`}>
@@ -584,7 +649,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
           })}
           {filtered.length === 0 && (
             <div className="text-center text-sm text-[var(--color-text-muted)] py-8 font-medium">
-              No entries found.
+              {search.trim() ? `No entries match "${search}"` : 'No entries yet.'}
             </div>
           )}
         </div>
@@ -612,7 +677,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                 <div />
               )}
               
-              {/* Date Navigation & Picker */}
+                          {/* Date Navigation & Picker */}
               <div className="flex items-center gap-2 bg-slate-50 dark:bg-zinc-900/50 p-1.5 border border-[var(--color-border)] rounded-xl">
                 <Button variant="outline" size="icon-sm" onClick={() => navigateDay('prev')} icon={<ChevronLeft size={14} />} title="Previous Day" />
                 <input
@@ -807,6 +872,26 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
               className="w-full mt-4 bg-transparent text-[17px] text-[var(--color-text-main)] placeholder-slate-350 dark:placeholder-zinc-700 focus:outline-hidden leading-[1.85] resize-none font-serif min-h-[350px] border-0 p-0 outline-hidden contenteditable-editor"
             />
 
+            {/* Empty state CTA — shown in read mode when no content */}
+            {!editMode && (!content || content === '<p></p>' || content.trim() === '') && (
+              <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+                <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/10 flex items-center justify-center">
+                  <Edit3 className="w-5 h-5 text-[var(--color-primary)]" />
+                </div>
+                <div>
+                  <p className="text-base font-bold text-[var(--color-text-main)]">Nothing written yet</p>
+                  <p className="text-sm text-[var(--color-text-muted)] mt-1">Capture your thoughts for {formatJournalDate(activeDate + 'T12:00:00Z')}</p>
+                </div>
+                <Button
+                  onClick={() => setEditMode(true)}
+                  size="sm"
+                  icon={<Edit3 className="w-3.5 h-3.5" />}
+                >
+                  Write Entry
+                </Button>
+              </div>
+            )}
+
             {/* Mention Menu */}
             {mentionMenu && (
               <div 
@@ -845,14 +930,99 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
             )}
 
             {/* Memories Section (Mobile & Tablet Layout) */}
-            <div className="xl:hidden mt-8 pt-8 border-t border-slate-100 dark:border-zinc-900/60">
-              <h3 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-muted)] mb-3">Memories</h3>
+            {(attachedImages.length > 0 || editMode) && (
+              <div className="xl:hidden mt-8 pt-8 border-t border-slate-100 dark:border-zinc-900/60">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-muted)]">Memories</h3>
+                  {editMode && (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-1 text-[10px] font-bold text-[var(--color-primary)] hover:opacity-80 transition-opacity"
+                    >
+                      <Upload size={11} /> Attach
+                    </button>
+                  )}
+                </div>
+                {attachedImages.length > 0 ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                    {attachedImages.map((img, idx) => (
+                      <div
+                        key={idx}
+                        className="group relative aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-zinc-800/80 shadow-3xs"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={img.data}
+                          alt={img.name}
+                          className="w-full h-full object-cover cursor-pointer"
+                          onClick={() => setZoomImage(img.data)}
+                        />
+                        <div className="absolute inset-x-0 bottom-0 bg-black/70 py-1 px-2 flex items-center justify-around sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => insertExistingImage(img.data, img.name)}
+                            className="text-white hover:text-blue-400 p-1 cursor-pointer"
+                            title="Insert into text"
+                            aria-label="Insert into text"
+                          >
+                            <PlusCircle size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteImageFromGallery(img.data)}
+                            className="text-white hover:text-rose-500 p-1 cursor-pointer"
+                            title="Delete from memories"
+                            aria-label="Delete from memories"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full py-8 border-2 border-dashed border-slate-200 dark:border-zinc-800 rounded-lg text-xs font-semibold text-[var(--color-text-muted)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition-colors flex flex-col items-center gap-2"
+                  >
+                    <Upload size={16} />
+                    Attach a photo
+                  </button>
+                )}
+              </div>
+            )}
+
+          </div>
+        </div>
+
+        {/* Memories Gallery Panel (Desktop Sidebar Layout) — only shown when images exist or editing */}
+        {(attachedImages.length > 0 || editMode) && (
+          <aside className="w-64 shrink-0 bg-slate-50/15 dark:bg-zinc-950/10 p-5 overflow-y-auto hidden xl:block border-l border-slate-100 dark:border-zinc-900/50">
+            <div className="flex flex-col gap-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-muted)]">Memories</h3>
+                  <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-bold mt-0.5">Photos in this entry</p>
+                </div>
+                {editMode && (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-1 text-[10px] font-bold text-[var(--color-primary)] hover:opacity-80 transition-opacity"
+                  >
+                    <Upload size={11} />
+                  </button>
+                )}
+              </div>
+
               {attachedImages.length > 0 ? (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 gap-2.5">
                   {attachedImages.map((img, idx) => (
                     <div
                       key={idx}
-                      className="group relative aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-zinc-800/80 shadow-3xs"
+                      className="group relative aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-zinc-800/80 shadow-3xs hover:border-[var(--color-primary)] transition-all bg-slate-100 dark:bg-zinc-900"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
@@ -861,7 +1031,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                         className="w-full h-full object-cover cursor-pointer"
                         onClick={() => setZoomImage(img.data)}
                       />
-                      <div className="absolute inset-x-0 bottom-0 bg-black/70 py-1 px-2 flex items-center justify-around sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                      <div className="absolute inset-x-0 bottom-0 bg-black/75 py-1.5 px-2 flex items-center justify-around sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         <button
                           type="button"
                           onClick={() => insertExistingImage(img.data, img.name)}
@@ -869,80 +1039,33 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                           title="Insert into text"
                           aria-label="Insert into text"
                         >
-                          <PlusCircle size={13} />
+                          <PlusCircle size={14} />
                         </button>
                         <button
                           type="button"
                           onClick={() => deleteImageFromGallery(img.data)}
                           className="text-white hover:text-rose-500 p-1 cursor-pointer"
                           title="Delete from memories"
-                          aria-label="Delete from memories"
                         >
-                          <Trash2 size={13} />
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-[11px] font-semibold text-slate-400 dark:text-zinc-500">No images attached to this entry.</p>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-10 border-2 border-dashed border-slate-200 dark:border-zinc-800 rounded-lg text-[11px] font-semibold text-[var(--color-text-muted)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition-colors flex flex-col items-center gap-2"
+                >
+                  <Upload size={16} />
+                  Attach a photo
+                </button>
               )}
             </div>
-
-          </div>
-        </div>
-
-        {/* Memories Gallery Panel (Desktop Sidebar Layout) */}
-        <aside className="w-85 shrink-0 bg-slate-50/15 dark:bg-zinc-950/10 p-6 overflow-y-auto hidden xl:block">
-          <div className="flex flex-col gap-5">
-            <div>
-              <h3 className="text-xs font-black uppercase tracking-wider text-[var(--color-text-muted)]">Memories</h3>
-              <p className="text-[10px] text-slate-400 dark:text-zinc-500 font-bold mt-1">Images in this entry</p>
-            </div>
-
-            {attachedImages.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3">
-                {attachedImages.map((img, idx) => (
-                  <div
-                    key={idx}
-                    className="group relative aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-zinc-800/80 shadow-3xs hover:border-[var(--color-primary)] transition-all bg-slate-100 dark:bg-zinc-900"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={img.data}
-                      alt={img.name}
-                      className="w-full h-full object-cover cursor-pointer"
-                      onClick={() => setZoomImage(img.data)}
-                    />
-                    <div className="absolute inset-x-0 bottom-0 bg-black/75 py-1.5 px-2 flex items-center justify-around sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                      <button
-                        type="button"
-                        onClick={() => insertExistingImage(img.data, img.name)}
-                        className="text-white hover:text-blue-400 p-1 cursor-pointer"
-                        title="Insert into text"
-                        aria-label="Insert into text"
-                      >
-                        <PlusCircle size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteImageFromGallery(img.data)}
-                        className="text-white hover:text-rose-500 p-1 cursor-pointer"
-                        title="Delete from memories"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 px-4 rounded-lg border-2 border-dashed border-slate-200 dark:border-zinc-800/80">
-                <span className="text-[11px] font-semibold text-slate-400 dark:text-zinc-500">No images attached. Paste, drop, or select photos to save memories.</span>
-              </div>
-            )}
-          </div>
-        </aside>
+          </aside>
+        )}
 
         {/* Lightbox Zoom Modal */}
         {zoomImage && (
