@@ -6,7 +6,7 @@ import { WeightRecord } from '@/lib/store/store';
 import { setupMockIndexedDB } from './helpers/mockIndexedDB';
 
 describe('Weight Offline Domain Tests', () => {
-  let dbMock: any = null;
+  let dbMock: ReturnType<typeof setupMockIndexedDB> | null = null;
 
   beforeEach(() => {
     dbMock = setupMockIndexedDB();

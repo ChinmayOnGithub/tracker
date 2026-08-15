@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { Briefcase, Clock } from 'lucide-react'
 import { Card, CardHeader, CardBody, Button, Input } from '@/design-system'
 import { ActivityLog } from '@/types'
@@ -55,6 +55,39 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       manualHours: 8.0,
     }
   })
+
+  // Track the log id we last synced from so we can detect when the
+  // underlying record changes (e.g. temp-id confirmed by the server).
+  const lastSyncedLogId = useRef<string | null | undefined>(todayWorkLog?.id)
+
+  // Derive formState from todayWorkLog when its identity changes.
+  // Using a ref guard instead of a bare useEffect avoids the
+  // react-hooks/set-state-in-effect lint error while still letting us
+  // re-sync form fields when the server confirms an optimistic log.
+  if (lastSyncedLogId.current !== todayWorkLog?.id) {
+    lastSyncedLogId.current = todayWorkLog?.id
+    // Inline state update during render (React allows this when guarded
+    // by a condition that always resolves before the next paint).
+    if (todayWorkLog) {
+      const payload = todayWorkLog.payload as Record<string, unknown> | null
+      setFormState({
+        status: todayWorkLog.status === 'wfh' ? 'wfh' : 'office',
+        mode: (payload?.loggingMode as 'time' | 'manual') || (payload?.inTime ? 'time' : 'manual'),
+        inTime: (payload?.inTime as string) || '09:00',
+        outTime: (payload?.outTime as string) || '',
+        manualHours: payload?.manualHours !== undefined ? Number(payload.manualHours) : (todayWorkLog.amount || 8.0),
+      })
+    } else {
+      setFormState({
+        status: 'cleared',
+        mode: 'manual',
+        inTime: '09:00',
+        outTime: '',
+        manualHours: 8.0,
+      })
+    }
+  }
+
   const [isLoggingWork, setIsLoggingWork] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
 

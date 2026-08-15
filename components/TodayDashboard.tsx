@@ -13,7 +13,7 @@ import { LeaveWidget } from './today/LeaveWidget'
 import { WeightWidget } from './today/WeightWidget'
 import { CompletionDialog } from './CompletionDialog'
 import { CompletionService } from '@/lib/services/CompletionService'
-import { ActivityTemplate, ActivityLog, Note, TimelineItem, AnalyzedTemplate } from '@/types'
+import { ActivityTemplate, ActivityLog, TimelineItem, AnalyzedTemplate } from '@/types'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
 import { getWeekDates } from '@/lib/recurrence'
 
@@ -39,7 +39,6 @@ const WIDGET_REGISTRY: WidgetDefinition[] = [
 export interface TodayDashboardProps {
   analyzedTemplates: AnalyzedTemplate[]
   logs: ActivityLog[]
-  _notes: Note[]
   todayStr: string
   calendarData: CalendarData
   onRefetchCalendar: (force?: boolean) => void
@@ -351,7 +350,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               case 'workHours':
                 return workTemplateId ? (
                   <WorkHoursWidget
-                    key={todayWorkLog?.id || todayStr}
+                    key={workTemplateId}
                     todayWorkLog={todayWorkLog}
                     workTemplateId={workTemplateId}
                     todayStr={todayStr}

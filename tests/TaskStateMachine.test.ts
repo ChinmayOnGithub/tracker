@@ -8,15 +8,18 @@ describe('TaskStateMachine', () => {
     expect(TaskStateMachine.isValidTransition('pending', 'skipped')).toBe(true);
     expect(TaskStateMachine.isValidTransition('pending', 'postponed')).toBe(true);
     expect(TaskStateMachine.isValidTransition('done', 'pending')).toBe(true);
+    expect(TaskStateMachine.isValidTransition('done', 'skipped')).toBe(true);       // cycle: Done -> Canceled
     expect(TaskStateMachine.isValidTransition('skipped', 'pending')).toBe(true);
+    expect(TaskStateMachine.isValidTransition('skipped', 'postponed')).toBe(true);  // cycle: Canceled -> Postponed
     expect(TaskStateMachine.isValidTransition('postponed', 'pending')).toBe(true);
     expect(TaskStateMachine.isValidTransition('postponed', 'done')).toBe(true);
   });
 
   it('should reject invalid state transitions', () => {
-    expect(TaskStateMachine.isValidTransition('done', 'skipped')).toBe(false);
-    expect(TaskStateMachine.isValidTransition('skipped', 'postponed')).toBe(false);
-    expect(TaskStateMachine.isValidTransition('done', 'postponed')).toBe(false);
+    expect(TaskStateMachine.isValidTransition('done', 'postponed')).toBe(false);   // direct skip not allowed
+    expect(TaskStateMachine.isValidTransition('skipped', 'done')).toBe(false);
+    expect(TaskStateMachine.isValidTransition('done', 'done')).toBe(false);
+    expect(TaskStateMachine.isValidTransition('pending', 'pending')).toBe(false);
   });
 });
 

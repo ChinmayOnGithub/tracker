@@ -2,9 +2,9 @@ export type TaskOccurrenceState = 'pending' | 'done' | 'skipped' | 'postponed';
 
 export class TaskStateMachine {
   private static transitions: Record<TaskOccurrenceState, TaskOccurrenceState[]> = {
-    pending: ['done', 'skipped', 'postponed'],
-    done: ['pending'],
-    skipped: ['pending'],
+    pending:   ['done', 'skipped', 'postponed'],
+    done:      ['pending', 'skipped'],   // cycle: done → skipped (Canceled) per UI spec
+    skipped:   ['pending', 'postponed'], // cycle: skipped → postponed for non-daily
     postponed: ['pending', 'done']
   };
 

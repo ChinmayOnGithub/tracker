@@ -4,14 +4,13 @@ import React, { useContext, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { CalendarDataContext } from './DashboardLayout'
 import { TodayDashboard } from './TodayDashboard'
-import { ActivityLog, Note, AnalyzedTemplate } from '@/types'
+import { ActivityLog, AnalyzedTemplate } from '@/types'
 import { useStore, JournalEntry, LeaveRecord, LeaveAllowance, WeightRecord } from '@/lib/store/store'
 import { analyzeRecurrence } from '@/lib/recurrence'
 
 interface TodayDashboardWrapperProps {
   analyzedTemplates: AnalyzedTemplate[]
   logs: ActivityLog[]
-  notes: Note[]
   todayStr: string
   journalEntries: JournalEntry[]
   leaveRecords: LeaveRecord[]
@@ -22,7 +21,6 @@ interface TodayDashboardWrapperProps {
 export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
   analyzedTemplates: initialAnalyzedTemplates,
   logs: initialLogs,
-  notes: initialNotes,
   todayStr,
   journalEntries: initialJournalEntries,
   leaveRecords: initialLeaveRecords,
@@ -39,7 +37,6 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     initialize({
       templates,
       logs: initialLogs,
-      notes: initialNotes,
       journalEntries: initialJournalEntries,
       leaveRecords: initialLeaveRecords,
       leaveAllowances: initialLeaveAllowances,
@@ -48,7 +45,6 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
   }, [
     initialAnalyzedTemplates,
     initialLogs,
-    initialNotes,
     initialJournalEntries,
     initialLeaveRecords,
     initialLeaveAllowances,
@@ -82,7 +78,6 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     <TodayDashboard
       analyzedTemplates={analyzedTemplates}
       logs={state.logs.length > 0 ? state.logs : initialLogs}
-      _notes={state.notes.length > 0 ? state.notes : initialNotes}
       todayStr={todayStr}
       calendarData={calendarData}
       onRefetchCalendar={fetchCalendar}

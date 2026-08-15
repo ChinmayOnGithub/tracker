@@ -9,7 +9,7 @@ import { LeaveRepository } from '@/modules/leave/repository/LeaveRepository';
 import { setupMockIndexedDB } from './helpers/mockIndexedDB';
 
 describe('Cross-Module Integration & Hardening Tests', () => {
-  let dbMock: any = null;
+  let dbMock: ReturnType<typeof setupMockIndexedDB> | null = null;
 
   beforeEach(() => {
     dbMock = setupMockIndexedDB();

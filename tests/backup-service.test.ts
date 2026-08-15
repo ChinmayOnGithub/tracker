@@ -39,7 +39,7 @@ const mockIndexedDB = {
 
 describe('Backup & Restore Service Tests', () => {
   beforeEach(() => {
-    const instance = IndexedDBEngine.getInstance() as any;
+    const instance = IndexedDBEngine.getInstance() as unknown as { db: IDBDatabase | null; dbPromise: Promise<IDBDatabase> | null };
     instance.db = null;
     instance.dbPromise = null;
     global.window = {
@@ -48,7 +48,7 @@ describe('Backup & Restore Service Tests', () => {
   });
 
   afterEach(() => {
-    const instance = IndexedDBEngine.getInstance() as any;
+    const instance = IndexedDBEngine.getInstance() as unknown as { db: IDBDatabase | null; dbPromise: Promise<IDBDatabase> | null };
     instance.db = null;
     instance.dbPromise = null;
     delete (global as unknown as { window?: unknown }).window;

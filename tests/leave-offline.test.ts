@@ -6,7 +6,7 @@ import { LeaveRecord } from '@/lib/store/store';
 import { setupMockIndexedDB } from './helpers/mockIndexedDB';
 
 describe('Leave Offline Domain Tests', () => {
-  let dbMock: any = null;
+  let dbMock: ReturnType<typeof setupMockIndexedDB> | null = null;
 
   beforeEach(() => {
     dbMock = setupMockIndexedDB();

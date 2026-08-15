@@ -6,7 +6,7 @@ import { WorkSession } from '@/modules/work/types';
 import { setupMockIndexedDB } from './helpers/mockIndexedDB';
 
 describe('Work Session Domain Tests', () => {
-  let dbMock: any = null;
+  let dbMock: ReturnType<typeof setupMockIndexedDB> | null = null;
 
   beforeEach(() => {
     dbMock = setupMockIndexedDB();

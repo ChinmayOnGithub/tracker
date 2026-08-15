@@ -49,11 +49,6 @@ export default async function Page(props: { searchParams: Promise<{ date?: strin
 
   const logsRaw = await fetchRecurrenceLogs(loggedUser.id, templatesRaw, loggedUser.username === 'admin')
   
-  const journalRawForNotes = await db.journalEntry.findMany({
-    where: { userId: loggedUser.id, deletedAt: null },
-    orderBy: { journalDate: 'desc' },
-  })
-
   const journalEntriesRaw = await db.journalEntry.findMany({
     where: { userId: loggedUser.id, deletedAt: null },
     orderBy: { journalDate: 'desc' },
@@ -132,22 +127,10 @@ export default async function Page(props: { searchParams: Promise<{ date?: strin
     deletedAt: r.deletedAt?.toISOString() ?? null,
   }))
 
-  const notes = journalRawForNotes.map(j => ({
-    id: j.id,
-    date: j.journalDate.toISOString().split('T')[0],
-    title: null,
-    content: j.content,
-    userId: loggedUser.id,
-    createdAt: j.journalDate,
-    updatedAt: j.journalDate,
-    deletedAt: null
-  }))
-
   return (
     <TodayDashboardWrapper
       analyzedTemplates={analyzedTemplates}
       logs={logs}
-      notes={notes}
       todayStr={todayStr}
       journalEntries={journalEntries}
       leaveRecords={leaveRecords}

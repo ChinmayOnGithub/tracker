@@ -1,11 +1,30 @@
 import { mock } from 'bun:test'
 import { IndexedDBEngine } from '@/lib/database/local/IndexedDBEngine'
 
+interface DbEngineInternal {
+  db: IDBDatabase | null
+  dbPromise: Promise<IDBDatabase> | null
+}
+
+interface MockIndex {
+  getAll: ReturnType<typeof mock>
+  get: ReturnType<typeof mock>
+}
+
+interface MockObjectStore {
+  put: ReturnType<typeof mock>
+  get: ReturnType<typeof mock>
+  getAll: ReturnType<typeof mock>
+  delete: ReturnType<typeof mock>
+  clear: ReturnType<typeof mock>
+  index: ReturnType<typeof mock>
+}
+
 export function setupMockIndexedDB() {
   const originalGetInstance = IndexedDBEngine.getInstance
 
   // Clear cached db on singleton before test begins
-  const initInstance = IndexedDBEngine.getInstance() as any
+  const initInstance = IndexedDBEngine.getInstance() as unknown as DbEngineInternal
   initInstance.db = null
   initInstance.dbPromise = null
 
@@ -29,7 +48,7 @@ export function setupMockIndexedDB() {
         onerror: null as (() => void) | null,
         result: {
           transaction: mock((stores: string[], _mode: string) => {
-            const storeMocks: Record<string, any> = {}
+            const storeMocks: Record<string, MockObjectStore> = {}
             let activeRequests = 0
             let completed = false
 
@@ -51,7 +70,7 @@ export function setupMockIndexedDB() {
               }
             }
 
-            const createRequestMock = (result: any = null) => {
+            const createRequestMock = (result: unknown = null) => {
               activeRequests++
               const req = {
                 onsuccess: null as (() => void) | null,
@@ -68,28 +87,28 @@ export function setupMockIndexedDB() {
 
             for (const s of stores) {
               storeMocks[s] = {
-                put: mock((item: any) => {
+                put: mock((item: Record<string, unknown> | null) => {
                   if (!localStore[s]) localStore[s] = []
                   const list = localStore[s]
-                  const idx = list.findIndex((i: any) => i.id === item?.id)
+                  const idx = list.findIndex((i: Record<string, unknown>) => i.id === item?.id)
                   if (idx >= 0) {
-                    list[idx] = item
+                    if (item) list[idx] = item
                   } else {
-                    list.push(item)
+                    if (item) list.push(item)
                   }
                   return createRequestMock(item?.id)
                 }),
-                get: mock((id: any) => {
-                  const item = localStore[s]?.find((i: any) => i.id === id) || null
+                get: mock((id: string) => {
+                  const item = localStore[s]?.find((i: Record<string, unknown>) => i.id === id) || null
                   return createRequestMock(item)
                 }),
                 getAll: mock(() => {
                   const items = localStore[s] || []
                   return createRequestMock(items)
                 }),
-                delete: mock((id: any) => {
+                delete: mock((id: string) => {
                   if (localStore[s]) {
-                    localStore[s] = localStore[s].filter((i: any) => i.id !== id)
+                    localStore[s] = localStore[s].filter((i: Record<string, unknown>) => i.id !== id)
                   }
                   return createRequestMock()
                 }),
@@ -97,13 +116,13 @@ export function setupMockIndexedDB() {
                   localStore[s] = []
                   return createRequestMock()
                 }),
-                index: mock(() => ({
-                  getAll: mock((_val: any) => {
+                index: mock((): MockIndex => ({
+                  getAll: mock((_val: unknown) => {
                     const items = localStore[s] || []
                     return createRequestMock(items)
                   }),
-                  get: mock((id: any) => {
-                    const item = localStore[s]?.find((i: any) => i.id === id) || null
+                  get: mock((id: string) => {
+                    const item = localStore[s]?.find((i: Record<string, unknown>) => i.id === id) || null
                     return createRequestMock(item)
                   })
                 }))
@@ -138,7 +157,7 @@ export function setupMockIndexedDB() {
     localStore,
     restore: () => {
       IndexedDBEngine.getInstance = originalGetInstance
-      const instance = IndexedDBEngine.getInstance() as any
+      const instance = IndexedDBEngine.getInstance() as unknown as DbEngineInternal
       instance.db = null
       instance.dbPromise = null
       delete (global as unknown as { window?: unknown }).window

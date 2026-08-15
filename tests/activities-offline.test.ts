@@ -6,7 +6,7 @@ import { ActivityTemplate, ActivityLog } from '@/types';
 import { setupMockIndexedDB } from './helpers/mockIndexedDB';
 
 describe('Activities & Templates Offline Domain Tests', () => {
-  let dbMock: any = null;
+  let dbMock: ReturnType<typeof setupMockIndexedDB> | null = null;
 
   beforeEach(() => {
     dbMock = setupMockIndexedDB();

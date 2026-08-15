@@ -5,6 +5,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { ActivityTemplate, ActivityLog, Note, TimelineItem, AnalyzedTemplate } from '@/types'
 import { writeQueue } from './write-queue'
+import { TaskStateMachine, TaskOccurrenceState } from '@/modules/activities/domain/TaskStateMachine'
 
 export interface JournalEntry {
   id: string
@@ -259,13 +260,45 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const initialize = useCallback((initialData: Partial<StoreState>) => {
     setState(prev => {
+      // Local-first merge: item with the latest updatedAt wins.
+      // Prevents server hydration from overwriting un-synced local edits.
+      const mergeById = <T extends { id: string; updatedAt?: Date | string }>(
+        currentItems: T[],
+        serverItems: T[]
+      ): T[] => {
+        const map = new Map<string, T>()
+        currentItems.forEach(item => map.set(item.id, item))
+        serverItems.forEach(item => {
+          const existing = map.get(item.id)
+          if (!existing) {
+            map.set(item.id, item)
+          } else {
+            const existingTime = new Date(existing.updatedAt ?? 0).getTime()
+            const serverTime = new Date(item.updatedAt ?? 0).getTime()
+            if (serverTime > existingTime) {
+              map.set(item.id, item)
+            }
+          }
+        })
+        return Array.from(map.values())
+      }
+
       const next = { ...prev }
-      Object.keys(initialData).forEach(key => {
-        const k = key as keyof StoreState
-        if (k !== 'journalEntries' && initialData[k] !== undefined) {
-          (next as any)[k] = initialData[k]
-        }
-      })
+
+      // Local-first types: merge by timestamp
+      if (initialData.templates !== undefined)     next.templates     = mergeById(prev.templates, initialData.templates)
+      if (initialData.logs !== undefined)          next.logs          = mergeById(prev.logs, initialData.logs)
+      if (initialData.weightRecords !== undefined) next.weightRecords = mergeById(prev.weightRecords, initialData.weightRecords)
+      if (initialData.leaveRecords !== undefined)  next.leaveRecords  = mergeById(prev.leaveRecords, initialData.leaveRecords)
+
+      // Non-mutated types: replace directly
+      if (initialData.notes !== undefined)           next.notes           = initialData.notes
+      if (initialData.leaveAllowances !== undefined) next.leaveAllowances = initialData.leaveAllowances
+      if (initialData.vaultItems !== undefined)      next.vaultItems      = initialData.vaultItems
+      if (initialData.links !== undefined)           next.links           = initialData.links
+      if (initialData.collections !== undefined)     next.collections     = initialData.collections
+      if (initialData.calendarData !== undefined)    next.calendarData    = initialData.calendarData
+
       return next
     })
 
@@ -365,24 +398,47 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const matched = state.templates.find(t => t.id === templateId)
     const isDaily = matched?.recurrenceType === 'daily'
 
-    // Cycle state logic
+    // Map current UI state to TaskOccurrenceState for machine validation
+    const currentMachineState: TaskOccurrenceState =
+      isPostponed ? 'postponed' :
+      isCanceled ? 'skipped' :
+      isDone ? 'done' :
+      'pending'
+
+    // Cycle state logic — determines next state
+    let nextMachineState: TaskOccurrenceState | null = null
     if (!currentCompleted && !isCanceled && !isPostponed) {
+      nextMachineState = 'done'
       nextCompleted = true
       nextStatus = matched?.category === 'finance' ? 'paid' : 'done'
     } else if (isDone) {
+      nextMachineState = 'skipped'
       nextCompleted = true
       nextStatus = 'skipped'
     } else if (isCanceled) {
       if (isDaily) {
+        nextMachineState = 'pending'
         nextCompleted = false
         nextStatus = undefined
       } else {
+        nextMachineState = 'postponed'
         nextCompleted = true
         nextStatus = 'postponed'
       }
     } else if (isPostponed) {
+      nextMachineState = 'pending'
       nextCompleted = false
       nextStatus = undefined
+    }
+
+    // Guard via TaskStateMachine — log warning if transition is not in the domain model
+    if (nextMachineState !== null && nextMachineState !== 'pending') {
+      if (!TaskStateMachine.isValidTransition(currentMachineState, nextMachineState)) {
+        console.warn(
+          `[TaskStateMachine] Invalid transition: ${currentMachineState} → ${nextMachineState} for template ${templateId}. Skipping.`
+        )
+        return
+      }
     }
 
     const previousLogs = [...state.logs]
