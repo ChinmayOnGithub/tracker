@@ -336,15 +336,15 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     }
   }, [editMode, editor])
 
-  const [prevActiveDate, setPrevActiveDate] = useState(activeDate)
-
-  if (activeDate !== prevActiveDate) {
+  // Synchronise content edits when activeDate, activeEntry, or dbValue changes
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setContent(dbValue)
     setAttachedImages(getMetadataImages(activeEntry))
     setMentionMenu(null)
     setContentStatus('idle')
-    setPrevActiveDate(activeDate)
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDate, dbValue])
 
   // Safe read-only exporter triggers
   const handleExportJournal = async () => {
@@ -408,18 +408,9 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     return () => clearTimeout(t)
   }, [content, activeEntry?.content, saveContent, editMode])
 
-  const handleSave = async () => {
-    await saveContent(content, revisionRef.current)
-    setEditMode(false)
-  }
-
-  const handleCancel = () => {
-    if (content !== dbValue && !confirm('You have unsaved changes. Are you sure you want to discard them?')) {
-      return
-    }
-    setContent(dbValue)
-    if (editor) {
-      editor.commands.setContent(dbValue, { emitUpdate: false })
+  const handleExitEdit = async () => {
+    if (content !== dbValue) {
+      await saveContent(content, revisionRef.current)
     }
     setEditMode(false)
   }
@@ -695,10 +686,13 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                 {!editMode ? (
                   <Button onClick={() => setEditMode(true)} size="sm" icon={<Edit3 className="w-3.5 h-3.5" />}>Edit</Button>
                 ) : (
-                  <div className="flex items-center gap-1.5">
-                    <Button variant="outline" size="sm" onClick={() => handleCancel()}>Cancel</Button>
-                    <Button variant="primary" size="sm" onClick={() => handleSave()} disabled={content === dbValue}>Save</Button>
-                  </div>
+                  <Button
+                    onClick={() => handleExitEdit()}
+                    variant="ghost"
+                    size="icon-sm"
+                    icon={<X className="w-4 h-4" />}
+                    title="Exit Edit Mode"
+                  />
                 )}
               </div>
             </div>

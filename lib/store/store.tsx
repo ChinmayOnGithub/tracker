@@ -922,12 +922,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updated.push({
           id: finalId,
           journalDate: new Date(`${date}T12:00:00.000Z`).toISOString(),
-          content: fields.content || '',
+          content: fields.content !== undefined ? fields.content : '',
           mood: fields.mood || null,
           gratitude: fields.gratitude || null,
           reflections: fields.reflections || null,
           lessonsLearned: fields.lessonsLearned || null,
           tomorrowPlan: fields.tomorrowPlan || null,
+          metadata: fields.metadata || null,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         })
@@ -942,12 +943,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const payload: JournalEntry = {
         id: finalId,
         journalDate: new Date(`${date}T12:00:00.000Z`).toISOString(),
-        content: fields.content || (existing ? existing.content : ''),
+        content: fields.content !== undefined ? fields.content : (existing ? existing.content : ''),
         mood: fields.mood !== undefined ? fields.mood : (existing ? existing.mood : null),
         gratitude: fields.gratitude !== undefined ? fields.gratitude : (existing ? existing.gratitude : null),
         reflections: fields.reflections !== undefined ? fields.reflections : (existing ? existing.reflections : null),
         lessonsLearned: fields.lessonsLearned !== undefined ? fields.lessonsLearned : (existing ? existing.lessonsLearned : null),
         tomorrowPlan: fields.tomorrowPlan !== undefined ? fields.tomorrowPlan : (existing ? existing.tomorrowPlan : null),
+        metadata: fields.metadata !== undefined ? fields.metadata : (existing ? existing.metadata : null),
         createdAt: existing ? (typeof existing.createdAt === 'string' ? existing.createdAt : existing.createdAt.toISOString()) : new Date().toISOString(),
         updatedAt: new Date().toISOString()
       }
