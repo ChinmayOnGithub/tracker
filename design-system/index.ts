@@ -13,6 +13,14 @@ export { Tabs, TabsList, Tab, TabsContent } from './components/Tabs'
 export { ToastProvider, useToast } from './components/Toast'
 export type { ToastVariant, ToastItem } from './components/Toast'
 
+// Radix Primitives
+export * from './components/Dialog'
+export * from './components/Sheet'
+export * from './components/Popover'
+export * from './components/DropdownMenu'
+export * from './components/Tooltip'
+export { Switch } from './components/Switch'
+
 // UI Grammar Primitives
 export { PageContainer } from './components/PageContainer'
 export { PageHeader } from './components/PageHeader'
@@ -20,3 +28,6 @@ export { Section } from './components/Section'
 export { ListRow } from './components/ListRow'
 export { IconButton } from './components/IconButton'
 export { StatusBadge } from './components/StatusBadge'
+export { ConfirmDialog } from './components/ConfirmDialog'
+export { ActionSheet } from './components/ActionSheet'
+export { PageShell } from './components/PageShell'

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { Shield, Lock, FileText, FileImage, FileVideo, FileArchive, FileCode, FileSpreadsheet, File } from 'lucide-react'
-import { Card, Skeleton } from '@/design-system'
+import { Card, CardHeader, CardBody, Skeleton, ListRow } from '@/design-system'
 import { VaultItem } from '@/app/actions/vault'
 
 interface RecentDocumentsWidgetProps {
@@ -10,6 +10,10 @@ interface RecentDocumentsWidgetProps {
   onTabChange: (tab: string) => void
 }
 
+/**
+ * RecentDocumentsWidget
+ * Standardized to match Card hierarchies and utilize ListRow for listing files.
+ */
 export const RecentDocumentsWidget: React.FC<RecentDocumentsWidgetProps> = ({
   isVisible,
   onTabChange,
@@ -64,46 +68,47 @@ export const RecentDocumentsWidget: React.FC<RecentDocumentsWidgetProps> = ({
   if (!isVisible) return null
 
   return (
-    <Card className="p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
-      <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
-        <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
+    <Card className="hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
+      <CardHeader className="pb-2 border-b border-[var(--color-border)]/40 mb-2 flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
           <Shield className="w-3.5 h-3.5 text-[var(--color-external)]" />
           Secure Vault
         </span>
         <Lock className="w-3 h-3 text-[var(--color-text-muted)]" />
-      </div>
+      </CardHeader>
 
-      {vaultLoading ? (
-        <div className="space-y-1.5 py-1">
-          {[1, 2].map(i => <Skeleton key={i} className="h-6 w-full rounded-md" />)}
-        </div>
-      ) : vaultItems.length > 0 ? (
-        <div className="space-y-1 py-0.5">
-          {vaultItems.map((item: VaultItem) => {
-            const IconComponent = getVaultIcon(item.mimeGroup)
-            const iconColor = getVaultIconColor(item.mimeGroup)
-            return (
-              <div 
-                key={item.id}
-                onClick={() => onTabChange('documents')}
-                className="flex items-center gap-2 p-1.5 rounded-md hover:bg-[var(--color-accent)]/50 transition-colors cursor-pointer border border-transparent hover:border-[var(--color-border)] group/vaultitem"
-              >
-                <IconComponent className={`w-3.5 h-3.5 ${iconColor} shrink-0`} />
-                <span className="text-xs text-[var(--color-text-main)] font-semibold truncate flex-1 group-hover/vaultitem:text-[var(--color-primary)]">
-                  {item.searchName}
-                </span>
-                <span className="text-[9px] text-[var(--color-text-muted)] font-mono shrink-0">
-                  {item.extension ? `.${item.extension}` : ''}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      ) : (
-        <div className="py-2 text-center text-xs text-[var(--color-text-muted)] italic">
-          No files in vault yet.
-        </div>
-      )}
+      <CardBody className="py-1">
+        {vaultLoading ? (
+          <div className="space-y-1.5 py-1">
+            {[1, 2].map(i => <Skeleton key={i} className="h-6 w-full rounded-md" />)}
+          </div>
+        ) : vaultItems.length > 0 ? (
+          <div className="flex flex-col">
+            {vaultItems.map((item: VaultItem) => {
+              const IconComponent = getVaultIcon(item.mimeGroup)
+              const iconColor = getVaultIconColor(item.mimeGroup)
+              return (
+                <ListRow
+                  key={item.id}
+                  left={<IconComponent className={`w-3.5 h-3.5 ${iconColor}`} />}
+                  title={item.searchName}
+                  right={
+                    <span className="text-[9px] text-[var(--color-text-muted)] font-mono">
+                      {item.extension ? `.${item.extension}` : ''}
+                    </span>
+                  }
+                  onClick={() => onTabChange('documents')}
+                  className="px-1.5 py-1.5 hover:bg-[var(--color-accent)]/30 rounded-md"
+                />
+              )
+            })}
+          </div>
+        ) : (
+          <div className="py-4 text-center text-xs text-[var(--color-text-muted)] italic">
+            No files in vault yet.
+          </div>
+        )}
+      </CardBody>
     </Card>
   )
 }

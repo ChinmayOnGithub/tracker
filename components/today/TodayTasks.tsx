@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react'
 import { Check, ArrowRightCircle, ExternalLink, MoreVertical } from 'lucide-react'
 import { TimelineItem, ActivityLog, AnalyzedTemplate } from '@/types'
-import { Button, Input, Skeleton, EmptyState, ListRow, IconButton, StatusBadge, Section } from '@/design-system'
+import { Button, Input, Skeleton, EmptyState, ListRow, IconButton, StatusBadge, Section, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, ConfirmDialog } from '@/design-system'
 import { getTemplateColorClasses } from '@/lib/colors'
 
 interface TodayTasksProps {
@@ -90,69 +90,67 @@ const TaskContextMenu: React.FC<{
   isDone: boolean
   isCanceled: boolean
   isPostponed: boolean
-  isOpen: boolean
   todayStr: string
   template: AnalyzedTemplate['template'] | undefined
-  onOpen: () => void
-  onClose: () => void
   cycleTaskStatus: (o: TimelineItem) => Promise<void>
   setTaskStatusAction: (o: TimelineItem, date: string, status: 'cleared' | 'done' | 'skipped' | 'postponed') => Promise<void>
   deleteActivityLog: (id: string) => Promise<unknown>
   onOpenCreateActivity: () => void
 }> = ({
-  occurrence, isDone, isCanceled, isPostponed, isOpen, todayStr,
-  template, onOpen, onClose, cycleTaskStatus, setTaskStatusAction, deleteActivityLog, onOpenCreateActivity
+  occurrence, isDone, isCanceled, isPostponed, todayStr,
+  template, cycleTaskStatus, setTaskStatusAction, deleteActivityLog, onOpenCreateActivity
 }) => (
-  <div className="relative flex items-center">
-    <IconButton
-      icon={<MoreVertical className="w-3.5 h-3.5" />}
-      label="More actions"
-      variant="ghost"
-      size="sm"
-      onClick={(e) => { e?.stopPropagation(); if (isOpen) { onClose() } else { onOpen() } }}
-    />
-    {isOpen && (
-      <div className="absolute right-0 bottom-8 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-xl)] shadow-lg py-1 z-50 w-44 animate-in slide-in-from-bottom-2 duration-100">
-        <button type="button" onClick={async (e) => { e.stopPropagation(); onClose(); await cycleTaskStatus(occurrence) }}
-          className="w-full text-left px-3 py-1.5 text-xs text-[var(--color-text-main)] hover:bg-[var(--color-accent)] font-medium transition-colors">
-          {isDone ? 'Mark Uncompleted' : 'Mark Completed'}
-        </button>
-        {!isCanceled && (
-          <button type="button" onClick={async (e) => { e.stopPropagation(); onClose(); await setTaskStatusAction(occurrence, todayStr, 'skipped') }}
-            className="w-full text-left px-3 py-1.5 text-xs text-[var(--color-overdue)] hover:bg-[var(--color-overdue)]/5 font-medium transition-colors">
-            Skip Today
-          </button>
-        )}
-        {!isPostponed && template?.recurrenceType !== 'daily' && (
-          <button type="button" onClick={async (e) => { e.stopPropagation(); onClose(); await setTaskStatusAction(occurrence, todayStr, 'postponed') }}
-            className="w-full text-left px-3 py-1.5 text-xs text-[var(--color-external)] hover:bg-[var(--color-external)]/5 font-medium transition-colors">
-            Postpone to Tomorrow
-          </button>
-        )}
-        {occurrence.templateId && (
-          <button type="button" onClick={(e) => { e.stopPropagation(); onClose(); onOpenCreateActivity() }}
-            className="w-full text-left px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-accent)] font-medium transition-colors border-t border-[var(--color-border)]/50 mt-1 pt-1">
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <IconButton
+        icon={<MoreVertical className="w-3.5 h-3.5" />}
+        label="More actions"
+        variant="ghost"
+        size="sm"
+        onClick={(e) => e.stopPropagation()}
+      />
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end">
+      <DropdownMenuItem onClick={async (e) => { e.stopPropagation(); await cycleTaskStatus(occurrence) }}>
+        {isDone ? 'Mark Uncompleted' : 'Mark Completed'}
+      </DropdownMenuItem>
+      {!isCanceled && (
+        <DropdownMenuItem variant="danger" onClick={async (e) => { e.stopPropagation(); await setTaskStatusAction(occurrence, todayStr, 'skipped') }}>
+          Skip Today
+        </DropdownMenuItem>
+      )}
+      {!isPostponed && template?.recurrenceType !== 'daily' && (
+        <DropdownMenuItem onClick={async (e) => { e.stopPropagation(); await setTaskStatusAction(occurrence, todayStr, 'postponed') }}>
+          Postpone to Tomorrow
+        </DropdownMenuItem>
+      )}
+      {occurrence.templateId && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onOpenCreateActivity() }}>
             Edit Template
-          </button>
-        )}
-        {occurrence.logId && (
-          <button type="button" onClick={async (e) => {
-            e.stopPropagation(); onClose()
-            if (confirm("Delete today's log for this activity?")) await deleteActivityLog(occurrence.logId!)
-          }}
-            className="w-full text-left px-3 py-1.5 text-xs text-[var(--color-overdue)] hover:bg-[var(--color-overdue)]/5 font-medium transition-colors border-t border-[var(--color-border)]/50 mt-1 pt-1">
+          </DropdownMenuItem>
+        </>
+      )}
+      {occurrence.logId && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="danger" onClick={(e) => {
+            e.stopPropagation()
+            deleteActivityLog(occurrence.logId!)
+          }}>
             Delete Log
-          </button>
-        )}
-      </div>
-    )}
-  </div>
+          </DropdownMenuItem>
+        </>
+      )}
+    </DropdownMenuContent>
+  </DropdownMenu>
 )
 
 // ── Task Row ──
 export const TaskRow: React.FC<TaskRowProps> = ({
   occurrence, index,
-  completingHabitId, activeMenuId, setActiveMenuId,
+  completingHabitId, activeMenuId: _activeMenuId, setActiveMenuId: _setActiveMenuId,
   cycleTaskStatus, setTaskStatusAction, deleteActivityLog,
   onOpenCreateActivity, todayStr, analyzedTemplates,
   handleDragStart, handleDragOver, handleDrop,
@@ -231,11 +229,8 @@ export const TaskRow: React.FC<TaskRowProps> = ({
           isDone={isDone}
           isCanceled={isCanceled}
           isPostponed={isPostponed}
-          isOpen={activeMenuId === occurrence.id}
           todayStr={todayStr}
           template={template}
-          onOpen={() => setActiveMenuId(occurrence.id)}
-          onClose={() => setActiveMenuId(null)}
           cycleTaskStatus={cycleTaskStatus}
           setTaskStatusAction={setTaskStatusAction}
           deleteActivityLog={deleteActivityLog}
@@ -291,6 +286,19 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
   const [showTemplatesDropdown, setShowTemplatesDropdown] = useState(false)
   const [manualOrderIds, setManualOrderIds] = useState<string[] | null>(null)
   const [optimisticTasks, setOptimisticTasks] = useState<TimelineItem[]>([])
+  const [deletingLogId, setDeletingLogId] = useState<string | null>(null)
+  const [isDeletingLog, setIsDeletingLog] = useState(false)
+
+  const handleDeleteLogConfirm = async () => {
+    if (!deletingLogId) return
+    setIsDeletingLog(true)
+    try {
+      await deleteActivityLog(deletingLogId)
+    } finally {
+      setIsDeletingLog(false)
+      setDeletingLogId(null)
+    }
+  }
 
   const mergedTimeline = useMemo(() => [...timeline, ...optimisticTasks], [timeline, optimisticTasks])
 
@@ -412,7 +420,7 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
                 setActiveMenuId={setActiveMenuId}
                 cycleTaskStatus={cycleTaskStatus}
                 setTaskStatusAction={setTaskStatusAction}
-                deleteActivityLog={deleteActivityLog}
+                deleteActivityLog={async (id) => setDeletingLogId(id)}
                 onOpenCreateActivity={onOpenCreateActivity}
                 todayStr={todayStr}
                 analyzedTemplates={analyzedTemplates}
@@ -422,6 +430,18 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
               />
             ))
           )}
+
+          <ConfirmDialog
+            isOpen={!!deletingLogId}
+            onClose={() => setDeletingLogId(null)}
+            onConfirm={handleDeleteLogConfirm}
+            title="Delete Log"
+            description="Delete today's log for this activity?"
+            confirmText="Delete"
+            cancelText="Cancel"
+            variant="danger"
+            isLoading={isDeletingLog}
+          />
 
           {/* Quick Task Add */}
           <div className="p-2.5 bg-[var(--color-bg-subtle)] border-t border-[var(--color-border)]/60 flex items-center gap-2">

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { Briefcase, Clock } from 'lucide-react'
-import { Card, Button } from '@/design-system'
+import { Card, CardHeader, CardBody, Button, Input } from '@/design-system'
 import { ActivityLog } from '@/types'
 
 interface WorkHoursWidgetProps {
@@ -23,6 +23,10 @@ type WorkFormState = {
   manualHours: number
 }
 
+/**
+ * WorkHoursWidget
+ * Standardized to fit Card layouts, segmented button styles, and time inputs.
+ */
 export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   todayWorkLog,
   workTemplateId,
@@ -128,24 +132,24 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   }
 
   return (
-    <Card className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3.5 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
-      <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
-        <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
+    <Card className="hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
+      <CardHeader className="pb-2 border-b border-[var(--color-border)]/40 mb-2 flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
           <Briefcase className="w-3.5 h-3.5 text-emerald-500" />
           Work Hours Tracker
         </span>
         <Clock className="w-3 h-3 text-[var(--color-text-muted)]" />
-      </div>
+      </CardHeader>
 
-      <div className="space-y-3">
+      <CardBody className="space-y-3">
         {/* Status Segmented Control */}
-        <div className="flex bg-[var(--color-bg-base)] p-0.5 rounded-[9px] border border-[var(--color-border)]">
+        <div className="flex bg-[var(--color-bg-base)] p-0.5 rounded-[var(--radius-lg)] border border-[var(--color-border)]">
           {(['cleared', 'office', 'wfh'] as const).map((status) => (
             <button
               key={status}
               type="button"
               onClick={() => setFormState(prev => ({ ...prev, status }))}
-              className={`flex-1 py-2.5 md:py-1 text-[10px] font-bold rounded-md capitalize transition-all duration-150 cursor-pointer ${
+              className={`flex-1 py-1.5 text-[10px] font-bold rounded-[var(--radius-md)] capitalize transition-all duration-150 cursor-pointer ${
                 formState.status === status
                   ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-xs border border-[var(--color-border)]'
                   : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
@@ -160,7 +164,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
         {formState.status !== 'cleared' && (
           <div className="space-y-3">
             {/* Mode Segmented Control */}
-            <div className="flex bg-[var(--color-bg-base)] p-0.5 rounded-[9px] border border-[var(--color-border)]">
+            <div className="flex bg-[var(--color-bg-base)] p-0.5 rounded-[var(--radius-lg)] border border-[var(--color-border)]">
               {(['time', 'manual'] as const).map((mode) => (
                 <button
                   key={mode}
@@ -176,7 +180,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                       setFormState(prev => ({ ...prev, mode }))
                     }
                   }}
-                  className={`flex-1 py-2.5 md:py-1 text-[10px] font-bold rounded-md capitalize transition-all duration-150 cursor-pointer ${
+                  className={`flex-1 py-1.5 text-[10px] font-bold rounded-[var(--radius-md)] capitalize transition-all duration-150 cursor-pointer ${
                     formState.mode === mode
                       ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-xs border border-[var(--color-border)]'
                       : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
@@ -233,14 +237,14 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                   <span>Total Hours Worked</span>
                   <span className="text-xs font-mono text-[var(--color-text-main)] font-bold">{formState.manualHours}h</span>
                 </div>
-                <input
+                <Input
                   type="number"
                   min="0"
                   max="24"
                   step="0.5"
                   value={formState.manualHours}
                   onChange={(e) => setFormState(prev => ({ ...prev, manualHours: parseFloat(e.target.value) || 0 }))}
-                  className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
+                  className="text-xs"
                 />
               </div>
             )}
@@ -271,7 +275,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
               {totalOfficeHours}h / {weeklyGoal}h
             </span>
           </div>
-          <div className="w-full h-2 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-full overflow-hidden">
             <div
               className={`h-full transition-all duration-500 rounded-full ${isGoalMet ? 'bg-emerald-500' : 'bg-blue-500'}`}
               style={{ width: `${Math.min(100, (totalOfficeHours / weeklyGoal) * 100)}%` }}
@@ -286,7 +290,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
             )}
           </div>
         </div>
-      </div>
+      </CardBody>
     </Card>
   )
 }

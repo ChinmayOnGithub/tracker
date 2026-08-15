@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { Scale } from 'lucide-react'
-import { Card } from '@/design-system'
+import { Card, CardHeader, CardBody } from '@/design-system'
 import { Sparkline } from '../WeightPanel'
 import { WeightRecord } from '@/lib/store/store'
 
@@ -11,6 +11,10 @@ interface WeightWidgetProps {
   weightRecords: WeightRecord[]
 }
 
+/**
+ * WeightWidget
+ * Standardized using Card components and design token typography/borders.
+ */
 export const WeightWidget: React.FC<WeightWidgetProps> = ({
   isVisible,
   weightRecords,
@@ -29,9 +33,9 @@ export const WeightWidget: React.FC<WeightWidgetProps> = ({
     : null
 
   return (
-    <Card className="p-4 space-y-3 hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
-      <div className="flex items-center justify-between border-b border-[var(--color-border)]/50 pb-2">
-        <span className="text-xs uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
+    <Card className="hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
+      <CardHeader className="pb-2 border-b border-[var(--color-border)]/40 mb-2 flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
           <Scale className="w-3.5 h-3.5 text-[var(--color-completed)]" />
           Weight Graph
         </span>
@@ -40,16 +44,18 @@ export const WeightWidget: React.FC<WeightWidgetProps> = ({
             {latestWeightRecord.weight.toFixed(1)} kg
           </span>
         )}
-      </div>
-      {sparklineData.length >= 2 ? (
-        <div className="pt-2">
-          <Sparkline data={sparklineData} width={280} height={120} />
-        </div>
-      ) : (
-        <div className="py-6 text-center text-xs text-[var(--color-text-muted)] italic">
-          Need at least 2 logs to show weight graph.
-        </div>
-      )}
+      </CardHeader>
+      <CardBody className="py-1">
+        {sparklineData.length >= 2 ? (
+          <div className="pt-2 flex justify-center w-full overflow-hidden">
+            <Sparkline data={sparklineData} width={280} height={120} />
+          </div>
+        ) : (
+          <div className="py-6 text-center text-xs text-[var(--color-text-muted)] italic">
+            Need at least 2 logs to show weight graph.
+          </div>
+        )}
+      </CardBody>
     </Card>
   )
 }

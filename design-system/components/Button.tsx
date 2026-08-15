@@ -1,4 +1,5 @@
 import React from 'react'
+import { Slot } from '@radix-ui/react-slot'
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost' | 'warning'
@@ -6,9 +7,10 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   isLoading?: boolean
   loading?: boolean
   icon?: React.ReactNode
+  asChild?: boolean
 }
 
-export const Button: React.FC<ButtonProps> = ({
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
   children,
   variant = 'primary',
   size = 'md',
@@ -17,8 +19,9 @@ export const Button: React.FC<ButtonProps> = ({
   disabled = false,
   icon,
   className = '',
+  asChild = false,
   ...props
-}) => {
+}, ref) => {
   const isLoadingState = isLoading || loading
   const baseStyle = 'inline-flex items-center justify-center font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed'
   
@@ -40,8 +43,11 @@ export const Button: React.FC<ButtonProps> = ({
     'icon-sm': 'p-1.5 rounded-lg'
   }
 
+  const Comp = asChild ? Slot : "button"
+
   return (
-    <button
+    <Comp
+      ref={ref}
       disabled={disabled || isLoadingState}
       className={`${baseStyle} ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
@@ -70,6 +76,7 @@ export const Button: React.FC<ButtonProps> = ({
       )}
       {!isLoadingState && icon && <span className="flex-shrink-0">{icon}</span>}
       {children}
-    </button>
+    </Comp>
   )
-}
+})
+Button.displayName = 'Button'

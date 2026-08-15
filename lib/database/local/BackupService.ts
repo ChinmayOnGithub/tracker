@@ -23,6 +23,32 @@ export class BackupService {
    */
   public static async exportBackup(): Promise<string> {
     const engine = IndexedDBEngine.getInstance();
+    
+    // Pre-fetch and reconcile server journal entries into IndexedDB before exporting
+    try {
+      const { listJournalEntries } = await import('@/app/actions/journal');
+      const { LocalJournalRepository } = await import('@/modules/journal/repository/LocalJournalRepository');
+      
+      const res = await listJournalEntries(1, 100000);
+      if (res && res.success && res.entries) {
+        const localJournalRepo = new LocalJournalRepository();
+        for (const serverEntry of res.entries) {
+          const localEntry = await localJournalRepo.getById(serverEntry.id);
+          if (!localEntry) {
+            await localJournalRepo.save({
+              ...serverEntry,
+              journalDate: serverEntry.journalDate instanceof Date ? serverEntry.journalDate.toISOString() : new Date(serverEntry.journalDate).toISOString(),
+              createdAt: serverEntry.createdAt instanceof Date ? serverEntry.createdAt.toISOString() : new Date(serverEntry.createdAt).toISOString(),
+              updatedAt: serverEntry.updatedAt instanceof Date ? serverEntry.updatedAt.toISOString() : new Date(serverEntry.updatedAt).toISOString(),
+              deletedAt: serverEntry.deletedAt ? (serverEntry.deletedAt instanceof Date ? serverEntry.deletedAt.toISOString() : new Date(serverEntry.deletedAt).toISOString()) : null,
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[BackupService] Failed to pre-fetch server journal entries for backup:', err);
+    }
+
     const data: Record<string, unknown[]> = {};
 
     for (const store of STORES) {

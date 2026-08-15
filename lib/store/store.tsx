@@ -224,13 +224,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const localWeights = await weightRepo.getAll();
         const localLeaves = await leaveRepo.getAll();
 
+        const mergeById = <T extends { id: string; updatedAt?: any }>(serverItems: T[], localItems: T[]): T[] => {
+          const map = new Map<string, T>()
+          serverItems.forEach(item => map.set(item.id, item))
+          localItems.forEach(item => {
+            const existing = map.get(item.id)
+            if (!existing) {
+              map.set(item.id, item)
+            } else {
+              const existingTime = new Date(existing.updatedAt || 0).getTime()
+              const localTime = new Date(item.updatedAt || 0).getTime()
+              if (localTime > existingTime) {
+                map.set(item.id, item)
+              }
+            }
+          })
+          return Array.from(map.values())
+        }
+
         setState(prev => ({
           ...prev,
-          templates: localTemplates.length > 0 ? localTemplates : prev.templates,
-          logs: localLogs.length > 0 ? localLogs : prev.logs,
-          journalEntries: localJournals.length > 0 ? localJournals : prev.journalEntries,
-          weightRecords: localWeights.length > 0 ? localWeights : prev.weightRecords,
-          leaveRecords: localLeaves.length > 0 ? localLeaves : prev.leaveRecords
+          templates: mergeById(prev.templates, localTemplates),
+          logs: mergeById(prev.logs, localLogs),
+          journalEntries: mergeById(prev.journalEntries, localJournals),
+          weightRecords: mergeById(prev.weightRecords, localWeights),
+          leaveRecords: mergeById(prev.leaveRecords, localLeaves)
         }));
       } catch (err) {
         console.error('Failed to load offline data into store:', err);
@@ -244,12 +262,88 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const next = { ...prev }
       Object.keys(initialData).forEach(key => {
         const k = key as keyof StoreState
-        if (initialData[k] !== undefined) {
+        if (k !== 'journalEntries' && initialData[k] !== undefined) {
           (next as any)[k] = initialData[k]
         }
       })
       return next
     })
+
+    if (initialData.journalEntries) {
+      const serverEntries = initialData.journalEntries
+      const reconcile = async () => {
+        try {
+          const { JournalRepository } = await import('@/modules/journal/repository/JournalRepository')
+          const { LocalJournalRepository } = await import('@/modules/journal/repository/LocalJournalRepository')
+          const { IndexedDBEngine } = await import('@/lib/database/local/IndexedDBEngine')
+          const journalRepo = new JournalRepository()
+          const localJournalRepo = new LocalJournalRepository()
+          const engine = IndexedDBEngine.getInstance()
+
+          let queuedItems: any[] = []
+          try {
+            queuedItems = await engine.getAll<any>('sync_queue')
+          } catch (err) {
+            console.error(err)
+          }
+          const pendingEntryIds = new Set(
+            queuedItems
+              .filter(q => q.module === 'journal_entries')
+              .map(q => q.entityId)
+          )
+
+          for (const serverEntry of serverEntries) {
+            const localEntry = await journalRepo.getById(serverEntry.id)
+            if (!localEntry) {
+              await localJournalRepo.save(serverEntry)
+            } else {
+              const hasPendingMutation = pendingEntryIds.has(serverEntry.id)
+              if (hasPendingMutation) {
+                if (localEntry.content !== serverEntry.content && localEntry.updatedAt !== serverEntry.updatedAt) {
+                  const meta = typeof localEntry.metadata === 'string' ? JSON.parse(localEntry.metadata || '{}') : (localEntry.metadata || {})
+                  localEntry.metadata = {
+                    ...meta,
+                    conflict: {
+                      remoteContent: serverEntry.content,
+                      remoteUpdatedAt: serverEntry.updatedAt,
+                      localContentAtConflict: localEntry.content,
+                      resolved: false
+                    }
+                  }
+                  await localJournalRepo.save(localEntry)
+                }
+              } else {
+                const localTime = new Date(localEntry.updatedAt || 0).getTime()
+                const serverTime = new Date(serverEntry.updatedAt || 0).getTime()
+                if (serverTime > localTime) {
+                  if (localEntry.content !== serverEntry.content) {
+                    const meta = typeof localEntry.metadata === 'string' ? JSON.parse(localEntry.metadata || '{}') : (localEntry.metadata || {})
+                    localEntry.metadata = {
+                      ...meta,
+                      conflict: {
+                        remoteContent: serverEntry.content,
+                        remoteUpdatedAt: serverEntry.updatedAt,
+                        localContentAtConflict: localEntry.content,
+                        resolved: false
+                      }
+                    }
+                    await localJournalRepo.save(localEntry)
+                  } else {
+                    await localJournalRepo.save(serverEntry)
+                  }
+                }
+              }
+            }
+          }
+
+          const allJournals = await journalRepo.getAll()
+          setState(prev => ({ ...prev, journalEntries: allJournals }))
+        } catch (err) {
+          console.error('[Store] Journal reconciliation failed:', err)
+        }
+      }
+      reconcile()
+    }
   }, [])
 
   // --- CALENDAR ACTIONS ---
@@ -803,6 +897,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       await journalRepo.save(payload)
+      const allJournals = await journalRepo.getAll()
+      setState(prev => ({ ...prev, journalEntries: allJournals }))
     } catch (err) {
       console.error('Upsert journal entry transaction failed, rolling back:', err)
       setState(prev => ({ ...prev, journalEntries: previousJournal }))
@@ -817,6 +913,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const { JournalRepository } = await import('@/modules/journal/repository/JournalRepository')
       const journalRepo = new JournalRepository()
       await journalRepo.delete(id)
+      const allJournals = await journalRepo.getAll()
+      setState(prev => ({ ...prev, journalEntries: allJournals }))
     } catch (err) {
       console.error('Delete journal entry transaction failed, rolling back:', err)
       setState(prev => ({ ...prev, journalEntries: previousJournal }))

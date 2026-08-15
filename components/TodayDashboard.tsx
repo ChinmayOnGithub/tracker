@@ -18,6 +18,23 @@ import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboard
 import { getWeekDates } from '@/lib/recurrence'
 
 import { LeaveRecord, LeaveAllowance, WeightRecord, JournalEntry, CalendarData } from '@/lib/store/store'
+import { Button, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/design-system'
+
+interface WidgetDefinition {
+  id: string
+  title: string
+  description: string
+  category: string
+  defaultEnabled: boolean
+}
+
+const WIDGET_REGISTRY: WidgetDefinition[] = [
+  { id: 'journal', title: 'Journal', description: 'Write daily journal reflections', category: 'Habits', defaultEnabled: true },
+  { id: 'workHours', title: 'Work Hours', description: 'Track work presence and goal status', category: 'Work', defaultEnabled: true },
+  { id: 'leaveBalance', title: 'Leave Balance', description: 'View vacation and personal leave statistics', category: 'Work', defaultEnabled: true },
+  { id: 'weight', title: 'Weight Tracker', description: 'Log and monitor body weight stats', category: 'Health', defaultEnabled: true },
+  { id: 'recentDocuments', title: 'Recent Vault Documents', description: 'Quick access to recently decrypted files', category: 'Vault', defaultEnabled: true },
+]
 
 export interface TodayDashboardProps {
   analyzedTemplates: AnalyzedTemplate[]
@@ -80,18 +97,14 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     return () => clearInterval(timer)
   }, [])
 
-  // Widget visibility configurations
-  const [widgetsVisibility, setWidgetsVisibility] = useState<Record<string, boolean>>(() => {
+  // Widget config state
+  const [widgetsConfig, setWidgetsConfig] = useState<{ order: string[]; hidden: string[] }>(() => {
     const defaults = {
-      tasks: true,
-      workHours: true,
-      journal: true,
-      leaveBalance: true,
-      weight: true,
-      recentDocuments: true,
+      order: ['journal', 'workHours', 'leaveBalance', 'weight', 'recentDocuments'],
+      hidden: []
     }
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('personal_dashboard_widgets')
+      const saved = localStorage.getItem('personal_dashboard_config')
       if (saved) {
         try {
           return { ...defaults, ...JSON.parse(saved) }
@@ -103,20 +116,11 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     return defaults
   })
 
+  const [isCustomizing, setIsCustomizing] = useState(false)
+
   useEffect(() => {
-    const handleSettingsUpdate = () => {
-      const updated = localStorage.getItem('personal_dashboard_widgets')
-      if (updated) {
-        try {
-          setWidgetsVisibility(prev => ({ ...prev, ...JSON.parse(updated) }))
-        } catch (e) {
-          console.error(e)
-        }
-      }
-    }
-    window.addEventListener('personal_settings_changed', handleSettingsUpdate)
-    return () => window.removeEventListener('personal_settings_changed', handleSettingsUpdate)
-  }, [])
+    localStorage.setItem('personal_dashboard_config', JSON.stringify(widgetsConfig))
+  }, [widgetsConfig])
 
   const [weeklyGoal, setWeeklyGoal] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -325,44 +329,161 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
         {/* Right Column: Widgets */}
         <div className="space-y-6 xl:sticky xl:top-6">
-          {widgetsVisibility.journal !== false && (
-            <JournalWidget
-              todayJournal={todayJournal}
-              onOpenJournal={() => onTabChange('journal')}
-            />
-          )}
+          <div className="flex justify-between items-center pb-2 border-b border-[var(--color-border)]/40">
+            <span className="text-xs font-bold text-[var(--color-text-muted)]">Dashboard Widgets</span>
+            <Button variant="ghost" size="sm" onClick={() => setIsCustomizing(true)} className="text-xs font-semibold">
+              Edit Dashboard
+            </Button>
+          </div>
 
-          {widgetsVisibility.workHours !== false && workTemplateId && (
-            <WorkHoursWidget
-              key={todayWorkLog?.id || todayStr}
-              todayWorkLog={todayWorkLog}
-              workTemplateId={workTemplateId}
-              todayStr={todayStr}
-              weekDates={weekDates}
-              logs={logs}
-              weeklyGoal={weeklyGoal}
-              logWorkPresenceAction={logWorkPresenceAction}
-            />
-          )}
+          {widgetsConfig.order.map((widgetId) => {
+            if (widgetsConfig.hidden.includes(widgetId)) return null
 
-          <LeaveWidget
-            isVisible={widgetsVisibility.leaveBalance !== false}
-            leaveRecords={leaveRecords}
-            leaveAllowances={leaveAllowances}
-            onTabChange={onTabChange}
-          />
-
-          <WeightWidget
-            isVisible={widgetsVisibility.weight !== false}
-            weightRecords={weightRecords}
-          />
-
-          <RecentDocumentsWidget
-            isVisible={widgetsVisibility.recentDocuments !== false}
-            onTabChange={onTabChange}
-          />
+            switch (widgetId) {
+              case 'journal':
+                return (
+                  <JournalWidget
+                    key="journal"
+                    todayJournal={todayJournal}
+                    onOpenJournal={() => onTabChange('journal')}
+                  />
+                )
+              case 'workHours':
+                return workTemplateId ? (
+                  <WorkHoursWidget
+                    key={todayWorkLog?.id || todayStr}
+                    todayWorkLog={todayWorkLog}
+                    workTemplateId={workTemplateId}
+                    todayStr={todayStr}
+                    weekDates={weekDates}
+                    logs={logs}
+                    weeklyGoal={weeklyGoal}
+                    logWorkPresenceAction={logWorkPresenceAction}
+                  />
+                ) : null
+              case 'leaveBalance':
+                return (
+                  <LeaveWidget
+                    key="leave"
+                    isVisible={true}
+                    leaveRecords={leaveRecords}
+                    leaveAllowances={leaveAllowances}
+                    onTabChange={onTabChange}
+                  />
+                )
+              case 'weight':
+                return (
+                  <WeightWidget
+                    key="weight"
+                    isVisible={true}
+                    weightRecords={weightRecords}
+                  />
+                )
+              case 'recentDocuments':
+                return (
+                  <RecentDocumentsWidget
+                    key="recentDocs"
+                    isVisible={true}
+                    onTabChange={onTabChange}
+                  />
+                )
+              default:
+                return null
+            }
+          })}
         </div>
       </div>
+
+      <Dialog open={isCustomizing} onOpenChange={setIsCustomizing}>
+        <DialogContent size="sm">
+          <DialogHeader>
+            <DialogTitle>Edit Dashboard Widgets</DialogTitle>
+            <DialogDescription>
+              Toggle visibility and arrange the order of your home screen widgets.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-5 space-y-4">
+            <div className="space-y-2.5">
+              {widgetsConfig.order.map((widgetId, index) => {
+                const widget = WIDGET_REGISTRY.find(w => w.id === widgetId)
+                if (!widget) return null
+                const isHidden = widgetsConfig.hidden.includes(widgetId)
+
+                return (
+                  <div key={widgetId} className="flex items-center justify-between p-3 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-[var(--radius-lg)]">
+                    <div className="min-w-0">
+                      <span className="block text-xs font-bold text-[var(--color-text-main)]">{widget.title}</span>
+                      <span className="block text-[10px] text-[var(--color-text-muted)] truncate">{widget.description}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={index === 0}
+                        onClick={() => {
+                          const newOrder = [...widgetsConfig.order]
+                          const temp = newOrder[index]
+                          newOrder[index] = newOrder[index - 1]
+                          newOrder[index - 1] = temp
+                          setWidgetsConfig(prev => ({ ...prev, order: newOrder }))
+                        }}
+                      >
+                        ▲
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={index === widgetsConfig.order.length - 1}
+                        onClick={() => {
+                          const newOrder = [...widgetsConfig.order]
+                          const temp = newOrder[index]
+                          newOrder[index] = newOrder[index + 1]
+                          newOrder[index + 1] = temp
+                          setWidgetsConfig(prev => ({ ...prev, order: newOrder }))
+                        }}
+                      >
+                        ▼
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newHidden = isHidden
+                            ? widgetsConfig.hidden.filter(id => id !== widgetId)
+                            : [...widgetsConfig.hidden, widgetId]
+                          setWidgetsConfig(prev => ({ ...prev, hidden: newHidden }))
+                        }}
+                        className={`text-xs font-bold px-2 py-1 rounded-[var(--radius-sm)] ${
+                          isHidden
+                            ? 'bg-rose-500/10 text-[var(--color-overdue)]'
+                            : 'bg-emerald-500/10 text-[var(--color-completed)]'
+                        }`}
+                      >
+                        {isHidden ? 'Hidden' : 'Visible'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setWidgetsConfig({
+                  order: ['journal', 'workHours', 'leaveBalance', 'weight', 'recentDocuments'],
+                  hidden: []
+                })
+              }}
+            >
+              Reset to Defaults
+            </Button>
+            <Button variant="primary" onClick={() => setIsCustomizing(false)}>
+              Save & Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <CompletionDialog
         key={activeCompletion ? `${activeCompletion.occurrence.id}-${activeCompletion.occurrence.templateId}` : 'closed'}
