@@ -12,6 +12,7 @@ import { Button, SearchInput, DropdownMenu, DropdownMenuTrigger, DropdownMenuCon
 import { useSearchParams, useRouter } from 'next/navigation'
 
 import { useEditor, EditorContent } from '@tiptap/react'
+import { type Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import UnderlineExtension from '@tiptap/extension-underline'
 import HighlightExtension from '@tiptap/extension-highlight'
@@ -26,6 +27,24 @@ import { TableCell as TiptapTableCell } from '@tiptap/extension-table-cell'
 
 import { JournalContentAdapter } from '@/modules/journal/editor/JournalContentAdapter'
 import { JournalExportService, ExportSummary } from '@/modules/journal/JournalExportService'
+
+const CustomImage = ImageExtension.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        renderHTML: attributes => {
+          if (!attributes.width) return {}
+          return {
+            width: attributes.width,
+            style: `width: ${attributes.width}; max-height: 500px; object-fit: contain; display: block;`
+          }
+        }
+      }
+    }
+  }
+})
 
 interface JournalEntry {
   id: string
@@ -136,9 +155,10 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   }
 
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(getMetadataImages(activeEntry))
-  const [mentionMenu, setMentionMenu] = useState<{ open: boolean; x: number; y: number } | null>(null)
+  const [mentionMenu, setMentionMenu] = useState<{ open: boolean; x: number; y: number; query?: string } | null>(null)
   const [activeMentionIndex, setActiveMentionIndex] = useState(0)
   const [zoomImage, setZoomImage] = useState<string | null>(null)
+  const [selectedImageNode, setSelectedImageNode] = useState<{ element: HTMLImageElement; pos: number } | null>(null)
 
   const [exportSummary, setExportSummary] = useState<ExportSummary | null>(null)
   const [showExportDialog, setShowExportDialog] = useState(false)
@@ -193,6 +213,59 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     setContentStatus('saving')
   }
 
+  // Helper to dynamically open and filter mention options based on what is typed after @
+  const updateMentionMenu = useCallback((currentEditor: Editor) => {
+    if (!currentEditor) return
+    const { selection } = currentEditor.state
+    const $from = selection.$from
+    const textBefore = $from.parent.textBetween(
+      Math.max(0, $from.parentOffset - 50),
+      $from.parentOffset,
+      undefined,
+      ' '
+    )
+    const match = textBefore.match(/@([^\s]*)$/)
+    if (match) {
+      const query = match[1]
+      const filteredImgs = attachedImagesRef.current.filter(img =>
+        img.name.toLowerCase().includes(query.toLowerCase())
+      )
+      if (filteredImgs.length > 0) {
+        try {
+          const coords = currentEditor.view.coordsAtPos(selection.from)
+          setMentionMenu({
+            open: true,
+            x: coords.left,
+            y: coords.bottom + 8,
+            query
+          })
+        } catch {
+          setMentionMenu(prev => prev ? { ...prev, query } : null)
+        }
+      } else {
+        setMentionMenu(null)
+      }
+    } else {
+      setMentionMenu(null)
+    }
+  }, [])
+
+  const resizeSelectedImage = (width: string) => {
+    if (!selectedImageNode || !editor) return
+    editor.commands.focus()
+    editor.commands.command(({ tr }) => {
+      const node = tr.doc.nodeAt(selectedImageNode.pos)
+      if (node && node.type.name === 'image') {
+        tr.setNodeMarkup(selectedImageNode.pos, undefined, {
+          ...node.attrs,
+          width
+        })
+      }
+      return true
+    })
+    setSelectedImageNode(null)
+  }
+
   // Tiptap Editor Initialization
   const editor = useEditor({
     extensions: [
@@ -209,10 +282,10 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
           class: 'text-[var(--color-primary)] hover:underline cursor-pointer',
         },
       }),
-      ImageExtension.configure({
+      CustomImage.configure({
         HTMLAttributes: {
-          class: 'max-w-full my-4 rounded-lg border border-slate-200 dark:border-zinc-800 shadow-sm transition-transform hover:scale-[1.01]',
-          style: 'max-height: 380px; object-fit: contain; display: block;',
+          class: 'my-4 rounded-lg border border-slate-200 dark:border-zinc-800 shadow-sm transition-transform hover:scale-[1.01]',
+          style: 'max-height: 500px; object-fit: contain; display: block;',
         },
       }),
       TaskListExtension,
@@ -248,15 +321,26 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
       const html = editor.getHTML()
       revisionRef.current += 1
       triggerLocalContentChange(html)
+      updateMentionMenu(editor)
     },
-    onSelectionUpdate: () => {
-      // Dismiss popup when cursor shifts/moves away
-      setMentionMenu(null)
+    onSelectionUpdate: ({ editor }) => {
+      updateMentionMenu(editor)
     },
     editorProps: {
+      handleClick: (_view, pos, event) => {
+        const target = event.target as HTMLElement
+        if (target.tagName === 'IMG') {
+          setSelectedImageNode({
+            element: target as HTMLImageElement,
+            pos
+          })
+          return true
+        } else {
+          setSelectedImageNode(null)
+        }
+      },
       handleKeyDown: (view, event) => {
         const menu = mentionMenuRef.current
-        const imgs = attachedImagesRef.current
         const activeIdx = activeMentionIndexRef.current
 
         if (event.key === 'Backspace') {
@@ -274,39 +358,30 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
         }
 
         if (menu && menu.open) {
+          const filteredImgs = attachedImagesRef.current.filter(img =>
+            !menu.query || img.name.toLowerCase().includes(menu.query.toLowerCase())
+          )
           if (event.key === 'ArrowDown') {
             event.preventDefault()
-            setActiveMentionIndex((activeIdx + 1) % imgs.length)
+            setActiveMentionIndex((activeIdx + 1) % filteredImgs.length)
             return true
           }
           if (event.key === 'ArrowUp') {
             event.preventDefault()
-            setActiveMentionIndex((activeIdx - 1 + imgs.length) % imgs.length)
+            setActiveMentionIndex((activeIdx - 1 + filteredImgs.length) % filteredImgs.length)
             return true
           }
           if (event.key === 'Enter') {
             event.preventDefault()
-            if (imgs[activeIdx]) {
-              insertFromMention(imgs[activeIdx].data, imgs[activeIdx].name)
+            if (filteredImgs[activeIdx]) {
+              insertFromMention(filteredImgs[activeIdx].data, filteredImgs[activeIdx].name)
             }
             return true
           }
-          if (event.key === ' ' || event.code === 'Space' || event.key === 'Escape') {
+          if (event.key === 'Escape') {
             setMentionMenu(null)
-            return false // Let space character be typed normally
+            return true
           }
-        }
-
-        if (event.key === '@') {
-          const selection = view.state.selection
-          const start = selection.from
-          const coords = view.coordsAtPos(start)
-          setMentionMenu({
-            open: true,
-            x: coords.left,
-            y: coords.bottom + 8
-          })
-          setActiveMentionIndex(0)
         }
         return false
       }
@@ -449,12 +524,11 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     const reader = new FileReader()
     reader.onload = (event) => {
       const base64 = event.target?.result as string
-      editor?.chain().focus().setImage({ src: base64, alt: file.name }).run()
 
       setAttachedImages(prev => {
         if (prev.some(item => item.data === base64)) return prev
         const updated = [...prev, { name: file.name, data: base64 }]
-        saveMetadata(updated)
+        setTimeout(() => saveMetadata(updated), 0)
         return updated
       })
     }
@@ -464,7 +538,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   const deleteImageFromGallery = (src: string) => {
     const updated = attachedImages.filter(img => img.data !== src)
     setAttachedImages(updated)
-    saveMetadata(updated)
+    setTimeout(() => saveMetadata(updated), 0)
   }
 
   const insertExistingImage = (src: string, name?: string) => {
@@ -472,8 +546,26 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   }
 
   const insertFromMention = (src: string, name?: string) => {
+    if (!editor) return
+    const { selection } = editor.state
+    const $from = selection.$from
+    const textBefore = $from.parent.textBetween(
+      Math.max(0, $from.parentOffset - 50),
+      $from.parentOffset,
+      undefined,
+      ' '
+    )
+    const match = textBefore.match(/@([^\s]*)$/)
+    if (match) {
+      const startPos = selection.from - match[0].length
+      editor.chain().focus()
+        .deleteRange({ from: startPos, to: selection.from })
+        .setImage({ src, alt: name })
+        .run()
+    } else {
+      editor.chain().focus().setImage({ src, alt: name }).run()
+    }
     setMentionMenu(null)
-    insertExistingImage(src, name)
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -546,8 +638,16 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={handleExportJournal}>
-                    Export Journal
+                    Export All Entries
                   </DropdownMenuItem>
+                  {activeEntry && (
+                    <DropdownMenuItem 
+                      onClick={() => handleDelete(activeEntry.id, activeDate)}
+                      className="text-rose-500 hover:text-rose-600 dark:hover:text-rose-450"
+                    >
+                      Delete Current Entry
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -651,7 +751,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
         
         {/* Editor Writing Area */}
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 md:px-12 py-6 sm:py-10 pb-24 border-r border-slate-100 dark:border-zinc-900/60">
-          <div className="max-w-3xl mx-auto w-full flex flex-col gap-6">
+          <div className="max-w-5xl mx-auto w-full flex flex-col gap-6">
             
             <div className="flex items-center justify-between flex-wrap gap-3">
               {dateParam ? (
@@ -895,9 +995,13 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                   left: `${mentionMenu.x}px`,
                 }}
               >
-                {attachedImages.length > 0 ? (
+                {attachedImages.filter(img => 
+                  !mentionMenu.query || img.name.toLowerCase().includes(mentionMenu.query.toLowerCase())
+                ).length > 0 ? (
                   <div className="flex flex-col">
-                    {attachedImages.map((img, idx) => {
+                    {attachedImages.filter(img => 
+                      !mentionMenu.query || img.name.toLowerCase().includes(mentionMenu.query.toLowerCase())
+                    ).map((img, idx) => {
                       const isActive = idx === activeMentionIndex
                       return (
                         <button
@@ -918,8 +1022,38 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                     })}
                   </div>
                 ) : (
-                  <p className="text-[10px] text-slate-450 dark:text-zinc-500 font-bold p-2 leading-normal">No memories available. Paste or drag a photo into the editor first to add it to your memories list.</p>
+                  <p className="text-[10px] text-slate-450 dark:text-zinc-500 font-bold p-2 leading-normal">No matching memories.</p>
                 )}
+              </div>
+            )}
+
+            {/* Image Resize Toolbar (Jira-style sizing presets) */}
+            {selectedImageNode && editMode && (
+              <div 
+                className="fixed z-50 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg p-1 shadow-lg flex items-center gap-1 animate-fade-in"
+                style={{
+                  top: `${selectedImageNode.element.getBoundingClientRect().top + window.scrollY - 45}px`,
+                  left: `${selectedImageNode.element.getBoundingClientRect().left + window.scrollX}px`,
+                }}
+              >
+                {(['25%', '50%', '100%', 'original'] as const).map(size => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => resizeSelectedImage(size === 'original' ? '100%' : size)}
+                    className="px-2 py-1 text-[11px] font-bold rounded hover:bg-slate-100 dark:hover:bg-zinc-800 text-[var(--color-text-main)]"
+                  >
+                    {size}
+                  </button>
+                ))}
+                <div className="w-px h-3 bg-slate-200 dark:bg-zinc-800 mx-1" />
+                <button
+                  type="button"
+                  onClick={() => setSelectedImageNode(null)}
+                  className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded cursor-pointer"
+                >
+                  <X size={12} />
+                </button>
               </div>
             )}
 
@@ -974,6 +1108,16 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                         </div>
                       </div>
                     ))}
+                    {editMode && (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="aspect-square rounded-lg border-2 border-dashed border-slate-200 dark:border-zinc-800 hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] text-[var(--color-text-muted)] transition-colors flex flex-col items-center justify-center gap-1 text-[10px] font-bold"
+                      >
+                        <Upload size={13} />
+                        Add
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <button
@@ -1006,7 +1150,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                     onClick={() => fileInputRef.current?.click()}
                     className="flex items-center gap-1 text-[10px] font-bold text-[var(--color-primary)] hover:opacity-80 transition-opacity"
                   >
-                    <Upload size={11} />
+                    <Upload size={11} /> Add
                   </button>
                 )}
               </div>
@@ -1046,6 +1190,16 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                       </div>
                     </div>
                   ))}
+                  {editMode && (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="aspect-square rounded-lg border-2 border-dashed border-slate-200 dark:border-zinc-800 hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] text-[var(--color-text-muted)] transition-colors flex flex-col items-center justify-center gap-1 text-[10px] font-bold"
+                    >
+                      <Upload size={14} />
+                      Add
+                    </button>
+                  )}
                 </div>
               ) : (
                 <button
