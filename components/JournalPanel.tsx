@@ -497,6 +497,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     }
   }
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const saveContent = useCallback(async (v: string, saveRevision: number) => {
     if (isSavingRef.current) { 
       pendingRef.current = v
