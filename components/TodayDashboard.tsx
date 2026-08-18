@@ -1,7 +1,8 @@
 "use client"
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useStore } from '@/lib/store/store'
+import { saveDashboardConfigAction } from '@/app/actions/settings'
 import { useRouter } from 'next/navigation'
 import { TodayHeader } from './today/TodayHeader'
 import { TodayContext } from './today/TodayContext'
@@ -167,6 +168,7 @@ export interface TodayDashboardProps {
   leaveAllowances: LeaveAllowance[]
   weightRecords: WeightRecord[]
   onTabChange: (tabId: string) => void
+  initialDashboardConfig?: { order: string[]; hidden: string[] } | null
 }
 
 export const TodayDashboard: React.FC<TodayDashboardProps> = ({
@@ -181,6 +183,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   leaveAllowances,
   weightRecords,
   onTabChange,
+  initialDashboardConfig,
 }) => {
   const router = useRouter()
   const {
@@ -220,10 +223,20 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     order: ['journal', 'workHours', 'leaveBalance', 'weight', 'recentDocuments'] as string[],
     hidden: [] as string[],
   }
-  const [widgetsConfig, setWidgetsConfig] = useState<{ order: string[]; hidden: string[] }>(WIDGET_DEFAULTS)
+  const [widgetsConfig, setWidgetsConfig] = useState<{ order: string[]; hidden: string[] }>(() => {
+    if (initialDashboardConfig) {
+      return {
+        order: initialDashboardConfig.order || WIDGET_DEFAULTS.order,
+        hidden: initialDashboardConfig.hidden || WIDGET_DEFAULTS.hidden,
+      }
+    }
+    return WIDGET_DEFAULTS
+  })
+  const [saveError, setSaveError] = useState(false)
 
-  // Load config client-side only after mounting
+  // Load config client-side only after mounting if server-sent config is not present
   useEffect(() => {
+    if (initialDashboardConfig) return
     try {
       const saved = localStorage.getItem('personal_dashboard_config')
       if (saved) {
@@ -234,13 +247,37 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     } catch (e) {
       console.error('[TodayDashboard] Failed to load widget config:', e)
     }
-  }, [])
+  }, [initialDashboardConfig])
 
   // Persist widgetsConfig when changed
+  const initialMount = useRef(true)
   useEffect(() => {
-    // Check if the current widgetsConfig is the default one; we only write if it's customized
-    // or we're on the client. But simple write is fine.
+    if (initialMount.current) {
+      initialMount.current = false
+      return
+    }
     localStorage.setItem('personal_dashboard_config', JSON.stringify(widgetsConfig))
+
+    let active = true
+    const saveConfig = async () => {
+      try {
+        const res = await saveDashboardConfigAction(widgetsConfig)
+        if (active) {
+          if (!res.success) {
+            setSaveError(true)
+          } else {
+            setSaveError(false)
+          }
+        }
+      } catch (err) {
+        console.error('[TodayDashboard] Exception saving dashboard config:', err)
+        if (active) setSaveError(true)
+      }
+    }
+    saveConfig()
+    return () => {
+      active = false
+    }
   }, [widgetsConfig])
 
   const [isCustomizing, setIsCustomizing] = useState(false)
@@ -446,6 +483,25 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         onNavigateDate={handleNavigateDate}
         onGoToToday={() => router.push('/')}
       />
+
+      {saveError && (
+        <div className="mb-4 p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg text-xs font-semibold flex items-center justify-between shadow-xs">
+          <span>⚠️ Failed to sync dashboard preferences to your account. Offline or server unavailable.</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 text-[10px] hover:bg-rose-500/20 text-rose-600 dark:text-rose-400"
+            onClick={async () => {
+              try {
+                const res = await saveDashboardConfigAction(widgetsConfig)
+                if (res.success) setSaveError(false)
+              } catch (_) {}
+            }}
+          >
+            Retry Sync
+          </Button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,3.25fr)_minmax(0,1.25fr)] gap-8 items-start">
         {/* Left Column: Timeline feed & Progress */}

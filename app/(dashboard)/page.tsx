@@ -127,6 +127,19 @@ export default async function Page(props: { searchParams: Promise<{ date?: strin
     deletedAt: r.deletedAt?.toISOString() ?? null,
   }))
 
+  const settingsRaw = await db.userSetting.findUnique({
+    where: {
+      userId_module: {
+        userId: loggedUser.id,
+        module: 'DASHBOARD',
+      },
+    },
+  })
+
+  const initialDashboardConfig = settingsRaw?.config
+    ? (settingsRaw.config as { order: string[]; hidden: string[] })
+    : null
+
   return (
     <TodayDashboardWrapper
       analyzedTemplates={analyzedTemplates}
@@ -136,6 +149,7 @@ export default async function Page(props: { searchParams: Promise<{ date?: strin
       leaveRecords={leaveRecords}
       leaveAllowances={leaveAllowancesRaw}
       weightRecords={weightRecords}
+      initialDashboardConfig={initialDashboardConfig}
     />
   )
 }

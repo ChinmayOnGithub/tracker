@@ -16,6 +16,7 @@ interface TodayDashboardWrapperProps {
   leaveRecords: LeaveRecord[]
   leaveAllowances: LeaveAllowance[]
   weightRecords: WeightRecord[]
+  initialDashboardConfig?: { order: string[]; hidden: string[] } | null
 }
 
 export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
@@ -26,6 +27,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
   leaveRecords: initialLeaveRecords,
   leaveAllowances: initialLeaveAllowances,
   weightRecords: initialWeightRecords,
+  initialDashboardConfig,
 }) => {
   const router = useRouter()
   const context = useContext(CalendarDataContext)
@@ -88,6 +90,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
       leaveAllowances={state.leaveAllowances.length > 0 ? state.leaveAllowances : initialLeaveAllowances}
       weightRecords={state.weightRecords.length > 0 ? state.weightRecords : initialWeightRecords}
       onTabChange={onTabChange}
+      initialDashboardConfig={initialDashboardConfig}
     />
   )
 }

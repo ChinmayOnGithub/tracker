@@ -1,6 +1,6 @@
 import React from 'react'
 
-interface IconButtonProps {
+interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** The icon to render inside the button */
   icon: React.ReactNode
   /** Accessible label — shown as title tooltip and used as aria-label */
@@ -13,10 +13,6 @@ interface IconButtonProps {
   disabled?: boolean
   /** Loading state — replaces icon with spinner */
   isLoading?: boolean
-  onClick?: React.MouseEventHandler<HTMLButtonElement>
-  type?: 'button' | 'submit' | 'reset'
-  className?: string
-  id?: string
 }
 
 const sizeClasses = {
@@ -52,26 +48,24 @@ const variantClasses = {
  * <IconButton icon={<Plus />} label="Add task" size="md" onClick={handleAdd} />
  * <IconButton icon={<Trash2 />} label="Delete" variant="danger" size="sm" />
  */
-export const IconButton: React.FC<IconButtonProps> = ({
+export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(({
   icon,
   label,
   size = 'md',
   variant = 'ghost',
   disabled = false,
   isLoading = false,
-  onClick,
   type = 'button',
   className = '',
-  id,
-}) => {
+  ...props
+}, ref) => {
   return (
     <button
-      id={id}
+      ref={ref}
       type={type}
       aria-label={label}
       title={label}
       disabled={disabled || isLoading}
-      onClick={onClick}
       className={[
         'inline-flex items-center justify-center shrink-0',
         'transition-all duration-[var(--motion-duration-fast)]',
@@ -81,6 +75,7 @@ export const IconButton: React.FC<IconButtonProps> = ({
         variantClasses[variant],
         className,
       ].filter(Boolean).join(' ')}
+      {...props}
     >
       {isLoading ? (
         <svg
@@ -104,4 +99,5 @@ export const IconButton: React.FC<IconButtonProps> = ({
       )}
     </button>
   )
-}
+})
+IconButton.displayName = 'IconButton'

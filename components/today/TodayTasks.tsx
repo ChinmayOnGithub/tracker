@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo, useCallback } from 'react'
-import { Check, ArrowRightCircle, ExternalLink, MoreVertical } from 'lucide-react'
+import { Check, ArrowRightCircle, ExternalLink, MoreVertical, Calendar } from 'lucide-react'
 import { TimelineItem, ActivityLog, AnalyzedTemplate } from '@/types'
 import { Button, Input, Skeleton, EmptyState, ListRow, IconButton, StatusBadge, Section, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, ConfirmDialog } from '@/design-system'
 import { getTemplateColorClasses } from '@/lib/colors'
@@ -97,13 +97,12 @@ const TaskContextMenu: React.FC<{
   isPostponed: boolean
   todayStr: string
   template: AnalyzedTemplate['template'] | undefined
-  cycleTaskStatus: (o: TimelineItem) => Promise<void>
   setTaskStatusAction: (o: TimelineItem, date: string, status: 'cleared' | 'done' | 'skipped' | 'postponed') => Promise<void>
   deleteActivityLog: (id: string) => Promise<unknown>
   onOpenCreateActivity: () => void
 }> = ({
   occurrence, isDone, isCanceled, isPostponed, todayStr,
-  template, cycleTaskStatus, setTaskStatusAction, deleteActivityLog, onOpenCreateActivity
+  template, setTaskStatusAction, deleteActivityLog, onOpenCreateActivity
 }) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
@@ -116,18 +115,35 @@ const TaskContextMenu: React.FC<{
       />
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end">
-      <DropdownMenuItem onClick={async (e) => { e.stopPropagation(); await cycleTaskStatus(occurrence) }}>
-        {isDone ? 'Mark Uncompleted' : 'Mark Completed'}
-      </DropdownMenuItem>
-      {!isCanceled && (
-        <DropdownMenuItem variant="danger" onClick={async (e) => { e.stopPropagation(); await setTaskStatusAction(occurrence, todayStr, 'skipped') }}>
-          Skip Today
+      {isDone && (
+        <DropdownMenuItem onClick={async (e) => { e.stopPropagation(); await setTaskStatusAction(occurrence, todayStr, 'cleared') }}>
+          Mark Uncompleted
         </DropdownMenuItem>
       )}
-      {!isPostponed && template?.recurrenceType !== 'daily' && (
-        <DropdownMenuItem onClick={async (e) => { e.stopPropagation(); await setTaskStatusAction(occurrence, todayStr, 'postponed') }}>
-          Postpone to Tomorrow
+      {isCanceled && (
+        <DropdownMenuItem onClick={async (e) => { e.stopPropagation(); await setTaskStatusAction(occurrence, todayStr, 'cleared') }}>
+          Restore Task
         </DropdownMenuItem>
+      )}
+      {isPostponed && (
+        <DropdownMenuItem onClick={async (e) => { e.stopPropagation(); await setTaskStatusAction(occurrence, todayStr, 'cleared') }}>
+          Restore Task
+        </DropdownMenuItem>
+      )}
+      {!isDone && !isCanceled && !isPostponed && (
+        <>
+          <DropdownMenuItem onClick={async (e) => { e.stopPropagation(); await setTaskStatusAction(occurrence, todayStr, 'done') }}>
+            Mark Completed
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="danger" onClick={async (e) => { e.stopPropagation(); await setTaskStatusAction(occurrence, todayStr, 'skipped') }}>
+            Skip Today
+          </DropdownMenuItem>
+          {template?.recurrenceType !== 'daily' && (
+            <DropdownMenuItem onClick={async (e) => { e.stopPropagation(); await setTaskStatusAction(occurrence, todayStr, 'postponed') }}>
+              Postpone to Tomorrow
+            </DropdownMenuItem>
+          )}
+        </>
       )}
       {occurrence.templateId && (
         <>
@@ -237,7 +253,6 @@ export const TaskRow: React.FC<TaskRowProps> = ({
           isPostponed={isPostponed}
           todayStr={todayStr}
           template={template}
-          cycleTaskStatus={cycleTaskStatus}
           setTaskStatusAction={setTaskStatusAction}
           deleteActivityLog={deleteActivityLog}
           onOpenCreateActivity={onOpenCreateActivity}
@@ -250,21 +265,30 @@ export const TaskRow: React.FC<TaskRowProps> = ({
     <ListRow
       left={
         <div className="flex items-center">
-          {!isGoogleCalendar && (
-            <DragHandle
-              dragHandleRef={_dragHandleRef}
-              dragHandleListeners={_dragHandleListeners}
-              dragHandleAttributes={_dragHandleAttributes}
-            />
+          {!isGoogleCalendar ? (
+            <>
+              <DragHandle
+                dragHandleRef={_dragHandleRef}
+                dragHandleListeners={_dragHandleListeners}
+                dragHandleAttributes={_dragHandleAttributes}
+              />
+              <TaskCheckbox
+                occurrence={occurrence}
+                completingHabitId={completingHabitId}
+                isDone={isDone}
+                isCanceled={isCanceled}
+                isPostponed={isPostponed}
+                onCycle={() => cycleTaskStatus(occurrence)}
+              />
+            </>
+          ) : (
+            <>
+              <div className="w-5 shrink-0" />
+              <div className="w-11 h-11 flex items-center justify-center text-[var(--color-external)] opacity-85 shrink-0">
+                <Calendar className="w-4 h-4" />
+              </div>
+            </>
           )}
-          <TaskCheckbox
-            occurrence={occurrence}
-            completingHabitId={completingHabitId}
-            isDone={isDone}
-            isCanceled={isCanceled}
-            isPostponed={isPostponed}
-            onCycle={() => cycleTaskStatus(occurrence)}
-          />
         </div>
       }
       title={titleNode}
@@ -277,6 +301,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
       accentColor={accentColor}
       strikethrough={isDone || isCanceled}
       dimmed={isCanceled || isPostponed}
+      onClick={isGoogleCalendar && occurrence.htmlLink ? () => window.open(occurrence.htmlLink!, '_blank') : undefined}
       className={isDragOverlay ? 'shadow-lg opacity-95 bg-[var(--color-bg-surface)]' : undefined}
     />
   )
