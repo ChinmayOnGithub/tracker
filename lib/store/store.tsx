@@ -117,12 +117,31 @@ interface StoreState {
   links: LinkItem[]
   collections: LinkCollection[]
   calendarData: CalendarData
+  cacheMetadata: {
+    lastFetched: Record<string, number>
+    isValidating: Record<string, boolean>
+  }
+  journalDrafts: Record<string, {
+    content: string
+    mood: string | null
+    gratitude: string | null
+    reflections: string | null
+    lessonsLearned: string | null
+    tomorrowPlan: string | null
+    updatedAt: number
+  }>
+  activeJournalDate: string | null
+  journalSearchQuery: string
 }
 
 interface StoreContextType {
   state: StoreState
   isSyncing: boolean
   initialize: (initialData: Partial<StoreState>) => void
+  setCacheMetadata: (domain: string, timestamp: number, isValidating?: boolean) => void
+  saveJournalDraftAction: (date: string, fields: any) => void
+  setActiveJournalDateAction: (date: string | null) => void
+  setJournalSearchQueryAction: (query: string) => void
   
   // Calendar Actions
   cycleTaskStatusAction: (occurrence: TimelineItem, todayStr: string, payload?: any) => Promise<void>
@@ -185,7 +204,14 @@ const defaultState: StoreState = {
     agenda: null,
     error: null,
     loading: false
-  }
+  },
+  cacheMetadata: {
+    lastFetched: {},
+    isValidating: {}
+  },
+  journalDrafts: {},
+  activeJournalDate: null,
+  journalSearchQuery: ''
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined)
@@ -193,6 +219,38 @@ const StoreContext = createContext<StoreContextType | undefined>(undefined)
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<StoreState>(defaultState)
   const [isSyncing, setIsSyncing] = useState(false)
+
+  const setCacheMetadata = useCallback((domain: string, timestamp: number, isValidating = false) => {
+    setState(prev => ({
+      ...prev,
+      cacheMetadata: {
+        lastFetched: { ...prev.cacheMetadata.lastFetched, [domain]: timestamp },
+        isValidating: { ...prev.cacheMetadata.isValidating, [domain]: isValidating }
+      }
+    }))
+  }, [])
+
+  const saveJournalDraftAction = useCallback((date: string, fields: any) => {
+    setState(prev => ({
+      ...prev,
+      journalDrafts: {
+        ...prev.journalDrafts,
+        [date]: {
+          ...prev.journalDrafts[date],
+          ...fields,
+          updatedAt: Date.now()
+        }
+      }
+    }))
+  }, [])
+
+  const setActiveJournalDateAction = useCallback((date: string | null) => {
+    setState(prev => ({ ...prev, activeJournalDate: date }))
+  }, [])
+
+  const setJournalSearchQueryAction = useCallback((query: string) => {
+    setState(prev => ({ ...prev, journalSearchQuery: query }))
+  }, [])
 
   // Track queue sync status
   useEffect(() => {
@@ -933,7 +991,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           updatedAt: new Date().toISOString()
         })
       }
-      return { ...prev, journalEntries: updated }
+      const newDrafts = { ...prev.journalDrafts }
+      delete newDrafts[date]
+      return {
+        ...prev,
+        journalEntries: updated,
+        journalDrafts: newDrafts
+      }
     })
 
     try {
@@ -1370,6 +1434,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       state,
       isSyncing,
       initialize,
+      setCacheMetadata,
+      saveJournalDraftAction,
+      setActiveJournalDateAction,
+      setJournalSearchQueryAction,
       cycleTaskStatusAction,
       setTaskStatusAction,
       deleteActivityLog,

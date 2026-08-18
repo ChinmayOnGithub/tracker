@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '@/lib/store/store'
+import { fetchDashboardDataAction } from '@/app/actions/queries'
 
 import {
   Trash2, CheckCircle2, CloudOff, Loader2, Edit3, PlusCircle,
@@ -82,27 +83,99 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   const dateParam = searchParams?.get('date')
 
   const today = todayYMD()
-  const { state, initialize, upsertJournalAction, deleteJournalAction } = useStore()
+  const {
+    state,
+    initialize,
+    upsertJournalAction,
+    deleteJournalAction,
+    saveJournalDraftAction,
+    setActiveJournalDateAction,
+    setJournalSearchQueryAction,
+    setCacheMetadata,
+  } = useStore()
 
   useEffect(() => {
     initialize({ journalEntries: initialEntries })
   }, [initialEntries, initialize])
 
   const entries = state.journalEntries.length > 0 ? state.journalEntries : initialEntries
-  const [activeDate, setActiveDate] = useState<string>(() => dateParam || today)
+
+  const [activeDate, setActiveDateState] = useState<string>(() => state.activeJournalDate || dateParam || today)
+  const setActiveDate = (date: string) => {
+    setActiveDateState(date)
+    setActiveJournalDateAction(date)
+  }
+
   const [editMode, setEditMode] = useState(false)
 
   const activeEntry = entries.find(e => toYMD(e.journalDate) === activeDate) || null
   const dbValue = JournalContentAdapter.toEditor(activeEntry?.content)
+  const draftContent = state.journalDrafts[activeDate]?.content
+  const editorValue = draftContent !== undefined ? draftContent : dbValue
   
-  const [content, setContent] = useState(dbValue)
+  const [content, setContent] = useState(editorValue)
   const [contentStatus, setContentStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+  // Adjust activeDate state synchronously during render if store updates
+  const [prevActiveJournalDate, setPrevActiveJournalDate] = useState(state.activeJournalDate)
+  if (state.activeJournalDate && state.activeJournalDate !== prevActiveJournalDate) {
+    setPrevActiveJournalDate(state.activeJournalDate)
+    setActiveDateState(state.activeJournalDate)
+  }
+
+
+
+  const JOURNAL_TTL = 60000 // 60 seconds TTL for Journal
+
+  // Loop-safe state ref to prevent useEffect infinite trigger loops
+  const stateRef = useRef(state)
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
+
+  useEffect(() => {
+    let active = true
+    const lastFetched = stateRef.current.cacheMetadata.lastFetched['journal'] || 0
+    const isValidating = stateRef.current.cacheMetadata.isValidating['journal']
+    const entriesLength = stateRef.current.journalEntries.length
+    const isStale = Date.now() - lastFetched > JOURNAL_TTL
+
+    if (!isValidating && (isStale || entriesLength === 0)) {
+      const revalidate = async () => {
+        setCacheMetadata('journal', lastFetched, true)
+        try {
+          const res = await fetchDashboardDataAction(activeDate)
+          if (active && res.success && res.data) {
+            initialize({
+              journalEntries: res.data.journalEntries,
+            })
+            setCacheMetadata('journal', Date.now(), false)
+          } else if (active) {
+            setCacheMetadata('journal', lastFetched, false)
+          }
+        } catch (err) {
+          console.error('[JournalPanel] Background revalidation failed:', err)
+          if (active) {
+            setCacheMetadata('journal', lastFetched, false)
+          }
+        }
+      }
+      revalidate()
+    }
+    return () => {
+      active = false
+    }
+  }, [activeDate, initialize, setCacheMetadata])
 
   const isSavingRef = useRef(false)
   const pendingRef = useRef<string | null>(null)
   const pendingRevisionRef = useRef<number | null>(null)
 
-  const [search, setSearch] = useState('')
+  const [search, setSearchState] = useState(state.journalSearchQuery)
+  const setSearch = (query: string) => {
+    setSearchState(query)
+    setJournalSearchQueryAction(query)
+  }
   const [sort, setSort] = useState<'newest' | 'oldest' | 'longest' | 'shortest'>('newest')
   const [mobileView, setMobileView] = useState<'list' | 'editor'>('editor')
 
@@ -132,6 +205,19 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
 
   const [attachedImages, setAttachedImages] = useState<AttachedImage[]>(getMetadataImages(activeEntry))
   const [mentionMenu, setMentionMenu] = useState<{ open: boolean; x: number; y: number; query?: string } | null>(null)
+
+  // Adjust content state and other related values synchronously during render when date/dbValue changes
+  const [prevDate, setPrevDate] = useState(activeDate)
+  const [prevDbValue, setPrevDbValue] = useState(dbValue)
+  if (activeDate !== prevDate || dbValue !== prevDbValue) {
+    setPrevDate(activeDate)
+    setPrevDbValue(dbValue)
+    const draft = state.journalDrafts[activeDate]?.content
+    setContent(draft !== undefined ? draft : dbValue)
+    setAttachedImages(getMetadataImages(activeEntry))
+    setMentionMenu(null)
+    setContentStatus('idle')
+  }
   const [activeMentionIndex, setActiveMentionIndex] = useState(0)
   const [zoomImage, setZoomImage] = useState<string | null>(null)
   const [selectedImageNode, setSelectedImageNode] = useState<{ element: HTMLImageElement; pos: number } | null>(null)
@@ -298,6 +384,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
       revisionRef.current += 1
       triggerLocalContentChange(html)
       updateMentionMenu(editor)
+      saveJournalDraftAction(activeDate, { content: html })
     },
     onSelectionUpdate: ({ editor }) => {
       updateMentionMenu(editor)
@@ -369,7 +456,8 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     if (!editor) return
     const entryId = activeEntry?.id || null
     if (activeDate !== loadedDateRef.current || entryId !== loadedEntryIdRef.current) {
-      const adapted = JournalContentAdapter.toEditor(activeEntry?.content)
+      const draft = state.journalDrafts[activeDate]?.content
+      const adapted = draft !== undefined ? draft : JournalContentAdapter.toEditor(activeEntry?.content)
       editor.commands.setContent(adapted, { emitUpdate: false })
       loadedDateRef.current = activeDate
       loadedEntryIdRef.current = entryId
@@ -378,7 +466,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
       savedRevisionRef.current = 0
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDate, activeEntry?.id, editor])
+  }, [activeDate, activeEntry?.id, editor, state.journalDrafts])
 
   // Synchronise editor editability
   useEffect(() => {
@@ -387,15 +475,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     }
   }, [editMode, editor])
 
-  // Synchronise content edits when activeDate, activeEntry, or dbValue changes
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setContent(dbValue)
-    setAttachedImages(getMetadataImages(activeEntry))
-    setMentionMenu(null)
-    setContentStatus('idle')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDate, dbValue])
+
 
   // Safe read-only exporter triggers
   const handleExportJournal = async () => {
@@ -417,7 +497,6 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     }
   }
 
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const saveContent = useCallback(async (v: string, saveRevision: number) => {
     if (isSavingRef.current) { 
       pendingRef.current = v
