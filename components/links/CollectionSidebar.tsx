@@ -133,10 +133,10 @@ export const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
         <div className="p-2 border-b border-[var(--color-border)]/50 space-y-0.5 shrink-0">
           <button
             onClick={() => { setActiveTab('all'); setSelectedTagFilter(null); }}
-            className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-[3px] text-xs transition-colors text-left cursor-pointer ${
+            className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs transition-colors text-left cursor-pointer ${
               activeTab === 'all' && !selectedTagFilter
-                ? 'bg-slate-100 dark:bg-zinc-800/80 text-[var(--color-text-main)] font-semibold'
-                : 'text-[var(--color-text-muted)] hover:bg-slate-50 dark:hover:bg-zinc-900/40 hover:text-[var(--color-text-main)]'
+                ? 'bg-[var(--color-accent)] text-[var(--color-text-main)] font-semibold border border-[var(--color-border)] shadow-xs'
+                : 'text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]/50 hover:text-[var(--color-text-main)]'
             }`}
           >
             <Folder size={12} className="text-slate-400 dark:text-zinc-500" />
@@ -144,10 +144,10 @@ export const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
           </button>
           <button
             onClick={() => { setActiveTab('pinned'); setSelectedTagFilter(null); }}
-            className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-[3px] text-xs transition-colors text-left cursor-pointer ${
+            className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs transition-colors text-left cursor-pointer ${
               activeTab === 'pinned'
-                ? 'bg-slate-100 dark:bg-zinc-800/80 text-[var(--color-text-main)] font-semibold'
-                : 'text-[var(--color-text-muted)] hover:bg-slate-50 dark:hover:bg-zinc-900/40 hover:text-[var(--color-text-main)]'
+                ? 'bg-[var(--color-accent)] text-[var(--color-text-main)] font-semibold border border-[var(--color-border)] shadow-xs'
+                : 'text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]/50 hover:text-[var(--color-text-main)]'
             }`}
           >
             <Pin size={12} className="text-amber-500" />
@@ -155,10 +155,10 @@ export const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
           </button>
           <button
             onClick={() => { setActiveTab('private'); setSelectedTagFilter(null); }}
-            className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-[3px] text-xs transition-colors text-left cursor-pointer ${
+            className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs transition-colors text-left cursor-pointer ${
               activeTab === 'private'
-                ? 'bg-slate-100 dark:bg-zinc-800/80 text-[var(--color-text-main)] font-semibold'
-                : 'text-[var(--color-text-muted)] hover:bg-slate-50 dark:hover:bg-zinc-900/40 hover:text-[var(--color-text-main)]'
+                ? 'bg-[var(--color-accent)] text-[var(--color-text-main)] font-semibold border border-[var(--color-border)] shadow-xs'
+                : 'text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]/50 hover:text-[var(--color-text-main)]'
             }`}
           >
             <Lock size={12} className="text-indigo-500" />
@@ -166,10 +166,10 @@ export const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
           </button>
           <button
             onClick={() => { setActiveTab('archived'); setSelectedTagFilter(null); }}
-            className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-[3px] text-xs transition-colors text-left cursor-pointer ${
+            className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-[var(--radius-sm)] text-xs transition-colors text-left cursor-pointer ${
               activeTab === 'archived'
-                ? 'bg-slate-100 dark:bg-zinc-800/80 text-[var(--color-text-main)] font-semibold'
-                : 'text-[var(--color-text-muted)] hover:bg-slate-50 dark:hover:bg-zinc-900/40 hover:text-[var(--color-text-main)]'
+                ? 'bg-[var(--color-accent)] text-[var(--color-text-main)] font-semibold border border-[var(--color-border)] shadow-xs'
+                : 'text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]/50 hover:text-[var(--color-text-main)]'
             }`}
           >
             <Archive size={12} className="text-slate-400 dark:text-zinc-500" />
@@ -207,10 +207,10 @@ export const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
                 onDragOver={(e) => onDragOver(e, col.id)}
                 onDragLeave={onDragLeave}
                 onDrop={(e) => onDrop(e, col.id)}
-                className={`group flex items-center justify-between px-3 py-1.5 rounded-[3px] cursor-pointer transition-all ${
+                className={`group flex items-center justify-between px-3 py-1.5 rounded-[var(--radius-sm)] cursor-pointer transition-all ${
                   isActive
-                    ? 'bg-slate-100 dark:bg-zinc-800/80 text-[var(--color-text-main)] font-semibold border-l-2'
-                    : 'text-[var(--color-text-muted)] hover:bg-slate-50 dark:hover:bg-zinc-900/40 hover:text-[var(--color-text-main)]'
+                    ? 'bg-[var(--color-accent)] text-[var(--color-text-main)] font-semibold border border-[var(--color-border)] border-l-2 shadow-xs'
+                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]/50 hover:text-[var(--color-text-main)]'
                 } ${isDragOver ? 'border-dashed border-2 border-indigo-500 scale-[1.02] bg-indigo-50/10' : ''}`}
                 style={{ borderLeftColor: isActive ? col.color : undefined }}
               >
@@ -263,10 +263,10 @@ export const CollectionSidebar: React.FC<CollectionSidebarProps> = ({
                   onClick={() => {
                     setSelectedTagFilter(isSelected ? null : tag.name)
                   }}
-                  className={`text-[10px] font-bold px-2 py-0.75 rounded-[3px] border transition-all cursor-pointer ${
+                  className={`text-[10px] font-bold px-2 py-0.75 rounded-[var(--radius-sm)] border transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-slate-800 text-white dark:bg-zinc-100 dark:text-zinc-900 border-transparent shadow-3xs'
-                      : 'bg-slate-55 text-slate-600 dark:bg-zinc-900/60 dark:text-zinc-300 border-[var(--color-border)] hover:bg-slate-100 dark:hover:bg-zinc-800'
+                      ? 'bg-[var(--color-primary)] text-white border-transparent shadow-3xs'
+                      : 'bg-[var(--color-bg-base)] text-[var(--color-text-muted)] border-[var(--color-border)] hover:bg-[var(--color-accent)]'
                   }`}
                 >
                   #{tag.name}

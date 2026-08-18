@@ -287,7 +287,7 @@ export const LinkCard: React.FC<LinkCardProps> = ({
                     e.stopPropagation()
                     onSelectTagFilter(t.name)
                   }}
-                  className="text-[8.5px] font-bold px-1.5 py-0.25 rounded-[3px] bg-slate-100 text-slate-500 dark:bg-zinc-800 dark:text-zinc-450 hover:bg-slate-200 hover:text-[var(--color-primary)] transition-colors cursor-pointer"
+                  className="text-[8.5px] font-bold px-1.5 py-0.25 rounded-[var(--radius-sm)] bg-[var(--color-bg-base)] text-[var(--color-text-muted)] border border-[var(--color-border)] hover:bg-[var(--color-accent)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
                 >
                   #{t.name}
                 </button>

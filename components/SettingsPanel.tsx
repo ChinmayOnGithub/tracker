@@ -343,8 +343,8 @@ export const SettingsPanel: React.FC = () => {
                 onClick={() => setActiveSection(section.id)}
                 className={`flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold rounded-lg shrink-0 transition-all cursor-pointer ${
                   isActive 
-                    ? 'bg-white dark:bg-zinc-800 text-[var(--color-text-main)] shadow-[0_1px_2px_rgba(0,0,0,0.08)] border border-[var(--color-border)]' 
-                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-slate-100/30 dark:hover:bg-zinc-900/20'
+                    ? 'bg-[var(--color-accent)] text-[var(--color-text-main)] border border-[var(--color-border)] shadow-xs' 
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)]/50 border border-transparent'
                 }`}
               >
                 <Icon size={14} className={isActive ? 'text-[var(--color-primary)]' : ''} />

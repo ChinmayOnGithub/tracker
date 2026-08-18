@@ -681,31 +681,29 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
               <div
                 key={entry.id}
                 onClick={() => handleNavigateDate(dateStr)}
-                className={`group relative flex flex-col gap-1.5 px-3 py-3 rounded-lg cursor-pointer transition-all duration-150 ${
+                className={`group relative flex flex-col gap-1.5 px-3 py-3 rounded-lg cursor-pointer transition-all duration-150 border-l-4 ${
                   isActive
-                    ? 'bg-[var(--color-primary)] text-white shadow-sm'
-                    : 'text-[var(--color-text-main)] hover:bg-slate-200/50 dark:hover:bg-zinc-800/60 hover:translate-x-0.5'
+                    ? 'bg-[var(--color-accent)] border-l-[var(--color-primary)] shadow-xs'
+                    : 'border-l-transparent text-[var(--color-text-main)] hover:bg-slate-200/50 dark:hover:bg-zinc-800/60 hover:translate-x-0.5'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className={`text-[13px] font-bold flex items-center gap-1.5 ${isActive ? 'text-white' : 'text-[var(--color-text-main)]'}`}>
+                  <span className="text-[13px] font-bold flex items-center gap-1.5 text-[var(--color-text-main)]">
                     {hasMood && (
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-white/70' : 'bg-[var(--color-primary)]'}`} />
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[var(--color-primary)]" />
                     )}
                     {fmtDateMed(entry.journalDate)}
                   </span>
-                  <span className={`text-[10px] font-semibold tabular-nums shrink-0 ${isActive ? 'text-white/60' : 'text-[var(--color-text-muted)]'}`}>
+                  <span className="text-[10px] font-semibold tabular-nums shrink-0 text-[var(--color-text-muted)]">
                     {wc > 0 ? `${wc}w` : ''}
                   </span>
                 </div>
-                <p className={`text-xs line-clamp-2 leading-relaxed ${isActive ? 'text-white/80' : 'text-[var(--color-text-muted)]'}`}>
+                <p className="text-xs line-clamp-2 leading-relaxed text-[var(--color-text-muted)]">
                   {preview}
                 </p>
                 <button
                   onClick={e => { e.stopPropagation(); handleDelete(entry.id, dateStr) }}
-                  className={`absolute right-2 bottom-2 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 rounded-lg transition-colors ${
-                    isActive ? 'text-white hover:bg-white/20' : 'text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10'
-                  }`}
+                  className="absolute right-2 bottom-2 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 rounded-lg transition-colors text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"
                   title="Delete Entry"
                   aria-label="Delete Entry"
                 >
@@ -723,10 +721,10 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
       </aside>
 
       {/* ── RIGHT WORKSPACE: Canvas ── */}
-      <main className={`flex-1 flex flex-col xl:flex-row bg-white dark:bg-[#09090b] relative overflow-hidden ${mobileView === 'list' ? 'hidden md:flex' : 'flex'} ${editMode ? 'max-md:fixed max-md:inset-0 max-md:z-50 max-md:h-screen max-md:w-screen' : ''}`}>
+      <main className={`flex-1 flex flex-col xl:flex-row bg-[var(--color-bg-base)] relative overflow-hidden ${mobileView === 'list' ? 'hidden md:flex' : 'flex'} ${editMode ? 'max-md:fixed max-md:inset-0 max-md:z-50 max-md:h-screen max-md:w-screen' : ''}`}>
         
         {/* Editor Writing Area */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 md:px-12 py-6 sm:py-10 pb-24 border-r border-slate-100 dark:border-zinc-900/60">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 md:px-12 py-6 sm:py-10 pb-24 border-r border-[var(--color-border)]/50">
           <div className="max-w-5xl mx-auto w-full flex flex-col gap-6">
             
             <div className="flex items-center justify-between flex-wrap gap-3">
@@ -781,7 +779,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
 
             {/* Rich Formatting Toolbar (Only visible in Edit Mode) */}
             {editMode && editor && (
-              <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-50 dark:bg-zinc-900/50 border border-slate-205/65 dark:border-zinc-800/80 rounded-lg max-w-max animate-fade-in">
+              <div className="flex flex-wrap items-center gap-1 p-1 bg-[var(--color-bg-subtle)] border border-[var(--color-border)] rounded-[var(--radius-lg)] max-w-max animate-fade-in">
                 <Button
                   variant="ghost"
                   size="icon-sm"
@@ -1113,7 +1111,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
 
         {/* Memories Gallery Panel (Desktop Sidebar Layout) — only shown when images exist or editing */}
         {(attachedImages.length > 0 || editMode) && (
-          <aside className="w-64 shrink-0 bg-slate-50/15 dark:bg-zinc-950/10 p-5 overflow-y-auto hidden xl:block border-l border-slate-100 dark:border-zinc-900/50">
+          <aside className="w-64 shrink-0 bg-[var(--color-bg-subtle)]/30 p-5 overflow-y-auto hidden xl:block border-l border-[var(--color-border)]/50">
             <div className="flex flex-col gap-5">
               <div className="flex items-center justify-between">
                 <div>

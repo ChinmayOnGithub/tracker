@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState, useRef } from 'react'
-import { Briefcase, Clock } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import { Briefcase, Clock, Play, Square, Pencil } from 'lucide-react'
 import { Card, CardHeader, CardBody, Button, Input } from '@/design-system'
 import { ActivityLog } from '@/types'
 
@@ -23,10 +23,6 @@ type WorkFormState = {
   manualHours: number
 }
 
-/**
- * WorkHoursWidget
- * Standardized to fit Card layouts, segmented button styles, and time inputs.
- */
 export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   todayWorkLog,
   workTemplateId,
@@ -49,25 +45,18 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     }
     return {
       status: 'cleared',
-      mode: 'manual',
+      mode: 'time',
       inTime: '09:00',
       outTime: '',
       manualHours: 8.0,
     }
   })
 
-  // Track the log id we last synced from so we can detect when the
-  // underlying record changes (e.g. temp-id confirmed by the server).
+  const [isEditingTimes, setIsEditingTimes] = useState(false)
   const lastSyncedLogId = useRef<string | null | undefined>(todayWorkLog?.id)
 
-  // Derive formState from todayWorkLog when its identity changes.
-  // Using a ref guard instead of a bare useEffect avoids the
-  // react-hooks/set-state-in-effect lint error while still letting us
-  // re-sync form fields when the server confirms an optimistic log.
   if (lastSyncedLogId.current !== todayWorkLog?.id) {
     lastSyncedLogId.current = todayWorkLog?.id
-    // Inline state update during render (React allows this when guarded
-    // by a condition that always resolves before the next paint).
     if (todayWorkLog) {
       const payload = todayWorkLog.payload as Record<string, unknown> | null
       setFormState({
@@ -80,7 +69,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     } else {
       setFormState({
         status: 'cleared',
-        mode: 'manual',
+        mode: 'time',
         inTime: '09:00',
         outTime: '',
         manualHours: 8.0,
@@ -90,6 +79,19 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
 
   const [isLoggingWork, setIsLoggingWork] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [_tick, setTick] = useState(0)
+
+  useEffect(() => {
+    let interval: Timer | null = null
+    if (formState.status !== 'cleared' && formState.mode === 'time' && !formState.outTime) {
+      interval = setInterval(() => {
+        setTick(t => t + 1)
+      }, 1000)
+    }
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [formState.status, formState.mode, formState.outTime])
 
   // Stats calculation
   const weeklyWorkLogs = workTemplateId
@@ -107,6 +109,13 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   const remainingHours = Math.max(0, weeklyGoal - totalOfficeHours)
   const isGoalMet = totalOfficeHours >= weeklyGoal
 
+  const getLocalTimeStr = () => {
+    const now = new Date()
+    const hh = String(now.getHours()).padStart(2, '0')
+    const mm = String(now.getMinutes()).padStart(2, '0')
+    return `${hh}:${mm}`
+  }
+
   const computeOfficeHours = (inT: string, outT: string): number => {
     if (!inT || !outT) return 0
     const [inH, inM] = inT.split(':').map(Number)
@@ -116,19 +125,38 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     return parseFloat((diffMins / 60).toFixed(1))
   }
 
-  const handleSaveWorkPresence = async () => {
+  const computeElapsedHours = (inT: string): string => {
+    if (!inT) return '0h 0m'
+    const [inH, inM] = inT.split(':').map(Number)
+    const now = new Date()
+    const inDate = new Date()
+    inDate.setHours(inH, inM, 0, 0)
+    
+    let diffMs = now.getTime() - inDate.getTime()
+    if (diffMs < 0) {
+      diffMs += 24 * 60 * 60 * 1000
+    }
+    const diffMins = Math.floor(diffMs / (60 * 1000))
+    const h = Math.floor(diffMins / 60)
+    const m = diffMins % 60
+    const s = Math.floor((diffMs % (60 * 1000)) / 1000)
+    return `${h}h ${m}m ${s}s`
+  }
+
+  const handleSaveWorkPresence = async (customState?: WorkFormState) => {
     if (!workTemplateId || isLoggingWork) return
     setValidationError(null)
 
-    // Validation
-    if (formState.status !== 'cleared') {
-      if (formState.mode === 'manual') {
-        if (isNaN(formState.manualHours) || formState.manualHours < 0 || formState.manualHours > 24) {
+    const stateToSave = customState || formState
+
+    if (stateToSave.status !== 'cleared') {
+      if (stateToSave.mode === 'manual') {
+        if (isNaN(stateToSave.manualHours) || stateToSave.manualHours < 0 || stateToSave.manualHours > 24) {
           setValidationError('Please enter a valid number of hours between 0 and 24.')
           return
         }
       } else {
-        if (!formState.inTime) {
+        if (!stateToSave.inTime) {
           setValidationError('Please select a start time.')
           return
         }
@@ -138,24 +166,25 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     setIsLoggingWork(true)
     try {
       let computedHours = 0
-      if (formState.status !== 'cleared') {
-        if (formState.mode === 'time') {
-          computedHours = formState.outTime ? computeOfficeHours(formState.inTime, formState.outTime) : 0
+      if (stateToSave.status !== 'cleared') {
+        if (stateToSave.mode === 'time') {
+          computedHours = stateToSave.outTime ? computeOfficeHours(stateToSave.inTime, stateToSave.outTime) : 0
         } else {
-          computedHours = formState.manualHours
+          computedHours = stateToSave.manualHours
         }
       }
 
       await logWorkPresenceAction({
         templateId: workTemplateId,
         date: todayStr,
-        status: formState.status,
-        inTime: formState.status !== 'cleared' && formState.mode === 'time' ? formState.inTime : null,
-        outTime: formState.status !== 'cleared' && formState.mode === 'time' ? (formState.outTime || null) : null,
+        status: stateToSave.status,
+        inTime: stateToSave.status !== 'cleared' && stateToSave.mode === 'time' ? stateToSave.inTime : null,
+        outTime: stateToSave.status !== 'cleared' && stateToSave.mode === 'time' ? (stateToSave.outTime || null) : null,
         hours: computedHours,
-        loggingMode: formState.status !== 'cleared' ? formState.mode : null,
-        manualHours: formState.status !== 'cleared' && formState.mode === 'manual' ? formState.manualHours : null
+        loggingMode: stateToSave.status !== 'cleared' ? stateToSave.mode : null,
+        manualHours: stateToSave.status !== 'cleared' && stateToSave.mode === 'manual' ? stateToSave.manualHours : null
       })
+      setIsEditingTimes(false)
     } catch (err) {
       console.error('Failed to log work presence:', err)
       setValidationError('Failed to save presence records.')
@@ -163,6 +192,31 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       setIsLoggingWork(false)
     }
   }
+
+  const handleStartSession = async (status: 'office' | 'wfh') => {
+    const nowTime = getLocalTimeStr()
+    const updated: WorkFormState = {
+      status,
+      mode: 'time',
+      inTime: nowTime,
+      outTime: '',
+      manualHours: 8.0
+    }
+    setFormState(updated)
+    await handleSaveWorkPresence(updated)
+  }
+
+  const handleStopSession = async () => {
+    const nowTime = getLocalTimeStr()
+    const updated: WorkFormState = {
+      ...formState,
+      outTime: nowTime
+    }
+    setFormState(updated)
+    await handleSaveWorkPresence(updated)
+  }
+
+  const isActiveSession = formState.status !== 'cleared' && formState.mode === 'time' && !formState.outTime
 
   return (
     <Card className="hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
@@ -175,130 +229,176 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       </CardHeader>
 
       <CardBody className="space-y-3">
-        {/* Status Segmented Control */}
-        <div className="flex bg-[var(--color-bg-base)] p-0.5 rounded-[var(--radius-lg)] border border-[var(--color-border)]">
-          {(['cleared', 'office', 'wfh'] as const).map((status) => (
-            <button
-              key={status}
-              type="button"
-              onClick={() => setFormState(prev => ({ ...prev, status }))}
-              className={`flex-1 py-1.5 text-[10px] font-bold rounded-[var(--radius-md)] capitalize transition-all duration-150 cursor-pointer ${
-                formState.status === status
-                  ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-xs border border-[var(--color-border)]'
-                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
-              }`}
-            >
-              {status === 'cleared' ? 'Clear' : status}
-            </button>
-          ))}
-        </div>
-
-        {/* Inputs depending on status */}
-        {formState.status !== 'cleared' && (
+        {isActiveSession && !isEditingTimes ? (
+          /* Active Session View */
           <div className="space-y-3">
-            {/* Mode Segmented Control */}
+            <div className="flex flex-col items-center justify-center py-5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-[var(--radius-lg)] space-y-1">
+              <span className="text-[9px] uppercase tracking-wider font-extrabold text-[var(--color-text-muted)]">
+                Active Session ({formState.status === 'office' ? 'Office' : 'WFH'})
+              </span>
+              <span className="text-2xl font-mono font-black text-[var(--color-primary)] tracking-tight">
+                {computeElapsedHours(formState.inTime)}
+              </span>
+              <span className="text-[9px] text-[var(--color-text-muted)]">
+                Started at {formState.inTime}
+              </span>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={handleStopSession}
+                isLoading={isLoggingWork}
+                variant="primary"
+                size="sm"
+                className="flex-1 font-bold text-xs"
+                icon={<Square className="w-3.5 h-3.5" />}
+              >
+                Stop Session
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditingTimes(true)}
+                title="Edit times manually"
+                icon={<Pencil className="w-3.5 h-3.5" />}
+              />
+            </div>
+          </div>
+        ) : (
+          /* Set/Edit Session View */
+          <div className="space-y-3">
+            {/* Status Segmented Control (only when not editing an active timer manually) */}
             <div className="flex bg-[var(--color-bg-base)] p-0.5 rounded-[var(--radius-lg)] border border-[var(--color-border)]">
-              {(['time', 'manual'] as const).map((mode) => (
+              {(['cleared', 'office', 'wfh'] as const).map((status) => (
                 <button
-                  key={mode}
+                  key={status}
                   type="button"
                   onClick={() => {
-                    if (mode === 'manual' && formState.inTime && formState.outTime) {
-                      setFormState(prev => ({
-                        ...prev,
-                        mode,
-                        manualHours: computeOfficeHours(formState.inTime, formState.outTime),
-                      }))
-                    } else {
-                      setFormState(prev => ({ ...prev, mode }))
+                    setFormState(prev => ({ ...prev, status }))
+                    if (status === 'cleared') {
+                      handleSaveWorkPresence({
+                        status: 'cleared',
+                        mode: 'time',
+                        inTime: '',
+                        outTime: '',
+                        manualHours: 0
+                      })
                     }
                   }}
                   className={`flex-1 py-1.5 text-[10px] font-bold rounded-[var(--radius-md)] capitalize transition-all duration-150 cursor-pointer ${
-                    formState.mode === mode
+                    formState.status === status
                       ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-xs border border-[var(--color-border)]'
                       : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
                   }`}
                 >
-                  {mode === 'time' ? 'Time-Based' : 'Manual'}
+                  {status === 'cleared' ? 'Clear' : status}
                 </button>
               ))}
             </div>
 
-            {/* Time-Based Fields */}
-            {formState.mode === 'time' && (
-              <div className="space-y-2 pt-1">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <label className="block text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">Start Time</label>
-                    <input
-                      type="time"
-                      value={formState.inTime}
-                      onChange={(e) => setFormState(prev => ({ ...prev, inTime: e.target.value }))}
-                      className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">End Time</label>
-                    <input
-                      type="time"
-                      value={formState.outTime}
-                      onChange={(e) => setFormState(prev => ({ ...prev, outTime: e.target.value }))}
-                      className="w-full text-xs font-mono bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-md px-2 py-1.5 text-[var(--color-text-main)] focus:outline-none focus:border-[var(--color-primary)]"
-                    />
-                  </div>
+            {formState.status !== 'cleared' && (
+              <div className="space-y-3">
+                {/* Mode Segmented Control */}
+                <div className="flex bg-[var(--color-bg-base)] p-0.5 rounded-[var(--radius-lg)] border border-[var(--color-border)]">
+                  {(['time', 'manual'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setFormState(prev => ({ ...prev, mode }))}
+                      className={`flex-1 py-1.5 text-[10px] font-bold rounded-[var(--radius-md)] capitalize transition-all duration-150 cursor-pointer ${
+                        formState.mode === mode
+                          ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-xs border border-[var(--color-border)]'
+                          : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                      }`}
+                    >
+                      {mode === 'time' ? 'Time-Based' : 'Manual'}
+                    </button>
+                  ))}
                 </div>
-                <div className="text-[10px] text-right font-semibold text-[var(--color-text-muted)] pr-0.5 flex justify-between items-center">
-                  <span>Status:</span>
-                  {!formState.outTime ? (
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 animate-pulse">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      Session Active
-                    </span>
-                  ) : (
-                    <span className="text-[var(--color-text-main)] font-mono">
-                      Calculated: {computeOfficeHours(formState.inTime, formState.outTime)}h
-                    </span>
+
+                {formState.mode === 'time' ? (
+                  /* Time-Based Inputs */
+                  <div className="space-y-2">
+                    {isEditingTimes ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          type="time"
+                          label="Start Time"
+                          value={formState.inTime}
+                          onChange={(e) => setFormState(prev => ({ ...prev, inTime: e.target.value }))}
+                          className="font-mono text-xs"
+                        />
+                        <Input
+                          type="time"
+                          label="End Time"
+                          value={formState.outTime}
+                          onChange={(e) => setFormState(prev => ({ ...prev, outTime: e.target.value }))}
+                          className="font-mono text-xs"
+                        />
+                      </div>
+                    ) : (
+                      <div className="py-2 flex flex-col items-center">
+                        <Button
+                          onClick={() => handleStartSession(formState.status as 'office' | 'wfh')}
+                          isLoading={isLoggingWork}
+                          variant="primary"
+                          size="sm"
+                          className="w-full font-bold text-xs"
+                          icon={<Play className="w-3.5 h-3.5" />}
+                        >
+                          Start {formState.status === 'office' ? 'Office' : 'WFH'} Session
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Manual Hours Input */
+                  <div className="space-y-1.5">
+                    <Input
+                      type="number"
+                      label="Total Hours Worked"
+                      min="0"
+                      max="24"
+                      step="0.5"
+                      value={formState.manualHours}
+                      onChange={(e) => setFormState(prev => ({ ...prev, manualHours: parseFloat(e.target.value) || 0 }))}
+                      className="text-xs"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Validation / Action Footer (only when input is shown) */}
+            {formState.status !== 'cleared' && (formState.mode === 'manual' || isEditingTimes) && (
+              <div className="space-y-2">
+                {validationError && (
+                  <p className="text-[10px] text-rose-500 font-semibold text-center">{validationError}</p>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => handleSaveWorkPresence()}
+                    isLoading={isLoggingWork}
+                    variant="primary"
+                    size="sm"
+                    className="flex-1 font-bold text-xs"
+                  >
+                    Save Presence
+                  </Button>
+                  {isEditingTimes && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditingTimes(false)}
+                    >
+                      Cancel
+                    </Button>
                   )}
                 </div>
               </div>
             )}
-
-            {/* Manual Fields */}
-            {formState.mode === 'manual' && (
-              <div className="space-y-1.5 pt-1">
-                <div className="flex justify-between items-center text-[9px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider">
-                  <span>Total Hours Worked</span>
-                  <span className="text-xs font-mono text-[var(--color-text-main)] font-bold">{formState.manualHours}h</span>
-                </div>
-                <Input
-                  type="number"
-                  min="0"
-                  max="24"
-                  step="0.5"
-                  value={formState.manualHours}
-                  onChange={(e) => setFormState(prev => ({ ...prev, manualHours: parseFloat(e.target.value) || 0 }))}
-                  className="text-xs"
-                />
-              </div>
-            )}
           </div>
         )}
-
-        {/* Validation Errors */}
-        {validationError && (
-          <p className="text-[10px] text-rose-500 font-semibold text-center">{validationError}</p>
-        )}
-
-        {/* Action Button */}
-        <Button
-          onClick={handleSaveWorkPresence}
-          isLoading={isLoggingWork}
-          variant="primary"
-          size="sm"
-          className="w-full font-bold text-xs"
-        >
-          Save Presence
-        </Button>
 
         {/* Progress Grid */}
         <div className="border-t border-[var(--color-border)]/50 pt-3 space-y-2">

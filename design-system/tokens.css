@@ -44,6 +44,8 @@
   --spacing-5: 20px;               /* Fills gap between 4 and 6 */
   --spacing-6: 24px;
   --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
 
   /* Typography */
   --font-size-xs2: 10px;           /* Micro labels, timestamps */

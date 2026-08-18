@@ -264,7 +264,7 @@ export const Calendar: React.FC<CalendarProps> = ({
         
         <div className="flex flex-wrap items-center gap-3">
           {/* iOS-style Segmented Control */}
-          <div className="flex bg-slate-100 dark:bg-zinc-800/60 p-0.5 rounded-[9px] shadow-inner">
+          <div className="flex bg-[var(--color-bg-subtle)]/50 p-0.5 border border-[var(--color-border)] rounded-[var(--radius-md)]">
             {(['month', 'week'] as const).map(v => (
               <button
                 key={v}
@@ -272,10 +272,10 @@ export const Calendar: React.FC<CalendarProps> = ({
                   setView(v)
                   localStorage.setItem('calendar_default_view', v)
                 }}
-                className={`px-3.5 py-2.5 md:py-1.5 text-[11px] font-bold rounded-md transition-all duration-200 capitalize ${
+                className={`px-3.5 py-2.5 md:py-1.5 text-[11px] font-bold rounded-[var(--radius-sm)] transition-all duration-200 capitalize cursor-pointer border ${
                   view === v 
-                    ? 'bg-white dark:bg-zinc-700 text-black dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
-                    : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300'
+                    ? 'bg-[var(--color-accent)] border-[var(--color-border)] text-[var(--color-text-main)] shadow-xs'
+                    : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
                 }`}
               >
                 {v}
@@ -345,13 +345,13 @@ export const Calendar: React.FC<CalendarProps> = ({
             ))}
           </div>
 
-          <div className="grid grid-cols-7 border-t border-l border-slate-200 dark:border-zinc-800 rounded-xl overflow-hidden bg-white dark:bg-zinc-950 shadow-xs">
+          <div className="grid grid-cols-7 border-t border-l border-[var(--color-border)]/60 rounded-xl overflow-hidden bg-[var(--color-bg-surface)] shadow-xs">
             {cells.map((cell, idx) => {
               const { dateStr, dayNumber, isCurrentMonth } = cell
               if (!isCurrentMonth || !dateStr) {
                 return (
-                  <div key={`pad-${idx}`} className="aspect-square sm:aspect-auto sm:min-h-[100px] border-r border-b border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 p-2 opacity-40">
-                    <span className="text-[11px] font-bold text-slate-400">{dayNumber}</span>
+                  <div key={`pad-${idx}`} className="aspect-square sm:aspect-auto sm:min-h-[100px] border-r border-b border-[var(--color-border)]/60 bg-[var(--color-bg-subtle)]/50 p-2 opacity-40">
+                    <span className="text-[11px] font-bold text-[var(--color-text-muted)]">{dayNumber}</span>
                   </div>
                 )
               }
@@ -365,10 +365,10 @@ export const Calendar: React.FC<CalendarProps> = ({
                 <button
                   key={dateStr}
                   onClick={() => onDayClick(dateStr)}
-                  className={`aspect-square sm:aspect-auto sm:min-h-[100px] p-2 border-r border-b border-slate-200 dark:border-zinc-800 flex flex-col transition-colors focus:outline-hidden hover:bg-slate-50 dark:hover:bg-zinc-900/80 group ${
-                    isToday ? 'bg-blue-50/30 dark:bg-blue-900/10' : 'bg-white dark:bg-zinc-950'
+                  className={`aspect-square sm:aspect-auto sm:min-h-[100px] p-2 border-r border-b border-[var(--color-border)]/60 flex flex-col transition-colors focus:outline-hidden hover:bg-[var(--color-accent)]/50 group cursor-pointer ${
+                    isToday ? 'bg-[var(--color-primary)]/5' : 'bg-[var(--color-bg-surface)]'
                   } ${
-                    isSelected ? 'ring-2 ring-[var(--color-primary)] ring-inset bg-[var(--color-accent)]/30 dark:bg-[var(--color-accent)]/10' : ''
+                    isSelected ? 'ring-2 ring-[var(--color-primary)] ring-inset bg-[var(--color-accent)]/30' : ''
                   }`}
                 >
                   <div className="w-full flex justify-between items-start">
@@ -436,10 +436,10 @@ export const Calendar: React.FC<CalendarProps> = ({
 
       {/* ── 2. WEEK VIEW (HOURLY TIME-GRID) ── */}
       {view === 'week' && (
-        <div className="flex flex-col bg-white dark:bg-zinc-950 rounded-xl border border-slate-200 dark:border-zinc-800 overflow-hidden shadow-xs">
+        <div className="flex flex-col bg-[var(--color-bg-surface)] rounded-xl border border-[var(--color-border)]/60 overflow-hidden shadow-xs">
           
           {/* Day Headers (7 Columns + Left Time Column Buffer) */}
-          <div className="grid grid-cols-8 border-b border-slate-200 dark:border-zinc-800 text-center bg-slate-50 dark:bg-zinc-900/60 py-2.5 font-bold uppercase tracking-wider text-[11px] text-slate-500 dark:text-zinc-400">
+          <div className="grid grid-cols-8 border-b border-[var(--color-border)]/60 text-center bg-[var(--color-bg-subtle)]/50 py-2.5 font-bold uppercase tracking-wider text-[11px] text-[var(--color-text-muted)]">
             {/* Hour column buffer */}
             <div className="text-[9px] flex items-center justify-center font-black">Time</div>
             
@@ -481,9 +481,9 @@ export const Calendar: React.FC<CalendarProps> = ({
             <div className="grid grid-cols-8 relative" style={{ height: `${HOURS.length * 60}px` }}>
               
               {/* Left Column Hour Label Grid */}
-              <div className="border-r border-slate-200 dark:border-zinc-800 flex flex-col h-full bg-slate-50/30 dark:bg-zinc-900/10 z-10">
+              <div className="border-r border-[var(--color-border)]/60 flex flex-col h-full bg-[var(--color-bg-subtle)]/30 z-10">
                 {HOURS.map((hour) => (
-                  <div key={hour} className="h-[60px] text-right pr-2.5 text-[9px] font-bold text-slate-400 dark:text-zinc-500 border-b border-slate-100 dark:border-zinc-800/40 pt-1 leading-none select-none">
+                  <div key={hour} className="h-[60px] text-right pr-2.5 text-[9px] font-bold text-[var(--color-text-muted)] border-b border-[var(--color-border)]/40 pt-1 leading-none select-none">
                     {hour > 12 ? `${hour - 12} PM` : hour === 12 ? '12 PM' : `${hour} AM`}
                   </div>
                 ))}
@@ -500,12 +500,12 @@ export const Calendar: React.FC<CalendarProps> = ({
                 return (
                   <div
                     key={dateStr}
-                    className={`border-r border-slate-200 dark:border-zinc-800 h-full relative group transition-colors ${
+                    className={`border-r border-[var(--color-border)]/60 h-full relative group transition-colors ${
                       isToday 
-                        ? 'bg-blue-50/10 dark:bg-blue-900/5 hover:bg-blue-50/20 dark:hover:bg-blue-900/10' 
+                        ? 'bg-[var(--color-primary)]/5 hover:bg-[var(--color-primary)]/10' 
                         : isSelected
                           ? 'bg-[var(--color-accent)]/10'
-                          : 'hover:bg-slate-50/20 dark:hover:bg-zinc-900/10'
+                          : 'hover:bg-[var(--color-accent)]/5'
                     }`}
                   >
                     {/* Hour cell borders */}
@@ -513,7 +513,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                       <div
                         key={hour}
                         onClick={() => onDayClick(dateStr)}
-                        className="h-[60px] border-b border-slate-100 dark:border-zinc-850 cursor-pointer"
+                        className="h-[60px] border-b border-[var(--color-border)]/40 cursor-pointer"
                       />
                     ))}
 

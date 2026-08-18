@@ -111,11 +111,17 @@ export function DragHandle({
   dragHandleListeners,
   dragHandleAttributes,
 }: DragHandleProps) {
+  const [mounted, setMounted] = React.useState(false)
+  React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true)
+  }, [])
+
   return (
     <button
       ref={dragHandleRef}
-      {...dragHandleListeners}
-      {...dragHandleAttributes}
+      {...(mounted ? dragHandleListeners : {})}
+      {...(mounted ? dragHandleAttributes : {})}
       type="button"
       aria-label="Drag to reorder"
       className={[

@@ -50,7 +50,7 @@ import {
   updateVaultItemCategory
 } from '@/app/actions/vault'
 import type { VaultItem, VaultBreadcrumb, QuickInfoFieldDTO } from '@/app/actions/vault'
-import { Modal, Input, Button, Card, EmptyState, SkeletonWidget, SearchInput } from '@/design-system'
+import { Modal, Input, Button, Card, EmptyState, SkeletonWidget, SearchInput, IconButton } from '@/design-system'
 import { notify } from '@/lib/notifications'
 import { writeQueue } from '@/lib/store/write-queue'
 import { VaultUploader } from './vault/VaultUploader'
@@ -1071,19 +1071,19 @@ export function VaultPanel() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <IconButton
             onClick={() => setShowQuickSettings(v => !v)}
-            className="w-9 h-9 flex items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)] transition-colors cursor-pointer"
-          >
-            <Settings className={`w-4 h-4 text-[var(--color-text-muted)] transition-transform duration-300 ${showQuickSettings ? 'rotate-90' : ''}`} />
-          </button>
-          <button
+            variant="outline"
+            icon={<Settings className={`w-4 h-4 text-[var(--color-text-muted)] transition-transform duration-300 ${showQuickSettings ? 'rotate-90' : ''}`} />}
+            label="Settings"
+          />
+          <IconButton
             onClick={() => void refreshAll()}
             disabled={loading}
-            className="w-9 h-9 flex items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)] transition-colors cursor-pointer disabled:opacity-40"
-          >
-            <RefreshCw className={`w-4 h-4 text-[var(--color-text-muted)] ${loading ? 'animate-spin' : ''}`} />
-          </button>
+            variant="outline"
+            icon={<RefreshCw className={`w-4 h-4 text-[var(--color-text-muted)] ${loading ? 'animate-spin' : ''}`} />}
+            label="Refresh"
+          />
           <Button
             variant="primary"
             size="sm"
@@ -1151,9 +1151,7 @@ export function VaultPanel() {
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{errorMessage}</span>
           </div>
-          <button onClick={() => setErrorMessage(null)} className="p-0.5 rounded hover:bg-rose-500/10 cursor-pointer">
-            <X className="w-4 h-4" />
-          </button>
+          <IconButton variant="ghost" onClick={() => setErrorMessage(null)} icon={<X className="w-4 h-4" />} label="Clear error message" />
         </div>
       )}
 
@@ -1169,14 +1167,12 @@ export function VaultPanel() {
                 <span className="text-[11px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">Quick Access Information</span>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => setShowNewCustomField(true)}
-                  className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] px-2 py-1 rounded-[var(--radius-sm)] hover:bg-[var(--color-accent)] transition-colors cursor-pointer">
-                  <Plus className="w-3.5 h-3.5" /> Add Field
-                </button>
-                <button onClick={() => setShowQuickSettings(v => !v)}
-                  className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] px-2 py-1 rounded-[var(--radius-sm)] hover:bg-[var(--color-accent)] transition-colors cursor-pointer">
-                  <Settings className="w-3.5 h-3.5" /> Customize
-                </button>
+                <Button size="sm" variant="ghost" onClick={() => setShowNewCustomField(true)} icon={<Plus className="w-3.5 h-3.5" />}>
+                  Add Field
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowQuickSettings(v => !v)} icon={<Settings className="w-3.5 h-3.5" />}>
+                  Customize
+                </Button>
               </div>
             </div>
             <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1457,26 +1453,41 @@ export function VaultPanel() {
               }
             />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+            <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] divide-y divide-[var(--color-border)] overflow-hidden shadow-xs">
               {categoryItems.map(item => {
                 const IconComponent = getFileIcon(item.mimeGroup, item.isFolder)
                 const iconColor = getFileColor(item.mimeGroup, item.isFolder)
                 return (
-                  <Card key={item.id} className="p-3 border border-[var(--color-border)] bg-[var(--color-bg-surface)]/60 flex flex-col gap-2 relative transition-all hover:shadow-md rounded-[var(--radius-lg)]">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-[var(--radius-md)] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/10 flex items-center justify-center shrink-0">
-                        <IconComponent className={`w-4 h-4 ${iconColor}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-[var(--color-text-main)] truncate">{item.name}</p>
-                        <p className="text-[10px] font-mono text-[var(--color-text-muted)]">{formatFileSize(item.fileSize)} &middot; {formatDate(item.createdAt)}</p>
-                      </div>
+                  <div key={item.id} className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-accent)] transition-colors group">
+                    <div className="w-8 h-8 rounded-[var(--radius-sm)] bg-[var(--color-accent)] flex items-center justify-center shrink-0 border border-[var(--color-border)]/55">
+                      <IconComponent className={`w-4 h-4 ${iconColor}`} />
                     </div>
-                    <div className="flex gap-1.5 pt-2 border-t border-[var(--color-border)]/40">
-                      <Button variant="outline" size="sm" className="flex-1 text-xs min-h-[40px] touch-manipulation" onClick={() => handleDownload(item)} icon={<Download className="w-3.5 h-3.5" />}>Download</Button>
-                      <Button variant="ghost" size="sm" className="px-3 min-h-[40px] text-rose-500 hover:bg-rose-500/10 touch-manipulation" onClick={() => setDeletingItem(item)} icon={<Trash2 className="w-3.5 h-3.5" />} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-[var(--color-text-main)] truncate">{item.name}</p>
+                      <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
+                        {formatFileSize(item.fileSize)} &bull; {formatDate(item.createdAt)}
+                      </p>
                     </div>
-                  </Card>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs h-8 px-3"
+                        onClick={() => handleDownload(item)}
+                        icon={<Download className="w-3.5 h-3.5" />}
+                      >
+                        Download
+                      </Button>
+                      <IconButton
+                        variant="ghost"
+                        size="sm"
+                        className="text-rose-500 hover:bg-rose-500/10 h-8 w-8"
+                        onClick={() => setDeletingItem(item)}
+                        icon={<Trash2 className="w-3.5 h-3.5" />}
+                        label="Delete document"
+                      />
+                    </div>
+                  </div>
                 )
               })}
             </div>
