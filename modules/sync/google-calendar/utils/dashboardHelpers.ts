@@ -215,7 +215,8 @@ export function generateTimeline(
       htmlLink: event.htmlLink,
       completed: isFinished,
       status: isFinished ? 'done' : undefined,
-      icon: 'Calendar'
+      icon: 'Calendar',
+      notes: event.description || null,
     })
   }
 

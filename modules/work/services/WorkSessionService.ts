@@ -269,8 +269,8 @@ export class WorkSessionService {
     const template = await ActivityService.getOrCreateDefaultTemplate(
       params.userId,
       'PERSONAL',
-      'Work Session',
-      'work',
+      'Work Tracker',
+      'productivity',
       'Briefcase',
       'amber'
     );

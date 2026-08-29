@@ -112,9 +112,9 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
 
   const { calendarData } = context
 
-  // Local DayLogsModal states
+  // Local DayLogsModal states - auto open Today's overview right away on calendar view
   const selectedDateStr = dateParam || todayStr
-  const [isDayLogsOpen, setIsDayLogsOpen] = useState(!!dateParam)
+  const [isDayLogsOpen, setIsDayLogsOpen] = useState(true)
 
   const handleDayClick = (dateStr: string) => {
     setIsDayLogsOpen(true)

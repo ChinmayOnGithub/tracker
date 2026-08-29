@@ -64,6 +64,30 @@ export async function createLeaveRequest(data: {
 
   try {
     const user = await requireAuth()
+
+    // Check for overlapping active leave in the same range
+    const startUtc = new Date(`${data.startDate}T00:00:00.000Z`)
+    const endUtc = new Date(`${data.endDate}T23:59:59.999Z`)
+
+    const existingOverlap = await db.leaveRecord.findFirst({
+      where: {
+        userId: user.id,
+        deletedAt: null,
+        status: { not: LeaveStatus.REJECTED },
+        startDate: { lte: endUtc },
+        endDate: { gte: startUtc },
+      },
+    })
+
+    if (existingOverlap) {
+      const overlapStart = existingOverlap.startDate.toISOString().split('T')[0]
+      const overlapEnd = existingOverlap.endDate.toISOString().split('T')[0]
+      return {
+        success: false,
+        error: `Overlapping leave already exists for ${existingOverlap.leaveType} (${overlapStart} to ${overlapEnd}).`,
+      }
+    }
+
     const record = await db.leaveRecord.create({
       data: {
         userId: user.id,
@@ -95,13 +119,22 @@ export async function createLeaveRequest(data: {
       'purple'
     )
 
-    for (const dateStr of dates) {
+    for (let i = 0; i < dates.length; i++) {
+      const dateStr = dates[i]
+      // Day 0 maintains the foreign key relation.
+      // Days > 0 store the leaveRecordId in the payload JSON to satisfy the @unique constraint on leaveRecordId.
       await ActivityService.logActivity({
         userId: user.id,
         templateId: template.id,
         date: dateStr,
         status: 'done',
-        leaveRecordId: record.id,
+        leaveRecordId: i === 0 ? record.id : null,
+        payload: {
+          leaveRecordId: record.id,
+          leaveType: data.leaveType,
+          dayIndex: i,
+          totalDays: data.totalDays,
+        },
         note: data.notes ?? `Time Off: ${data.leaveType}`
       })
     }
@@ -131,15 +164,25 @@ export async function updateLeaveStatus(id: string, status: LeaveStatus) {
     })
 
     if (status === LeaveStatus.REJECTED) {
-      // Soft-delete corresponding logs
+      // Soft-delete corresponding logs across both 1:1 foreign key and multi-day payloads
       await db.activityLog.updateMany({
-        where: { leaveRecordId: id },
+        where: {
+          OR: [
+            { leaveRecordId: id },
+            { payload: { path: ['leaveRecordId'], equals: id } },
+          ],
+        },
         data: { deletedAt: new Date() }
       })
     } else if (status === LeaveStatus.APPROVED) {
       // Restore corresponding logs if they were soft-deleted
       await db.activityLog.updateMany({
-        where: { leaveRecordId: id },
+        where: {
+          OR: [
+            { leaveRecordId: id },
+            { payload: { path: ['leaveRecordId'], equals: id } },
+          ],
+        },
         data: { deletedAt: null }
       })
     }
@@ -159,9 +202,14 @@ export async function deleteLeaveRecord(id: string) {
 
     await db.leaveRecord.update({ where: { id }, data: { deletedAt: new Date() } })
     
-    // Soft-delete corresponding activity logs
+    // Soft-delete corresponding activity logs for single-day and multi-day ranges
     await db.activityLog.updateMany({
-      where: { leaveRecordId: id },
+      where: {
+        OR: [
+          { leaveRecordId: id },
+          { payload: { path: ['leaveRecordId'], equals: id } },
+        ],
+      },
       data: { deletedAt: new Date() }
     })
 
@@ -236,4 +284,37 @@ export async function updateLeaveAllowance(leaveType: LeaveType, year: number, a
     return { success: false, error: String(error) }
   }
 }
+
+/** Batch update multiple leave allowances for a year. */
+export async function batchUpdateLeaveAllowances(year: number, updates: { leaveType: LeaveType; allowance: number }[]) {
+  try {
+    const user = await requireAuth()
+    for (const u of updates) {
+      await db.leaveAllowance.upsert({
+        where: {
+          userId_year_leaveType: {
+            userId: user.id,
+            year,
+            leaveType: u.leaveType,
+          },
+        },
+        create: {
+          userId: user.id,
+          year,
+          leaveType: u.leaveType,
+          allowance: u.allowance,
+        },
+        update: {
+          allowance: u.allowance,
+        },
+      })
+    }
+    revalidatePath('/')
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to batch update leave allowances:', error)
+    return { success: false, error: String(error) }
+  }
+}
+
 

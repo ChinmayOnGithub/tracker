@@ -12,6 +12,7 @@ import { CommandPalette } from './CommandPalette'
 import { Card, CardBody, Button, Input, Modal } from '@/design-system'
 import { TemplateModal } from './TemplateModal'
 import { getTodayDateStr } from '@/lib/recurrence'
+import { CalendarCacheService } from '@/modules/calendar/services/CalendarCacheService'
 
 export interface CalendarData {
   connected: boolean
@@ -80,7 +81,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const pinInputRef = useRef<HTMLInputElement>(null)
 
   // Theme state
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark')
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
+      if (savedTheme) return savedTheme
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    }
+    return 'dark'
+  })
 
   const changeTab = useCallback((tabId: string) => {
     router.push(tabId === 'today' ? '/' : `/${tabId}`)
@@ -99,9 +107,30 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       setCalendarData({ connected: false, agenda: null, error: null, loading: false })
       return
     }
-    setCalendarData(prev => ({ ...prev, loading: !force, error: null }))
+
+    const todayStr = dateParam || getTodayDateStr()
+
+    // 1. Check warm memory / IndexedDB cache first
+    const { data: cachedAgenda, isStale } = await CalendarCacheService.getCachedAgenda(todayStr)
+    if (cachedAgenda) {
+      setCalendarData(prev => ({
+        ...prev,
+        connected: true,
+        agenda: cachedAgenda,
+        error: null,
+        loading: false,
+      }))
+      // If cache is fresh and not forced, DO NOT trigger an unnecessary network request!
+      if (!isStale && !force) {
+        return
+      }
+    } else {
+      // Only show loading if we don't have any cached events
+      setCalendarData(prev => ({ ...prev, loading: !force, error: null }))
+    }
+
+    // 2. Fetch fresh data from server in background (or foreground if no cache)
     try {
-      const todayStr = dateParam || getTodayDateStr()
       const res = (await getAgendaAction(todayStr, force)) as {
         success: boolean
         connected?: boolean
@@ -112,26 +141,34 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         }
         error?: string
       }
+
       if (res.success && res.connected && res.agenda) {
+        // 3. Reconcile with existing cached items using stable event IDs
+        const reconciled = CalendarCacheService.reconcileAgenda(cachedAgenda, res.agenda)
+        await CalendarCacheService.saveCachedAgenda(todayStr, reconciled)
+
         setCalendarData({
           connected: res.connected,
-          agenda: res.agenda,
+          agenda: reconciled,
           error: null,
-          loading: false
+          loading: false,
         })
-      } else {
+      } else if (!cachedAgenda) {
         setCalendarData(prev => ({
           ...prev,
+          connected: res.connected ?? false,
           error: res.error || "Failed to fetch calendar",
-          loading: false
+          loading: false,
         }))
       }
     } catch (err: unknown) {
-      setCalendarData(prev => ({
-        ...prev,
-        error: err instanceof Error ? err.message : "An unexpected error occurred",
-        loading: false
-      }))
+      if (!cachedAgenda) {
+        setCalendarData(prev => ({
+          ...prev,
+          error: err instanceof Error ? err.message : "An unexpected error occurred",
+          loading: false,
+        }))
+      }
     }
   }, [user, dateParam])
 
@@ -144,11 +181,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // Load client-specific states on mount
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
-    if (savedTheme) {
-      setTimeout(() => setTheme(savedTheme), 0)
-    } else {
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      setTimeout(() => setTheme(systemDark ? 'dark' : 'light'), 0)
+    if (savedTheme && savedTheme !== theme) {
+      setTheme(savedTheme)
     }
 
     // Apply personal styles on load
@@ -157,7 +191,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     // Listen to custom settings update events to refresh layout styles instantly
     window.addEventListener('personal_settings_changed', applyPersonalStyles)
     return () => window.removeEventListener('personal_settings_changed', applyPersonalStyles)
-  }, [])
+  }, [theme])
 
   const applyPersonalStyles = () => {
     const accent = localStorage.getItem('personal_accent_color') || 'blue'

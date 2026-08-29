@@ -4,6 +4,10 @@ import React from 'react'
 import { CalendarX } from 'lucide-react'
 import { Card, CardHeader, CardBody, CardFooter, Button } from '@/design-system'
 import { LeaveRecord, LeaveAllowance } from '@/lib/store/store'
+import {
+  LeaveType, DEFAULT_LEAVE_TYPES_META,
+  useLeaveMeta, getLeaveTypeStyle
+} from '@/lib/leaveConfig'
 
 interface LeaveWidgetProps {
   isVisible: boolean
@@ -14,7 +18,8 @@ interface LeaveWidgetProps {
 
 /**
  * LeaveWidget
- * Standardized using Card components and design token colors/borders.
+ * Displays remaining time-off using customized leave types, labels, and colors.
+ * Excludes types where allocation is 0 and no leaves have been used.
  */
 export const LeaveWidget: React.FC<LeaveWidgetProps> = ({
   isVisible,
@@ -22,6 +27,8 @@ export const LeaveWidget: React.FC<LeaveWidgetProps> = ({
   leaveAllowances,
   onTabChange,
 }) => {
+  const metaMap = useLeaveMeta()
+
   if (!isVisible) return null
 
   // Compute approved leaves used
@@ -30,16 +37,15 @@ export const LeaveWidget: React.FC<LeaveWidgetProps> = ({
     usedByType[r.leaveType] = (usedByType[r.leaveType] ?? 0) + r.totalDays
   })
 
-  const leaveTypes = ['CASUAL', 'SICK', 'PTO', 'COMP_OFF']
-  const leaveLabels: Record<string, string> = {
-    CASUAL: 'Casual', SICK: 'Sick', PTO: 'PTO', COMP_OFF: 'Comp Off'
-  }
-  const leaveColors: Record<string, string> = {
-    CASUAL: 'text-blue-500 border-blue-500/20 bg-blue-500/5 dark:bg-blue-500/10',
-    SICK: 'text-red-500 border-red-500/20 bg-red-500/5 dark:bg-red-500/10',
-    PTO: 'text-purple-500 border-purple-500/20 bg-purple-500/5 dark:bg-purple-500/10',
-    COMP_OFF: 'text-amber-500 border-amber-500/20 bg-amber-500/5 dark:bg-amber-500/10'
-  }
+  // Filter types that are enabled AND have allowance > 0 or used > 0
+  const ALL_LEAVE_TYPES: LeaveType[] = ['CASUAL', 'SICK', 'PTO', 'COMP_OFF', 'HALF_DAY', 'WFH']
+  const displayTypes = ALL_LEAVE_TYPES.filter(type => {
+    const meta = metaMap[type] || DEFAULT_LEAVE_TYPES_META[type]
+    if (!meta.enabled) return false
+    const allowance = leaveAllowances.find(a => a.leaveType === type)?.allowance ?? 0
+    const used = usedByType[type] ?? 0
+    return allowance > 0 || used > 0
+  })
 
   return (
     <Card className="hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
@@ -51,19 +57,30 @@ export const LeaveWidget: React.FC<LeaveWidgetProps> = ({
         <span className="text-[10px] font-bold text-[var(--color-text-muted)]">Remaining</span>
       </CardHeader>
       <CardBody className="py-1">
-        <div className="grid grid-cols-2 gap-2">
-          {leaveTypes.map(type => {
-            const allowance = leaveAllowances.find(a => a.leaveType === type)?.allowance ?? 0
-            const used = usedByType[type] ?? 0
-            const remaining = Math.max(0, allowance - used)
-            return (
-              <div key={type} className={`border border-[var(--color-border)] p-2 rounded-xl flex flex-col justify-center ${leaveColors[type] || ''}`}>
-                <div className="text-sm font-black tabular-nums">{remaining} / {allowance}</div>
-                <div className="text-[9px] font-bold uppercase tracking-wider opacity-85 mt-0.5">{leaveLabels[type] || type}</div>
-              </div>
-            )
-          })}
-        </div>
+        {displayTypes.length === 0 ? (
+          <div className="text-center py-3 text-xs text-[var(--color-text-muted)]">
+            No active leave entitlements
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {displayTypes.map(type => {
+              const meta = metaMap[type] || DEFAULT_LEAVE_TYPES_META[type]
+              const allowance = leaveAllowances.find(a => a.leaveType === type)?.allowance ?? 0
+              const used = usedByType[type] ?? 0
+              const remaining = Math.max(0, allowance - used)
+              const colorStyle = getLeaveTypeStyle(meta.color)
+
+              return (
+                <div key={type} className={`border p-2 rounded-xl flex flex-col justify-center ${colorStyle}`}>
+                  <div className="text-sm font-black tabular-nums">{remaining} / {allowance}</div>
+                  <div className="text-[9px] font-bold uppercase tracking-wider opacity-90 mt-0.5 truncate" title={meta.label}>
+                    {meta.label}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </CardBody>
       <CardFooter className="pt-2 border-t border-[var(--color-border)]/40 mt-2">
         <Button
@@ -78,3 +95,4 @@ export const LeaveWidget: React.FC<LeaveWidgetProps> = ({
     </Card>
   )
 }
+export default LeaveWidget

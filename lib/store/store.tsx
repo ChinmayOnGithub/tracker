@@ -159,6 +159,7 @@ interface StoreContextType {
 
   // Leave Allowance Actions
   updateLeaveAllowanceAction: (leaveType: string, year: number, val: number) => Promise<void>
+  batchUpdateLeaveAllowancesAction: (year: number, updates: { leaveType: string; allowance: number }[]) => Promise<void>
   ensureLeaveAllowancesAction: (year: number) => Promise<void>
 
   // Journal Actions
@@ -939,10 +940,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const updateLeaveAllowanceAction = async (leaveType: string, year: number, val: number) => {
     const previousAllowances = [...state.leaveAllowances]
-    setState(prev => ({
-      ...prev,
-      leaveAllowances: prev.leaveAllowances.map(a => a.leaveType === leaveType ? { ...a, allowance: val } : a)
-    }))
+    setState(prev => {
+      const exists = prev.leaveAllowances.some(a => a.leaveType === leaveType)
+      return {
+        ...prev,
+        leaveAllowances: exists
+          ? prev.leaveAllowances.map(a => a.leaveType === leaveType ? { ...a, allowance: val } : a)
+          : [...prev.leaveAllowances, { id: `temp-${leaveType}-${year}`, userId: '', year, leaveType, allowance: val }],
+      }
+    })
 
     writeQueue.add({
       id: `leave-allowance-update-${leaveType}-${year}`,
@@ -950,6 +956,34 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       run: async () => {
         const { updateLeaveAllowance } = await import('@/app/actions/leave')
         return updateLeaveAllowance(leaveType as any, year, val)
+      },
+      rollback: () => {
+        setState(prev => ({ ...prev, leaveAllowances: previousAllowances }))
+      }
+    })
+  }
+
+  const batchUpdateLeaveAllowancesAction = async (year: number, updates: { leaveType: string; allowance: number }[]) => {
+    const previousAllowances = [...state.leaveAllowances]
+    setState(prev => {
+      const copy = [...prev.leaveAllowances]
+      for (const u of updates) {
+        const idx = copy.findIndex(a => a.leaveType === u.leaveType)
+        if (idx >= 0) {
+          copy[idx] = { ...copy[idx], allowance: u.allowance }
+        } else {
+          copy.push({ id: `temp-${u.leaveType}-${year}`, userId: '', year, leaveType: u.leaveType, allowance: u.allowance })
+        }
+      }
+      return { ...prev, leaveAllowances: copy }
+    })
+
+    writeQueue.add({
+      id: `leave-allowance-batch-${year}-${Date.now()}`,
+      dedupKey: `leave-allowance-batch-${year}`,
+      run: async () => {
+        const { batchUpdateLeaveAllowances } = await import('@/app/actions/leave')
+        return batchUpdateLeaveAllowances(year, updates as any)
       },
       rollback: () => {
         setState(prev => ({ ...prev, leaveAllowances: previousAllowances }))
@@ -1455,6 +1489,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       upsertNoteAction,
       deleteNoteAction,
       updateLeaveAllowanceAction,
+      batchUpdateLeaveAllowancesAction,
       ensureLeaveAllowancesAction,
       upsertJournalAction,
       deleteJournalAction,

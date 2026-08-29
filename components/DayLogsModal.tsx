@@ -6,15 +6,16 @@ import { ActivityTemplate, ActivityLog, Note, TimelineItem, AnalyzedTemplate } f
 import { CalendarDayDTO } from '@/modules/calendar/dto/CalendarDayDTO'
 import { analyzeRecurrence } from '@/lib/recurrence'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
-import { createCalendarEventAction, updateCalendarEventAction, deleteCalendarEventAction } from '@/app/actions/calendar'
+import { createCalendarEventAction, updateCalendarEventAction } from '@/app/actions/calendar'
 import { Icon } from './Icon'
-import { X, Sparkles, BookOpen, Search, Plus, Clock, Check, ArrowRightCircle, Edit2, Trash2, Settings, Briefcase, MoreVertical } from 'lucide-react'
+import { X, Sparkles, BookOpen, Search, Plus, Clock, Settings, Briefcase, MoreVertical } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
 import { useRouter } from 'next/navigation'
 import { Button, Input } from '@/design-system'
 import { MarathiCalendarEvents } from './daylogs/MarathiCalendarEvents'
 import { CompletionService } from '@/lib/services/CompletionService'
 import { CompletionDialog } from './CompletionDialog'
+import { TaskActivityRow } from './shared/TaskActivityRow'
 
 interface CalendarDayEvent {
   id: string
@@ -411,24 +412,6 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
     setIsScheduling(true)
   }
 
-  const handleEditEvent = (event: CalendarDayEvent) => {
-    setErrorMsg('')
-    setEditingEventId(event.id)
-    setTaskTitle(event.title)
-    setAllDay(event.allDay)
-    if (!event.allDay && event.start && event.end) {
-      const sDate = new Date(event.start)
-      const eDate = new Date(event.end)
-      setStartTime(`${String(sDate.getHours()).padStart(2, '0')}:${String(sDate.getMinutes()).padStart(2, '0')}`)
-      setEndTime(`${String(eDate.getHours()).padStart(2, '0')}:${String(eDate.getMinutes()).padStart(2, '0')}`)
-    } else {
-      setStartTime('10:00')
-      setEndTime('10:30')
-    }
-    setSelectedColor(event.color || 'zinc')
-    setIsScheduling(true)
-  }
-
   const handleSaveEvent = async () => {
     if (!taskTitle.trim()) { setErrorMsg('Please specify a title'); return }
     try {
@@ -488,18 +471,6 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
     }
   }
 
-  const handleDeleteEvent = async (id: string) => {
-    if (confirm('Remove this scheduled event?')) {
-      try {
-        await deleteCalendarEventAction(id)
-        fetchDayDetails()
-        router.refresh()
-      } catch (_err) {
-        alert('Failed to delete event')
-      }
-    }
-  }
-
   // ── Timeline card renderer (matches TodayDashboard style) ───────────────
   const renderTimelineCard = (occurrence: TimelineItem) => {
     const isTimed = !occurrence.isAllDay
@@ -541,175 +512,137 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
       statusIndicatorColor = 'bg-[var(--color-external)]'
     }
 
-    return (
-      <div
-        key={occurrence.id}
-        className={`flex items-center gap-3 px-3 py-1.5 transition-all duration-150 group relative hover:bg-[var(--color-accent)]/30 ${
-          isDone ? 'opacity-65' : isCanceled || isPostponed ? 'opacity-40' : ''
-        }`}
-      >
-        {/* Left Indicator Strip */}
-        <div className={`absolute left-0 top-0 bottom-0 w-1 ${statusIndicatorColor}`} />
+    const titleNode = occurrence.htmlLink ? (
+      <a href={occurrence.htmlLink} target="_blank" rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        className="hover:underline inline-flex items-center gap-1">
+        <span className="truncate">{occurrence.templateName}</span>
+      </a>
+    ) : occurrence.templateName
 
-        {/* Cycling Checkbox */}
+    const metaParts = (
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {isTimed && startTimeLabel && (
+          <span className={`shrink-0 text-[9px] font-mono font-bold px-1 py-0.5 rounded-sm border ${colorClasses.text} ${colorClasses.border} ${colorClasses.bg}`}>
+            {startTimeLabel}
+            {estimatedDuration ? ` • ${estimatedDuration}m` : ''}
+          </span>
+        )}
+        {streak > 1 && !isDone && !isCanceled && (
+          <span className="shrink-0 flex items-center gap-0.5 text-[9px] font-extrabold text-orange-500 bg-orange-500/10 px-1 py-0.5 rounded-sm border border-orange-500/20" title={`${streak} day streak!`}>
+            🔥 {streak}
+          </span>
+        )}
+      </div>
+    )
+
+    const menuSlot = !isGoogleCalendar ? (
+      <div className="relative shrink-0 flex items-center ml-auto mr-1">
         <button
-          disabled={completingHabitId === occurrence.templateId}
-          onClick={() => cycleTaskStatus(occurrence)}
-          title={`Status: ${isDone ? 'Done' : isCanceled ? 'Canceled' : isPostponed ? 'Postponed' : 'Cleared'}. Click to cycle.`}
-          aria-label="Cycle task status"
-          className="shrink-0 w-11 h-11 flex items-center justify-center cursor-pointer transition-all duration-300 hover:scale-110 active:scale-90 disabled:opacity-50 -ml-2.5 -mr-2.5"
+          type="button"
+          title="More Actions"
+          onClick={(e) => {
+            e.stopPropagation()
+            setActiveMenuId(activeMenuId === occurrence.id ? null : occurrence.id)
+          }}
+          className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
         >
-          <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-all duration-300 shadow-xs ${
-            completingHabitId === occurrence.templateId ? 'bg-slate-100 dark:bg-zinc-800 border-[var(--color-border)]' :
-            isDone ? 'bg-[var(--color-completed)] border-[var(--color-completed)] text-white' :
-            isCanceled ? 'bg-[var(--color-overdue)] border-[var(--color-overdue)] text-white' :
-            isPostponed ? 'bg-[var(--color-external)] border-[var(--color-external)] text-white' :
-            'bg-[var(--color-bg-base)] border-[var(--color-border)] hover:border-[var(--color-primary)]'
-          }`}>
-            {completingHabitId === occurrence.templateId ? (
-              <span className="w-1.5 h-1.5 bg-[var(--color-primary)] rounded-full animate-ping" />
-            ) : isDone ? (
-              <Check className="w-3.5 h-3.5 animate-check-pop" />
-            ) : isCanceled ? (
-              <span className="text-[10px] font-black leading-none">✕</span>
-            ) : isPostponed ? (
-              <ArrowRightCircle className="w-3.5 h-3.5" />
-            ) : null}
-          </div>
+          <MoreVertical className="w-3.5 h-3.5" />
         </button>
 
-        {/* Category Icon */}
-        <div className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 ${
-          isGoogleCalendar
-            ? 'bg-[var(--color-external)]/10 border-[var(--color-external)]/20 text-[var(--color-external)]'
-            : `${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`
-        }`}>
-          <Icon name={occurrence.icon || template?.icon || 'CheckSquare'} size={12} />
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-xs font-semibold leading-tight truncate ${
-              isDone || isCanceled
-                ? 'line-through text-[var(--color-text-muted)]'
-                : 'text-[var(--color-text-main)]'
-            }`}>
-              {occurrence.templateName}
-            </span>
-            {isTimed && startTimeLabel && (
-              <span className={`shrink-0 text-[9px] font-mono font-bold px-1 py-0.5 rounded-sm border ${colorClasses.text} ${colorClasses.border} ${colorClasses.bg}`}>
-                {startTimeLabel}
-                {estimatedDuration ? ` • ${estimatedDuration}m` : ''}
-              </span>
-            )}
-            {streak > 1 && !isDone && !isCanceled && (
-              <span className="shrink-0 flex items-center gap-0.5 text-[9px] font-extrabold text-orange-500 bg-orange-500/10 px-1 py-0.5 rounded-sm border border-orange-500/20" title={`${streak} day streak!`}>
-                🔥 {streak}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Three-Dot Menu button */}
-        {!isGoogleCalendar && (
-          <div className="relative shrink-0 flex items-center ml-auto mr-1">
+        {activeMenuId === occurrence.id && (
+          <div className="absolute right-0 bottom-6 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg shadow-lg py-1 z-50 w-44 animate-in slide-in-from-bottom-2 duration-100">
             <button
               type="button"
-              title="More Actions"
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation()
-                setActiveMenuId(activeMenuId === occurrence.id ? null : occurrence.id)
+                setActiveMenuId(null)
+                await cycleTaskStatus(occurrence)
               }}
-              className="w-11 h-11 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer -mr-3.5"
+              className="w-full text-left px-3 py-1.5 text-xs text-[var(--color-text-main)] hover:bg-[var(--color-accent)]/10 font-medium transition-colors"
             >
-              <MoreVertical className="w-3.5 h-3.5" />
+              {isDone ? 'Mark Uncompleted' : 'Mark Completed'}
             </button>
 
-            {activeMenuId === occurrence.id && (
-              <div className="absolute right-0 bottom-6 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg shadow-lg py-1 z-50 w-44 animate-in slide-in-from-bottom-2 duration-100">
-                <button
-                  type="button"
-                  onClick={async (e) => {
-                    e.stopPropagation()
-                    setActiveMenuId(null)
-                    await cycleTaskStatus(occurrence)
-                  }}
-                  className="w-full text-left px-3 py-1.5 text-xs text-[var(--color-text-main)] hover:bg-[var(--color-accent)]/10 font-medium transition-colors"
-                >
-                  {isDone ? 'Mark Uncompleted' : 'Mark Completed'}
-                </button>
+            {!isCanceled && (
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  setActiveMenuId(null)
+                  await setTaskStatusAction(occurrence, dateStr, 'skipped')
+                  invalidateCache(dateStr)
+                  fetchDayDetails()
+                }}
+                className="w-full text-left px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 font-medium transition-colors"
+              >
+                Skip / Cancel Today
+              </button>
+            )}
 
-                {!isCanceled && (
-                  <button
-                    type="button"
-                    onClick={async (e) => {
-                      e.stopPropagation()
-                      setActiveMenuId(null)
-                      await setTaskStatusAction(occurrence, dateStr, 'skipped')
+            {!isPostponed && template?.recurrenceType !== 'daily' && (
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  setActiveMenuId(null)
+                  await setTaskStatusAction(occurrence, dateStr, 'postponed')
+                  invalidateCache(dateStr)
+                  fetchDayDetails()
+                }}
+                className="w-full text-left px-3 py-1.5 text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 font-medium transition-colors"
+              >
+                Postpone to Tomorrow
+              </button>
+            )}
+
+            {(occurrence.logId || occurrence.id.includes('temp-')) && (
+              <button
+                type="button"
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  setActiveMenuId(null)
+                  if (confirm("Are you sure you want to delete today's log?")) {
+                    if (occurrence.logId) {
+                      await deleteActivityLog(occurrence.logId)
                       invalidateCache(dateStr)
                       fetchDayDetails()
-                    }}
-                    className="w-full text-left px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 font-medium transition-colors"
-                  >
-                    Skip / Cancel Today
-                  </button>
-                )}
-
-                {!isPostponed && template?.recurrenceType !== 'daily' && (
-                  <button
-                    type="button"
-                    onClick={async (e) => {
-                      e.stopPropagation()
-                      setActiveMenuId(null)
-                      await setTaskStatusAction(occurrence, dateStr, 'postponed')
-                      invalidateCache(dateStr)
-                      fetchDayDetails()
-                    }}
-                    className="w-full text-left px-3 py-1.5 text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 font-medium transition-colors"
-                  >
-                    Postpone to Tomorrow
-                  </button>
-                )}
-
-                {occurrence.templateId && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setActiveMenuId(null)
-                      // No template open handler directly in logs modal but let's show label anyway
-                    }}
-                    className="w-full text-left px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]/10 font-medium transition-colors border-t border-[var(--color-border)]/50 mt-1 pt-1"
-                  >
-                    Activity Template
-                  </button>
-                )}
-
-                {(occurrence.logId || occurrence.id.includes('temp-')) && (
-                  <button
-                    type="button"
-                    onClick={async (e) => {
-                      e.stopPropagation()
-                      setActiveMenuId(null)
-                      if (confirm("Are you sure you want to delete today's log?")) {
-                        if (occurrence.logId) {
-                          await deleteActivityLog(occurrence.logId)
-                          invalidateCache(dateStr)
-                          fetchDayDetails()
-                        }
-                      }
-                    }}
-                    className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 font-medium transition-colors border-t border-[var(--color-border)]/50 mt-1 pt-1"
-                  >
-                    Delete Today&apos;s Log
-                  </button>
-                )}
-              </div>
+                    }
+                  }
+                }}
+                className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 font-medium transition-colors border-t border-[var(--color-border)]/50 mt-1 pt-1"
+              >
+                Delete Today&apos;s Log
+              </button>
             )}
           </div>
         )}
       </div>
+    ) : undefined
+
+    return (
+      <TaskActivityRow
+        key={occurrence.id}
+        id={occurrence.id}
+        title={titleNode}
+        icon={
+          <div className={`w-5 h-5 rounded-md flex items-center justify-center ${
+            isGoogleCalendar ? 'text-[var(--color-external)]' : `${colorClasses.text}`
+          }`}>
+            <Icon name={occurrence.icon || template?.icon || 'CheckSquare'} size={12} />
+          </div>
+        }
+        isExternal={isGoogleCalendar}
+        status={isDone ? 'done' : isCanceled ? 'skipped' : isPostponed ? 'postponed' : 'cleared'}
+        isCompleted={isDone}
+        isSkipped={isCanceled}
+        isPostponed={isPostponed}
+        isLoading={completingHabitId === occurrence.templateId}
+        accentColorClass={statusIndicatorColor}
+        onCheckboxClick={() => cycleTaskStatus(occurrence)}
+        meta={metaParts}
+        rightActions={menuSlot}
+      />
     )
   }
 
@@ -1052,22 +985,18 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                         timeLabel = `${s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
                       }
                       return (
-                        <div key={`event-${event.id}`} className="flex items-center justify-between px-3 py-1.5 hover:bg-[var(--color-accent)]/30 transition-colors group relative">
-                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-[var(--color-primary)]" />
+                        <div key={`event-${event.id}`} className="flex items-center justify-between px-3 py-2 hover:bg-[var(--color-accent)]/20 transition-colors relative">
+                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-[var(--color-external)]" />
                           <div className="flex items-center gap-3 min-w-0">
                             <div className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}>
                               <Icon name={event.type === 'MEETING' ? 'Calendar' : 'CheckSquare'} size={12} />
                             </div>
                             <div className="min-w-0">
-                              <span className="text-xs font-semibold text-[var(--color-text-main)] truncate">{event.title}</span>
-                              <p className="text-[10px] text-slate-400 dark:text-zinc-500 flex items-center gap-1">
+                              <span className="text-xs font-semibold text-[var(--color-text-main)] truncate block">{event.title}</span>
+                              <p className="text-[10px] text-slate-400 dark:text-zinc-500 flex items-center gap-1 mt-0.5">
                                 <Clock size={10} /> {timeLabel}
                               </p>
                             </div>
-                          </div>
-                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button variant="ghost" size="sm" onClick={() => handleEditEvent(event)} className="p-1"><Edit2 size={12} /></Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteEvent(event.id)} className="p-1 text-red-500"><Trash2 size={12} /></Button>
                           </div>
                         </div>
                       )

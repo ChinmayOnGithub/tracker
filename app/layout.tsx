@@ -47,7 +47,7 @@ export default function RootLayout({
       <head>
         <ThemeScript />
       </head>
-      <body className={`${inter.variable} ${jetbrainsMono.variable} min-h-full flex flex-col bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-100 selection:bg-slate-200 dark:selection:bg-zinc-800 selection:text-slate-900 dark:selection:text-white transition-colors duration-200`}>
+      <body className={`${inter.variable} ${jetbrainsMono.variable} min-h-full flex flex-col bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-100 selection:bg-slate-200 dark:selection:bg-zinc-800 selection:text-slate-900 dark:selection:text-white`}>
         <ClientProviders>
           {children}
         </ClientProviders>

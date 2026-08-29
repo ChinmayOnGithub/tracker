@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-const LEAVE_TYPES = ['CASUAL', 'SICK', 'PTO', 'COMP_OFF', 'HALF_DAY', 'WFH'] as const
-const LEAVE_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as const
+export const LEAVE_TYPES = ['CASUAL', 'SICK', 'PTO', 'COMP_OFF', 'HALF_DAY', 'WFH'] as const
+export const LEAVE_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as const
 
 export const createLeaveSchema = z
   .object({
@@ -16,8 +16,7 @@ export const createLeaveSchema = z
       .regex(/^\d{4}-\d{2}-\d{2}$/, 'End date must be in YYYY-MM-DD format'),
     totalDays: z
       .number({ invalid_type_error: 'Total days must be a number' })
-      .int('Total days must be a whole number')
-      .min(1, 'Must be at least 1 day'),
+      .min(0.5, 'Must be at least 0.5 days'),
     notes: z.string().max(1000, 'Notes must be 1000 characters or fewer').optional(),
     status: z.enum(LEAVE_STATUSES).optional(),
   })
@@ -27,7 +26,7 @@ export const createLeaveSchema = z
   )
 
 export const updateLeaveStatusSchema = z.object({
-  id: z.string().cuid('Invalid leave record ID'),
+  id: z.string().min(1, 'Invalid leave record ID'),
   status: z.enum(LEAVE_STATUSES, {
     errorMap: () => ({ message: 'Invalid status' }),
   }),
@@ -38,7 +37,6 @@ export const updateLeaveAllowanceSchema = z.object({
   year: z.number().int().min(2000).max(2100),
   allowance: z
     .number({ invalid_type_error: 'Allowance must be a number' })
-    .int('Allowance must be a whole number')
     .min(0, 'Allowance cannot be negative')
     .max(365, 'Allowance cannot exceed 365 days'),
 })

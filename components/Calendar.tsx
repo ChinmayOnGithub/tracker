@@ -9,6 +9,7 @@ import { CalendarMonthSummaryDTO } from '@/modules/calendar/dto/CalendarMonthSum
 import { CalendarWeekDTO, CalendarWeekEventDTO } from '@/modules/calendar/dto/CalendarWeekDTO'
 import { checkGoogleConnection, syncCalendarAction } from '@/modules/sync/google-calendar/actions'
 import { getWeekDates } from '@/lib/recurrence'
+import { CalendarCacheService } from '@/modules/calendar/services/CalendarCacheService'
 
 interface TestAnalyzedTemplate {
   template: ActivityTemplate
@@ -114,24 +115,48 @@ export const Calendar: React.FC<CalendarProps> = ({
     })
   }, [startOfWeekDate])
 
-  // Sync state with date/view changes using isolated async load inside effect to avoid setState-in-effect warning
+  // Sync state with date/view changes using cache-first background-revalidation strategy
   useEffect(() => {
     let active = true
     const load = async () => {
       try {
-        setLoading(true)
         if (view === 'month') {
+          // 1. Check cache first
+          const { data: cachedMonth, isStale } = await CalendarCacheService.getCachedMonthSummary(year, month + 1)
+          if (cachedMonth && active) {
+            setMonthSummaries(cachedMonth)
+            setLoading(false)
+            if (!isStale) return // Warm & fresh: zero network request!
+          } else if (active) {
+            setLoading(true)
+          }
+
+          // 2. Background revalidation
           const res = await fetch(`/api/calendar/month?year=${year}&month=${month + 1}`)
           const json = await res.json()
           if (active && json.success) {
             setMonthSummaries(json.data)
+            await CalendarCacheService.saveCachedMonthSummary(year, month + 1, json.data)
           }
         } else {
           const startStr = `${startOfWeekDate.getFullYear()}-${String(startOfWeekDate.getMonth() + 1).padStart(2, '0')}-${String(startOfWeekDate.getDate()).padStart(2, '0')}`
+          
+          // 1. Check cache first
+          const { data: cachedWeek, isStale } = await CalendarCacheService.getCachedWeekData(startStr)
+          if (cachedWeek && active) {
+            setWeekData(cachedWeek)
+            setLoading(false)
+            if (!isStale) return // Warm & fresh: zero network request!
+          } else if (active) {
+            setLoading(true)
+          }
+
+          // 2. Background revalidation
           const res = await fetch(`/api/calendar/week?startOfWeek=${startStr}`)
           const json = await res.json()
           if (active && json.success) {
             setWeekData(json.data)
+            await CalendarCacheService.saveCachedWeekData(startStr, json.data)
           }
         }
       } catch (err) {
