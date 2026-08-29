@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react'
-import { Briefcase, Clock, Play, Square, Pencil } from 'lucide-react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { Briefcase, Clock, Play, Square, Pencil, Pause, RotateCcw } from 'lucide-react'
 import { Card, CardHeader, CardBody, Button, Input } from '@/design-system'
 import { ActivityLog } from '@/types'
 
@@ -15,12 +15,68 @@ interface WorkHoursWidgetProps {
   logWorkPresenceAction: (data: unknown) => Promise<unknown>
 }
 
-type WorkFormState = {
+export type WorkSessionState = 'idle' | 'running' | 'paused' | 'completed'
+
+interface WorkFormState {
   status: 'office' | 'wfh' | 'cleared'
   mode: 'time' | 'manual'
+  sessionState: WorkSessionState
+  accumulatedSeconds: number
+  currentSegmentStartedAt: string | null
   inTime: string
   outTime: string
   manualHours: number
+}
+
+function parseInitialWorkState(todayWorkLog: ActivityLog | null): WorkFormState {
+  if (todayWorkLog && todayWorkLog.status !== 'cleared') {
+    const payload = todayWorkLog.payload as Record<string, unknown> | null
+    const status = todayWorkLog.status === 'wfh' ? 'wfh' : 'office'
+    const mode = (payload?.loggingMode as 'time' | 'manual') || (payload?.manualHours ? 'manual' : 'time')
+    const inTime = (payload?.inTime as string) || ''
+    const outTime = (payload?.outTime as string) || ''
+    const manualHours = payload?.manualHours !== undefined ? Number(payload.manualHours) : (todayWorkLog.amount || 8.0)
+    
+    // Explicit session state resolution
+    let sessionState: WorkSessionState = 'idle'
+    if (payload?.sessionState) {
+      sessionState = payload.sessionState as WorkSessionState
+    } else if (outTime) {
+      sessionState = 'completed'
+    } else if (payload?.currentSegmentStartedAt) {
+      sessionState = 'running'
+    } else if (todayWorkLog.amount && todayWorkLog.amount > 0) {
+      sessionState = 'completed'
+    }
+
+    const accumulatedSeconds = typeof payload?.accumulatedSeconds === 'number'
+      ? payload.accumulatedSeconds
+      : (todayWorkLog.amount ? Math.round(todayWorkLog.amount * 3600) : 0)
+
+    const currentSegmentStartedAt = (payload?.currentSegmentStartedAt as string) || null
+
+    return {
+      status,
+      mode,
+      sessionState,
+      accumulatedSeconds,
+      currentSegmentStartedAt,
+      inTime,
+      outTime,
+      manualHours,
+    }
+  }
+
+  return {
+    status: 'cleared',
+    mode: 'time',
+    sessionState: 'idle',
+    accumulatedSeconds: 0,
+    currentSegmentStartedAt: null,
+    inTime: '',
+    outTime: '',
+    manualHours: 8.0,
+  }
 }
 
 export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
@@ -32,79 +88,51 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   weeklyGoal,
   logWorkPresenceAction,
 }) => {
-  const [formState, setFormState] = useState<WorkFormState>(() => {
-    if (todayWorkLog) {
-      const payload = todayWorkLog.payload as Record<string, unknown> | null
-      return {
-        status: todayWorkLog.status === 'wfh' ? 'wfh' : 'office',
-        mode: (payload?.loggingMode as 'time' | 'manual') || (payload?.inTime ? 'time' : 'manual'),
-        inTime: (payload?.inTime as string) || '09:00',
-        outTime: (payload?.outTime as string) || '',
-        manualHours: payload?.manualHours !== undefined ? Number(payload.manualHours) : (todayWorkLog.amount || 8.0),
-      }
-    }
-    return {
-      status: 'cleared',
-      mode: 'time',
-      inTime: '09:00',
-      outTime: '',
-      manualHours: 8.0,
-    }
-  })
-
+  const [formState, setFormState] = useState<WorkFormState>(() => parseInitialWorkState(todayWorkLog))
   const [isEditingTimes, setIsEditingTimes] = useState(false)
   const lastSyncedLogId = useRef<string | null | undefined>(todayWorkLog?.id)
 
+  // Synchronize when todayWorkLog changes externally
   if (lastSyncedLogId.current !== todayWorkLog?.id) {
     lastSyncedLogId.current = todayWorkLog?.id
-    if (todayWorkLog) {
-      const payload = todayWorkLog.payload as Record<string, unknown> | null
-      setFormState({
-        status: todayWorkLog.status === 'wfh' ? 'wfh' : 'office',
-        mode: (payload?.loggingMode as 'time' | 'manual') || (payload?.inTime ? 'time' : 'manual'),
-        inTime: (payload?.inTime as string) || '09:00',
-        outTime: (payload?.outTime as string) || '',
-        manualHours: payload?.manualHours !== undefined ? Number(payload.manualHours) : (todayWorkLog.amount || 8.0),
-      })
-    } else {
-      setFormState({
-        status: 'cleared',
-        mode: 'time',
-        inTime: '09:00',
-        outTime: '',
-        manualHours: 8.0,
-      })
-    }
+    setFormState(parseInitialWorkState(todayWorkLog))
   }
 
   const [isLoggingWork, setIsLoggingWork] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
-  const [_tick, setTick] = useState(0)
+  const [nowTimestamp, setNowTimestamp] = useState(() => Date.now())
 
+  // Timer ticking for live display when RUNNING
   useEffect(() => {
     let interval: Timer | null = null
-    if (formState.status !== 'cleared' && formState.mode === 'time' && !formState.outTime) {
+    if (formState.sessionState === 'running') {
       interval = setInterval(() => {
-        setTick(t => t + 1)
+        setNowTimestamp(Date.now())
       }, 1000)
     }
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [formState.status, formState.mode, formState.outTime])
+  }, [formState.sessionState])
 
   // Stats calculation
-  const weeklyWorkLogs = workTemplateId
-    ? logs.filter(l => l.activityId === workTemplateId && weekDates.includes(l.date))
-    : []
+  const weeklyWorkLogs = useMemo(() => {
+    return workTemplateId
+      ? logs.filter(l => l.activityId === workTemplateId && weekDates.includes(l.date))
+      : []
+  }, [workTemplateId, logs, weekDates])
 
-  const totalOfficeHours = weeklyWorkLogs
-    .filter(l => l.status === 'done')
-    .reduce((sum, l) => sum + (l.amount ?? 0), 0)
+  const totalOfficeHours = useMemo(() => {
+    return weeklyWorkLogs
+      .filter(l => l.status === 'done')
+      .reduce((sum, l) => sum + (l.amount ?? 0), 0)
+  }, [weeklyWorkLogs])
 
-  const totalWfhHours = weeklyWorkLogs
-    .filter(l => l.status === 'wfh')
-    .reduce((sum, l) => sum + (l.amount ?? 0), 0)
+  const totalWfhHours = useMemo(() => {
+    return weeklyWorkLogs
+      .filter(l => l.status === 'wfh')
+      .reduce((sum, l) => sum + (l.amount ?? 0), 0)
+  }, [weeklyWorkLogs])
 
   const remainingHours = Math.max(0, weeklyGoal - totalOfficeHours)
   const isGoalMet = totalOfficeHours >= weeklyGoal
@@ -116,7 +144,24 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     return `${hh}:${mm}`
   }
 
-  const computeOfficeHours = (inT: string, outT: string): number => {
+  // Calculate current elapsed seconds: accumulated duration + elapsed duration in current active segment
+  const currentElapsedSeconds = useMemo(() => {
+    if (formState.sessionState === 'running' && formState.currentSegmentStartedAt) {
+      const segmentStartMs = new Date(formState.currentSegmentStartedAt).getTime()
+      const segmentElapsedSec = Math.max(0, Math.floor((nowTimestamp - segmentStartMs) / 1000))
+      return formState.accumulatedSeconds + segmentElapsedSec
+    }
+    return formState.accumulatedSeconds
+  }, [formState.sessionState, formState.currentSegmentStartedAt, formState.accumulatedSeconds, nowTimestamp])
+
+  const formatElapsedDisplay = (totalSec: number): string => {
+    const h = Math.floor(totalSec / 3600)
+    const m = Math.floor((totalSec % 3600) / 60)
+    const s = totalSec % 60
+    return `${h}h ${m}m ${s}s`
+  }
+
+  const computeManualOrTimeHours = (inT: string, outT: string): number => {
     if (!inT || !outT) return 0
     const [inH, inM] = inT.split(':').map(Number)
     const [outH, outM] = outT.split(':').map(Number)
@@ -125,39 +170,14 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     return parseFloat((diffMins / 60).toFixed(1))
   }
 
-  const computeElapsedHours = (inT: string): string => {
-    if (!inT) return '0h 0m'
-    const [inH, inM] = inT.split(':').map(Number)
-    const now = new Date()
-    const inDate = new Date()
-    inDate.setHours(inH, inM, 0, 0)
-    
-    let diffMs = now.getTime() - inDate.getTime()
-    if (diffMs < 0) {
-      diffMs += 24 * 60 * 60 * 1000
-    }
-    const diffMins = Math.floor(diffMs / (60 * 1000))
-    const h = Math.floor(diffMins / 60)
-    const m = diffMins % 60
-    const s = Math.floor((diffMs % (60 * 1000)) / 1000)
-    return `${h}h ${m}m ${s}s`
-  }
-
-  const handleSaveWorkPresence = async (customState?: WorkFormState) => {
+  const handleSaveWorkPresence = useCallback(async (stateToSave: WorkFormState) => {
     if (!workTemplateId || isLoggingWork) return
     setValidationError(null)
-
-    const stateToSave = customState || formState
 
     if (stateToSave.status !== 'cleared') {
       if (stateToSave.mode === 'manual') {
         if (isNaN(stateToSave.manualHours) || stateToSave.manualHours < 0 || stateToSave.manualHours > 24) {
           setValidationError('Please enter a valid number of hours between 0 and 24.')
-          return
-        }
-      } else {
-        if (!stateToSave.inTime) {
-          setValidationError('Please select a start time.')
           return
         }
       }
@@ -167,10 +187,12 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     try {
       let computedHours = 0
       if (stateToSave.status !== 'cleared') {
-        if (stateToSave.mode === 'time') {
-          computedHours = stateToSave.outTime ? computeOfficeHours(stateToSave.inTime, stateToSave.outTime) : 0
-        } else {
+        if (stateToSave.mode === 'manual') {
           computedHours = stateToSave.manualHours
+        } else if (stateToSave.sessionState === 'completed' && stateToSave.outTime && stateToSave.inTime && !stateToSave.accumulatedSeconds) {
+          computedHours = computeManualOrTimeHours(stateToSave.inTime, stateToSave.outTime)
+        } else {
+          computedHours = parseFloat((stateToSave.accumulatedSeconds / 3600).toFixed(1))
         }
       }
 
@@ -178,11 +200,14 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
         templateId: workTemplateId,
         date: todayStr,
         status: stateToSave.status,
-        inTime: stateToSave.status !== 'cleared' && stateToSave.mode === 'time' ? stateToSave.inTime : null,
+        inTime: stateToSave.status !== 'cleared' && stateToSave.mode === 'time' ? (stateToSave.inTime || null) : null,
         outTime: stateToSave.status !== 'cleared' && stateToSave.mode === 'time' ? (stateToSave.outTime || null) : null,
         hours: computedHours,
         loggingMode: stateToSave.status !== 'cleared' ? stateToSave.mode : null,
-        manualHours: stateToSave.status !== 'cleared' && stateToSave.mode === 'manual' ? stateToSave.manualHours : null
+        manualHours: stateToSave.status !== 'cleared' && stateToSave.mode === 'manual' ? stateToSave.manualHours : null,
+        sessionState: stateToSave.status !== 'cleared' ? stateToSave.sessionState : null,
+        accumulatedSeconds: stateToSave.accumulatedSeconds,
+        currentSegmentStartedAt: stateToSave.currentSegmentStartedAt,
       })
       setIsEditingTimes(false)
     } catch (err) {
@@ -191,32 +216,96 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     } finally {
       setIsLoggingWork(false)
     }
-  }
+  }, [workTemplateId, isLoggingWork, todayStr, logWorkPresenceAction])
 
-  const handleStartSession = async (status: 'office' | 'wfh') => {
+  // Explicit Start (Transitions from IDLE to RUNNING)
+  const handleStartSession = async (chosenStatus: 'office' | 'wfh') => {
+    if (isLoggingWork || formState.sessionState === 'running') return
     const nowTime = getLocalTimeStr()
-    const updated: WorkFormState = {
-      status,
-      mode: 'time',
-      inTime: nowTime,
-      outTime: '',
-      manualHours: 8.0
-    }
-    setFormState(updated)
-    await handleSaveWorkPresence(updated)
-  }
-
-  const handleStopSession = async () => {
-    const nowTime = getLocalTimeStr()
+    const nowIso = new Date().toISOString()
     const updated: WorkFormState = {
       ...formState,
-      outTime: nowTime
+      status: chosenStatus,
+      mode: 'time',
+      sessionState: 'running',
+      inTime: formState.inTime || nowTime,
+      outTime: '',
+      currentSegmentStartedAt: nowIso,
+      // If starting fresh from IDLE, accumulatedSeconds is preserved if restarting same day or 0
+      accumulatedSeconds: formState.sessionState === 'completed' ? formState.accumulatedSeconds : 0,
     }
     setFormState(updated)
     await handleSaveWorkPresence(updated)
   }
 
-  const isActiveSession = formState.status !== 'cleared' && formState.mode === 'time' && !formState.outTime
+  // Explicit Pause (Transitions from RUNNING to PAUSED without losing elapsed time)
+  const handlePauseSession = async () => {
+    if (isLoggingWork || formState.sessionState !== 'running') return
+    const nowMs = Date.now()
+    const segmentStartMs = formState.currentSegmentStartedAt ? new Date(formState.currentSegmentStartedAt).getTime() : nowMs
+    const segmentSec = Math.max(0, Math.floor((nowMs - segmentStartMs) / 1000))
+    const totalAccumulated = formState.accumulatedSeconds + segmentSec
+
+    const updated: WorkFormState = {
+      ...formState,
+      sessionState: 'paused',
+      accumulatedSeconds: totalAccumulated,
+      currentSegmentStartedAt: null,
+    }
+    setFormState(updated)
+    await handleSaveWorkPresence(updated)
+  }
+
+  // Explicit Resume (Transitions from PAUSED to RUNNING, continuing from previous accumulated time)
+  const handleResumeSession = async () => {
+    if (isLoggingWork || formState.sessionState !== 'paused') return
+    const nowIso = new Date().toISOString()
+    const updated: WorkFormState = {
+      ...formState,
+      sessionState: 'running',
+      currentSegmentStartedAt: nowIso,
+    }
+    setFormState(updated)
+    await handleSaveWorkPresence(updated)
+  }
+
+  // Explicit Finish Day (Transitions from RUNNING or PAUSED to COMPLETED)
+  const handleFinishSession = async () => {
+    if (isLoggingWork) return
+    const nowTime = getLocalTimeStr()
+    let totalSec = formState.accumulatedSeconds
+    if (formState.sessionState === 'running' && formState.currentSegmentStartedAt) {
+      const segmentStartMs = new Date(formState.currentSegmentStartedAt).getTime()
+      totalSec += Math.max(0, Math.floor((Date.now() - segmentStartMs) / 1000))
+    }
+
+    const updated: WorkFormState = {
+      ...formState,
+      sessionState: 'completed',
+      outTime: nowTime,
+      accumulatedSeconds: totalSec,
+      currentSegmentStartedAt: null,
+    }
+    setFormState(updated)
+    await handleSaveWorkPresence(updated)
+  }
+
+  const handleClearPresence = async () => {
+    const updated: WorkFormState = {
+      status: 'cleared',
+      mode: 'time',
+      sessionState: 'idle',
+      accumulatedSeconds: 0,
+      currentSegmentStartedAt: null,
+      inTime: '',
+      outTime: '',
+      manualHours: 8.0,
+    }
+    setFormState(updated)
+    await handleSaveWorkPresence(updated)
+  }
+
+  const activeModeLabel = formState.status === 'office' ? 'Office' : 'WFH'
 
   return (
     <Card className="hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
@@ -229,31 +318,42 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       </CardHeader>
 
       <CardBody className="space-y-3">
-        {isActiveSession && !isEditingTimes ? (
-          /* Active Session View */
+        {/* RUNNING STATE */}
+        {formState.sessionState === 'running' && !isEditingTimes && (
           <div className="space-y-3">
-            <div className="flex flex-col items-center justify-center py-5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-[var(--radius-lg)] space-y-1">
-              <span className="text-[9px] uppercase tracking-wider font-extrabold text-[var(--color-text-muted)]">
-                Active Session ({formState.status === 'office' ? 'Office' : 'WFH'})
+            <div className="flex flex-col items-center justify-center py-4 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-[var(--radius-lg)] space-y-1">
+              <span className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Active Session ({activeModeLabel})
               </span>
               <span className="text-2xl font-mono font-black text-[var(--color-primary)] tracking-tight">
-                {computeElapsedHours(formState.inTime)}
+                {formatElapsedDisplay(currentElapsedSeconds)}
               </span>
               <span className="text-[9px] text-[var(--color-text-muted)]">
-                Started at {formState.inTime}
+                {formState.inTime ? `Started at ${formState.inTime}` : 'In progress'}
               </span>
             </div>
 
             <div className="flex gap-2">
               <Button
-                onClick={handleStopSession}
+                onClick={handlePauseSession}
+                isLoading={isLoggingWork}
+                variant="outline"
+                size="sm"
+                className="flex-1 font-bold text-xs"
+                icon={<Pause className="w-3.5 h-3.5 text-amber-500" />}
+              >
+                Pause
+              </Button>
+              <Button
+                onClick={handleFinishSession}
                 isLoading={isLoggingWork}
                 variant="primary"
                 size="sm"
                 className="flex-1 font-bold text-xs"
                 icon={<Square className="w-3.5 h-3.5" />}
               >
-                Stop Session
+                Finish Day
               </Button>
               <Button
                 variant="outline"
@@ -264,25 +364,118 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
               />
             </div>
           </div>
-        ) : (
-          /* Set/Edit Session View */
+        )}
+
+        {/* PAUSED STATE */}
+        {formState.sessionState === 'paused' && !isEditingTimes && (
           <div className="space-y-3">
-            {/* Status Segmented Control (only when not editing an active timer manually) */}
+            <div className="flex flex-col items-center justify-center py-4 bg-[var(--color-bg-base)] border border-amber-500/30 rounded-[var(--radius-lg)] space-y-1">
+              <span className="text-[9px] uppercase tracking-wider font-extrabold text-amber-500 flex items-center gap-1.5">
+                <Pause className="w-3 h-3" />
+                Session Paused ({activeModeLabel})
+              </span>
+              <span className="text-2xl font-mono font-black text-[var(--color-text-muted)] tracking-tight">
+                {formatElapsedDisplay(formState.accumulatedSeconds)}
+              </span>
+              <span className="text-[9px] text-[var(--color-text-muted)]">
+                Accumulated time preserved
+              </span>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={handleResumeSession}
+                isLoading={isLoggingWork}
+                variant="primary"
+                size="sm"
+                className="flex-1 font-bold text-xs"
+                icon={<Play className="w-3.5 h-3.5" />}
+              >
+                Resume
+              </Button>
+              <Button
+                onClick={handleFinishSession}
+                isLoading={isLoggingWork}
+                variant="outline"
+                size="sm"
+                className="flex-1 font-bold text-xs"
+                icon={<Square className="w-3.5 h-3.5" />}
+              >
+                Finish Day
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditingTimes(true)}
+                title="Edit times manually"
+                icon={<Pencil className="w-3.5 h-3.5" />}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* COMPLETED STATE */}
+        {formState.sessionState === 'completed' && !isEditingTimes && (
+          <div className="space-y-3">
+            <div className="flex flex-col items-center justify-center py-4 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-500/30 rounded-[var(--radius-lg)] space-y-1">
+              <span className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-600 dark:text-emerald-400">
+                Completed Day ({activeModeLabel})
+              </span>
+              <span className="text-2xl font-mono font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
+                {(formState.accumulatedSeconds / 3600).toFixed(1)}h
+              </span>
+              {formState.inTime && formState.outTime && (
+                <span className="text-[9px] text-[var(--color-text-muted)]">
+                  {formState.inTime} – {formState.outTime}
+                </span>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={() => handleStartSession(formState.status === 'wfh' ? 'wfh' : 'office')}
+                isLoading={isLoggingWork}
+                variant="outline"
+                size="sm"
+                className="flex-1 font-bold text-xs"
+                icon={<RotateCcw className="w-3.5 h-3.5" />}
+              >
+                Start New Session
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsEditingTimes(true)}
+                title="Edit times manually"
+                icon={<Pencil className="w-3.5 h-3.5" />}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearPresence}
+                title="Clear today's work record"
+                className="text-rose-500 hover:text-rose-600"
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* IDLE OR EDITING TIMES STATE */}
+        {(formState.sessionState === 'idle' || isEditingTimes) && (
+          <div className="space-y-3">
+            {/* Status Segmented Control */}
             <div className="flex bg-[var(--color-bg-base)] p-0.5 rounded-[var(--radius-lg)] border border-[var(--color-border)]">
               {(['cleared', 'office', 'wfh'] as const).map((status) => (
                 <button
                   key={status}
                   type="button"
                   onClick={() => {
-                    setFormState(prev => ({ ...prev, status }))
                     if (status === 'cleared') {
-                      handleSaveWorkPresence({
-                        status: 'cleared',
-                        mode: 'time',
-                        inTime: '',
-                        outTime: '',
-                        manualHours: 0
-                      })
+                      handleClearPresence()
+                    } else {
+                      setFormState(prev => ({ ...prev, status }))
                     }
                   }}
                   className={`flex-1 py-1.5 text-[10px] font-bold rounded-[var(--radius-md)] capitalize transition-all duration-150 cursor-pointer ${
@@ -311,13 +504,12 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                           : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
                       }`}
                     >
-                      {mode === 'time' ? 'Time-Based' : 'Manual'}
+                      {mode === 'time' ? 'Timer' : 'Manual'}
                     </button>
                   ))}
                 </div>
 
                 {formState.mode === 'time' ? (
-                  /* Time-Based Inputs */
                   <div className="space-y-2">
                     {isEditingTimes ? (
                       <div className="grid grid-cols-2 gap-2">
@@ -352,7 +544,6 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                     )}
                   </div>
                 ) : (
-                  /* Manual Hours Input */
                   <div className="space-y-1.5">
                     <Input
                       type="number"
@@ -369,7 +560,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
               </div>
             )}
 
-            {/* Validation / Action Footer (only when input is shown) */}
+            {/* Save / Cancel Footer for Manual or Editing Times */}
             {formState.status !== 'cleared' && (formState.mode === 'manual' || isEditingTimes) && (
               <div className="space-y-2">
                 {validationError && (
@@ -377,13 +568,26 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                 )}
                 <div className="flex gap-2">
                   <Button
-                    onClick={() => handleSaveWorkPresence()}
+                    onClick={() => {
+                      if (isEditingTimes && formState.mode === 'time' && formState.inTime && formState.outTime) {
+                        const computedHrs = computeManualOrTimeHours(formState.inTime, formState.outTime)
+                        const updated: WorkFormState = {
+                          ...formState,
+                          sessionState: 'completed',
+                          accumulatedSeconds: Math.round(computedHrs * 3600),
+                        }
+                        setFormState(updated)
+                        handleSaveWorkPresence(updated)
+                      } else {
+                        handleSaveWorkPresence(formState)
+                      }
+                    }}
                     isLoading={isLoggingWork}
                     variant="primary"
                     size="sm"
                     className="flex-1 font-bold text-xs"
                   >
-                    Save Presence
+                    Save Hours
                   </Button>
                   {isEditingTimes && (
                     <Button
@@ -400,7 +604,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
           </div>
         )}
 
-        {/* Progress Grid */}
+        {/* Weekly Progress Grid */}
         <div className="border-t border-[var(--color-border)]/50 pt-3 space-y-2">
           <div className="flex items-center justify-between text-[10px] font-bold text-[var(--color-text-muted)]">
             <span>Weekly Office Presence</span>

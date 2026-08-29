@@ -243,6 +243,10 @@ export async function logWorkPresence(data: {
   hours?: number | null
   loggingMode?: 'time' | 'manual' | null
   manualHours?: number | null
+  sessionState?: 'idle' | 'running' | 'paused' | 'completed' | null
+  accumulatedSeconds?: number | null
+  currentSegmentStartedAt?: string | null
+  workSessionId?: string | null
 }) {
   try {
     const { user } = await requireOwnership('activityTemplate', data.templateId)
@@ -263,25 +267,72 @@ export async function logWorkPresence(data: {
 
     if (data.status === 'cleared') {
       if (existing) {
+        if (existing.workSessionId) {
+          await db.workSession.updateMany({
+            where: { id: existing.workSessionId, userId: user.id, deletedAt: null },
+            data: { deletedAt: new Date() }
+          })
+        }
         await service.deleteLog(user.id, existing.id)
       }
     } else {
       const logStatus = data.status === 'office' ? 'done' : 'wfh'
+      const sessionState = data.sessionState || (data.outTime ? 'completed' : 'running')
+      const accumulatedSeconds = data.accumulatedSeconds !== undefined && data.accumulatedSeconds !== null
+        ? data.accumulatedSeconds
+        : (data.hours ? Math.round(data.hours * 3600) : 0)
+
+      // Ensure a linked WorkSession exists and is synchronized
+      let wsId = data.workSessionId || existing?.workSessionId
+      if (!wsId) {
+        const ws = await db.workSession.create({
+          data: {
+            userId: user.id,
+            date: data.date,
+            mode: data.status,
+            startedAt: data.currentSegmentStartedAt ? new Date(data.currentSegmentStartedAt) : (data.inTime ? new Date(`${data.date}T${data.inTime}:00`) : null),
+            endedAt: sessionState === 'completed' && data.outTime ? new Date(`${data.date}T${data.outTime}:00`) : null,
+            durationMinutes: Math.round(accumulatedSeconds / 60),
+            loggingMode: data.loggingMode || 'timer',
+            manualMinutes: data.manualHours ? Math.round(data.manualHours * 60) : 0,
+          }
+        })
+        wsId = ws.id
+      } else {
+        await db.workSession.updateMany({
+          where: { id: wsId, userId: user.id },
+          data: {
+            mode: data.status,
+            startedAt: data.currentSegmentStartedAt ? new Date(data.currentSegmentStartedAt) : undefined,
+            endedAt: sessionState === 'completed' && data.outTime ? new Date(`${data.date}T${data.outTime}:00`) : (sessionState === 'running' ? null : undefined),
+            durationMinutes: Math.round(accumulatedSeconds / 60),
+            loggingMode: data.loggingMode || 'timer',
+            manualMinutes: data.manualHours ? Math.round(data.manualHours * 60) : 0,
+          }
+        })
+      }
+
       const payloadJson = {
         inTime: data.inTime || null,
         outTime: data.outTime || null,
         isWfh: data.status === 'wfh',
         hours: data.hours || 0,
         loggingMode: data.loggingMode || null,
-        manualHours: data.manualHours || null
+        manualHours: data.manualHours || null,
+        sessionState,
+        accumulatedSeconds,
+        currentSegmentStartedAt: data.currentSegmentStartedAt ?? null,
+        workSessionId: wsId,
       }
 
       await service.logActivity({
+        id: existing?.id,
         userId: user.id,
         templateId: data.templateId,
         date: data.date,
         status: logStatus,
         amount: data.hours || 0,
+        workSessionId: wsId,
         payload: payloadJson
       })
     }

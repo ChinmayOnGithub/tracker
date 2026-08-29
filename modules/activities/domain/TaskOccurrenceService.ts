@@ -57,4 +57,25 @@ export class TaskOccurrenceService {
     date.setUTCDate(date.getUTCDate() + days);
     return date.toISOString().split('T')[0];
   }
+
+  /**
+   * Identifies whether an activity template represents an ephemeral/temporary task
+   * (e.g. quick task created for Today) vs a persistent Activity definition/schedule.
+   */
+  public static isTemporaryTask(template: {
+    id?: string;
+    category?: string;
+    type?: string;
+    recurrenceType?: string;
+    metadata?: unknown;
+  }): boolean {
+    const meta = typeof template.metadata === 'string'
+      ? (() => { try { return JSON.parse(template.metadata as string) } catch { return {} } })()
+      : (template.metadata || {}) as Record<string, unknown>;
+
+    if (meta?.isQuickTask === true || meta?.temporary === true) return true;
+    if (template.category === 'general' && template.type === 'TASK' && template.recurrenceType === 'one_time') return true;
+    if (template.id && template.id.startsWith('temp-template-') && template.type === 'TASK') return true;
+    return false;
+  }
 }

@@ -825,11 +825,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (fields.status === 'cleared') {
         updatedLogs = updatedLogs.filter(l => l.id !== existingLog?.id)
       } else {
+        const prevPayload = (existingLog?.payload as Record<string, unknown> | null) || {}
         const payload = {
-          inTime: fields.inTime,
-          outTime: fields.outTime,
-          loggingMode: fields.loggingMode,
-          manualHours: fields.manualHours
+          ...prevPayload,
+          inTime: fields.inTime !== undefined ? fields.inTime : prevPayload.inTime,
+          outTime: fields.outTime !== undefined ? fields.outTime : prevPayload.outTime,
+          loggingMode: fields.loggingMode !== undefined ? fields.loggingMode : prevPayload.loggingMode,
+          manualHours: fields.manualHours !== undefined ? fields.manualHours : prevPayload.manualHours,
+          sessionState: fields.sessionState !== undefined ? fields.sessionState : (fields.outTime ? 'completed' : prevPayload.sessionState || 'running'),
+          accumulatedSeconds: fields.accumulatedSeconds !== undefined ? fields.accumulatedSeconds : (prevPayload.accumulatedSeconds !== undefined ? prevPayload.accumulatedSeconds : (fields.hours ? Math.round(fields.hours * 3600) : 0)),
+          currentSegmentStartedAt: fields.currentSegmentStartedAt !== undefined ? fields.currentSegmentStartedAt : prevPayload.currentSegmentStartedAt,
+          workSessionId: fields.workSessionId || prevPayload.workSessionId || null,
         }
         
         if (existingLog) {

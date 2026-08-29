@@ -54,6 +54,42 @@ export async function updateWorkSession(id: string, session: Partial<WorkSession
   }
 }
 
+export async function pauseWorkSession(id: string) {
+  try {
+    const user = await requireAuth();
+    const record = await WorkSessionService.pauseSession(user.id, id);
+    revalidatePath('/');
+    return { success: true, data: record };
+  } catch (error) {
+    console.error('Failed to pause work session action:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function resumeWorkSession(id: string) {
+  try {
+    const user = await requireAuth();
+    const record = await WorkSessionService.resumeSession(user.id, id);
+    revalidatePath('/');
+    return { success: true, data: record };
+  } catch (error) {
+    console.error('Failed to resume work session action:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export async function finishWorkSession(id: string) {
+  try {
+    const user = await requireAuth();
+    const record = await WorkSessionService.finishSession(user.id, id);
+    revalidatePath('/');
+    return { success: true, data: record };
+  } catch (error) {
+    console.error('Failed to finish work session action:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
 export async function deleteWorkSession(id: string) {
   try {
     const user = await requireAuth();

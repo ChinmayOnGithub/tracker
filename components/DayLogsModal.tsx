@@ -303,7 +303,9 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
         status: workStatus,
         inTime: workStatus === 'office' ? inTime : null,
         outTime: workStatus === 'office' ? outTime : null,
-        hours: computedHours
+        hours: computedHours,
+        sessionState: 'completed',
+        accumulatedSeconds: Math.round(computedHours * 3600),
       })
       invalidateCache(dateStr)
       setIsEditingWork(false)

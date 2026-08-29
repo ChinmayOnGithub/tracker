@@ -527,6 +527,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
 
               <Input
                 type="number"
+                step="0.01"
                 label="Billing Amount (₹)"
                 placeholder="e.g. 500"
                 {...register('amount')}
@@ -656,12 +657,14 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                     <div className="grid grid-cols-2 gap-3">
                       <Input
                         type="number"
+                        step="any"
                         label="Minimum Value"
                         placeholder="Optional"
                         {...register('valueMinimum')}
                       />
                       <Input
                         type="number"
+                        step="any"
                         label="Maximum Value"
                         placeholder="Optional"
                         {...register('valueMaximum')}

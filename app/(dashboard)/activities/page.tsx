@@ -6,6 +6,7 @@ import { getLoggedUser } from '@/app/actions/auth'
 import { redirect } from 'next/navigation'
 
 import { fetchRecurrenceLogs } from '@/lib/services/TimelineService'
+import { TaskOccurrenceService } from '@/modules/activities/domain/TaskOccurrenceService'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -17,21 +18,34 @@ export default async function Page() {
   }
 
   const templatesRaw = await db.activityTemplate.findMany({
-    where: loggedUser.username === 'admin'
-      ? { OR: [{ userId: loggedUser.id }, { userId: null }] }
-      : { userId: loggedUser.id },
+    where: {
+      ...(loggedUser.username === 'admin'
+        ? { OR: [{ userId: loggedUser.id }, { userId: null }] }
+        : { userId: loggedUser.id }),
+      deletedAt: null,
+      NOT: {
+        AND: [
+          { category: 'general' },
+          { type: 'TASK' },
+          { recurrenceType: 'one_time' },
+        ],
+      },
+    },
     include: { tags: true },
     orderBy: { sortOrder: 'asc' },
   })
 
-  const logsRaw = await fetchRecurrenceLogs(loggedUser.id, templatesRaw, loggedUser.username === 'admin')
+  // Additional defense-in-depth domain boundary check for metadata or temporary IDs
+  const persistentTemplatesRaw = templatesRaw.filter(t => !TaskOccurrenceService.isTemporaryTask(t))
+
+  const logsRaw = await fetchRecurrenceLogs(loggedUser.id, persistentTemplatesRaw, loggedUser.username === 'admin')
   const journalRaw = await db.journalEntry.findMany({
     where: { userId: loggedUser.id, deletedAt: null },
     orderBy: { journalDate: 'desc' },
   })
   const tagsRaw = await db.tag.findMany({ orderBy: { name: 'asc' } })
 
-  const templates: ActivityTemplate[] = templatesRaw.map(t => ({
+  const templates: ActivityTemplate[] = persistentTemplatesRaw.map(t => ({
     ...t,
     recurrenceType: t.recurrenceType as RecurrenceType,
     targetDate: t.targetDate ? t.targetDate.toISOString().split('T')[0] : null,

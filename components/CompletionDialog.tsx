@@ -49,7 +49,7 @@ export const CompletionDialog: React.FC<CompletionDialogProps> = ({
   }
 
   const getStep = () => {
-    if (inputType === 'decimal' || inputType === 'currency') {
+    if (['number', 'decimal', 'currency', 'percentage'].includes(inputType || 'number')) {
       return 'any'
     }
     return '1'

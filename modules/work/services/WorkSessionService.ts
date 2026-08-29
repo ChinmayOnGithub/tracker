@@ -6,12 +6,16 @@ export class WorkSessionService {
    * Starts a new work session using a timer.
    */
   public static async startSession(userId: string, date: string, mode: 'office' | 'wfh', id?: string) {
-    // Check if there is an active session (endedAt is null)
+    // Check if there is already an active session (endedAt is null)
     const active = await db.workSession.findFirst({
       where: { userId, endedAt: null, deletedAt: null }
     });
     if (active) {
-      throw new Error('A work session is already active.');
+      // Idempotent protection against double-click: return the existing active session
+      if (active.date === date) {
+        return active;
+      }
+      throw new Error('A work session is already active on another date.');
     }
 
     const session = await db.workSession.create({
@@ -29,70 +33,213 @@ export class WorkSessionService {
     const template = await ActivityService.getOrCreateDefaultTemplate(
       userId,
       'PERSONAL',
-      'Work Session',
-      'work',
+      'Work Tracker',
+      'productivity',
       'Briefcase',
       'amber'
     );
+
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const inTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
     // Create corresponding ActivityLog
     await ActivityService.logActivity({
       userId,
       templateId: template.id,
       date,
-      status: 'done',
+      status: mode === 'office' ? 'done' : 'wfh',
       workSessionId: session.id,
       amount: 0,
-      note: `Started work session (${mode.toUpperCase()})`
+      note: `Started work session (${mode.toUpperCase()})`,
+      payload: {
+        sessionState: 'running',
+        accumulatedSeconds: 0,
+        currentSegmentStartedAt: now.toISOString(),
+        inTime,
+        outTime: null,
+        loggingMode: 'time',
+        workSessionId: session.id,
+        isWfh: mode === 'wfh'
+      }
     });
 
     return session;
   }
 
   /**
-   * Stops an active work session and calculates duration in minutes.
+   * Pauses an active work session, calculating the elapsed segment duration and accumulating it.
    */
-  public static async stopSession(userId: string, id: string) {
+  public static async pauseSession(userId: string, id: string) {
     const session = await db.workSession.findFirst({
       where: { id, userId, deletedAt: null }
     });
     if (!session) {
       throw new Error('Work session not found.');
     }
-    if (session.endedAt) {
-      throw new Error('Work session has already ended.');
+    // Idempotent: already paused
+    if (session.endedAt !== null) {
+      return session;
     }
 
-    const endedAt = new Date();
-    const started = session.startedAt ? new Date(session.startedAt) : new Date();
-    const durationMinutes = Math.max(0, Math.round((endedAt.getTime() - started.getTime()) / 60000));
+    const now = new Date();
+    const started = session.startedAt ? new Date(session.startedAt) : now;
+    const segmentMs = Math.max(0, now.getTime() - started.getTime());
+    const segmentMinutes = Math.round(segmentMs / 60000);
+    const totalMinutes = session.durationMinutes + segmentMinutes;
 
     const updatedSession = await db.workSession.update({
       where: { id },
       data: {
-        endedAt,
-        durationMinutes
+        endedAt: now,
+        durationMinutes: totalMinutes
       }
     });
 
-    // Update corresponding ActivityLog note & amount
     const log = await db.activityLog.findFirst({
       where: { workSessionId: id }
     });
     if (log) {
+      const prevPayload = (log.payload || {}) as Record<string, unknown>;
       await ActivityService.logActivity({
         id: log.id,
         userId,
         templateId: log.activityId,
         date: session.date,
-        status: 'done',
+        status: session.mode === 'office' ? 'done' : 'wfh',
         workSessionId: id,
-        amount: durationMinutes,
-        note: `Worked ${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}m (${session.mode.toUpperCase()})`
+        amount: parseFloat((totalMinutes / 60).toFixed(1)),
+        note: `Paused work session: ${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m (${session.mode.toUpperCase()})`,
+        payload: {
+          ...prevPayload,
+          sessionState: 'paused',
+          accumulatedSeconds: totalMinutes * 60,
+          currentSegmentStartedAt: null,
+          workSessionId: id,
+        }
       });
     }
 
     return updatedSession;
+  }
+
+  /**
+   * Resumes a paused work session without losing accumulated duration.
+   */
+  public static async resumeSession(userId: string, id: string) {
+    const session = await db.workSession.findFirst({
+      where: { id, userId, deletedAt: null }
+    });
+    if (!session) {
+      throw new Error('Work session not found.');
+    }
+    // Idempotent: already running
+    if (session.endedAt === null && session.startedAt !== null) {
+      return session;
+    }
+
+    const now = new Date();
+    const updatedSession = await db.workSession.update({
+      where: { id },
+      data: {
+        startedAt: now,
+        endedAt: null,
+      }
+    });
+
+    const log = await db.activityLog.findFirst({
+      where: { workSessionId: id }
+    });
+    if (log) {
+      const prevPayload = (log.payload || {}) as Record<string, unknown>;
+      await ActivityService.logActivity({
+        id: log.id,
+        userId,
+        templateId: log.activityId,
+        date: session.date,
+        status: session.mode === 'office' ? 'done' : 'wfh',
+        workSessionId: id,
+        amount: parseFloat((session.durationMinutes / 60).toFixed(1)),
+        note: `Resumed work session (${session.mode.toUpperCase()})`,
+        payload: {
+          ...prevPayload,
+          sessionState: 'running',
+          accumulatedSeconds: session.durationMinutes * 60,
+          currentSegmentStartedAt: now.toISOString(),
+          workSessionId: id,
+        }
+      });
+    }
+
+    return updatedSession;
+  }
+
+  /**
+   * Finalizes/stops a work session and logs the final duration.
+   */
+  public static async finishSession(userId: string, id: string) {
+    const session = await db.workSession.findFirst({
+      where: { id, userId, deletedAt: null }
+    });
+    if (!session) {
+      throw new Error('Work session not found.');
+    }
+
+    const now = new Date();
+    let finalDurationMinutes = session.durationMinutes;
+
+    // If currently running, add the elapsed time of the active segment
+    if (session.endedAt === null && session.startedAt !== null) {
+      const started = new Date(session.startedAt);
+      const segmentMinutes = Math.max(0, Math.round((now.getTime() - started.getTime()) / 60000));
+      finalDurationMinutes += segmentMinutes;
+    }
+
+    const updatedSession = await db.workSession.update({
+      where: { id },
+      data: {
+        endedAt: now,
+        durationMinutes: finalDurationMinutes
+      }
+    });
+
+    const log = await db.activityLog.findFirst({
+      where: { workSessionId: id }
+    });
+    if (log) {
+      const prevPayload = (log.payload || {}) as Record<string, unknown>;
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const outTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+      await ActivityService.logActivity({
+        id: log.id,
+        userId,
+        templateId: log.activityId,
+        date: session.date,
+        status: session.mode === 'office' ? 'done' : 'wfh',
+        workSessionId: id,
+        amount: parseFloat((finalDurationMinutes / 60).toFixed(1)),
+        note: `Worked ${Math.floor(finalDurationMinutes / 60)}h ${finalDurationMinutes % 60}m (${session.mode.toUpperCase()})`,
+        payload: {
+          ...prevPayload,
+          sessionState: 'completed',
+          outTime,
+          accumulatedSeconds: finalDurationMinutes * 60,
+          currentSegmentStartedAt: null,
+          hours: parseFloat((finalDurationMinutes / 60).toFixed(1)),
+          workSessionId: id,
+        }
+      });
+    }
+
+    return updatedSession;
+  }
+
+  /**
+   * Stops an active work session (alias for finishSession for backward compatibility).
+   */
+  public static async stopSession(userId: string, id: string) {
+    return this.finishSession(userId, id);
   }
 
   /**

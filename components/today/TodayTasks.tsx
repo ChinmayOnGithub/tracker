@@ -392,9 +392,15 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
     setOptimisticTasks(prev => [...prev, tempItem])
     try {
       await createActivityTemplateAction({
-        name: title, category: 'general', type: 'TASK', priority: 'NORMAL',
-        icon: 'CheckSquare', color: quickTaskColor, recurrenceType: 'one_time',
+        name: title,
+        category: 'general',
+        type: 'TASK',
+        priority: 'NORMAL',
+        icon: 'CheckSquare',
+        color: quickTaskColor,
+        recurrenceType: 'one_time',
         targetDate: `${todayStr}T00:00:00.000Z`,
+        metadata: { isQuickTask: true },
       })
       setOptimisticTasks(prev => prev.filter(t => t.id !== tempId))
     } catch (err) {
