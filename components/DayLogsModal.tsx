@@ -6,16 +6,17 @@ import { ActivityTemplate, ActivityLog, Note, TimelineItem, AnalyzedTemplate } f
 import { CalendarDayDTO } from '@/modules/calendar/dto/CalendarDayDTO'
 import { analyzeRecurrence } from '@/lib/recurrence'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
-import { createCalendarEventAction, updateCalendarEventAction } from '@/app/actions/calendar'
+import { createCalendarEventAction } from '@/app/actions/calendar'
 import { Icon } from './Icon'
 import { X, Sparkles, BookOpen, Search, Plus, Clock, Settings, Briefcase, MoreVertical } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
 import { useRouter } from 'next/navigation'
-import { Button, Input } from '@/design-system'
+import { Button } from '@/design-system'
 import { MarathiCalendarEvents } from './daylogs/MarathiCalendarEvents'
 import { CompletionService } from '@/lib/services/CompletionService'
 import { CompletionDialog } from './CompletionDialog'
 import { TaskActivityRow } from './shared/TaskActivityRow'
+import { TaskCreateDialog } from './shared/TaskCreateDialog'
 
 interface CalendarDayEvent {
   id: string
@@ -56,8 +57,13 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   allLogs,
   mode = 'modal',
 }) => {
+  const [_isSaving, setIsSaving] = useState(false)
   const router = useRouter()
-  const { cycleTaskStatusAction, setTaskStatusAction, deleteActivityLog, logWorkPresenceAction, upsertJournalAction, logWeightAction } = useStore()
+  const {
+    cycleTaskStatusAction, setTaskStatusAction, deleteActivityLog,
+    logWorkPresenceAction, upsertJournalAction, logWeightAction,
+    createActivityTemplateAction,
+  } = useStore()
 
   // ── Compute timeline from props (instant, no API) ───────────────────────
   const analyzedTemplates: AnalyzedTemplate[] = useMemo(() => {
@@ -186,17 +192,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
     template: ActivityTemplate
     occurrence: TimelineItem
   } | null>(null)
-
-  // Scheduler form state
-  const [isScheduling, setIsScheduling] = useState(false)
-  const [editingEventId, setEditingEventId] = useState<string | null>(null)
-  const [taskTitle, setTaskTitle] = useState('')
-  const [allDay, setAllDay] = useState(true)
-  const [startTime, setStartTime] = useState('10:00')
-  const [endTime, setEndTime] = useState('10:30')
-  const [selectedColor, setSelectedColor] = useState('zinc')
-  const [isSaving, setIsSaving] = useState(false)
-  const [errorMsg, setErrorMsg] = useState('')
+  const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false)
 
   // Template selector
   const [activitySearch, setActivitySearch] = useState('')
@@ -383,55 +379,40 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
     }
   }
 
-  // ── Scheduler actions ───────────────────────────────────────────────────
-  const handleOpenScheduler = (template?: ActivityTemplate) => {
-    setErrorMsg('')
-    if (template) {
-      setEditingEventId(null)
-      setTaskTitle(template.name)
-      setAllDay(!template.scheduledTime)
-      setStartTime(template.scheduledTime || '10:00')
-      const dur = template.estimatedDuration || 30
-      if (template.scheduledTime) {
-        const [h, m] = template.scheduledTime.split(':').map(Number)
-        const d = new Date()
-        d.setHours(h, m + dur, 0, 0)
-        setEndTime(`${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`)
-      } else {
-        setEndTime('10:30')
-      }
-      setSelectedColor(template.color || 'zinc')
-    } else {
-      setEditingEventId(null)
-      setTaskTitle('')
-      setAllDay(true)
-      setStartTime('10:00')
-      setEndTime('10:30')
-      setSelectedColor('zinc')
-    }
-    setIsScheduling(true)
-  }
-
-  const handleSaveEvent = async () => {
-    if (!taskTitle.trim()) { setErrorMsg('Please specify a title'); return }
+  // ── Canonical Task Creation Handler ───────────────────────────────────────
+  const handleCreateTask = async (data: {
+    name: string
+    category: string
+    type: string
+    priority: string
+    icon: string
+    color: string
+    targetDate: string
+    scheduledTime?: string | null
+    estimatedDuration?: number | null
+    isAllDay: boolean
+    notes?: string | null
+    metadata?: Record<string, unknown>
+  }) => {
     try {
-      setIsSaving(true)
-      setErrorMsg('')
-      const startIso = allDay ? `${dateStr}T00:00:00.000Z` : `${dateStr}T${startTime}:00.000`
-      const endIso = allDay ? `${dateStr}T23:59:59.000Z` : `${dateStr}T${endTime}:00.000`
-      if (editingEventId) {
-        await updateCalendarEventAction(editingEventId, { title: taskTitle.trim(), start: startIso, end: endIso, allDay, color: selectedColor })
-      } else {
-        await createCalendarEventAction({ title: taskTitle.trim(), start: startIso, end: endIso, allDay, type: 'TASK', color: selectedColor })
-      }
-      setIsScheduling(false)
-      setEditingEventId(null)
+      await createActivityTemplateAction({
+        name: data.name,
+        category: data.category || 'general',
+        type: data.type || 'TASK',
+        priority: data.priority || 'NORMAL',
+        icon: data.icon || 'CheckSquare',
+        color: data.color || 'blue',
+        recurrenceType: 'one_time',
+        targetDate: data.targetDate,
+        scheduledTime: data.scheduledTime,
+        estimatedDuration: data.estimatedDuration,
+        notes: data.notes,
+        metadata: data.metadata || { isQuickTask: true, source: 'calendar' },
+      })
+      invalidateCache(dateStr)
       fetchDayDetails()
-      router.refresh()
-    } catch (_err) {
-      setErrorMsg('Something went wrong')
-    } finally {
-      setIsSaving(false)
+    } catch (err) {
+      console.error('Failed to create task from calendar:', err)
     }
   }
 
@@ -723,51 +704,6 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
           {activeTab === 'activities' && (
             <div className="space-y-6">
 
-              {/* Event Scheduler Form */}
-              {isScheduling && (
-                <div className="p-5 bg-slate-50 dark:bg-zinc-955/40 border border-slate-200 dark:border-zinc-800 rounded-xl space-y-4 shadow-sm animate-in slide-in-from-top-4 duration-200">
-                  <div className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-900 pb-2">
-                    <h4 className="font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
-                      <Clock className="w-4 h-4 text-[var(--color-primary)]" />
-                      {editingEventId ? 'Edit Event' : 'Schedule Task / Event'}
-                    </h4>
-                    <Button variant="ghost" size="sm" onClick={() => { setIsScheduling(false); setEditingEventId(null) }}>Cancel</Button>
-                  </div>
-                  {errorMsg && <div className="p-2.5 bg-rose-50 dark:bg-rose-950/45 border border-rose-200 dark:border-rose-900 text-rose-500 rounded-lg font-semibold text-xs">{errorMsg}</div>}
-                  <div className="space-y-3">
-                    <Input label="Event Name" value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="e.g. Sync with team, Gym session..." />
-                    <div className="flex items-center gap-2 pt-1">
-                      <input type="checkbox" id="formIsAllDay" checked={allDay} onChange={e => setAllDay(e.target.checked)} className="w-4 h-4 text-[var(--color-primary)] border-slate-300 rounded-sm cursor-pointer" />
-                      <label htmlFor="formIsAllDay" className="text-xs font-semibold text-[var(--color-text-main)] cursor-pointer">Anytime / All Day</label>
-                    </div>
-                    {!allDay && (
-                      <div className="grid grid-cols-2 gap-3 pt-1">
-                        <Input type="time" label="Start Time" value={startTime} onChange={e => setStartTime(e.target.value)} />
-                        <Input type="time" label="End Time" value={endTime} onChange={e => setEndTime(e.target.value)} />
-                      </div>
-                    )}
-                    <div>
-                      <label className="block text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider mb-1">Color</label>
-                      <div className="flex gap-2">
-                        {['zinc', 'red', 'orange', 'amber', 'green', 'blue', 'purple', 'pink'].map(col => {
-                          const cc = getTemplateColorClasses(col)
-                          return (
-                            <button key={col} type="button" onClick={() => setSelectedColor(col)}
-                              className={`w-6 h-6 rounded-full border-2 transition-transform cursor-pointer ${cc.bg} ${selectedColor === col ? 'border-black dark:border-white scale-110' : 'border-transparent hover:scale-105'}`}
-                            />
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2 border-t border-slate-200 dark:border-zinc-800 pt-3">
-                    <Button variant="primary" size="sm" disabled={isSaving} onClick={handleSaveEvent} loading={isSaving}>
-                      {editingEventId ? 'Update Event' : 'Schedule Event'}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
               {/* Timeline Items (Tasks & Activities) - AT THE TOP */}
               {config.tasksList && (
                 <div className="space-y-3">
@@ -775,12 +711,10 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                     <div className="text-[10px] uppercase tracking-widest font-extrabold text-slate-400 dark:text-zinc-555">
                       Tasks & Activities ({orderedItems.length})
                     </div>
-                    {!isScheduling && (
-                      <Button onClick={() => handleOpenScheduler()} variant="outline" size="sm"
-                        className="flex items-center gap-1 text-[10px] py-1 px-2.5 font-bold uppercase tracking-wider">
-                        <Plus size={11} /> Add Task
-                      </Button>
-                    )}
+                    <Button onClick={() => setIsTaskDialogOpen(true)} variant="outline" size="sm"
+                      className="flex items-center gap-1 text-[10px] py-1 px-2.5 font-bold uppercase tracking-wider">
+                      <Plus size={11} /> Add Task
+                    </Button>
                   </div>
 
                   {orderedItems.length === 0 ? (
@@ -1006,13 +940,12 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
               )}
 
               {/* Template Selector - COLLAPSIBLE AND COMPACT */}
-              {!isScheduling && (
-                <div className="bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-xl p-3.5 space-y-3.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsTemplatesExpanded(!isTemplatesExpanded)}
-                    className="w-full flex items-center justify-between font-bold text-[10px] uppercase tracking-wider text-slate-500 dark:text-zinc-405 cursor-pointer hover:text-[var(--color-text-main)] transition-colors"
-                  >
+              <div className="bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-xl p-3.5 space-y-3.5">
+                <button
+                  type="button"
+                  onClick={() => setIsTemplatesExpanded(!isTemplatesExpanded)}
+                  className="w-full flex items-center justify-between font-bold text-[10px] uppercase tracking-wider text-slate-500 dark:text-zinc-405 cursor-pointer hover:text-[var(--color-text-main)] transition-colors"
+                >
                     <span>Schedule from Templates</span>
                     <span className="text-[9px] text-[var(--color-text-muted)] font-normal border border-[var(--color-border)] rounded px-1.5 py-0.5 hover:bg-[var(--color-bg-surface)]">
                       {isTemplatesExpanded ? 'Hide' : 'Show'}
@@ -1049,7 +982,6 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                     </div>
                   )}
                 </div>
-              )}
             </div>
           )}
 
@@ -1132,6 +1064,14 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
           invalidateCache(dateStr)
           setActiveCompletion(null)
         }}
+      />
+
+      <TaskCreateDialog
+        isOpen={isTaskDialogOpen}
+        onClose={() => setIsTaskDialogOpen(false)}
+        initialDate={dateStr}
+        source="calendar"
+        onSubmitTask={handleCreateTask}
       />
     </>
   )

@@ -78,3 +78,25 @@ export const templateFormSchema = z.object({
 })
 
 export type TemplateFormValues = z.infer<typeof templateFormSchema>
+
+// ── Canonical Task Creation Schema for TaskCreateDialog ──
+
+export const taskCreateSchema = z.object({
+  name: z
+    .string()
+    .min(1, 'Task title is required')
+    .max(200, 'Title must be 200 characters or fewer')
+    .trim(),
+  category: z.string().default('general'),
+  icon: z.string().default('CheckSquare'),
+  color: z.string().default('blue'),
+  priority: z.enum(PRIORITIES).default('NORMAL'),
+  type: z.enum(ACTIVITY_TYPES).default('TASK'),
+  isAllDay: z.boolean().default(true),
+  targetDate: z.string().min(1, 'Target date is required'),
+  startTime: z.string().optional(),
+  estimatedDuration: z.string().optional(),
+  notes: z.string().max(2000).optional(),
+})
+
+export type TaskCreateFormValues = z.infer<typeof taskCreateSchema>

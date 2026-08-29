@@ -7,6 +7,7 @@ import { Button, Input, Skeleton, EmptyState, IconButton, StatusBadge, Section, 
 import { getTemplateColorClasses } from '@/lib/colors'
 import { SortableTaskList, DragHandle } from './SortableTaskList'
 import { TaskActivityRow } from '@/components/shared/TaskActivityRow'
+import { TaskCreateDialog } from '@/components/shared/TaskCreateDialog'
 import { Icon } from '@/components/Icon'
 
 interface TodayTasksProps {
@@ -255,8 +256,39 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
   const [showTemplatesDropdown, setShowTemplatesDropdown] = useState(false)
   const [manualOrderIds, setManualOrderIds] = useState<string[] | null>(null)
   const [optimisticTasks, setOptimisticTasks] = useState<TimelineItem[]>([])
+  const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false)
   const [deletingLogId, setDeletingLogId] = useState<string | null>(null)
   const [isDeletingLog, setIsDeletingLog] = useState(false)
+
+  const handleCreateFromDialog = async (data: {
+    name: string
+    category: string
+    type: string
+    priority: string
+    icon: string
+    color: string
+    targetDate: string
+    scheduledTime?: string | null
+    estimatedDuration?: number | null
+    isAllDay: boolean
+    notes?: string | null
+    metadata?: Record<string, unknown>
+  }) => {
+    await createActivityTemplateAction({
+      name: data.name,
+      category: data.category || 'general',
+      type: data.type || 'TASK',
+      priority: data.priority || 'NORMAL',
+      icon: data.icon || 'CheckSquare',
+      color: data.color || 'blue',
+      recurrenceType: 'one_time',
+      targetDate: data.targetDate,
+      scheduledTime: data.scheduledTime,
+      estimatedDuration: data.estimatedDuration,
+      notes: data.notes,
+      metadata: data.metadata || { isQuickTask: true, source: 'today' },
+    })
+  }
 
   const handleDeleteLogConfirm = async () => {
     if (!deletingLogId) return
@@ -438,6 +470,16 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
                 )}
               </div>
 
+              {/* Full Task Dialog Trigger */}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsTaskDialogOpen(true)}
+                className="text-xs font-semibold"
+              >
+                + Details
+              </Button>
+
               {/* Templates picker */}
               <div className="relative shrink-0">
                 <Button size="sm" variant="outline"
@@ -523,6 +565,14 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
           </div>
         </Section>
       )}
+
+      <TaskCreateDialog
+        isOpen={isTaskDialogOpen}
+        onClose={() => setIsTaskDialogOpen(false)}
+        initialDate={todayStr}
+        source="today"
+        onSubmitTask={handleCreateFromDialog}
+      />
     </div>
   )
 }
