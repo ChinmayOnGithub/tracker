@@ -4,8 +4,9 @@ import React, { useState, useMemo } from 'react'
 import { ActivityTemplate, RecurrenceAnalysis } from '@/types'
 import { deleteActivityTemplate, duplicateActivityTemplate, updateActivityTemplate, reorderActivityTemplates } from '@/app/actions/template'
 import { Icon } from './Icon'
-import { Plus, ArrowUp, ArrowDown, Edit2, Copy, Check, Trash2, EyeOff, MoreVertical } from 'lucide-react'
+import { Plus, Edit2, Copy, Check, Trash2, EyeOff, MoreVertical } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
+import { SortableList, DragHandle } from '@/components/shared/SortableList'
 import {
   Button,
   EmptyState,
@@ -72,21 +73,15 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
     return [...list].sort((a, b) => a.template.sortOrder - b.template.sortOrder)
   }, [showArchived, activeTemplates, archivedTemplates, activeRecurrence, searchQuery])
 
-  // Reordering
-  const handleMove = async (index: number, direction: 'up' | 'down') => {
-    const newIndex = direction === 'up' ? index - 1 : index + 1
-    if (newIndex < 0 || newIndex >= filteredTemplates.length) return
-
-    const item = filteredTemplates[index].template
-    setIsProcessing(item.id)
-
-    const reordered = [...filteredTemplates.map(t => t.template)]
-    reordered[index] = reordered[newIndex]
-    reordered[newIndex] = item
-
-    const ids = reordered.map(t => t.id)
-    await reorderActivityTemplates(ids)
-    setIsProcessing(null)
+  // Drag and drop reordering handler
+  const handleReorder = async (reordered: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]) => {
+    const ids = reordered.map(item => item.template.id)
+    setIsProcessing('reorder')
+    try {
+      await reorderActivityTemplates(ids)
+    } finally {
+      setIsProcessing(null)
+    }
   }
 
   const handleToggleArchive = async (template: ActivityTemplate) => {
@@ -202,85 +197,94 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
         })}
       </div>
 
-          {/* Bulk Action Bar overlay */}
-          {selectedIds.length > 0 && (
-            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[var(--color-bg-surface)] border border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)] backdrop-blur-xl rounded-full px-6 py-3 flex items-center gap-8 z-50 animate-in slide-in-from-bottom-8 duration-300 ease-out">
-              <span className="text-sm font-bold text-[var(--color-text-main)] whitespace-nowrap">
-                {selectedIds.length} item(s) selected
-              </span>
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleBulkArchive(!showArchived)}
-                  disabled={isProcessing !== null}
-                  className="rounded-full"
-                >
-                  {showArchived ? 'Restore' : 'Archive'}
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={handleBulkDelete}
-                  disabled={isProcessing !== null}
-                  className="rounded-full"
-                >
-                  Delete
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedIds([])}
-                  className="rounded-full"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
+      {/* Bulk Action Bar overlay */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[var(--color-bg-surface)] border border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)] backdrop-blur-xl rounded-full px-6 py-3 flex items-center gap-8 z-50 animate-in slide-in-from-bottom-8 duration-300 ease-out">
+          <span className="text-sm font-bold text-[var(--color-text-main)] whitespace-nowrap">
+            {selectedIds.length} item(s) selected
+          </span>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleBulkArchive(!showArchived)}
+              disabled={isProcessing !== null}
+              className="rounded-full"
+            >
+              {showArchived ? 'Restore' : 'Archive'}
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleBulkDelete}
+              disabled={isProcessing !== null}
+              className="rounded-full"
+            >
+              Delete
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedIds([])}
+              className="rounded-full"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
 
-        {/* Activities List */}
-        {filteredTemplates.length === 0 ? (
-          <EmptyState
-            title="No Activities Found"
-            description="Create your first activity template to schedule task reminders, workouts, bills, or study sessions."
-          />
-        ) : (
-          <div className="space-y-2">
-            {/* Header select-all row */}
-            <div className="flex items-center gap-3 px-3 py-1 text-[9px] text-[var(--color-text-muted)] font-black uppercase tracking-wider">
-              <input
-                type="checkbox"
-                checked={selectedIds.length === filteredTemplates.length && filteredTemplates.length > 0}
-                onChange={e => handleSelectAll(e.target.checked)}
-                className="w-3.5 h-3.5 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
-              />
-              <span>Select All</span>
-            </div>
+      {/* Activities List */}
+      {filteredTemplates.length === 0 ? (
+        <EmptyState
+          title="No Activities Found"
+          description="Create your first activity template to schedule task reminders, workouts, bills, or study sessions."
+        />
+      ) : (
+        <div className="space-y-2">
+          {/* Header select-all row */}
+          <div className="flex items-center gap-3 px-3 py-1 text-[9px] text-[var(--color-text-muted)] font-black uppercase tracking-wider">
+            <input
+              type="checkbox"
+              checked={selectedIds.length === filteredTemplates.length && filteredTemplates.length > 0}
+              onChange={e => handleSelectAll(e.target.checked)}
+              className="w-3.5 h-3.5 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
+            />
+            <span>Select All</span>
+          </div>
 
-            {/* List checklist items */}
-            {filteredTemplates.map((item, idx) => {
+          {/* Sortable vertical list */}
+          <SortableList<{ template: ActivityTemplate; analysis: RecurrenceAnalysis; id: string }>
+            items={filteredTemplates.map(item => ({ ...item, id: item.template.id }))}
+            onReorder={handleReorder}
+            disabled={!showArchived ? false : true}
+            getItemId={item => item.template.id}
+            renderItem={(item, { isDragOverlay }) => {
               const { template, analysis } = item
-              const isFirst = idx === 0
-              const isLast = idx === filteredTemplates.length - 1
               const isTemplateActive = template.isActive
               const isSelected = selectedIds.includes(template.id)
               const colorClasses = getTemplateColorClasses(template.color, isTemplateActive)
 
               return (
                 <div
-                  key={template.id}
-                  className={`flex items-center justify-between gap-3 p-3 border rounded-xl transition-all duration-[var(--motion-duration-fast)] group hover:shadow-2xs ${
+                  className={`flex items-center justify-between gap-3 p-3 border rounded-xl transition-all duration-[var(--motion-duration-fast)] group hover:shadow-2xs select-none ${
                     isTemplateActive ? `${colorClasses.bg} ${colorClasses.border}` : 'bg-transparent border-slate-200 dark:border-zinc-800 opacity-40'
-                  } ${isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''}`}
+                  } ${isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''} ${
+                    isDragOverlay ? 'shadow-lg border-[var(--color-primary)] scale-[1.01] bg-[var(--color-bg-surface)]' : ''
+                  }`}
                 >
-                  {/* Left elements: checkbox, icon, details */}
-                  <div className="flex items-center gap-3 min-w-0">
+                  {/* Left elements: drag handle, checkbox, icon, details */}
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {/* Drag Handle */}
+                    {isTemplateActive && !showArchived && (
+                      <DragHandle className="mr-0.5" />
+                    )}
+
                     <input
                       type="checkbox"
                       checked={isSelected}
                       onChange={e => handleSelectItem(template.id, e.target.checked)}
-                      className="w-3.5 h-3.5 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
+                      className="w-3.5 h-3.5 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer shrink-0"
                     />
 
                     {/* Colorful visual Icon wrapper */}
@@ -314,31 +318,8 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                     </div>
                   </div>
 
-                  {/* Right operations: Reorder arrows + 3-dots Menu */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    {/* Ordering (manual sortOrder) */}
-                    {isTemplateActive && !showArchived && (
-                      <div className="flex items-center gap-0.5 mr-1">
-                        <IconButton
-                          icon={<ArrowUp size={12} />}
-                          label="Move Up"
-                          variant="ghost"
-                          size="sm"
-                          disabled={isFirst || isProcessing !== null}
-                          onClick={() => handleMove(idx, 'up')}
-                        />
-                        <IconButton
-                          icon={<ArrowDown size={12} />}
-                          label="Move Down"
-                          variant="ghost"
-                          size="sm"
-                          disabled={isLast || isProcessing !== null}
-                          onClick={() => handleMove(idx, 'down')}
-                        />
-                      </div>
-                    )}
-
-                    {/* Three-dots Dropdown Menu */}
+                  {/* Right operations: Three-dots Dropdown Menu */}
+                  <div className="flex items-center shrink-0">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <IconButton
@@ -384,9 +365,10 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                   </div>
                 </div>
               )
-            })}
-          </div>
-        )}
+            }}
+          />
+        </div>
+      )}
     </div>
   )
 }
