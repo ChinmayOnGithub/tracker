@@ -22,13 +22,16 @@ function legacyHashPin(pin: string): string {
 /**
  * Retrieves the currently logged-in user from the signed session token cookie.
  */
-export async function getLoggedUser(): Promise<{ id: string; username: string } | null> {
+export async function getLoggedUser(): Promise<{ id: string; username: string; email?: string | null; isOwner: boolean } | null> {
   try {
     const cookieStore = await cookies()
     const token = cookieStore.get('session_token')?.value
     const session = verifySession(token)
     if (!session) return null
-    return { id: session.userId, username: session.username }
+    
+    // Check if user is owner
+    const isOwner = session.username === 'admin' || isAuthorizedUserEmail(session.username)
+    return { id: session.userId, username: session.username, isOwner }
   } catch (error) {
     console.error('Failed to get logged user:', error)
     return null

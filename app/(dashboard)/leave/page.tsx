@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { LeavePanel } from '@/components/LeavePanel'
 import { getLoggedUser } from '@/app/actions/auth'
 import { redirect } from 'next/navigation'
+import { canAccess } from '@/lib/auth-guards'
 
 import { LeaveType, LeaveStatus } from '@prisma/client'
 
@@ -12,6 +13,12 @@ export default async function Page() {
   const loggedUser = await getLoggedUser()
   if (!loggedUser) {
     redirect('/')
+    return null
+  }
+
+  if (!canAccess(loggedUser, 'leave.read')) {
+    redirect('/settings')
+    return null
   }
 
   const currentYear = new Date().getFullYear()

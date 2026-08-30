@@ -88,6 +88,33 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     return () => window.removeEventListener('personal_settings_changed', handleSettingsUpdate)
   }, [])
 
+  const isOwner = user?.username === 'admin' || user?.username === 'chinmaydpatil09' || (user as { isOwner?: boolean })?.isOwner === true
+
+  // Fetch guest permissions for non-owner accounts
+  const [guestPerms, setGuestPerms] = React.useState<Record<string, boolean>>({
+    today: false,
+    calendar: false,
+    activities: false,
+    journal: false,
+    leave: false,
+    weight: false,
+    links: false,
+    documents: false,
+    settings: true,
+  })
+
+  React.useEffect(() => {
+    if (!isOwner) {
+      import('@/app/actions/settings').then(mod => {
+        mod.getGuestPermissionsAction().then(res => {
+          if (res.success && res.permissions) {
+            setGuestPerms(res.permissions)
+          }
+        })
+      })
+    }
+  }, [isOwner])
+
   const allNavItems: NavigationItem[] = [
     { id: 'today', label: 'Today', icon: LayoutDashboard },
     { id: 'calendar', label: 'Calendar', icon: CalendarDays },
@@ -101,8 +128,11 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   ]
 
   const navItems = allNavItems.filter(item => {
-    if (visibleModules[item.id] === false) return false
-    return true
+    if (!isOwner) {
+      if (item.id === 'settings') return true
+      return guestPerms[item.id] === true
+    }
+    return visibleModules[item.id] !== false
   })
 
   const bottomNavItems = [
@@ -110,7 +140,14 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     { id: 'calendar', label: 'Calendar', icon: CalendarDays },
     { id: 'journal', label: 'Journal', icon: BookOpen },
     { id: 'weight', label: 'Weight', icon: Scale },
-  ].filter(item => visibleModules[item.id] !== false)
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ].filter(item => {
+    if (!isOwner) {
+      if (item.id === 'settings') return true
+      return guestPerms[item.id] === true
+    }
+    return visibleModules[item.id] !== false
+  })
 
   const moreNavItems = [
     { id: 'activities', label: 'Activities', icon: CheckSquare },
@@ -118,7 +155,13 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     { id: 'links', label: 'Link Library', icon: Link2 },
     { id: 'documents', label: 'Secure Vault', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
-  ].filter(item => visibleModules[item.id] !== false)
+  ].filter(item => {
+    if (!isOwner) {
+      if (item.id === 'settings') return true
+      return guestPerms[item.id] === true
+    }
+    return visibleModules[item.id] !== false
+  })
 
   const currentItem = allNavItems.find(item => item.id === activeTab)
 

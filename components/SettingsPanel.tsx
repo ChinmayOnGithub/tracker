@@ -5,15 +5,16 @@ import { Card, CardHeader, CardBody, Button, Skeleton, Select, Input } from '@/d
 import { 
   User, Palette, Calendar, Layout, Bell, RefreshCw, Lock, 
   Settings2, Database, Shield, CheckCircle2, AlertCircle, 
-  Trash2, Key, Check, Sparkles
+  Trash2, Key, Check, Sparkles, ShieldCheck
 } from 'lucide-react'
 import { checkGoogleConnection, disconnectGoogleAccount } from '@/modules/sync/google-calendar/actions'
 import { getUserProfileAction, setPasscodeAction } from '@/app/actions/auth'
+import { getGuestPermissionsAction, saveGuestPermissionsAction } from '@/app/actions/settings'
 import { BackupService } from '@/lib/database/local/BackupService'
 import { OfflineDebugPanel } from './OfflineDebugPanel'
 
 export const SettingsPanel: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave'>('profile')
+  const [activeSection, setActiveSection] = useState<'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave' | 'admin'>('profile')
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
   const [lastSync, setLastSync] = useState<string | null>(null)
@@ -151,6 +152,21 @@ export const SettingsPanel: React.FC = () => {
   const [developerMode, setDeveloperMode] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_developer_mode') === 'true' : false)
   const [experimentalFeatures, setExperimentalFeatures] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_experimental_features') === 'true' : false)
 
+  // 9. Admin Guest Permissions States
+  const [guestPermissions, setGuestPermissions] = useState<Record<string, boolean>>({
+    today: false,
+    calendar: false,
+    activities: false,
+    journal: false,
+    leave: false,
+    weight: false,
+    links: false,
+    documents: false,
+    settings: true,
+  })
+  const [savingPermissions, setSavingPermissions] = useState(false)
+  const [permissionsSuccess, setPermissionsSuccess] = useState<string | null>(null)
+
   // Load profile & integrations data
   const fetchProfile = useCallback(async () => {
     setProfileLoading(true)
@@ -159,6 +175,13 @@ export const SettingsPanel: React.FC = () => {
       setUserProfile(res.user)
     }
     setProfileLoading(false)
+  }, [])
+
+  const fetchGuestPermissions = useCallback(async () => {
+    const res = await getGuestPermissionsAction()
+    if (res.success && res.permissions) {
+      setGuestPermissions(res.permissions)
+    }
   }, [])
 
   const fetchConnection = useCallback(async () => {
@@ -179,9 +202,27 @@ export const SettingsPanel: React.FC = () => {
     const timer = setTimeout(() => {
       fetchProfile()
       fetchConnection()
+      fetchGuestPermissions()
     }, 0)
     return () => clearTimeout(timer)
-  }, [fetchProfile, fetchConnection])
+  }, [fetchProfile, fetchConnection, fetchGuestPermissions])
+
+  const handleToggleGuestPermission = async (moduleKey: string) => {
+    const updated = {
+      ...guestPermissions,
+      [moduleKey]: !guestPermissions[moduleKey]
+    }
+    setGuestPermissions(updated)
+    setSavingPermissions(true)
+    setPermissionsSuccess(null)
+    const res = await saveGuestPermissionsAction(updated)
+    if (res.success) {
+      setPermissionsSuccess(`Guest access for ${moduleKey} updated!`)
+      window.dispatchEvent(new Event('personal_settings_changed'))
+      setTimeout(() => setPermissionsSuccess(null), 3000)
+    }
+    setSavingPermissions(false)
+  }
 
   // Save Settings Helper (updates localStorage & dispatches change event)
   const saveToLocal = (key: string, value: string) => {
@@ -332,24 +373,34 @@ export const SettingsPanel: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-[var(--spacing-6)] items-start">
         {/* Navigation Sidebar */}
         <div className="flex lg:flex-col overflow-x-auto lg:overflow-x-visible gap-1.5 p-1 bg-slate-100/50 dark:bg-zinc-900/40 rounded-xl lg:bg-transparent lg:p-0">
-          {([
-            { id: 'profile', label: 'Profile', icon: User },
-            { id: 'appearance', label: 'Appearance', icon: Palette },
-            { id: 'calendar', label: 'Calendar', icon: Calendar },
-            { id: 'dashboard', label: 'Dashboard', icon: Layout },
-            { id: 'leave', label: 'Time Off', icon: Calendar },
-            { id: 'notifications', label: 'Notifications', icon: Bell },
-            { id: 'integrations', label: 'Integrations', icon: RefreshCw },
-            { id: 'security', label: 'Security', icon: Lock },
-            { id: 'backup', label: 'Backup & Recovery', icon: Database },
-            { id: 'advanced', label: 'Advanced', icon: Settings2 },
-          ] as const).map(section => {
+          {(
+            userProfile?.isOwner !== false
+              ? [
+                  { id: 'profile', label: 'Profile', icon: User },
+                  { id: 'appearance', label: 'Appearance', icon: Palette },
+                  { id: 'calendar', label: 'Calendar', icon: Calendar },
+                  { id: 'dashboard', label: 'Dashboard', icon: Layout },
+                  { id: 'leave', label: 'Time Off', icon: Calendar },
+                  { id: 'notifications', label: 'Notifications', icon: Bell },
+                  { id: 'integrations', label: 'Integrations', icon: RefreshCw },
+                  { id: 'security', label: 'Security', icon: Lock },
+                  { id: 'admin', label: 'Guest Access Admin', icon: ShieldCheck },
+                  { id: 'backup', label: 'Backup & Recovery', icon: Database },
+                  { id: 'advanced', label: 'Advanced', icon: Settings2 },
+                ]
+              : [
+                  { id: 'profile', label: 'Profile & Account', icon: User },
+                  { id: 'appearance', label: 'Appearance', icon: Palette },
+                  { id: 'notifications', label: 'Notifications', icon: Bell },
+                  { id: 'security', label: 'Security', icon: Lock },
+                ]
+          ).map(section => {
             const Icon = section.icon
             const isActive = activeSection === section.id
             return (
               <button
                 key={section.id}
-                onClick={() => setActiveSection(section.id)}
+                onClick={() => setActiveSection(section.id as typeof activeSection)}
                 className={`flex items-center gap-2.5 px-3.5 py-2 text-xs font-semibold rounded-lg shrink-0 transition-all cursor-pointer ${
                   isActive 
                     ? 'bg-[var(--color-accent)] text-[var(--color-text-main)] border border-[var(--color-border)] shadow-xs' 
@@ -1048,6 +1099,68 @@ export const SettingsPanel: React.FC = () => {
 
               {/* Diagnostics Console */}
               <OfflineDebugPanel />
+            </div>
+          )}
+
+          {activeSection === 'admin' && userProfile?.isOwner !== false && (
+            <div className="space-y-6 animate-fade-in">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4.5 h-4.5 text-[var(--color-primary)]" />
+                      <span className="text-xs font-black text-[var(--color-text-main)] uppercase tracking-wider">
+                        Guest User Feature Access Controls
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      Primary Owner Only
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardBody className="space-y-4">
+                  <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
+                    Customize which tracker modules are visible and accessible to non-owner authenticated accounts (such as other Google login users). Unchecked modules are completely hidden and access-blocked for guest accounts.
+                  </p>
+
+                  {permissionsSuccess && (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-250 dark:border-emerald-900 text-emerald-600 dark:text-emerald-400 rounded-lg text-xs font-semibold animate-fade-in">
+                      {permissionsSuccess}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    {([
+                      { key: 'today', label: "Today Overview Dashboard", desc: "Daily timeline and core habits" },
+                      { key: 'calendar', label: "Unified Calendar Planner", desc: "Calendar events and scheduling" },
+                      { key: 'activities', label: "Activities & Habits Manager", desc: "Routine and activity management" },
+                      { key: 'journal', label: "Personal Diary & Journaling", desc: "Private journal entries" },
+                      { key: 'leave', label: "Leave Requests & Time Off", desc: "Company leave balance and records" },
+                      { key: 'weight', label: "Weight Metrics Panel", desc: "Personal weight records and sparkline" },
+                      { key: 'links', label: "Personal Bookmark Link Library", desc: "Saved bookmarks and links" },
+                      { key: 'documents', label: "Secure File Vault Workspace", desc: "Encrypted documents and vault" },
+                    ] as const).map(mod => (
+                      <div key={mod.key} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-850 rounded-xl">
+                        <div className="space-y-0.5">
+                          <span className="text-xs font-bold text-[var(--color-text-main)] block">{mod.label}</span>
+                          <span className="text-[10px] text-[var(--color-text-muted)]">{mod.desc}</span>
+                        </div>
+                        <button
+                          onClick={() => handleToggleGuestPermission(mod.key)}
+                          disabled={savingPermissions}
+                          className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 cursor-pointer ${
+                            guestPermissions[mod.key] === true ? 'bg-[var(--color-primary)]' : 'bg-slate-200 dark:bg-zinc-800'
+                          }`}
+                        >
+                          <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${
+                            guestPermissions[mod.key] === true ? 'translate-x-4' : 'translate-x-0'
+                          }`} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </CardBody>
+              </Card>
             </div>
           )}
 

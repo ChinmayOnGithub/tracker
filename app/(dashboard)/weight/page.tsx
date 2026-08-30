@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { WeightPanel } from '@/components/WeightPanel'
 import { getLoggedUser } from '@/app/actions/auth'
 import { redirect } from 'next/navigation'
+import { canAccess } from '@/lib/auth-guards'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -10,6 +11,12 @@ export default async function Page() {
   const loggedUser = await getLoggedUser()
   if (!loggedUser) {
     redirect('/')
+    return null
+  }
+
+  if (!canAccess(loggedUser, 'weight.read')) {
+    redirect('/settings')
+    return null
   }
 
   // Weight records from last 90 days
