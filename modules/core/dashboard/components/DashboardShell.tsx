@@ -100,7 +100,10 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     { id: 'settings', label: 'Settings', icon: Settings },
   ]
 
-  const navItems = allNavItems.filter(item => visibleModules[item.id] !== false)
+  const navItems = allNavItems.filter(item => {
+    if (visibleModules[item.id] === false) return false
+    return true
+  })
 
   const bottomNavItems = [
     { id: 'today', label: 'Today', icon: LayoutDashboard },
