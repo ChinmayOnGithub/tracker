@@ -35,6 +35,151 @@ const RECURRENCE_FILTERS = [
   { value: 'custom', label: 'Custom' },
 ]
 
+interface ActivityItemRowProps {
+  item: { template: ActivityTemplate; analysis: RecurrenceAnalysis; id: string }
+  isTemplateActive: boolean
+  isSelected: boolean
+  colorClasses: { bg: string; text: string; border: string }
+  showArchived: boolean
+  isDragOverlay?: boolean
+  onSelectItem: (id: string, checked: boolean) => void
+  onEditTemplate: (template: ActivityTemplate) => void
+  onDuplicate: (id: string) => void
+  onToggleArchive: (template: ActivityTemplate) => void
+  onDelete: (id: string, name: string) => void
+  // Injected by SortableItem via cloneElement
+  _dragHandleRef?: (el: HTMLElement | null) => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  _dragHandleListeners?: Record<string, any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  _dragHandleAttributes?: Record<string, any>
+}
+
+const ActivityItemRow: React.FC<ActivityItemRowProps> = ({
+  item,
+  isTemplateActive,
+  isSelected,
+  colorClasses,
+  showArchived,
+  isDragOverlay,
+  onSelectItem,
+  onEditTemplate,
+  onDuplicate,
+  onToggleArchive,
+  onDelete,
+  _dragHandleRef,
+  _dragHandleListeners,
+  _dragHandleAttributes,
+}) => {
+  const { template, analysis } = item
+
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 p-3 border rounded-xl transition-all duration-[var(--motion-duration-fast)] group hover:shadow-2xs select-none ${
+        isTemplateActive ? `${colorClasses.bg} ${colorClasses.border}` : 'bg-transparent border-slate-200 dark:border-zinc-800 opacity-40'
+      } ${isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''} ${
+        isDragOverlay ? 'shadow-lg border-[var(--color-primary)] scale-[1.01] bg-[var(--color-bg-surface)] cursor-grabbing z-50' : ''
+      }`}
+    >
+      {/* Left elements: drag handle, checkbox, icon, details */}
+      <div className="flex items-center gap-2.5 min-w-0">
+        {/* Drag Handle with attached listeners */}
+        {isTemplateActive && !showArchived && (
+          <DragHandle
+            className="mr-0.5"
+            dragHandleRef={_dragHandleRef}
+            dragHandleListeners={_dragHandleListeners}
+            dragHandleAttributes={_dragHandleAttributes}
+          />
+        )}
+
+        <input
+          type="checkbox"
+          checked={isSelected}
+          onChange={e => onSelectItem(template.id, e.target.checked)}
+          className="w-3.5 h-3.5 accent-[var(--color-primary)] bg-[var(--color-bg-surface)] border-[var(--color-border)] dark:bg-zinc-800 dark:border-zinc-700 rounded-sm cursor-pointer shrink-0"
+        />
+
+        {/* Colorful visual Icon wrapper */}
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center border shrink-0 ${
+          isTemplateActive ? `${colorClasses.bg} ${colorClasses.border}` : 'bg-slate-100 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700'
+        }`}>
+          <Icon name={template.icon} className={colorClasses.text} size={15} />
+        </div>
+
+        <div className="min-w-0">
+          <span className="font-semibold text-[var(--color-text-main)] text-xs block truncate">
+            {template.name}
+          </span>
+          <span className="text-[9px] text-[var(--color-text-muted)] font-medium capitalize flex items-center gap-1.5 mt-0.5">
+            <span className="bg-[var(--color-accent)] px-1.5 py-0.5 rounded text-[8px] font-bold">
+              {template.recurrenceType}
+            </span>
+            {template.amount !== null && (
+              <>
+                <span>•</span>
+                <span className="text-green-600 dark:text-green-400 font-bold font-mono">₹{template.amount.toFixed(2)}</span>
+              </>
+            )}
+            {analysis.daysSinceLast !== null && (
+              <>
+                <span>•</span>
+                <span>Last completed {analysis.daysSinceLast}d ago</span>
+              </>
+            )}
+          </span>
+        </div>
+      </div>
+
+      {/* Right operations: Three-dots Dropdown Menu */}
+      <div className="flex items-center shrink-0">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <IconButton
+              icon={<MoreVertical size={14} />}
+              label="More actions"
+              variant="ghost"
+              size="sm"
+              onClick={e => e.stopPropagation()}
+            />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => onEditTemplate(template)}>
+              <Edit2 className="w-3.5 h-3.5 mr-2 opacity-70" />
+              Edit Activity
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onDuplicate(template.id)}>
+              <Copy className="w-3.5 h-3.5 mr-2 opacity-70" />
+              Duplicate Activity
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onToggleArchive(template)}>
+              {isTemplateActive ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5 mr-2 opacity-70" />
+                  Archive Activity
+                </>
+              ) : (
+                <>
+                  <Check className="w-3.5 h-3.5 mr-2 opacity-70" />
+                  Restore Activity
+                </>
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="danger"
+              onClick={() => onDelete(template.id, template.name)}
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-2" />
+              Delete Activity
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  )
+}
+
 export const ActivityManager: React.FC<ActivityManagerProps> = ({
   analyzedTemplates,
   onAddTemplate,
@@ -279,110 +424,25 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
             disabled={!showArchived ? false : true}
             getItemId={item => item.template.id}
             renderItem={(item, { isDragOverlay }) => {
-              const { template, analysis } = item
-              const isTemplateActive = template.isActive
-              const isSelected = selectedIds.includes(template.id)
-              const colorClasses = getTemplateColorClasses(template.color, isTemplateActive)
+              const isTemplateActive = item.template.isActive
+              const isSelected = selectedIds.includes(item.template.id)
+              const colorClasses = getTemplateColorClasses(item.template.color, isTemplateActive)
 
               return (
-                <div
-                  className={`flex items-center justify-between gap-3 p-3 border rounded-xl transition-all duration-[var(--motion-duration-fast)] group hover:shadow-2xs select-none ${
-                    isTemplateActive ? `${colorClasses.bg} ${colorClasses.border}` : 'bg-transparent border-slate-200 dark:border-zinc-800 opacity-40'
-                  } ${isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''} ${
-                    isDragOverlay ? 'shadow-lg border-[var(--color-primary)] scale-[1.01] bg-[var(--color-bg-surface)]' : ''
-                  }`}
-                >
-                  {/* Left elements: drag handle, checkbox, icon, details */}
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    {/* Drag Handle */}
-                    {isTemplateActive && !showArchived && (
-                      <DragHandle className="mr-0.5" />
-                    )}
-
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={e => handleSelectItem(template.id, e.target.checked)}
-                      className="w-3.5 h-3.5 accent-[var(--color-primary)] bg-[var(--color-bg-surface)] border-[var(--color-border)] dark:bg-zinc-800 dark:border-zinc-700 rounded-sm cursor-pointer shrink-0"
-                    />
-
-                    {/* Colorful visual Icon wrapper */}
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center border shrink-0 ${
-                      isTemplateActive ? `${colorClasses.bg} ${colorClasses.border}` : 'bg-slate-100 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700'
-                    }`}>
-                      <Icon name={template.icon} className={colorClasses.text} size={15} />
-                    </div>
-
-                    <div className="min-w-0">
-                      <span className="font-semibold text-[var(--color-text-main)] text-xs block truncate">
-                        {template.name}
-                      </span>
-                      <span className="text-[9px] text-[var(--color-text-muted)] font-medium capitalize flex items-center gap-1.5 mt-0.5">
-                        <span className="bg-[var(--color-accent)] px-1.5 py-0.5 rounded text-[8px] font-bold">
-                          {template.recurrenceType}
-                        </span>
-                        {template.amount !== null && (
-                          <>
-                            <span>•</span>
-                            <span className="text-green-600 dark:text-green-400 font-bold font-mono">₹{template.amount.toFixed(2)}</span>
-                          </>
-                        )}
-                        {analysis.daysSinceLast !== null && (
-                          <>
-                            <span>•</span>
-                            <span>Last completed {analysis.daysSinceLast}d ago</span>
-                          </>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Right operations: Three-dots Dropdown Menu */}
-                  <div className="flex items-center shrink-0">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <IconButton
-                          icon={<MoreVertical size={14} />}
-                          label="More actions"
-                          variant="ghost"
-                          size="sm"
-                          onClick={e => e.stopPropagation()}
-                        />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => onEditTemplate(template)}>
-                          <Edit2 className="w-3.5 h-3.5 mr-2 opacity-70" />
-                          Edit Activity
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDuplicate(template.id)}>
-                          <Copy className="w-3.5 h-3.5 mr-2 opacity-70" />
-                          Duplicate Activity
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleToggleArchive(template)}>
-                          {isTemplateActive ? (
-                            <>
-                              <EyeOff className="w-3.5 h-3.5 mr-2 opacity-70" />
-                              Archive Activity
-                            </>
-                          ) : (
-                            <>
-                              <Check className="w-3.5 h-3.5 mr-2 opacity-70" />
-                              Restore Activity
-                            </>
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          variant="danger"
-                          onClick={() => handleDelete(template.id, template.name)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 mr-2" />
-                          Delete Activity
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
+                <ActivityItemRow
+                  key={item.id}
+                  item={item}
+                  isTemplateActive={isTemplateActive}
+                  isSelected={isSelected}
+                  colorClasses={colorClasses}
+                  showArchived={showArchived}
+                  isDragOverlay={isDragOverlay}
+                  onSelectItem={handleSelectItem}
+                  onEditTemplate={onEditTemplate}
+                  onDuplicate={handleDuplicate}
+                  onToggleArchive={handleToggleArchive}
+                  onDelete={handleDelete}
+                />
               )
             }}
           />

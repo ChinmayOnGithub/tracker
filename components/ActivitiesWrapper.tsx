@@ -8,6 +8,8 @@ import { ActivityTemplate, ActivityLog, Tag, RecurrenceAnalysis, Note } from '@/
 import { getTodayDateStr, analyzeRecurrence } from '@/lib/recurrence'
 import { useStore } from '@/lib/store/store'
 
+import { TaskOccurrenceService } from '@/modules/activities/domain/TaskOccurrenceService'
+
 interface ActivitiesWrapperProps {
   analyzedTemplates: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]
   recentLogs?: ActivityLog[]
@@ -39,8 +41,12 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
   const [isDayLogsOpen, setIsDayLogsOpen] = useState(false)
   const [dayLogsModalTab] = useState<'activities' | 'notes'>('activities')
 
-  // Use global reactive store if populated, otherwise fallback to server initial props
-  const effectiveTemplates = state.templates.length > 0 ? state.templates : initialTemplates
+  // Filter out any ephemeral/temporary quick tasks from the store before rendering
+  const rawTemplates = state.templates.length > 0 ? state.templates : initialTemplates
+  const persistentTemplates = useMemo(() => {
+    return rawTemplates.filter(t => !TaskOccurrenceService.isTemporaryTask(t))
+  }, [rawTemplates])
+
   const effectiveLogs = state.logs.length > 0 ? state.logs : initialLogs
   const effectiveNotes = state.journalEntries.length > 0 
     ? state.journalEntries.map(j => ({
@@ -57,12 +63,12 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
 
   const analyzedTemplates = useMemo(() => {
     const todayStr = getTodayDateStr()
-    return effectiveTemplates.map(template => {
+    return persistentTemplates.map(template => {
       const templateLogs = effectiveLogs.filter(log => log.activityId === template.id)
       const analysis = analyzeRecurrence(template, templateLogs, todayStr)
       return { template, analysis }
     })
-  }, [effectiveTemplates, effectiveLogs])
+  }, [persistentTemplates, effectiveLogs])
 
   // Filter logs and note for selected date
   const selectedDayLogs = effectiveLogs.filter(log => log.date === selectedDateStr)
@@ -92,7 +98,7 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
           isOpen={isDayLogsOpen}
           onClose={() => setIsDayLogsOpen(false)}
           dateStr={selectedDateStr}
-          templates={effectiveTemplates.filter(t => t.isActive)}
+          templates={persistentTemplates.filter(t => t.isActive)}
           logs={selectedDayLogs}
           note={selectedDayNote}
           initialTab={dayLogsModalTab}
