@@ -61,9 +61,9 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
             {title}
           </h1>
           {subtitle && (
-            <p className="text-sm text-[var(--color-text-muted)] mt-0.5 font-normal leading-snug">
+            <div className="text-sm text-[var(--color-text-muted)] mt-0.5 font-normal leading-snug">
               {subtitle}
-            </p>
+            </div>
           )}
         </div>
       </div>

@@ -267,7 +267,7 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
               type="checkbox"
               checked={selectedIds.length === filteredTemplates.length && filteredTemplates.length > 0}
               onChange={e => handleSelectAll(e.target.checked)}
-              className="w-3.5 h-3.5 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer"
+              className="w-3.5 h-3.5 accent-[var(--color-primary)] bg-[var(--color-bg-surface)] border-[var(--color-border)] dark:bg-zinc-800 dark:border-zinc-700 rounded-sm cursor-pointer"
             />
             <span>Select All</span>
           </div>
@@ -303,7 +303,7 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                       type="checkbox"
                       checked={isSelected}
                       onChange={e => handleSelectItem(template.id, e.target.checked)}
-                      className="w-3.5 h-3.5 text-[var(--color-primary)] border-[var(--color-border)] rounded-sm cursor-pointer shrink-0"
+                      className="w-3.5 h-3.5 accent-[var(--color-primary)] bg-[var(--color-bg-surface)] border-[var(--color-border)] dark:bg-zinc-800 dark:border-zinc-700 rounded-sm cursor-pointer shrink-0"
                     />
 
                     {/* Colorful visual Icon wrapper */}

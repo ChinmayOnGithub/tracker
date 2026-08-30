@@ -41,6 +41,13 @@ a, button, input, select, textarea {
   transition-duration: 200ms;
 }
 
+/* Dark mode inputs and checkboxes */
+.dark input[type="checkbox"] {
+  color-scheme: dark;
+  background-color: var(--color-bg-subtle, #18181b);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
