@@ -37,12 +37,14 @@ export const CompactTodayPills: React.FC = () => {
       {gold && (
         <span
           className="inline-flex items-center gap-1 hover:text-[var(--color-text-main)] transition-colors cursor-default"
-          title="Market reference gold rate per 10 grams (24K)"
+          title={`Gold 24K benchmark rate: ₹${(gold.pricePer10Gram24K || gold.pricePerGram24K * 10).toLocaleString('en-IN')}/10g (${gold.label})`}
         >
           <span className="font-semibold text-amber-500/90">Gold 24K</span>
           <span>₹{(gold.pricePer10Gram24K || gold.pricePerGram24K * 10).toLocaleString('en-IN')}/10g</span>
-          {gold.dailyChangePct != null && (
-            <span className="text-emerald-500 text-[10px] font-bold">↑{gold.dailyChangePct}%</span>
+          {gold.dailyChangePct !== undefined && (
+            <span className={`text-[10px] font-bold ${gold.dailyChangePct >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+              {gold.dailyChangePct >= 0 ? '↑' : '↓'}{Math.abs(gold.dailyChangePct)}%
+            </span>
           )}
         </span>
       )}

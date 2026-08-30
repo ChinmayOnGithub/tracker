@@ -1,8 +1,8 @@
 /**
  * GoldPriceService
  * 
- * Clean integration service for compact market reference gold rates in INR/gram.
- * Uses 4-hour local caching and fallback estimates so Today never blocks or fails.
+ * Clean integration service for compact spot & market reference gold rates in INR/gram.
+ * Uses 2-hour local caching and fallback estimates so Today never blocks or fails.
  */
 
 export interface GoldPriceSnapshot {
@@ -11,10 +11,10 @@ export interface GoldPriceSnapshot {
   currency: string
   dailyChangePct?: number
   timestamp: number
-  isReferencePrice: boolean
+  label: 'Spot / Reference' | 'Live Spot'
 }
 
-const GOLD_CACHE_KEY = 'tracker_gold_price_snapshot_v3'
+const GOLD_CACHE_KEY = 'tracker_gold_price_snapshot_v4'
 const GOLD_CACHE_TTL = 2 * 60 * 60 * 1000 // 2 hours
 
 export class GoldPriceService {
@@ -37,7 +37,7 @@ export class GoldPriceService {
   }
 
   /**
-   * Fetches latest 24K gold market rate in INR per 10 grams directly from real-time API.
+   * Fetches latest 24K gold benchmark market rate in INR per 10 grams directly from real-time API.
    */
   static async fetchGoldPrice(): Promise<GoldPriceSnapshot | null> {
     try {
@@ -45,7 +45,8 @@ export class GoldPriceService {
       if (cached) return cached
 
       let pricePerGram: number | null = null
-      let isReferencePrice = false
+      let dailyChange: number | undefined = undefined
+      let label: 'Spot / Reference' | 'Live Spot' = 'Spot / Reference'
 
       // 1. Primary Live Feed: Real-time XAU/INR Spot API
       try {
@@ -53,11 +54,16 @@ export class GoldPriceService {
         if (liveRes.ok) {
           const liveData = await liveRes.json()
           const xauInr = Number(liveData.price)
-          if (xauInr && xauInr > 100000) {
-            // 1 troy ounce = 31.1034768 grams + standard import duties/local retail benchmark adjustment (~10-12%)
-            const spotPerGram = xauInr / 31.1034768
-            const retailPerGram = Math.round(spotPerGram * 1.10)
-            pricePerGram = retailPerGram
+          if (xauInr && xauInr > 50000) {
+            // 1 troy ounce = 31.1034768 grams.
+            // Pure live spot price in INR per gram:
+            const spotPerGram = Math.round(xauInr / 31.1034768)
+            pricePerGram = spotPerGram
+            label = 'Live Spot'
+
+            if (typeof liveData.chp === 'number') {
+              dailyChange = Math.round(liveData.chp * 100) / 100
+            }
           }
         }
       } catch (e) {
@@ -77,8 +83,12 @@ export class GoldPriceService {
             const xauUsd = Number(xauData.price)
             const usdToInr = Number(forexData.rates?.INR) || 86.5
             if (xauUsd && usdToInr) {
-              const spotPerGram = (xauUsd * usdToInr) / 31.1034768
-              pricePerGram = Math.round(spotPerGram * 1.10)
+              const spotPerGram = Math.round((xauUsd * usdToInr) / 31.1034768)
+              pricePerGram = spotPerGram
+              label = 'Live Spot'
+              if (typeof xauData.chp === 'number') {
+                dailyChange = Math.round(xauData.chp * 100) / 100
+              }
             }
           }
         } catch {
@@ -86,19 +96,19 @@ export class GoldPriceService {
         }
       }
 
-      // 3. Fallback baseline if entirely offline
+      // 3. Fallback benchmark if entirely offline
       if (!pricePerGram) {
-        pricePerGram = 15280
-        isReferencePrice = true
+        pricePerGram = 8200 // Realistic spot benchmark ~₹82,000/10g
+        label = 'Spot / Reference'
       }
 
       const snapshot: GoldPriceSnapshot = {
         pricePerGram24K: pricePerGram,
         pricePer10Gram24K: pricePerGram * 10,
         currency: '₹',
-        dailyChangePct: 0.35,
+        dailyChangePct: dailyChange, // Only include if provided by genuine source
         timestamp: Date.now(),
-        isReferencePrice
+        label
       }
 
       if (typeof window !== 'undefined') {

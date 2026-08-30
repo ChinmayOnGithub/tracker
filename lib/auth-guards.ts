@@ -1,10 +1,73 @@
 import { db } from './db'
 import { getLoggedUser } from '@/app/actions/auth'
+import { isAuthorizedUserEmail } from './constants'
+
+export type TrackerCapability =
+  // Private Core Modules (Owner-Only)
+  | 'core.owner'
+  | 'journal.read'
+  | 'journal.write'
+  | 'vault.read'
+  | 'vault.write'
+  | 'calendar.personal'
+  | 'leave.read'
+  | 'leave.write'
+  | 'weight.read'
+  | 'weight.write'
+  | 'work-hours.read'
+  | 'work-hours.write'
+  | 'settings.manage'
+  // Future Shared Tools (Configurable / Multi-User)
+  | 'room-turn.read'
+  | 'room-turn.write'
+  | 'grocery.read'
+  | 'grocery.write'
+  | 'shared-finance.read'
+  | 'shared-finance.write'
+
+/**
+ * Checks whether an authenticated user has authorization for a given capability.
+ * Keeps authentication ("who is this user") decoupled from authorization ("what can they do").
+ */
+export function canAccess(
+  user: { id: string; username: string; email?: string | null } | null | undefined,
+  capability: TrackerCapability
+): boolean {
+  if (!user) return false
+
+  // 1. Owner privileges: The whitelisted owner account or legacy 'admin' user has full access
+  const isOwner = user.username === 'admin' || isAuthorizedUserEmail(user.email || user.username)
+
+  // 2. Private core capabilities require owner authorization
+  const isPrivateCore = capability === 'core.owner' ||
+    capability.startsWith('journal.') ||
+    capability.startsWith('vault.') ||
+    capability.startsWith('calendar.personal') ||
+    capability.startsWith('leave.') ||
+    capability.startsWith('weight.') ||
+    capability.startsWith('work-hours.') ||
+    capability.startsWith('settings.')
+
+  if (isPrivateCore) {
+    return isOwner
+  }
+
+  // 3. Shared tools capability evaluation (open to authenticated users / extensible)
+  return true
+}
 
 export async function requireAuth() {
   const user = await getLoggedUser()
   if (!user) {
     throw new Error('Authentication required')
+  }
+  return user
+}
+
+export async function requireCapability(capability: TrackerCapability) {
+  const user = await requireAuth()
+  if (!canAccess(user, capability)) {
+    throw new Error(`Unauthorized: missing capability ${capability}`)
   }
   return user
 }

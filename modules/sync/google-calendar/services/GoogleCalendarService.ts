@@ -624,44 +624,64 @@ export class GoogleCalendarService {
     })
     const calendarId = credential?.calendarId || 'primary'
 
-    const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`)
-    if (syncToken) {
-      url.searchParams.set('syncToken', syncToken)
-    } else {
-      // For initial sync, list events from 1 month ago to 1 year ahead
-      const timeMin = new Date()
-      timeMin.setMonth(timeMin.getMonth() - 1)
-      const timeMax = new Date()
-      timeMax.setFullYear(timeMax.getFullYear() + 1)
-      url.searchParams.set('timeMin', timeMin.toISOString())
-      url.searchParams.set('timeMax', timeMax.toISOString())
-    }
+    let allItems: unknown[] = []
+    let pageToken: string | undefined = undefined
+    let nextSyncToken: string | null = null
 
-    logger.debug('GoogleCalendarService', 'Fetching events list with sync token', {
-      userId,
-      hasSyncToken: !!syncToken,
-    })
+    do {
+      const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`)
+      if (syncToken) {
+        url.searchParams.set('syncToken', syncToken)
+      } else {
+        // For initial sync, list events from 1 month ago to 1 year ahead
+        const timeMin = new Date()
+        timeMin.setMonth(timeMin.getMonth() - 1)
+        const timeMax = new Date()
+        timeMax.setFullYear(timeMax.getFullYear() + 1)
+        url.searchParams.set('timeMin', timeMin.toISOString())
+        url.searchParams.set('timeMax', timeMax.toISOString())
+      }
 
-    const response = await fetchWithRetry(url.toString(), {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    })
+      if (pageToken) {
+        url.searchParams.set('pageToken', pageToken)
+      }
 
-    if (!response.ok) {
-      const errText = await response.text()
-      logger.error('GoogleCalendarService', 'Failed to list events with sync token', {
+      logger.debug('GoogleCalendarService', 'Fetching events page with sync/page token', {
         userId,
-        status: response.status,
-        error: errText.substring(0, 500)
+        hasSyncToken: !!syncToken,
+        hasPageToken: !!pageToken,
       })
-      throw new GoogleApiError(`Failed to list events: ${errText}`, response.status)
-    }
 
-    const data = await response.json()
+      const response = await fetchWithRetry(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      })
+
+      if (!response.ok) {
+        const errText = await response.text()
+        logger.error('GoogleCalendarService', 'Failed to list events with sync token', {
+          userId,
+          status: response.status,
+          error: errText.substring(0, 500)
+        })
+        throw new GoogleApiError(`Failed to list events: ${errText}`, response.status)
+      }
+
+      const data = await response.json()
+      if (Array.isArray(data.items)) {
+        allItems = allItems.concat(data.items)
+      }
+
+      pageToken = data.nextPageToken
+      if (data.nextSyncToken) {
+        nextSyncToken = data.nextSyncToken
+      }
+    } while (pageToken)
+
     return {
-      items: data.items || [],
-      nextSyncToken: data.nextSyncToken || null
+      items: allItems,
+      nextSyncToken
     }
   }
 

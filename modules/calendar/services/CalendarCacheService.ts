@@ -9,8 +9,9 @@ export interface AgendaData {
   upcoming: ParsedCalendarEvent[]
 }
 
-interface CacheEnvelope<T> {
+export interface UserCalendarCacheEnvelope<T> {
   key: string
+  userId: string
   value: T
   timestamp: number
 }
@@ -19,7 +20,7 @@ interface CacheEnvelope<T> {
 const CACHE_TTL_MS = 5 * 60 * 1000
 
 export class CalendarCacheService {
-  private static inMemory = new Map<string, CacheEnvelope<unknown>>()
+  private static inMemory = new Map<string, UserCalendarCacheEnvelope<unknown>>()
 
   private static isClient(): boolean {
     return typeof window !== 'undefined'
@@ -74,18 +75,22 @@ export class CalendarCacheService {
   /**
    * Fetches an agenda from warm memory or IndexedDB, returning immediately if available.
    * Also reports whether background revalidation is recommended.
-   * Key is strictly scoped to the authenticated userId.
+   * Key is strictly scoped to authenticated non-anonymous userId.
    */
   public static async getCachedAgenda(
-    userId: string,
+    userId: string | null | undefined,
     todayStr: string
   ): Promise<{ data: AgendaData | null; isStale: boolean }> {
-    const cacheKey = `cal_agenda_${userId || 'anonymous'}_${todayStr}`
+    if (!userId || userId === 'anonymous') {
+      return { data: null, isStale: true }
+    }
+
+    const cacheKey = `cal_agenda_${userId}_${todayStr}`
     const now = Date.now()
 
     // 1. Check warm memory
-    const mem = this.inMemory.get(cacheKey) as CacheEnvelope<AgendaData> | undefined
-    if (mem && mem.value) {
+    const mem = this.inMemory.get(cacheKey) as UserCalendarCacheEnvelope<AgendaData> | undefined
+    if (mem && mem.userId === userId && mem.value) {
       const isStale = now - mem.timestamp > CACHE_TTL_MS
       return { data: mem.value, isStale }
     }
@@ -94,8 +99,8 @@ export class CalendarCacheService {
     if (this.isClient()) {
       try {
         const db = IndexedDBEngine.getInstance()
-        const stored = await db.get<CacheEnvelope<AgendaData>>('settings', cacheKey)
-        if (stored && stored.value) {
+        const stored = await db.get<UserCalendarCacheEnvelope<AgendaData>>('settings', cacheKey)
+        if (stored && stored.userId === userId && stored.value) {
           // Warm up memory
           this.inMemory.set(cacheKey, stored)
           const isStale = now - stored.timestamp > CACHE_TTL_MS
@@ -113,13 +118,16 @@ export class CalendarCacheService {
    * Saves agenda into warm memory and IndexedDB for the authenticated user.
    */
   public static async saveCachedAgenda(
-    userId: string,
+    userId: string | null | undefined,
     todayStr: string,
     agenda: AgendaData
   ): Promise<void> {
-    const cacheKey = `cal_agenda_${userId || 'anonymous'}_${todayStr}`
-    const envelope: CacheEnvelope<AgendaData> = {
+    if (!userId || userId === 'anonymous') return
+
+    const cacheKey = `cal_agenda_${userId}_${todayStr}`
+    const envelope: UserCalendarCacheEnvelope<AgendaData> = {
       key: cacheKey,
+      userId,
       value: agenda,
       timestamp: Date.now(),
     }
@@ -142,23 +150,27 @@ export class CalendarCacheService {
    * Fetches cached month summaries for the authenticated user.
    */
   public static async getCachedMonthSummary(
-    userId: string,
+    userId: string | null | undefined,
     year: number,
     month: number
   ): Promise<{ data: CalendarMonthSummaryDTO[] | null; isStale: boolean }> {
-    const cacheKey = `cal_month_${userId || 'anonymous'}_${year}_${month}`
+    if (!userId || userId === 'anonymous') {
+      return { data: null, isStale: true }
+    }
+
+    const cacheKey = `cal_month_${userId}_${year}_${month}`
     const now = Date.now()
 
-    const mem = this.inMemory.get(cacheKey) as CacheEnvelope<CalendarMonthSummaryDTO[]> | undefined
-    if (mem && mem.value) {
+    const mem = this.inMemory.get(cacheKey) as UserCalendarCacheEnvelope<CalendarMonthSummaryDTO[]> | undefined
+    if (mem && mem.userId === userId && mem.value) {
       return { data: mem.value, isStale: now - mem.timestamp > CACHE_TTL_MS }
     }
 
     if (this.isClient()) {
       try {
         const db = IndexedDBEngine.getInstance()
-        const stored = await db.get<CacheEnvelope<CalendarMonthSummaryDTO[]>>('settings', cacheKey)
-        if (stored && stored.value) {
+        const stored = await db.get<UserCalendarCacheEnvelope<CalendarMonthSummaryDTO[]>>('settings', cacheKey)
+        if (stored && stored.userId === userId && stored.value) {
           this.inMemory.set(cacheKey, stored)
           return { data: stored.value, isStale: now - stored.timestamp > CACHE_TTL_MS }
         }
@@ -174,14 +186,17 @@ export class CalendarCacheService {
    * Saves month summaries to cache for the authenticated user.
    */
   public static async saveCachedMonthSummary(
-    userId: string,
+    userId: string | null | undefined,
     year: number,
     month: number,
     data: CalendarMonthSummaryDTO[]
   ): Promise<void> {
-    const cacheKey = `cal_month_${userId || 'anonymous'}_${year}_${month}`
-    const envelope: CacheEnvelope<CalendarMonthSummaryDTO[]> = {
+    if (!userId || userId === 'anonymous') return
+
+    const cacheKey = `cal_month_${userId}_${year}_${month}`
+    const envelope: UserCalendarCacheEnvelope<CalendarMonthSummaryDTO[]> = {
       key: cacheKey,
+      userId,
       value: data,
       timestamp: Date.now(),
     }
@@ -201,22 +216,26 @@ export class CalendarCacheService {
    * Fetches cached week data for the authenticated user.
    */
   public static async getCachedWeekData(
-    userId: string,
+    userId: string | null | undefined,
     startStr: string
   ): Promise<{ data: CalendarWeekDTO | null; isStale: boolean }> {
-    const cacheKey = `cal_week_${userId || 'anonymous'}_${startStr}`
+    if (!userId || userId === 'anonymous') {
+      return { data: null, isStale: true }
+    }
+
+    const cacheKey = `cal_week_${userId}_${startStr}`
     const now = Date.now()
 
-    const mem = this.inMemory.get(cacheKey) as CacheEnvelope<CalendarWeekDTO> | undefined
-    if (mem && mem.value) {
+    const mem = this.inMemory.get(cacheKey) as UserCalendarCacheEnvelope<CalendarWeekDTO> | undefined
+    if (mem && mem.userId === userId && mem.value) {
       return { data: mem.value, isStale: now - mem.timestamp > CACHE_TTL_MS }
     }
 
     if (this.isClient()) {
       try {
         const db = IndexedDBEngine.getInstance()
-        const stored = await db.get<CacheEnvelope<CalendarWeekDTO>>('settings', cacheKey)
-        if (stored && stored.value) {
+        const stored = await db.get<UserCalendarCacheEnvelope<CalendarWeekDTO>>('settings', cacheKey)
+        if (stored && stored.userId === userId && stored.value) {
           this.inMemory.set(cacheKey, stored)
           return { data: stored.value, isStale: now - stored.timestamp > CACHE_TTL_MS }
         }
@@ -232,13 +251,16 @@ export class CalendarCacheService {
    * Saves week data to cache for the authenticated user.
    */
   public static async saveCachedWeekData(
-    userId: string,
+    userId: string | null | undefined,
     startStr: string,
     data: CalendarWeekDTO
   ): Promise<void> {
-    const cacheKey = `cal_week_${userId || 'anonymous'}_${startStr}`
-    const envelope: CacheEnvelope<CalendarWeekDTO> = {
+    if (!userId || userId === 'anonymous') return
+
+    const cacheKey = `cal_week_${userId}_${startStr}`
+    const envelope: UserCalendarCacheEnvelope<CalendarWeekDTO> = {
       key: cacheKey,
+      userId,
       value: data,
       timestamp: Date.now(),
     }
@@ -257,7 +279,7 @@ export class CalendarCacheService {
   /**
    * Explicit cache invalidation for all or single user.
    */
-  public static invalidateAll(userId?: string): void {
+  public static invalidateAll(userId?: string | null): void {
     if (!userId) {
       this.inMemory.clear()
       return
