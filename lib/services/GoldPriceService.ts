@@ -7,6 +7,7 @@
 
 export interface GoldPriceSnapshot {
   pricePerGram24K: number
+  pricePer10Gram24K: number
   currency: string
   dailyChangePct?: number
   timestamp: number
@@ -66,6 +67,7 @@ export class GoldPriceService {
 
       const snapshot: GoldPriceSnapshot = {
         pricePerGram24K: pricePerGram,
+        pricePer10Gram24K: pricePerGram * 10,
         currency: '₹',
         dailyChangePct,
         timestamp: Date.now(),

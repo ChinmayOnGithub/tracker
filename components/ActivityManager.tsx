@@ -4,9 +4,19 @@ import React, { useState, useMemo } from 'react'
 import { ActivityTemplate, RecurrenceAnalysis } from '@/types'
 import { deleteActivityTemplate, duplicateActivityTemplate, updateActivityTemplate, reorderActivityTemplates } from '@/app/actions/template'
 import { Icon } from './Icon'
-import { Plus, ArrowUp, ArrowDown, Edit2, Copy, Check, Trash2, EyeOff } from 'lucide-react'
+import { Plus, ArrowUp, ArrowDown, Edit2, Copy, Check, Trash2, EyeOff, MoreVertical } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
-import { Button, EmptyState, IconButton, SearchInput } from '@/design-system'
+import {
+  Button,
+  EmptyState,
+  IconButton,
+  SearchInput,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/design-system'
 
 interface ActivityManagerProps {
   analyzedTemplates: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]
@@ -288,8 +298,6 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                         <span className="bg-[var(--color-accent)] px-1.5 py-0.5 rounded text-[8px] font-bold">
                           {template.recurrenceType}
                         </span>
-                        <span>•</span>
-                        <span>{template.category}</span>
                         {template.amount !== null && (
                           <>
                             <span>•</span>
@@ -306,13 +314,13 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                     </div>
                   </div>
 
-                  {/* Right operations - Always visible on mobile, hover on desktop */}
-                  <div className="flex items-center gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-150 shrink-0">
+                  {/* Right operations: Reorder arrows + 3-dots Menu */}
+                  <div className="flex items-center gap-1 shrink-0">
                     {/* Ordering (manual sortOrder) */}
                     {isTemplateActive && !showArchived && (
-                      <div className="flex bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] p-0.5 gap-0.5">
+                      <div className="flex items-center gap-0.5 mr-1">
                         <IconButton
-                          icon={<ArrowUp size={11} />}
+                          icon={<ArrowUp size={12} />}
                           label="Move Up"
                           variant="ghost"
                           size="sm"
@@ -320,7 +328,7 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                           onClick={() => handleMove(idx, 'up')}
                         />
                         <IconButton
-                          icon={<ArrowDown size={11} />}
+                          icon={<ArrowDown size={12} />}
                           label="Move Down"
                           variant="ghost"
                           size="sm"
@@ -330,40 +338,49 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                       </div>
                     )}
 
-                    <div className="flex items-center gap-0.5 bg-[var(--color-bg-surface)] p-0.5 border border-[var(--color-border)] rounded-[var(--radius-md)]">
-                      <IconButton
-                        icon={<Edit2 size={11} />}
-                        label="Edit Template"
-                        variant="ghost"
-                        size="sm"
-                        disabled={isProcessing !== null}
-                        onClick={() => onEditTemplate(template)}
-                      />
-                      <IconButton
-                        icon={<Copy size={11} />}
-                        label="Duplicate Template"
-                        variant="ghost"
-                        size="sm"
-                        disabled={isProcessing !== null}
-                        onClick={() => handleDuplicate(template.id)}
-                      />
-                      <IconButton
-                        icon={isTemplateActive ? <EyeOff size={11} /> : <Check size={11} />}
-                        label={isTemplateActive ? 'Archive' : 'Restore'}
-                        variant="ghost"
-                        size="sm"
-                        disabled={isProcessing !== null}
-                        onClick={() => handleToggleArchive(template)}
-                      />
-                      <IconButton
-                        icon={<Trash2 size={11} />}
-                        label="Delete Template"
-                        variant="danger"
-                        size="sm"
-                        disabled={isProcessing !== null}
-                        onClick={() => handleDelete(template.id, template.name)}
-                      />
-                    </div>
+                    {/* Three-dots Dropdown Menu */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <IconButton
+                          icon={<MoreVertical size={14} />}
+                          label="More actions"
+                          variant="ghost"
+                          size="sm"
+                          onClick={e => e.stopPropagation()}
+                        />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => onEditTemplate(template)}>
+                          <Edit2 className="w-3.5 h-3.5 mr-2 opacity-70" />
+                          Edit Activity
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDuplicate(template.id)}>
+                          <Copy className="w-3.5 h-3.5 mr-2 opacity-70" />
+                          Duplicate Activity
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleToggleArchive(template)}>
+                          {isTemplateActive ? (
+                            <>
+                              <EyeOff className="w-3.5 h-3.5 mr-2 opacity-70" />
+                              Archive Activity
+                            </>
+                          ) : (
+                            <>
+                              <Check className="w-3.5 h-3.5 mr-2 opacity-70" />
+                              Restore Activity
+                            </>
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          variant="danger"
+                          onClick={() => handleDelete(template.id, template.name)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 mr-2" />
+                          Delete Activity
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               )
