@@ -84,7 +84,8 @@ describe('CalendarCacheService & Event Reconciliation', () => {
     expect(reconciled.tomorrow[0].summary).toBe('Sprint Planning')
   })
 
-  it('should store and retrieve agendas in warm memory cache', async () => {
+  it('should store and retrieve agendas in warm memory cache with user scoping', async () => {
+    const userId = 'user-1'
     const todayStr = '2026-09-01'
     const testAgenda: AgendaData = {
       today: [
@@ -95,34 +96,39 @@ describe('CalendarCacheService & Event Reconciliation', () => {
     }
 
     // 1. Initial check - cache miss
-    const miss = await CalendarCacheService.getCachedAgenda(todayStr)
+    const miss = await CalendarCacheService.getCachedAgenda(userId, todayStr)
     expect(miss.data).toBeNull()
     expect(miss.isStale).toBe(true)
 
     // 2. Save into cache
-    await CalendarCacheService.saveCachedAgenda(todayStr, testAgenda)
+    await CalendarCacheService.saveCachedAgenda(userId, todayStr, testAgenda)
 
-    // 3. Re-read - cache hit and fresh
-    const hit = await CalendarCacheService.getCachedAgenda(todayStr)
+    // 3. Re-read - cache hit and fresh for user-1
+    const hit = await CalendarCacheService.getCachedAgenda(userId, todayStr)
     expect(hit.data).not.toBeNull()
     expect(hit.data?.today[0].summary).toBe('Cached Morning Workout')
     expect(hit.isStale).toBe(false)
+
+    // 4. Isolation check: user-2 should have a cache MISS (never leak user-1 data)
+    const user2Miss = await CalendarCacheService.getCachedAgenda('user-2', todayStr)
+    expect(user2Miss.data).toBeNull()
   })
 
   it('should invalidate cache when invalidateAll is invoked', async () => {
+    const userId = 'user-1'
     const todayStr = '2026-09-01'
-    await CalendarCacheService.saveCachedAgenda(todayStr, {
+    await CalendarCacheService.saveCachedAgenda(userId, todayStr, {
       today: [],
       tomorrow: [],
       upcoming: [],
     })
 
-    const before = await CalendarCacheService.getCachedAgenda(todayStr)
+    const before = await CalendarCacheService.getCachedAgenda(userId, todayStr)
     expect(before.data).not.toBeNull()
 
-    CalendarCacheService.invalidateAll()
+    CalendarCacheService.invalidateAll(userId)
 
-    const after = await CalendarCacheService.getCachedAgenda(todayStr)
+    const after = await CalendarCacheService.getCachedAgenda(userId, todayStr)
     expect(after.data).toBeNull()
   })
 })

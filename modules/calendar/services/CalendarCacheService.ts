@@ -74,11 +74,13 @@ export class CalendarCacheService {
   /**
    * Fetches an agenda from warm memory or IndexedDB, returning immediately if available.
    * Also reports whether background revalidation is recommended.
+   * Key is strictly scoped to the authenticated userId.
    */
   public static async getCachedAgenda(
+    userId: string,
     todayStr: string
   ): Promise<{ data: AgendaData | null; isStale: boolean }> {
-    const cacheKey = `cal_agenda_${todayStr}`
+    const cacheKey = `cal_agenda_${userId || 'anonymous'}_${todayStr}`
     const now = Date.now()
 
     // 1. Check warm memory
@@ -108,10 +110,14 @@ export class CalendarCacheService {
   }
 
   /**
-   * Saves agenda into warm memory and IndexedDB.
+   * Saves agenda into warm memory and IndexedDB for the authenticated user.
    */
-  public static async saveCachedAgenda(todayStr: string, agenda: AgendaData): Promise<void> {
-    const cacheKey = `cal_agenda_${todayStr}`
+  public static async saveCachedAgenda(
+    userId: string,
+    todayStr: string,
+    agenda: AgendaData
+  ): Promise<void> {
+    const cacheKey = `cal_agenda_${userId || 'anonymous'}_${todayStr}`
     const envelope: CacheEnvelope<AgendaData> = {
       key: cacheKey,
       value: agenda,
@@ -133,13 +139,14 @@ export class CalendarCacheService {
   }
 
   /**
-   * Fetches cached month summaries.
+   * Fetches cached month summaries for the authenticated user.
    */
   public static async getCachedMonthSummary(
+    userId: string,
     year: number,
     month: number
   ): Promise<{ data: CalendarMonthSummaryDTO[] | null; isStale: boolean }> {
-    const cacheKey = `cal_month_${year}_${month}`
+    const cacheKey = `cal_month_${userId || 'anonymous'}_${year}_${month}`
     const now = Date.now()
 
     const mem = this.inMemory.get(cacheKey) as CacheEnvelope<CalendarMonthSummaryDTO[]> | undefined
@@ -164,14 +171,15 @@ export class CalendarCacheService {
   }
 
   /**
-   * Saves month summaries to cache.
+   * Saves month summaries to cache for the authenticated user.
    */
   public static async saveCachedMonthSummary(
+    userId: string,
     year: number,
     month: number,
     data: CalendarMonthSummaryDTO[]
   ): Promise<void> {
-    const cacheKey = `cal_month_${year}_${month}`
+    const cacheKey = `cal_month_${userId || 'anonymous'}_${year}_${month}`
     const envelope: CacheEnvelope<CalendarMonthSummaryDTO[]> = {
       key: cacheKey,
       value: data,
@@ -190,12 +198,13 @@ export class CalendarCacheService {
   }
 
   /**
-   * Fetches cached week data.
+   * Fetches cached week data for the authenticated user.
    */
   public static async getCachedWeekData(
+    userId: string,
     startStr: string
   ): Promise<{ data: CalendarWeekDTO | null; isStale: boolean }> {
-    const cacheKey = `cal_week_${startStr}`
+    const cacheKey = `cal_week_${userId || 'anonymous'}_${startStr}`
     const now = Date.now()
 
     const mem = this.inMemory.get(cacheKey) as CacheEnvelope<CalendarWeekDTO> | undefined
@@ -220,10 +229,14 @@ export class CalendarCacheService {
   }
 
   /**
-   * Saves week data to cache.
+   * Saves week data to cache for the authenticated user.
    */
-  public static async saveCachedWeekData(startStr: string, data: CalendarWeekDTO): Promise<void> {
-    const cacheKey = `cal_week_${startStr}`
+  public static async saveCachedWeekData(
+    userId: string,
+    startStr: string,
+    data: CalendarWeekDTO
+  ): Promise<void> {
+    const cacheKey = `cal_week_${userId || 'anonymous'}_${startStr}`
     const envelope: CacheEnvelope<CalendarWeekDTO> = {
       key: cacheKey,
       value: data,
@@ -242,9 +255,17 @@ export class CalendarCacheService {
   }
 
   /**
-   * Explicit cache invalidation.
+   * Explicit cache invalidation for all or single user.
    */
-  public static invalidateAll(): void {
-    this.inMemory.clear()
+  public static invalidateAll(userId?: string): void {
+    if (!userId) {
+      this.inMemory.clear()
+      return
+    }
+    for (const key of this.inMemory.keys()) {
+      if (key.includes(`_${userId}_`)) {
+        this.inMemory.delete(key)
+      }
+    }
   }
 }

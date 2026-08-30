@@ -440,7 +440,18 @@ export class GoogleCalendarService {
   }
 
   /**
-   * Creates a new event in the user's primary calendar.
+   * Helper to look up the configured calendar ID for the given user (defaults to 'primary').
+   */
+  static async getPrimaryCalendarId(userId: string): Promise<string> {
+    const credential = await db.googleCredential.findUnique({
+      where: { userId },
+      select: { calendarId: true }
+    })
+    return credential?.calendarId || 'primary'
+  }
+
+  /**
+   * Creates a new event in the user's calendar.
    */
   static async createEvent(
     userId: string,
@@ -449,6 +460,7 @@ export class GoogleCalendarService {
     this.validateEventInput(event)
     
     const accessToken = await this.getAccessToken(userId)
+    const calendarId = await this.getPrimaryCalendarId(userId)
     
     const body = {
       summary: event.summary,
@@ -463,7 +475,7 @@ export class GoogleCalendarService {
       recurrence: event.recurrence
     }
     
-    const url = 'https://www.googleapis.com/calendar/v3/calendars/primary/events'
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`
     const res = await fetchWithRetry(url, {
       method: 'POST',
       headers: {
@@ -498,7 +510,7 @@ export class GoogleCalendarService {
   }
 
   /**
-   * Updates an existing event in the user's primary calendar. Supports partial updates.
+   * Updates an existing event in the user's calendar. Supports partial updates.
    */
   static async updateEvent(
     userId: string,
@@ -508,6 +520,7 @@ export class GoogleCalendarService {
     this.validateEventInput(event, true)
     
     const accessToken = await this.getAccessToken(userId)
+    const calendarId = await this.getPrimaryCalendarId(userId)
     
     const body: Record<string, unknown> = {}
     if (event.summary !== undefined) body.summary = event.summary
@@ -524,7 +537,7 @@ export class GoogleCalendarService {
         : { dateTime: event.end.dateTime, timeZone: event.end.timeZone }
     }
     
-    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`
     const res = await fetchWithRetry(url, {
       method: 'PATCH',
       headers: {
@@ -563,15 +576,16 @@ export class GoogleCalendarService {
   }
 
   /**
-   * Deletes an event from the user's primary calendar.
+   * Deletes an event from the user's calendar.
    */
   static async deleteEvent(
     userId: string,
     eventId: string
   ): Promise<boolean> {
     const accessToken = await this.getAccessToken(userId)
+    const calendarId = await this.getPrimaryCalendarId(userId)
     
-    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`
     const res = await fetchWithRetry(url, {
       method: 'DELETE',
       headers: {

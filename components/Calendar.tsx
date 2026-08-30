@@ -10,6 +10,7 @@ import { CalendarWeekDTO, CalendarWeekEventDTO } from '@/modules/calendar/dto/Ca
 import { checkGoogleConnection, syncCalendarAction } from '@/modules/sync/google-calendar/actions'
 import { getWeekDates } from '@/lib/recurrence'
 import { CalendarCacheService } from '@/modules/calendar/services/CalendarCacheService'
+import { CalendarDataContext } from './DashboardLayout'
 
 interface TestAnalyzedTemplate {
   template: ActivityTemplate
@@ -115,6 +116,9 @@ export const Calendar: React.FC<CalendarProps> = ({
     })
   }, [startOfWeekDate])
 
+  const calendarContext = React.useContext(CalendarDataContext)
+  const userId = calendarContext?.currentUser?.id || 'anonymous'
+
   // Sync state with date/view changes using cache-first background-revalidation strategy
   useEffect(() => {
     let active = true
@@ -122,7 +126,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       try {
         if (view === 'month') {
           // 1. Check cache first
-          const { data: cachedMonth, isStale } = await CalendarCacheService.getCachedMonthSummary(year, month + 1)
+          const { data: cachedMonth, isStale } = await CalendarCacheService.getCachedMonthSummary(userId, year, month + 1)
           if (cachedMonth && active) {
             setMonthSummaries(cachedMonth)
             setLoading(false)
@@ -136,13 +140,13 @@ export const Calendar: React.FC<CalendarProps> = ({
           const json = await res.json()
           if (active && json.success) {
             setMonthSummaries(json.data)
-            await CalendarCacheService.saveCachedMonthSummary(year, month + 1, json.data)
+            await CalendarCacheService.saveCachedMonthSummary(userId, year, month + 1, json.data)
           }
         } else {
           const startStr = `${startOfWeekDate.getFullYear()}-${String(startOfWeekDate.getMonth() + 1).padStart(2, '0')}-${String(startOfWeekDate.getDate()).padStart(2, '0')}`
           
           // 1. Check cache first
-          const { data: cachedWeek, isStale } = await CalendarCacheService.getCachedWeekData(startStr)
+          const { data: cachedWeek, isStale } = await CalendarCacheService.getCachedWeekData(userId, startStr)
           if (cachedWeek && active) {
             setWeekData(cachedWeek)
             setLoading(false)
@@ -156,7 +160,7 @@ export const Calendar: React.FC<CalendarProps> = ({
           const json = await res.json()
           if (active && json.success) {
             setWeekData(json.data)
-            await CalendarCacheService.saveCachedWeekData(startStr, json.data)
+            await CalendarCacheService.saveCachedWeekData(userId, startStr, json.data)
           }
         }
       } catch (err) {
@@ -169,7 +173,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     return () => {
       active = false
     }
-  }, [view, currentDate, startOfWeekDate, year, month])
+  }, [view, currentDate, startOfWeekDate, year, month, userId])
 
   const handlePrev = () => {
     if (view === 'month') {

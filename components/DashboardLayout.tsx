@@ -27,6 +27,7 @@ export interface CalendarData {
 
 export interface CalendarDataContextType {
   calendarData: CalendarData
+  currentUser?: { id: string; username: string } | null
   fetchCalendar: (force?: boolean) => Promise<void>
   onOpenCreateActivity: () => void
   onEditTemplate: (template: ActivityTemplate) => void
@@ -111,7 +112,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     const todayStr = dateParam || getTodayDateStr()
 
     // 1. Check warm memory / IndexedDB cache first
-    const { data: cachedAgenda, isStale } = await CalendarCacheService.getCachedAgenda(todayStr)
+    const { data: cachedAgenda, isStale } = await CalendarCacheService.getCachedAgenda(user.id, todayStr)
     if (cachedAgenda) {
       setCalendarData(prev => ({
         ...prev,
@@ -145,7 +146,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       if (res.success && res.connected && res.agenda) {
         // 3. Reconcile with existing cached items using stable event IDs
         const reconciled = CalendarCacheService.reconcileAgenda(cachedAgenda, res.agenda)
-        await CalendarCacheService.saveCachedAgenda(todayStr, reconciled)
+        await CalendarCacheService.saveCachedAgenda(user.id, todayStr, reconciled)
 
         setCalendarData({
           connected: res.connected,
@@ -340,6 +341,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, [isAuthLoading])
 
   const handleLogout = async () => {
+    if (user?.id) {
+      CalendarCacheService.invalidateAll(user.id)
+    }
     setIsAuthenticated(false) // Immediately hide calendar data
     setUser(null)
     await logoutAction()
@@ -580,6 +584,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   return (
     <CalendarDataContext.Provider value={{
       calendarData,
+      currentUser: user,
       fetchCalendar,
       onOpenCreateActivity,
       onEditTemplate
