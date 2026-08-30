@@ -14,7 +14,8 @@ export interface GoldPriceSnapshot {
   isReferencePrice: boolean
 }
 
-const GOLD_CACHE_KEY = 'tracker_gold_price_snapshot'
+// Cache key bumped to v2 to invalidate stale low 74k reference cache
+const GOLD_CACHE_KEY = 'tracker_gold_price_snapshot_v2'
 const GOLD_CACHE_TTL = 4 * 60 * 60 * 1000 // 4 hours
 
 export class GoldPriceService {
@@ -37,28 +38,27 @@ export class GoldPriceService {
   }
 
   /**
-   * Fetches latest 24K gold market reference rate in INR per gram.
+   * Fetches latest 24K gold market reference rate in INR per 10 grams (Pune / India).
    */
   static async fetchGoldPrice(): Promise<GoldPriceSnapshot | null> {
     try {
       const cached = this.getCachedSnapshot()
       if (cached) return cached
 
-      // Query free market rate or gold reference endpoint
-      // Using gold price feed via currency / metals standard conversion
-      let pricePerGram = 7450 // baseline reference rate fallback in INR/g (24K)
-      const dailyChangePct = 0.2
+      // Realistic 24K gold baseline reference for Indian market (~₹15,280/g -> ~₹1,52,800 / 10g)
+      let pricePerGram = 15280
+      const dailyChangePct = 0.35
 
       try {
         // Fetch international spot rate via open forex rate conversion (XAU/USD to INR/g)
         const forexRes = await fetch('https://api.frankfurter.app/latest?from=USD&to=INR')
         if (forexRes.ok) {
           const forexData = await forexRes.json()
-          const usdToInr = forexData.rates?.INR || 83.9
-          // Estimated spot gold ~ $2,500/oz -> ~ $80.38/g * USD_INR
-          const estPrice = Math.round(80.38 * usdToInr)
-          if (estPrice > 5000 && estPrice < 15000) {
-            pricePerGram = estPrice
+          const usdToInr = Number(forexData.rates?.INR) || 86.5
+          // Gold spot ~ $5,500/troy-oz -> $176.8/g in 2026 market
+          const estSpotPerGram = Math.round((5500 / 31.1035) * usdToInr)
+          if (estSpotPerGram > 10000 && estSpotPerGram < 30000) {
+            pricePerGram = estSpotPerGram
           }
         }
       } catch {

@@ -14,7 +14,7 @@ export interface WeatherSnapshot {
   timestamp: number
 }
 
-const WEATHER_CACHE_KEY = 'tracker_weather_snapshot'
+const WEATHER_CACHE_KEY = 'tracker_weather_snapshot_v2'
 const WEATHER_CACHE_TTL = 60 * 60 * 1000 // 1 hour
 
 // WMO Weather interpretation codes (WW)
@@ -76,9 +76,10 @@ export class WeatherService {
 
   /**
    * Fetches the current weather snapshot using default or detected coordinates.
+   * Defaults specifically to Baner, Pune (18.5597, 73.7868).
    * Caches result locally.
    */
-  static async fetchWeather(lat = 19.0760, lon = 72.8777): Promise<WeatherSnapshot | null> {
+  static async fetchWeather(lat = 18.5597, lon = 73.7868): Promise<WeatherSnapshot | null> {
     try {
       const cached = this.getCachedSnapshot()
       if (cached) return cached
