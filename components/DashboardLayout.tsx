@@ -436,6 +436,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </p>
             </div>
 
+            {/* Unauthorized Account Alert */}
+            {searchParams?.get('error') === 'unauthorized-account' && (
+              <div className="w-full p-3 bg-rose-500/10 border border-rose-500/30 rounded-[var(--radius-md)] flex items-start gap-2.5 text-rose-600 dark:text-rose-400">
+                <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="text-[11px] leading-snug">
+                  <span className="font-bold block">Access Restricted</span>
+                  <span>
+                    {searchParams.get('account') 
+                      ? `${searchParams.get('account')} is not authorized. Only chinmaydpatil09@gmail.com can access this application.`
+                      : 'This private application is restricted exclusively to authorized accounts.'}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Primary Google Login Button */}
             <div className="w-full">
               <a

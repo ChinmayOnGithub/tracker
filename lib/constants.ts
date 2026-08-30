@@ -22,6 +22,21 @@ export const GOOGLE_OAUTH = {
   USER_INFO_SCOPE: 'openid email profile'
 } as const
 
+export const ALLOWED_USER_EMAILS = [
+  'chinmaydpatil09@gmail.com'
+] as const
+
+export function isAuthorizedUserEmail(email: string | null | undefined): boolean {
+  if (!email) return false
+  const normalized = email.trim().toLowerCase()
+  // Check env override if configured or hard whitelist
+  const envAllowed = process.env.ALLOWED_USER_EMAIL?.trim().toLowerCase()
+  if (envAllowed && envAllowed.split(',').map(e => e.trim()).includes(normalized)) {
+    return true
+  }
+  return (ALLOWED_USER_EMAILS as readonly string[]).includes(normalized)
+}
+
 export const CACHE_TTL = {
   CALENDAR_EVENTS_MS: 30 * 1000, // 30 seconds for fast refresh of deleted/completed events
   ACCESS_TOKEN_THRESHOLD_MS: 60 * 1000 // 1 minute buffer before expiry

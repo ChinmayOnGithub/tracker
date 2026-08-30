@@ -4,7 +4,7 @@ import { signSession } from '@/lib/session'
 import { cookies } from 'next/headers'
 import { env } from '@/lib/env'
 import { GoogleCredentialService } from '@/modules/sync/google-calendar/services/GoogleCredentialService'
-import { GOOGLE_OAUTH, COOKIES } from '@/lib/constants'
+import { GOOGLE_OAUTH, COOKIES, isAuthorizedUserEmail } from '@/lib/constants'
 import { logger } from '@/lib/logger'
 import crypto from 'crypto'
 
@@ -239,6 +239,14 @@ export async function GET(request: Request) {
     if (!email) {
       logger.error('OAuthCallback', 'No email in verified ID token payload')
       return NextResponse.redirect(`${siteUrl}/?error=google-no-email`)
+    }
+
+    // Step 5b: Authorization Gate — Strict Single-User Check
+    if (!isAuthorizedUserEmail(email)) {
+      logger.warn('OAuthCallback', 'Access denied for unauthorized Google account', {
+        email: logger.sensitive(email)
+      })
+      return NextResponse.redirect(`${siteUrl}/?error=unauthorized-account&account=${encodeURIComponent(email)}`)
     }
 
     // Step 6: Find or Create User
