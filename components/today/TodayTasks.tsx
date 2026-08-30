@@ -1,13 +1,14 @@
 "use client"
 
 import React, { useState, useMemo, useCallback } from 'react'
-import { ExternalLink, MoreVertical, Clock } from 'lucide-react'
-import { TimelineItem, ActivityLog, AnalyzedTemplate } from '@/types'
-import { Button, Input, Skeleton, EmptyState, IconButton, StatusBadge, Section, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, ConfirmDialog } from '@/design-system'
+import { ExternalLink, MoreVertical, Clock, Edit2 } from 'lucide-react'
+import { TimelineItem, ActivityLog, AnalyzedTemplate, ActivityTemplate, ActivityType, Priority } from '@/types'
+import { Button, Input, Skeleton, EmptyState, IconButton, Section, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, ConfirmDialog } from '@/design-system'
 import { getTemplateColorClasses } from '@/lib/colors'
+import { formatMoney } from '@/lib/formatMoney'
 import { SortableTaskList, DragHandle } from './SortableTaskList'
 import { TaskActivityRow } from '@/components/shared/TaskActivityRow'
-import { TaskCreateDialog } from '@/components/shared/TaskCreateDialog'
+import { TaskCreateDialog, TaskFormData } from '@/components/shared/TaskCreateDialog'
 import { Icon } from '@/components/Icon'
 
 interface TodayTasksProps {
@@ -23,6 +24,7 @@ interface TodayTasksProps {
   setTaskStatusAction: (occurrence: TimelineItem, date: string, status: 'cleared' | 'done' | 'skipped' | 'postponed', payload?: unknown) => Promise<void>
   deleteActivityLog: (id: string) => Promise<unknown>
   createActivityTemplateAction: (data: unknown) => Promise<unknown>
+  updateActivityTemplateAction?: (id: string, updates: Partial<ActivityTemplate>) => Promise<void>
   reorderActivityTemplatesAction: (ids: string[]) => Promise<unknown>
   onOpenCreateActivity: () => void
 }
@@ -36,7 +38,7 @@ interface TaskRowProps {
   cycleTaskStatus: (occurrence: TimelineItem) => Promise<void>
   setTaskStatusAction: (occurrence: TimelineItem, date: string, status: 'cleared' | 'done' | 'skipped' | 'postponed', payload?: unknown) => Promise<void>
   deleteActivityLog: (id: string) => Promise<unknown>
-  onOpenCreateActivity: () => void
+  onEditTask: (occurrence: TimelineItem) => void
   todayStr: string
   analyzedTemplates: AnalyzedTemplate[]
   isDragOverlay?: boolean
@@ -58,10 +60,10 @@ const TaskContextMenu: React.FC<{
   template: AnalyzedTemplate['template'] | undefined
   setTaskStatusAction: (o: TimelineItem, date: string, status: 'cleared' | 'done' | 'skipped' | 'postponed') => Promise<void>
   deleteActivityLog: (id: string) => Promise<unknown>
-  onOpenCreateActivity: () => void
+  onEditTask: (occurrence: TimelineItem) => void
 }> = ({
   occurrence, isDone, isCanceled, isPostponed, todayStr,
-  template, setTaskStatusAction, deleteActivityLog, onOpenCreateActivity
+  template, setTaskStatusAction, deleteActivityLog, onEditTask
 }) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
@@ -74,6 +76,11 @@ const TaskContextMenu: React.FC<{
       />
     </DropdownMenuTrigger>
     <DropdownMenuContent align="end">
+      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEditTask(occurrence) }}>
+        <Edit2 className="w-3.5 h-3.5 mr-1.5 opacity-70" />
+        Edit Task
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
       {isDone && (
         <DropdownMenuItem onClick={async (e) => { e.stopPropagation(); await setTaskStatusAction(occurrence, todayStr, 'cleared') }}>
           Mark Uncompleted
@@ -104,14 +111,6 @@ const TaskContextMenu: React.FC<{
           )}
         </>
       )}
-      {occurrence.templateId && (
-        <>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onOpenCreateActivity() }}>
-            Edit Template
-          </DropdownMenuItem>
-        </>
-      )}
       {occurrence.logId && (
         <>
           <DropdownMenuSeparator />
@@ -132,7 +131,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
   occurrence, index: _index,
   completingHabitId, activeMenuId: _activeMenuId, setActiveMenuId: _setActiveMenuId,
   cycleTaskStatus, setTaskStatusAction, deleteActivityLog,
-  onOpenCreateActivity, todayStr, analyzedTemplates,
+  onEditTask, todayStr, analyzedTemplates,
   isDragOverlay,
   _dragHandleRef, _dragHandleListeners, _dragHandleAttributes,
 }) => {
@@ -154,6 +153,10 @@ export const TaskRow: React.FC<TaskRowProps> = ({
   const isCanceled = occurrence.status === 'skipped'
   const isPostponed = occurrence.status === 'postponed'
   const isDone = occurrence.completed && !isCanceled && !isPostponed
+
+  // Money formatting
+  const effectiveAmount = occurrence.amount ?? template?.amount ?? null
+  const formattedAmount = formatMoney(effectiveAmount)
 
   // Accent strip — semantic color by status, then template color
   const colorBgMap: Record<string, string> = {
@@ -183,19 +186,18 @@ export const TaskRow: React.FC<TaskRowProps> = ({
       {startTimeLabel}{estimatedDuration ? ` · ${estimatedDuration}m` : ''}
     </span>
   )
+  if (formattedAmount) metaParts.push(
+    <span key="amount" className="font-mono text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded-sm border border-emerald-500/20">
+      {formattedAmount}
+    </span>
+  )
   if (streak > 1 && !isDone && !isCanceled) metaParts.push(
     <span key="streak" className="text-[9px] font-extrabold text-orange-500">🔥 {streak}</span>
   )
 
-  // Right side: status badge + context menu
+  // Right side: context menu only (redundant status badge removed per spec)
   const rightSlot = (
     <div className="flex items-center gap-1.5">
-      {(isDone || isCanceled || isPostponed) && (
-        <StatusBadge
-          status={isDone ? 'done' : isCanceled ? 'skipped' : 'postponed'}
-          size="xs"
-        />
-      )}
       <TaskContextMenu
         occurrence={occurrence}
         isDone={isDone}
@@ -205,7 +207,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
         template={template}
         setTaskStatusAction={setTaskStatusAction}
         deleteActivityLog={deleteActivityLog}
-        onOpenCreateActivity={onOpenCreateActivity}
+        onEditTask={onEditTask}
       />
     </div>
   )
@@ -246,8 +248,8 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
   timeline, analyzedTemplates, logs: _logs, todayStr, isTodayHydrated,
   completingHabitId, activeMenuId, setActiveMenuId,
   cycleTaskStatus, setTaskStatusAction, deleteActivityLog,
-  createActivityTemplateAction, reorderActivityTemplatesAction,
-  onOpenCreateActivity,
+  createActivityTemplateAction, updateActivityTemplateAction, reorderActivityTemplatesAction,
+  onOpenCreateActivity: _onOpenCreateActivity,
 }) => {
   const [quickTaskTitle, setQuickTaskTitle] = useState('')
   const [isCreatingQuickTask, setIsCreatingQuickTask] = useState(false)
@@ -256,38 +258,67 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
   const [showTemplatesDropdown, setShowTemplatesDropdown] = useState(false)
   const [manualOrderIds, setManualOrderIds] = useState<string[] | null>(null)
   const [optimisticTasks, setOptimisticTasks] = useState<TimelineItem[]>([])
-  const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false)
+  
+  // Canonical Task Dialog State (Supports create & edit mode)
+  const [dialogState, setDialogState] = useState<{
+    isOpen: boolean
+    mode: 'create' | 'edit'
+    taskToEdit: ActivityTemplate | TimelineItem | null
+  }>({
+    isOpen: false,
+    mode: 'create',
+    taskToEdit: null,
+  })
+
   const [deletingLogId, setDeletingLogId] = useState<string | null>(null)
   const [isDeletingLog, setIsDeletingLog] = useState(false)
 
-  const handleCreateFromDialog = async (data: {
-    name: string
-    category: string
-    type: string
-    priority: string
-    icon: string
-    color: string
-    targetDate: string
-    scheduledTime?: string | null
-    estimatedDuration?: number | null
-    isAllDay: boolean
-    notes?: string | null
-    metadata?: Record<string, unknown>
-  }) => {
-    await createActivityTemplateAction({
-      name: data.name,
-      category: data.category || 'general',
-      type: data.type || 'TASK',
-      priority: data.priority || 'NORMAL',
-      icon: data.icon || 'CheckSquare',
-      color: data.color || 'blue',
-      recurrenceType: 'one_time',
-      targetDate: data.targetDate,
-      scheduledTime: data.scheduledTime,
-      estimatedDuration: data.estimatedDuration,
-      notes: data.notes,
-      metadata: data.metadata || { isQuickTask: true, source: 'today' },
+  const handleOpenEditTask = useCallback((occurrence: TimelineItem) => {
+    const matchedTemplate = occurrence.templateId
+      ? analyzedTemplates.find(t => t.template.id === occurrence.templateId)?.template
+      : null
+
+    setDialogState({
+      isOpen: true,
+      mode: 'edit',
+      taskToEdit: matchedTemplate || occurrence,
     })
+  }, [analyzedTemplates])
+
+  const handleTaskDialogSubmit = async (data: TaskFormData) => {
+    if (dialogState.mode === 'edit' && data.id && updateActivityTemplateAction) {
+      // Update existing task entity without altering ID
+      await updateActivityTemplateAction(data.id, {
+        name: data.name,
+        category: data.category || 'general',
+        type: data.type as ActivityType,
+        priority: data.priority as Priority,
+        icon: data.icon,
+        color: data.color,
+        targetDate: data.targetDate,
+        scheduledTime: data.scheduledTime,
+        estimatedDuration: data.estimatedDuration || 0,
+        notes: data.notes,
+        amount: data.amount,
+      })
+    } else {
+      // Create new task
+      await createActivityTemplateAction({
+        name: data.name,
+        category: data.category || 'general',
+        type: data.type || 'TASK',
+        priority: data.priority || 'NORMAL',
+        icon: data.icon || 'CheckSquare',
+        color: data.color || 'blue',
+        recurrenceType: 'one_time',
+        targetDate: data.targetDate,
+        scheduledTime: data.scheduledTime,
+        estimatedDuration: data.estimatedDuration,
+        notes: data.notes,
+        amount: data.amount,
+        metadata: data.metadata || { isQuickTask: true, source: 'today' },
+      })
+    }
   }
 
   const handleDeleteLogConfirm = async () => {
@@ -388,12 +419,12 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
       cycleTaskStatus={cycleTaskStatus}
       setTaskStatusAction={setTaskStatusAction}
       deleteActivityLog={async (id) => setDeletingLogId(id)}
-      onOpenCreateActivity={onOpenCreateActivity}
+      onEditTask={handleOpenEditTask}
       todayStr={todayStr}
       analyzedTemplates={analyzedTemplates}
       isDragOverlay={opts.isDragOverlay}
     />
-  ), [completingHabitId, activeMenuId, setActiveMenuId, cycleTaskStatus, setTaskStatusAction, onOpenCreateActivity, todayStr, analyzedTemplates])
+  ), [completingHabitId, activeMenuId, setActiveMenuId, cycleTaskStatus, setTaskStatusAction, handleOpenEditTask, todayStr, analyzedTemplates])
 
   const COLORS = ['blue', 'green', 'amber', 'orange', 'red', 'purple', 'pink', 'zinc'] as const
   const colorToBg: Record<string, string> = {
@@ -402,16 +433,24 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
     pink: 'bg-pink-500', zinc: 'bg-zinc-500',
   }
 
-  const doneCount = sortedTasks.filter(o => o.completed && o.status !== 'skipped' && o.status !== 'postponed').length
+  // Count represents ONLY tracker tasks in this section
+  const trackerTasksCount = sortedTasks.length
 
   return (
     <div className="space-y-6">
       {/* ── 1. Tasks & Activities Section (Movable & Reorderable) ── */}
-      <Section
-        title="Tasks"
-        count={sortedTasks.length > 0 ? sortedTasks.length - doneCount : undefined}
-        noSeparator={false}
-      >
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] pb-2">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[11px] font-semibold uppercase tracking-widest text-[var(--color-text-muted)]">
+              Tasks
+            </h2>
+            <span className="text-[11px] font-bold text-[var(--color-text-muted)]">
+              · {trackerTasksCount}
+            </span>
+          </div>
+        </div>
+
         {!isTodayHydrated ? (
           <div className="space-y-1.5">
             {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-12 w-full rounded-md" />)}
@@ -474,7 +513,7 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setIsTaskDialogOpen(true)}
+                onClick={() => setDialogState({ isOpen: true, mode: 'create', taskToEdit: null })}
                 className="text-xs font-semibold"
               >
                 + Details
@@ -488,19 +527,81 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
                   Templates
                 </Button>
                 {showTemplatesDropdown && (
-                  <div className="absolute bottom-10 right-0 bg-[var(--color-bg-surface)] border border-[var(--color-border)] p-2 rounded-[var(--radius-xl)] shadow-lg flex flex-col gap-1 z-50 w-64 max-h-60 overflow-y-auto">
-                    <div className="text-[9px] uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] border-b border-[var(--color-border)]/50 pb-1.5 mb-1.5 px-1">
-                      Select Template
+                  <div className="absolute bottom-10 right-0 bg-[var(--color-bg-surface)] border border-[var(--color-border)] p-2 rounded-[var(--radius-xl)] shadow-lg flex flex-col gap-1 z-50 w-72 max-h-72 overflow-y-auto">
+                    <div className="text-[9px] uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] border-b border-[var(--color-border)]/50 pb-1.5 mb-1 px-1">
+                      Add From Template
                     </div>
                     {analyzedTemplates.filter(at => at.template.recurrenceType !== 'one_time').length === 0
                       ? <div className="text-[10px] text-[var(--color-text-muted)] italic py-3 text-center">No templates</div>
-                      : analyzedTemplates.filter(at => at.template.recurrenceType !== 'one_time').map(at => (
-                          <button key={at.template.id} type="button"
-                            onClick={() => { setShowTemplatesDropdown(false); cycleTaskStatus({ id: `schedule_${at.template.id}_${todayStr}`, templateId: at.template.id, templateName: at.template.name, type: at.template.type, priority: at.template.priority, start: new Date(), end: new Date(), isAllDay: true, completed: false }) }}
-                            className="w-full text-left px-2 py-1.5 rounded-lg text-xs text-[var(--color-text-main)] hover:bg-[var(--color-accent)] font-medium transition-colors">
-                            {at.template.name}
-                          </button>
-                        ))
+                      : analyzedTemplates.filter(at => at.template.recurrenceType !== 'one_time').map(at => {
+                          const t = at.template
+                          const colorClasses = getTemplateColorClasses(t.color || 'zinc')
+                          const money = formatMoney(t.amount)
+                          const recurrenceLabel = t.recurrenceType === 'daily'
+                            ? 'Daily'
+                            : t.recurrenceType === 'weekly'
+                            ? 'Weekly'
+                            : t.recurrenceType === 'monthly'
+                            ? 'Monthly'
+                            : t.recurrenceType === 'yearly'
+                            ? 'Yearly'
+                            : 'Custom'
+
+                          return (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => {
+                                setShowTemplatesDropdown(false)
+                                cycleTaskStatus({
+                                  id: `schedule_${t.id}_${todayStr}`,
+                                  templateId: t.id,
+                                  templateName: t.name,
+                                  type: t.type,
+                                  priority: t.priority,
+                                  start: new Date(),
+                                  end: new Date(),
+                                  isAllDay: !t.scheduledTime,
+                                  completed: false,
+                                  amount: t.amount,
+                                })
+                              }}
+                              className="w-full text-left p-2 rounded-lg hover:bg-[var(--color-accent)]/20 flex items-start gap-2.5 transition-colors group cursor-pointer border border-transparent hover:border-[var(--color-border)]/50"
+                            >
+                              <div className={`w-7 h-7 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}>
+                                <Icon name={t.icon || 'CheckSquare'} size={14} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-xs font-semibold text-[var(--color-text-main)] truncate block">
+                                  {t.name}
+                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-[var(--color-text-muted)] mt-0.5 font-medium">
+                                  <span className="capitalize">{t.category}</span>
+                                  {money && (
+                                    <>
+                                      <span>·</span>
+                                      <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">{money}</span>
+                                    </>
+                                  )}
+                                  {t.scheduledTime && (
+                                    <>
+                                      <span>·</span>
+                                      <span>{t.scheduledTime}</span>
+                                    </>
+                                  )}
+                                  {t.estimatedDuration ? (
+                                    <>
+                                      <span>·</span>
+                                      <span>{t.estimatedDuration}m</span>
+                                    </>
+                                  ) : null}
+                                  <span>·</span>
+                                  <span className="text-[9px] uppercase tracking-wider">{recurrenceLabel}</span>
+                                </div>
+                              </div>
+                            </button>
+                          )
+                        })
                     }
                   </div>
                 )}
@@ -511,7 +612,7 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
             </div>
           </div>
         )}
-      </Section>
+      </div>
 
       {/* ── 2. Calendar Events Section (Classified Separately, Matching Calendar Page) ── */}
       {calendarEvents.length > 0 && (
@@ -566,14 +667,18 @@ export const TodayTasks: React.FC<TodayTasksProps> = ({
         </Section>
       )}
 
+      {/* Canonical Create & Edit Task Dialog */}
       <TaskCreateDialog
-        isOpen={isTaskDialogOpen}
-        onClose={() => setIsTaskDialogOpen(false)}
+        isOpen={dialogState.isOpen}
+        onClose={() => setDialogState({ isOpen: false, mode: 'create', taskToEdit: null })}
+        mode={dialogState.mode}
+        initialTask={dialogState.taskToEdit}
         initialDate={todayStr}
         source="today"
-        onSubmitTask={handleCreateFromDialog}
+        onSubmitTask={handleTaskDialogSubmit}
       />
     </div>
   )
 }
 export default TodayTasks
+

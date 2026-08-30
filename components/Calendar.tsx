@@ -543,35 +543,69 @@ export const Calendar: React.FC<CalendarProps> = ({
                     ))}
 
                     {/* Events absolute overlay */}
-                    {dayEvents.map((event) => {
-                      const pos = getEventPosition(event)
-                      
-                      // Match colors or fallback to generic
-                      const isTask = event.type === 'TASK'
-                      const isLeave = event.type === 'LEAVE'
-                      const colorClass = isLeave
-                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400'
-                        : isTask
-                          ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-400'
-                          : 'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-400'
+                    {(() => {
+                      // Compute overlap columns for this day's events
+                      type LayoutEvent = CalendarWeekEventDTO & { col: number; totalCols: number }
+                      const laid: LayoutEvent[] = []
+                      for (const ev of dayEvents) {
+                        const evStart = new Date(ev.start).getTime()
+                        const evEnd   = new Date(ev.end).getTime()
+                        // Find which column slot this event fits into
+                        // A column is available if no previously-placed event in it overlaps
+                        const usedCols = laid
+                          .filter(l => new Date(l.end).getTime() > evStart && new Date(l.start).getTime() < evEnd)
+                          .map(l => l.col)
+                        let col = 0
+                        while (usedCols.includes(col)) col++
+                        laid.push({ ...ev, col, totalCols: 1 }) // totalCols resolved below
+                      }
+                      // Second pass: for each event, count how many columns its overlap group spans
+                      for (const ev of laid) {
+                        const evStart = new Date(ev.start).getTime()
+                        const evEnd   = new Date(ev.end).getTime()
+                        const overlapping = laid.filter(l =>
+                          new Date(l.end).getTime() > evStart && new Date(l.start).getTime() < evEnd
+                        )
+                        const maxCol = Math.max(...overlapping.map(l => l.col))
+                        ev.totalCols = maxCol + 1
+                      }
 
-                      return (
-                        <div
-                          key={event.id}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onDayClick(dateStr)
-                          }}
-                          className={`absolute left-1 right-1 rounded-lg border px-1.5 py-1 text-[9px] font-bold overflow-hidden shadow-xs hover:shadow-sm cursor-pointer select-none transition-all ${colorClass}`}
-                          style={{ top: pos.top, height: pos.height }}
-                        >
-                          <div className="truncate leading-tight">{event.title}</div>
-                          <div className="text-[8px] opacity-75 mt-0.5">
-                            {new Date(event.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                      return laid.map((event) => {
+                        const pos = getEventPosition(event)
+                        const colWidth = 100 / event.totalCols
+                        const leftPct = event.col * colWidth
+
+                        const isTask = event.type === 'TASK'
+                        const isLeave = event.type === 'LEAVE'
+                        const colorClass = isLeave
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400'
+                          : isTask
+                            ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-700 dark:text-indigo-400'
+                            : 'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-400'
+
+                        return (
+                          <div
+                            key={event.id}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onDayClick(dateStr)
+                            }}
+                            className={`absolute rounded-lg border px-1.5 py-1 text-[9px] font-bold overflow-hidden shadow-xs hover:shadow-sm cursor-pointer select-none transition-all ${colorClass}`}
+                            style={{
+                              top: pos.top,
+                              height: pos.height,
+                              left: `calc(${leftPct}% + 2px)`,
+                              width: `calc(${colWidth}% - 4px)`,
+                            }}
+                          >
+                            <div className="truncate leading-tight">{event.title}</div>
+                            <div className="text-[8px] opacity-75 mt-0.5">
+                              {new Date(event.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                            </div>
                           </div>
-                        </div>
-                      )
-                    })}
+                        )
+                      })
+                    })()}
                   </div>
                 )
               })}

@@ -79,9 +79,10 @@ export const templateFormSchema = z.object({
 
 export type TemplateFormValues = z.infer<typeof templateFormSchema>
 
-// ── Canonical Task Creation Schema for TaskCreateDialog ──
+// ── Canonical Task Form Schema for TaskCreateDialog (Create & Edit) ──
 
 export const taskCreateSchema = z.object({
+  id: z.string().optional(),
   name: z
     .string()
     .min(1, 'Task title is required')
@@ -97,6 +98,8 @@ export const taskCreateSchema = z.object({
   startTime: z.string().optional(),
   estimatedDuration: z.string().optional(),
   notes: z.string().max(2000).optional(),
+  amount: z.string().optional(),
 })
 
 export type TaskCreateFormValues = z.infer<typeof taskCreateSchema>
+

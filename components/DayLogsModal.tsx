@@ -2,21 +2,30 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { useStore } from '@/lib/store/store'
-import { ActivityTemplate, ActivityLog, Note, TimelineItem, AnalyzedTemplate } from '@/types'
+import { ActivityTemplate, ActivityLog, ActivityType, Note, Priority, TimelineItem, AnalyzedTemplate } from '@/types'
 import { CalendarDayDTO } from '@/modules/calendar/dto/CalendarDayDTO'
 import { analyzeRecurrence } from '@/lib/recurrence'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
 import { createCalendarEventAction } from '@/app/actions/calendar'
 import { Icon } from './Icon'
-import { X, Sparkles, BookOpen, Search, Plus, Clock, Settings, Briefcase, MoreVertical } from 'lucide-react'
+import { X, Sparkles, BookOpen, Search, Plus, Clock, Settings, Briefcase, MoreVertical, Edit2 } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/design-system'
+import {
+  Button,
+  IconButton,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/design-system'
 import { MarathiCalendarEvents } from './daylogs/MarathiCalendarEvents'
 import { CompletionService } from '@/lib/services/CompletionService'
 import { CompletionDialog } from './CompletionDialog'
 import { TaskActivityRow } from './shared/TaskActivityRow'
-import { TaskCreateDialog } from './shared/TaskCreateDialog'
+import { TaskCreateDialog, TaskFormData } from './shared/TaskCreateDialog'
+import { formatMoney } from '@/lib/formatMoney'
 
 interface CalendarDayEvent {
   id: string
@@ -62,7 +71,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   const {
     cycleTaskStatusAction, setTaskStatusAction, deleteActivityLog,
     logWorkPresenceAction, upsertJournalAction, logWeightAction,
-    createActivityTemplateAction,
+    createActivityTemplateAction, updateActivityTemplateAction,
   } = useStore()
 
   // ── Compute timeline from props (instant, no API) ───────────────────────
@@ -192,11 +201,18 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
     template: ActivityTemplate
     occurrence: TimelineItem
   } | null>(null)
-  const [isTaskDialogOpen, setIsTaskDialogOpen] = useState(false)
+  const [taskDialogState, setTaskDialogState] = useState<{
+    isOpen: boolean
+    mode: 'create' | 'edit'
+    taskToEdit: ActivityTemplate | TimelineItem | null
+  }>({
+    isOpen: false,
+    mode: 'create',
+    taskToEdit: null,
+  })
 
   // Template selector
   const [activitySearch, setActivitySearch] = useState('')
-  const [activeMenuId, setActiveMenuId] = useState<string | null>(null)
 
   // Work Tracker state
 
@@ -379,40 +395,44 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
     }
   }
 
-  // ── Canonical Task Creation Handler ───────────────────────────────────────
-  const handleCreateTask = async (data: {
-    name: string
-    category: string
-    type: string
-    priority: string
-    icon: string
-    color: string
-    targetDate: string
-    scheduledTime?: string | null
-    estimatedDuration?: number | null
-    isAllDay: boolean
-    notes?: string | null
-    metadata?: Record<string, unknown>
-  }) => {
+  // ── Canonical Task Creation & Edit Handler ─────────────────────────────────
+  const handleTaskDialogSubmit = async (data: TaskFormData) => {
     try {
-      await createActivityTemplateAction({
-        name: data.name,
-        category: data.category || 'general',
-        type: data.type || 'TASK',
-        priority: data.priority || 'NORMAL',
-        icon: data.icon || 'CheckSquare',
-        color: data.color || 'blue',
-        recurrenceType: 'one_time',
-        targetDate: data.targetDate,
-        scheduledTime: data.scheduledTime,
-        estimatedDuration: data.estimatedDuration,
-        notes: data.notes,
-        metadata: data.metadata || { isQuickTask: true, source: 'calendar' },
-      })
+      if (taskDialogState.mode === 'edit' && data.id && updateActivityTemplateAction) {
+        await updateActivityTemplateAction(data.id, {
+          name: data.name,
+          category: data.category || 'general',
+          type: data.type as ActivityType,
+          priority: data.priority as Priority,
+          icon: data.icon,
+          color: data.color,
+          targetDate: data.targetDate,
+          scheduledTime: data.scheduledTime,
+          estimatedDuration: data.estimatedDuration || 0,
+          notes: data.notes,
+          amount: data.amount,
+        })
+      } else {
+        await createActivityTemplateAction({
+          name: data.name,
+          category: data.category || 'general',
+          type: data.type || 'TASK',
+          priority: data.priority || 'NORMAL',
+          icon: data.icon || 'CheckSquare',
+          color: data.color || 'blue',
+          recurrenceType: 'one_time',
+          targetDate: data.targetDate,
+          scheduledTime: data.scheduledTime,
+          estimatedDuration: data.estimatedDuration,
+          notes: data.notes,
+          amount: data.amount,
+          metadata: data.metadata || { isQuickTask: true, source: 'calendar' },
+        })
+      }
       invalidateCache(dateStr)
       fetchDayDetails()
     } catch (err) {
-      console.error('Failed to create task from calendar:', err)
+      console.error('Failed to submit task from calendar:', err)
     }
   }
 
@@ -501,12 +521,20 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
       </a>
     ) : occurrence.templateName
 
+    const effectiveAmount = occurrence.amount ?? template?.amount ?? null
+    const formattedAmount = formatMoney(effectiveAmount)
+
     const metaParts = (
       <div className="flex items-center gap-1.5 flex-wrap">
         {isTimed && startTimeLabel && (
           <span className={`shrink-0 text-[9px] font-mono font-bold px-1 py-0.5 rounded-sm border ${colorClasses.text} ${colorClasses.border} ${colorClasses.bg}`}>
             {startTimeLabel}
             {estimatedDuration ? ` • ${estimatedDuration}m` : ''}
+          </span>
+        )}
+        {formattedAmount && (
+          <span className="shrink-0 font-mono text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded-sm border border-emerald-500/20">
+            {formattedAmount}
           </span>
         )}
         {streak > 1 && !isDone && !isCanceled && (
@@ -518,71 +546,71 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
     )
 
     const menuSlot = !isGoogleCalendar ? (
-      <div className="relative shrink-0 flex items-center ml-auto mr-1">
-        <button
-          type="button"
-          title="More Actions"
-          onClick={(e) => {
-            e.stopPropagation()
-            setActiveMenuId(activeMenuId === occurrence.id ? null : occurrence.id)
-          }}
-          className="w-8 h-8 flex items-center justify-center rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-        >
-          <MoreVertical className="w-3.5 h-3.5" />
-        </button>
-
-        {activeMenuId === occurrence.id && (
-          <div className="absolute right-0 bottom-6 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg shadow-lg py-1 z-50 w-44 animate-in slide-in-from-bottom-2 duration-100">
-            <button
-              type="button"
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <IconButton
+            icon={<MoreVertical className="w-3.5 h-3.5" />}
+            label="More actions"
+            variant="ghost"
+            size="sm"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={(e) => {
+              e.stopPropagation()
+              setTaskDialogState({
+                isOpen: true,
+                mode: 'edit',
+                taskToEdit: template || occurrence,
+              })
+            }}
+          >
+            <Edit2 className="w-3.5 h-3.5 mr-1.5 opacity-70" />
+            Edit Task
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={async (e) => {
+              e.stopPropagation()
+              await cycleTaskStatus(occurrence)
+            }}
+          >
+            {isDone ? 'Mark Uncompleted' : 'Mark Completed'}
+          </DropdownMenuItem>
+          {!isCanceled && (
+            <DropdownMenuItem
+              variant="danger"
               onClick={async (e) => {
                 e.stopPropagation()
-                setActiveMenuId(null)
-                await cycleTaskStatus(occurrence)
+                await setTaskStatusAction(occurrence, dateStr, 'skipped')
+                invalidateCache(dateStr)
+                fetchDayDetails()
               }}
-              className="w-full text-left px-3 py-1.5 text-xs text-[var(--color-text-main)] hover:bg-[var(--color-accent)]/10 font-medium transition-colors"
             >
-              {isDone ? 'Mark Uncompleted' : 'Mark Completed'}
-            </button>
-
-            {!isCanceled && (
-              <button
-                type="button"
+              Skip / Cancel Today
+            </DropdownMenuItem>
+          )}
+          {!isPostponed && template?.recurrenceType !== 'daily' && (
+            <DropdownMenuItem
+              onClick={async (e) => {
+                e.stopPropagation()
+                await setTaskStatusAction(occurrence, dateStr, 'postponed')
+                invalidateCache(dateStr)
+                fetchDayDetails()
+              }}
+            >
+              Postpone to Tomorrow
+            </DropdownMenuItem>
+          )}
+          {(occurrence.logId || occurrence.id.includes('temp-')) && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="danger"
                 onClick={async (e) => {
                   e.stopPropagation()
-                  setActiveMenuId(null)
-                  await setTaskStatusAction(occurrence, dateStr, 'skipped')
-                  invalidateCache(dateStr)
-                  fetchDayDetails()
-                }}
-                className="w-full text-left px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 font-medium transition-colors"
-              >
-                Skip / Cancel Today
-              </button>
-            )}
-
-            {!isPostponed && template?.recurrenceType !== 'daily' && (
-              <button
-                type="button"
-                onClick={async (e) => {
-                  e.stopPropagation()
-                  setActiveMenuId(null)
-                  await setTaskStatusAction(occurrence, dateStr, 'postponed')
-                  invalidateCache(dateStr)
-                  fetchDayDetails()
-                }}
-                className="w-full text-left px-3 py-1.5 text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 font-medium transition-colors"
-              >
-                Postpone to Tomorrow
-              </button>
-            )}
-
-            {(occurrence.logId || occurrence.id.includes('temp-')) && (
-              <button
-                type="button"
-                onClick={async (e) => {
-                  e.stopPropagation()
-                  setActiveMenuId(null)
                   if (confirm("Are you sure you want to delete today's log?")) {
                     if (occurrence.logId) {
                       await deleteActivityLog(occurrence.logId)
@@ -591,14 +619,13 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                     }
                   }
                 }}
-                className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 font-medium transition-colors border-t border-[var(--color-border)]/50 mt-1 pt-1"
               >
                 Delete Today&apos;s Log
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     ) : undefined
 
     return (
@@ -711,7 +738,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                     <div className="text-[10px] uppercase tracking-widest font-extrabold text-slate-400 dark:text-zinc-555">
                       Tasks & Activities ({orderedItems.length})
                     </div>
-                    <Button onClick={() => setIsTaskDialogOpen(true)} variant="outline" size="sm"
+                    <Button onClick={() => setTaskDialogState({ isOpen: true, mode: 'create', taskToEdit: null })} variant="outline" size="sm"
                       className="flex items-center gap-1 text-[10px] py-1 px-2.5 font-bold uppercase tracking-wider">
                       <Plus size={11} /> Add Task
                     </Button>
@@ -1067,11 +1094,13 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
       />
 
       <TaskCreateDialog
-        isOpen={isTaskDialogOpen}
-        onClose={() => setIsTaskDialogOpen(false)}
+        isOpen={taskDialogState.isOpen}
+        onClose={() => setTaskDialogState({ isOpen: false, mode: 'create', taskToEdit: null })}
+        mode={taskDialogState.mode}
+        initialTask={taskDialogState.taskToEdit}
         initialDate={dateStr}
         source="calendar"
-        onSubmitTask={handleCreateTask}
+        onSubmitTask={handleTaskDialogSubmit}
       />
     </>
   )

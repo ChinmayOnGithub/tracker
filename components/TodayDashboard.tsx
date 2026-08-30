@@ -5,7 +5,6 @@ import { useStore } from '@/lib/store/store'
 import { saveDashboardConfigAction } from '@/app/actions/settings'
 import { useRouter } from 'next/navigation'
 import { TodayHeader } from './today/TodayHeader'
-import { TodayContext } from './today/TodayContext'
 import { TodayTasks } from './today/TodayTasks'
 import { WorkHoursWidget } from './today/WorkHoursWidget'
 import { JournalWidget } from './today/JournalWidget'
@@ -191,6 +190,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     setTaskStatusAction,
     deleteActivityLog,
     createActivityTemplateAction,
+    updateActivityTemplateAction,
     reorderActivityTemplatesAction,
     logWorkPresenceAction,
     logWeightAction
@@ -346,7 +346,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   }, [analyzedTemplates, logs, todayStr, calendarEvents])
 
   // Unified derived timeline viewModel selector to minimize layouts and re-filters
-  const viewModel = useMemo(() => {
+  const _viewModel = useMemo(() => {
     const activeTimeline = debouncedTimeline.filter(o => !o.completed)
     const overdueTemplates = analyzedTemplates.filter(t => t.analysis.overdue && t.template.isActive)
     const overdueOccurrences: TimelineItem[] = overdueTemplates.map(t => {
@@ -475,7 +475,6 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
       <TodayHeader
         todayStr={todayStr}
         todayLongDate={todayLongDate}
-        contextSubtitle={viewModel.contextSubtitle}
         calendarConnected={calendarData.connected}
         calendarLoading={calendarData.loading}
         onRefetchCalendar={onRefetchCalendar}
@@ -504,14 +503,8 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,3.25fr)_minmax(0,1.25fr)] gap-8 items-start">
-        {/* Left Column: Timeline feed & Progress */}
+        {/* Left Column: Tasks Feed */}
         <div className="space-y-6 min-w-0">
-          <TodayContext
-            totalActivities={viewModel.totalActivities}
-            completedCount={viewModel.completedCount}
-            progressPct={viewModel.progressPct}
-          />
-
           <TodayTasks
             timeline={debouncedTimeline}
             analyzedTemplates={analyzedTemplates}
@@ -525,6 +518,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             setTaskStatusAction={typedSetTaskStatus}
             deleteActivityLog={deleteActivityLog}
             createActivityTemplateAction={createActivityTemplateAction}
+            updateActivityTemplateAction={updateActivityTemplateAction}
             reorderActivityTemplatesAction={reorderActivityTemplatesAction}
             onOpenCreateActivity={onOpenCreateActivity}
           />

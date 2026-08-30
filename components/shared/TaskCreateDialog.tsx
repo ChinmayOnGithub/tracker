@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect } from 'react'
-import { useForm, Controller } from 'react-hook-form'
+import { useForm, Controller, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -9,29 +9,36 @@ import {
 } from '@/design-system'
 import { taskCreateSchema, TaskCreateFormValues } from '@/lib/validations'
 import { Icon, ICON_OPTIONS } from '@/components/Icon'
-import { CheckSquare } from 'lucide-react'
+import { CheckSquare, Edit3 } from 'lucide-react'
+import { ActivityTemplate, ActivityType, Priority, TimelineItem } from '@/types'
+
+export interface TaskFormData {
+  id?: string
+  name: string
+  category: string
+  type: string
+  priority: string
+  icon: string
+  color: string
+  targetDate: string
+  scheduledTime?: string | null
+  estimatedDuration?: number | null
+  isAllDay: boolean
+  notes?: string | null
+  amount?: number | null
+  metadata?: Record<string, unknown>
+}
 
 export interface TaskCreateDialogProps {
   isOpen: boolean
   onClose: () => void
+  mode?: 'create' | 'edit'
+  initialTask?: ActivityTemplate | TimelineItem | null
   initialDate?: string
   initialTime?: string
   initialAllDay?: boolean
   source?: 'today' | 'calendar' | 'activities'
-  onSubmitTask: (data: {
-    name: string
-    category: string
-    type: string
-    priority: string
-    icon: string
-    color: string
-    targetDate: string
-    scheduledTime?: string | null
-    estimatedDuration?: number | null
-    isAllDay: boolean
-    notes?: string | null
-    metadata?: Record<string, unknown>
-  }) => Promise<void>
+  onSubmitTask: (data: TaskFormData) => Promise<void>
 }
 
 const COLOR_OPTIONS = [
@@ -63,68 +70,122 @@ const TYPE_OPTIONS = [
   { value: 'PERSONAL', label: 'Personal' },
 ]
 
+function getInitialFormValues(
+  mode: 'create' | 'edit',
+  initialTask?: ActivityTemplate | TimelineItem | null,
+  initialDate?: string,
+  initialTime?: string,
+  initialAllDay: boolean = true
+): TaskCreateFormValues {
+  const defaultDate = initialDate || new Date().toISOString().split('T')[0]
+
+  if (mode === 'edit' && initialTask) {
+    const isTimelineItem = 'templateName' in initialTask
+    const name = isTimelineItem ? (initialTask as TimelineItem).templateName : (initialTask as ActivityTemplate).name
+    const category = (initialTask as ActivityTemplate).category || 'general'
+    const icon = initialTask.icon || 'CheckSquare'
+    const color = (initialTask as ActivityTemplate).color || 'blue'
+    const priority = (initialTask.priority as Priority) || 'NORMAL'
+    const type = (initialTask.type as ActivityType) || 'TASK'
+    const isAllDay = isTimelineItem ? (initialTask as TimelineItem).isAllDay ?? true : !(initialTask as ActivityTemplate).scheduledTime
+    const notes = initialTask.notes || ''
+    const rawAmount = (initialTask as ActivityTemplate).amount ?? (initialTask as TimelineItem).amount
+    const amount = rawAmount != null ? String(rawAmount) : ''
+    const estimatedDuration = (initialTask as ActivityTemplate).estimatedDuration != null ? String((initialTask as ActivityTemplate).estimatedDuration) : '30'
+
+    let targetDate = defaultDate
+    if (isTimelineItem && (initialTask as TimelineItem).start) {
+      targetDate = new Date((initialTask as TimelineItem).start).toISOString().split('T')[0]
+    } else if ((initialTask as ActivityTemplate).targetDate) {
+      targetDate = (initialTask as ActivityTemplate).targetDate!.split('T')[0]
+    }
+
+    let startTime = initialTime || '10:00'
+    if (!isAllDay) {
+      if (isTimelineItem && (initialTask as TimelineItem).start) {
+        startTime = new Date((initialTask as TimelineItem).start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+      } else if ((initialTask as ActivityTemplate).scheduledTime) {
+        startTime = (initialTask as ActivityTemplate).scheduledTime!
+      }
+    }
+
+    return {
+      id: initialTask.id,
+      name,
+      category,
+      icon,
+      color,
+      priority,
+      type,
+      isAllDay,
+      targetDate,
+      startTime,
+      estimatedDuration,
+      notes,
+      amount,
+    }
+  }
+
+  return {
+    id: undefined,
+    name: '',
+    category: 'general',
+    icon: 'CheckSquare',
+    color: 'blue',
+    priority: 'NORMAL',
+    type: 'TASK',
+    isAllDay: initialTime ? false : initialAllDay,
+    targetDate: defaultDate,
+    startTime: initialTime || '10:00',
+    estimatedDuration: '30',
+    notes: '',
+    amount: '',
+  }
+}
+
 export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
   isOpen,
   onClose,
+  mode = 'create',
+  initialTask = null,
   initialDate,
   initialTime,
   initialAllDay = true,
   source = 'calendar',
   onSubmitTask,
 }) => {
-  const defaultDate = initialDate || new Date().toISOString().split('T')[0]
+  const isEditMode = mode === 'edit'
+  const defaultValues = getInitialFormValues(mode, initialTask, initialDate, initialTime, initialAllDay)
 
   const {
     register,
     handleSubmit,
     control,
-    watch,
     reset,
     formState: { errors, isSubmitting },
   } = useForm<TaskCreateFormValues>({
     resolver: zodResolver(taskCreateSchema),
-    defaultValues: {
-      name: '',
-      category: 'general',
-      icon: 'CheckSquare',
-      color: 'blue',
-      priority: 'NORMAL',
-      type: 'TASK',
-      isAllDay: initialAllDay,
-      targetDate: defaultDate,
-      startTime: initialTime || '10:00',
-      estimatedDuration: '30',
-      notes: '',
-    },
+    defaultValues,
   })
 
-  const isAllDay = watch('isAllDay')
-  const selectedColor = watch('color')
-  const selectedIcon = watch('icon')
+  const isAllDay = useWatch({ control, name: 'isAllDay' })
+  const selectedColor = useWatch({ control, name: 'color' })
+  const selectedIcon = useWatch({ control, name: 'icon' })
+  const targetDateValue = useWatch({ control, name: 'targetDate' })
 
   // Re-sync form when initial inputs change on open
   useEffect(() => {
     if (isOpen) {
-      reset({
-        name: '',
-        category: 'general',
-        icon: 'CheckSquare',
-        color: 'blue',
-        priority: 'NORMAL',
-        type: 'TASK',
-        isAllDay: initialTime ? false : initialAllDay,
-        targetDate: initialDate || new Date().toISOString().split('T')[0],
-        startTime: initialTime || '10:00',
-        estimatedDuration: '30',
-        notes: '',
-      })
+      reset(getInitialFormValues(mode, initialTask, initialDate, initialTime, initialAllDay))
     }
-  }, [isOpen, initialDate, initialTime, initialAllDay, reset])
+  }, [isOpen, mode, initialTask, initialDate, initialTime, initialAllDay, reset])
 
   const onFormSubmit = async (values: TaskCreateFormValues) => {
     const durationNum = values.estimatedDuration ? parseInt(values.estimatedDuration, 10) : null
-    
+    const amountNum = values.amount && values.amount.trim() !== '' ? parseFloat(values.amount) : null
+
     await onSubmitTask({
+      id: values.id || (isEditMode && initialTask ? initialTask.id : undefined),
       name: values.name.trim(),
       category: values.category || 'general',
       type: values.type,
@@ -136,6 +197,7 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
       estimatedDuration: !values.isAllDay && !isNaN(durationNum ?? NaN) ? durationNum : null,
       isAllDay: values.isAllDay,
       notes: values.notes?.trim() || null,
+      amount: amountNum != null && !isNaN(amountNum) ? amountNum : null,
       metadata: {
         isQuickTask: true,
         source,
@@ -152,14 +214,14 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
         <DialogHeader className="px-6 py-4 bg-[var(--color-bg-subtle)]/40 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center border border-[var(--color-primary)]/20">
-              <CheckSquare className="w-4 h-4" />
+              {isEditMode ? <Edit3 className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
             </div>
             <div>
               <DialogTitle className="text-sm font-bold text-[var(--color-text-main)]">
-                Create Task
+                {isEditMode ? 'Edit Task' : 'Create Task'}
               </DialogTitle>
               <DialogDescription className="text-[11px] text-[var(--color-text-muted)]">
-                Schedule a new task or activity for {defaultDate}
+                {isEditMode ? 'Update task details and preferences' : `Schedule a new task or activity for ${targetDateValue || initialDate || 'today'}`}
               </DialogDescription>
             </div>
           </div>
@@ -229,8 +291,8 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
             </div>
           )}
 
-          {/* Type & Priority */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Type, Priority, & Financial Amount */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Controller
               control={control}
               name="type"
@@ -255,6 +317,15 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
                   options={PRIORITY_OPTIONS}
                 />
               )}
+            />
+
+            <Input
+              type="number"
+              step="any"
+              label="Amount (Optional)"
+              placeholder="e.g. 119"
+              {...register('amount')}
+              error={errors.amount?.message}
             />
           </div>
 
@@ -333,7 +404,7 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
               Cancel
             </Button>
             <Button type="submit" isLoading={isSubmitting}>
-              Create Task
+              {isEditMode ? 'Save Changes' : 'Create Task'}
             </Button>
           </DialogFooter>
         </form>
@@ -342,3 +413,4 @@ export const TaskCreateDialog: React.FC<TaskCreateDialogProps> = ({
   )
 }
 export default TaskCreateDialog
+

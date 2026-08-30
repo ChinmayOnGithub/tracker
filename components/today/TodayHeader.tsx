@@ -7,7 +7,6 @@ import { Button, PageHeader, IconButton } from '@/design-system'
 interface TodayHeaderProps {
   todayStr: string
   todayLongDate: string
-  contextSubtitle: string
   calendarConnected: boolean
   calendarLoading: boolean
   onRefetchCalendar: (force?: boolean) => void
@@ -19,7 +18,6 @@ interface TodayHeaderProps {
 export const TodayHeader: React.FC<TodayHeaderProps> = ({
   todayStr,
   todayLongDate,
-  contextSubtitle,
   calendarConnected,
   calendarLoading,
   onRefetchCalendar,
@@ -76,7 +74,7 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
   return (
     <PageHeader
       title={isCurrentToday ? 'Today' : 'Timeline'}
-      subtitle={`${todayLongDate} · ${contextSubtitle}`}
+      subtitle={todayLongDate}
       prefix={prefix}
       actions={actions}
     />

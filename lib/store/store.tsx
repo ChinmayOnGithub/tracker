@@ -150,6 +150,7 @@ interface StoreContextType {
   postponeOneTimeTaskAction: (templateId: string, date: string, logId: string | null) => Promise<void>
   unpostponeOneTimeTaskAction: (templateId: string, logId: string, originalDate: string) => Promise<void>
   createActivityTemplateAction: (templateData: any) => Promise<void>
+  updateActivityTemplateAction: (id: string, updates: Partial<ActivityTemplate>) => Promise<void>
   reorderActivityTemplatesAction: (orderedIds: string[]) => Promise<void>
   logWorkPresenceAction: (fields: any) => Promise<void>
   
@@ -788,6 +789,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       await templateRepo.save(newTemplate)
     } catch (err) {
       console.error('Create template transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, templates: previousTemplates }))
+    }
+  }
+
+  const updateActivityTemplateAction = async (id: string, updates: Partial<ActivityTemplate>) => {
+    const previousTemplates = [...state.templates]
+
+    setState(prev => ({
+      ...prev,
+      templates: prev.templates.map(t => (t.id === id ? { ...t, ...updates, updatedAt: new Date() } : t))
+    }))
+
+    try {
+      const { ActivityTemplateRepository } = await import('@/modules/activities/repository/ActivityRepository')
+      const templateRepo = new ActivityTemplateRepository()
+      const existing = await templateRepo.getById(id)
+      if (existing) {
+        const merged: ActivityTemplate = {
+          ...existing,
+          ...updates,
+          updatedAt: new Date()
+        }
+        await templateRepo.save(merged)
+      }
+    } catch (err) {
+      console.error('Update template transaction failed, rolling back:', err)
       setState(prev => ({ ...prev, templates: previousTemplates }))
     }
   }
@@ -1484,6 +1511,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       postponeOneTimeTaskAction,
       unpostponeOneTimeTaskAction,
       createActivityTemplateAction,
+      updateActivityTemplateAction,
       reorderActivityTemplatesAction,
       logWorkPresenceAction,
       upsertNoteAction,
