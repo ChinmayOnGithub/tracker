@@ -13,7 +13,6 @@ import {
   Upload,
   Download,
   Trash2,
-  Pencil,
   ChevronRight,
   Shield,
   HardDrive as _HardDrive,
@@ -21,15 +20,11 @@ import {
   Check,
   AlertTriangle,
   Loader2,
-  Copy,
-  Eye,
-  EyeOff,
   Plus,
   RefreshCw,
   RotateCcw,
   ZoomIn,
   ZoomOut,
-  Maximize,
   Settings
 } from 'lucide-react'
 import {
@@ -47,13 +42,17 @@ import {
   toggleVaultPin,
   setVaultSpecialAsset,
   logVaultAuditAction,
-  updateVaultItemCategory
+  updateVaultItemCategory,
+  saveVaultBankAccount,
+  deleteVaultBankAccount
 } from '@/app/actions/vault'
-import type { VaultItem, VaultBreadcrumb, QuickInfoFieldDTO } from '@/app/actions/vault'
-import { Modal, Input, Button, Card, EmptyState, SkeletonWidget, SearchInput, IconButton } from '@/design-system'
+import type { VaultItem, VaultBreadcrumb, QuickInfoFieldDTO, BankAccountDTO } from '@/app/actions/vault'
+import { Modal, Input, Button, Card, EmptyState, SkeletonWidget, SearchInput, IconButton, PageHeader } from '@/design-system'
 import { notify } from '@/lib/notifications'
 import { writeQueue } from '@/lib/store/write-queue'
 import { VaultUploader } from './vault/VaultUploader'
+import { VaultFieldRow } from './vault/VaultFieldRow'
+import { BankPassbookSection } from './vault/BankPassbookSection'
 
 // --- File Type & Layout Helpers --------------------------------------------------
 
@@ -183,6 +182,7 @@ export function VaultPanel() {
 
   // Dashboard Setting Stats
   const [quickInfoFields, setQuickInfoFields] = useState<QuickInfoFieldDTO[]>([])
+  const [bankAccounts, setBankAccounts] = useState<BankAccountDTO[]>([])
   const [_quickActions, setQuickActions] = useState<string[]>([])
   const [pinnedDocuments, setPinnedDocuments] = useState<VaultItem[]>([])
   const [signatureDocId, setSignatureDocId] = useState<string | null>(null)
@@ -248,6 +248,7 @@ export function VaultPanel() {
       const data = await getVaultDashboardData()
       if (data.success) {
         setQuickInfoFields(data.quickInfoFields)
+        setBankAccounts(data.bankAccounts || [])
         setQuickActions(data.quickActions)
         setPinnedDocuments(data.pinnedDocuments)
         setSignatureDocId(data.signatureDocId)
@@ -265,17 +266,25 @@ export function VaultPanel() {
       const [itemsResult, breadcrumbsResult, statsResult] = await Promise.all([
         listVaultItems(currentFolderId),
         getVaultBreadcrumbs(currentFolderId),
-        getVaultStats(),
+        getVaultStats()
       ])
+
       if (itemsResult.success) {
         setItems(itemsResult.items)
       } else {
         setErrorMessage(itemsResult.error || 'Failed to load items')
       }
-      if (breadcrumbsResult.success) setBreadcrumbs(breadcrumbsResult.breadcrumbs)
-      if (statsResult.success) setStats(statsResult.stats)
+
+      if (breadcrumbsResult.success) {
+        setBreadcrumbs(breadcrumbsResult.breadcrumbs)
+      }
+
+      if (statsResult.success) {
+        setStats(statsResult.stats)
+      }
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to retrieve vault data')
+      console.error('Fetch error:', err)
+      setErrorMessage('Failed to load items')
     } finally {
       setLoading(false)
     }
@@ -292,11 +301,11 @@ export function VaultPanel() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFolderId])
 
-  // Fetch Special Assets blobs to Object URLs in-memory
+  // Fetch Special Assets using decrypted preview endpoint
   useEffect(() => {
     let sigObjectUrl: string | null = null
     if (signatureDocId) {
-      fetch(`/api/vault/download/${signatureDocId}`)
+      fetch(`/api/vault/preview/${signatureDocId}`)
         .then(res => {
           if (!res.ok) throw new Error()
           return res.blob()
@@ -318,7 +327,7 @@ export function VaultPanel() {
   useEffect(() => {
     let photoObjectUrl: string | null = null
     if (photoDocId) {
-      fetch(`/api/vault/download/${photoDocId}`)
+      fetch(`/api/vault/preview/${photoDocId}`)
         .then(res => {
           if (!res.ok) throw new Error()
           return res.blob()
@@ -336,6 +345,45 @@ export function VaultPanel() {
       if (photoObjectUrl) URL.revokeObjectURL(photoObjectUrl)
     }
   }, [photoDocId])
+
+  const handleSaveBankAccount = async (bankData: {
+    id?: string
+    bankName: string
+    accountHolder: string
+    accountNumber: string
+    ifscCode: string
+    branch?: string
+    accountType?: string
+    upiId?: string
+    documentId?: string | null
+  }) => {
+    try {
+      const res = await saveVaultBankAccount(bankData)
+      if (res.success) {
+        notify.success(`Bank account "${bankData.bankName}" saved`)
+        fetchDashboardData()
+      } else {
+        notify.error(res.error || 'Failed to save bank account')
+      }
+    } catch {
+      notify.error('Failed to save bank account')
+    }
+  }
+
+  const handleDeleteBankAccount = async (id: string, bankName: string) => {
+    if (!confirm(`Are you sure you want to remove the passbook for "${bankName}"?`)) return
+    try {
+      const res = await deleteVaultBankAccount(id)
+      if (res.success) {
+        notify.success('Bank account removed')
+        fetchDashboardData()
+      } else {
+        notify.error(res.error || 'Failed to delete bank account')
+      }
+    } catch {
+      notify.error('Failed to delete bank account')
+    }
+  }
 
   // --- Actions & Modals Handling -------------------------------------
 
@@ -405,17 +453,22 @@ export function VaultPanel() {
   const handleSaveCustomField = async () => {
     if (!customFieldLabel.trim() || !customFieldValue.trim()) return
     setActionLoading(true)
-    const customId = `custom_${Date.now()}`
+    
+    // Check if the label matches an existing predefined field
+    const matchedField = quickInfoFields.find(f => f.label.toLowerCase() === customFieldLabel.trim().toLowerCase())
+    const fieldId = matchedField ? matchedField.id : `custom_${Date.now()}`
+    const category = matchedField ? matchedField.category : customFieldCategory
+
     try {
-      const res = await saveVaultQuickInfoField(customId, customFieldCategory, customFieldLabel.trim(), customFieldValue.trim())
+      const res = await saveVaultQuickInfoField(fieldId, category, customFieldLabel.trim(), customFieldValue.trim())
       if (res.success) {
-        notify.success(`Custom field "${customFieldLabel}" added`)
+        notify.success(`"${customFieldLabel.trim()}" added to Vault`)
         setShowNewCustomField(false)
         setCustomFieldLabel('')
         setCustomFieldValue('')
         fetchDashboardData()
       } else {
-        notify.error(res.error || 'Failed to save custom field')
+        notify.error(res.error || 'Failed to save field')
       }
     } catch (_err) {
       notify.error('Failed to create field')
@@ -1060,47 +1113,47 @@ export function VaultPanel() {
       )}
 
       {/* PAGE HEADER */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 flex items-center justify-center">
+      <PageHeader
+        title="Secure Vault"
+        subtitle="Your encrypted documents and confidential information cabinet"
+        prefix={
+          <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 flex items-center justify-center shrink-0">
             <Shield className="w-5 h-5 text-[var(--color-primary)]" />
           </div>
-          <div>
-            <h1 className="text-xl font-black text-[var(--color-text-main)] tracking-tight leading-tight">Secure Vault</h1>
-            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">Your encrypted documents and important information</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <IconButton
-            onClick={() => setShowQuickSettings(v => !v)}
-            variant="outline"
-            icon={<Settings className={`w-4 h-4 text-[var(--color-text-muted)] transition-transform duration-300 ${showQuickSettings ? 'rotate-90' : ''}`} />}
-            label="Settings"
-          />
-          <IconButton
-            onClick={() => void refreshAll()}
-            disabled={loading}
-            variant="outline"
-            icon={<RefreshCw className={`w-4 h-4 text-[var(--color-text-muted)] ${loading ? 'animate-spin' : ''}`} />}
-            label="Refresh"
-          />
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => {
-              setUploadDocName('')
-              setUploadCategory(selectedCategory || 'Identity')
-              setUploadSubCategory(selectedSubCategory !== 'All' ? selectedSubCategory : '')
-              setUploadDocType('Other')
-              setUploadAssociateField('')
-              setShowUploadModal(true)
-            }}
-            icon={<Upload className="w-4 h-4" />}
-          >
-            Upload
-          </Button>
-        </div>
-      </div>
+        }
+        actions={
+          <>
+            <IconButton
+              onClick={() => setShowQuickSettings(v => !v)}
+              variant="outline"
+              icon={<Settings className={`w-4 h-4 text-[var(--color-text-muted)] transition-transform duration-300 ${showQuickSettings ? 'rotate-90' : ''}`} />}
+              label="Settings"
+            />
+            <IconButton
+              onClick={() => void refreshAll()}
+              disabled={loading}
+              variant="outline"
+              icon={<RefreshCw className={`w-4 h-4 text-[var(--color-text-muted)] ${loading ? 'animate-spin' : ''}`} />}
+              label="Refresh"
+            />
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setUploadDocName('')
+                setUploadCategory(selectedCategory || 'Identity')
+                setUploadSubCategory(selectedSubCategory !== 'All' ? selectedSubCategory : '')
+                setUploadDocType('Other')
+                setUploadAssociateField('')
+                setShowUploadModal(true)
+              }}
+              icon={<Upload className="w-4 h-4" />}
+            >
+              Upload
+            </Button>
+          </>
+        }
+      />
 
       {/* Quick Settings */}
       {showQuickSettings && (
@@ -1160,90 +1213,124 @@ export function VaultPanel() {
         <div className="space-y-5">
 
           {/* QUICK ACCESS INFORMATION */}
-          <div className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-bg-surface)] overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
-              <div className="flex items-center gap-2">
-                <Maximize className="w-3.5 h-3.5 text-[var(--color-primary)]" />
-                <span className="text-[11px] font-black uppercase tracking-wider text-[var(--color-text-muted)]">Quick Access Information</span>
+          {/* QUICK ACCESS INFORMATION CABINET */}
+          <div className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-bg-surface)] overflow-hidden shadow-xs">
+            {/* Header with Title, AES badge, and secondary actions */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-bg-subtle)]/40">
+              <div className="flex items-center gap-2.5">
+                <Shield className="w-4 h-4 text-emerald-500 shrink-0" />
+                <div>
+                  <span className="text-xs font-black uppercase tracking-wider text-[var(--color-text-main)]">Secure Vault Information</span>
+                  <span className="ml-2 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                    AES-256-GCM Encrypted
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="ghost" onClick={() => setShowNewCustomField(true)} icon={<Plus className="w-3.5 h-3.5" />}>
-                  Add Field
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setShowQuickSettings(v => !v)} icon={<Settings className="w-3.5 h-3.5" />}>
+              <div className="flex items-center gap-1.5 self-end sm:self-auto">
+                <Button size="sm" variant="ghost" onClick={() => setShowQuickSettings(v => !v)} icon={<Settings className="w-3.5 h-3.5" />} className="h-7 text-xs">
                   Customize
                 </Button>
+                <Button size="sm" variant="outline" onClick={() => setShowNewCustomField(true)} icon={<Plus className="w-3.5 h-3.5" />} className="h-7 text-xs">
+                  Add Field
+                </Button>
               </div>
             </div>
-            <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-              {quickInfoFields.map(field => {
-                const isSensitive = ['identity_aadhaar','identity_pan','banking_account_number','personal_phone','personal_email'].includes(field.id) || field.id.startsWith('custom_')
-                const showDownload = ['identity_aadhaar','identity_pan','banking_account_number'].includes(field.id)
-                return (
-                  <div key={field.id}
-                    className="border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-bg-base)] flex flex-col p-3 gap-2 hover:border-[var(--color-primary)]/40 hover:shadow-sm transition-all duration-150">
-                    {/* Label + AES badge */}
-                    <div className="flex items-start justify-between gap-1">
-                      <span className="text-[11px] font-semibold text-[var(--color-text-main)] leading-tight">{field.label}</span>
-                      {isSensitive && (
-                        <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                          AES-256
-                        </span>
-                      )}
-                    </div>
-                    {/* Value */}
-                    <div className="flex items-center gap-1.5 min-h-[24px]">
-                      <p className="font-mono text-sm font-semibold text-[var(--color-text-main)] truncate flex-1 select-all">
-                        {field.hasValue
-                          ? (isSensitive && !revealedSecrets[field.id]
-                              ? field.maskedValue
-                              : (revealedSecrets[field.id] || field.maskedValue))
-                          : <span className="text-[var(--color-text-muted)]">&mdash;</span>
-                        }
-                      </p>
-                      {isSensitive && field.hasValue && (
-                        <button onClick={() => handleToggleReveal(field.id)} disabled={revealingFieldId === field.id}
-                          className="w-6 h-6 flex items-center justify-center rounded text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] cursor-pointer transition-colors shrink-0">
-                          {revealingFieldId === field.id ? <Loader2 className="w-3 h-3 animate-spin" /> : revealedSecrets[field.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                        </button>
-                      )}
-                    </div>
-                    {/* Actions always visible */}
-                    <div className="flex items-center gap-px pt-1.5 border-t border-[var(--color-border)]/50 mt-auto">
-                      <button onClick={() => handleCopySecret(field.id, field.label)} disabled={!field.hasValue}
-                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] rounded-l transition-colors disabled:opacity-30 cursor-pointer touch-manipulation">
-                        <Copy className="w-3 h-3" /> Copy
-                      </button>
-                      <div className="w-px h-4 bg-[var(--color-border)]" />
-                      {showDownload && field.documentId ? (
-                        <button onClick={() => { const a=document.createElement('a'); a.href=`/api/vault/download/${field.documentId}`; document.body.appendChild(a); a.click(); setTimeout(()=>document.body.removeChild(a),100) }}
-                          className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] transition-colors cursor-pointer touch-manipulation">
-                          <Download className="w-3 h-3" /> Download
-                        </button>
-                      ) : showDownload ? (
-                        <button onClick={() => openUploadForField(field.id, field.label)}
-                          className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 transition-colors cursor-pointer touch-manipulation">
-                          <Download className="w-3 h-3" /> Download
-                        </button>
-                      ) : (
-                        <div className="flex-1" />
-                      )}
-                      <div className="w-px h-4 bg-[var(--color-border)]" />
-                      <button
-                        onClick={() => {
-                          setEditingField(field)
-                          if (field.hasValue) {
-                            getVaultSecretValue(field.id, 'reveal').then(r => { if (r.success) setEditValue(r.value || '') })
-                          } else setEditValue('')
-                        }}
-                        className="flex-1 flex items-center justify-center gap-1 py-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] rounded-r transition-colors cursor-pointer touch-manipulation">
-                        <Pencil className="w-3 h-3" /> Edit
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+
+            {/* Direct Flat Information Stack (Show only populated fields) */}
+            {quickInfoFields.filter(f => f.hasValue).length > 0 ? (
+              <div className="p-4 divide-y divide-[var(--color-border)]/50 space-y-1">
+                {quickInfoFields
+                  .filter(f => f.hasValue)
+                  .map(field => {
+                    const isSensitive = [
+                      'identity_aadhaar',
+                      'identity_pan',
+                      'identity_passport',
+                      'identity_dl',
+                      'identity_voter',
+                      'banking_account_number',
+                      'banking_ifsc',
+                      'banking_upi_id',
+                      'personal_phone',
+                      'personal_email',
+                      'personal_current_address',
+                      'personal_permanent_address',
+                      'personal_address',
+                    ].includes(field.id) || field.id.startsWith('custom_')
+
+                    const showDownload = ['identity_aadhaar', 'identity_pan', 'banking_account_number'].includes(field.id) || !!field.documentId
+
+                    return (
+                      <div key={field.id} className="pt-1.5 first:pt-0 pb-1.5 last:pb-0">
+                        <VaultFieldRow
+                          field={field}
+                          isSensitive={isSensitive}
+                          isRevealed={!!revealedSecrets[field.id]}
+                          revealedValue={revealedSecrets[field.id]}
+                          isRevealing={revealingFieldId === field.id}
+                          showDownload={showDownload}
+                          onToggleReveal={handleToggleReveal}
+                          onCopy={handleCopySecret}
+                          onEdit={(f) => {
+                            setEditingField(f)
+                            if (f.hasValue) {
+                              getVaultSecretValue(f.id, 'reveal').then(r => { if (r.success) setEditValue(r.value || '') })
+                            } else {
+                              setEditValue('')
+                            }
+                          }}
+                          onDownloadDoc={(docId) => {
+                            const a = document.createElement('a')
+                            a.href = `/api/vault/download/${docId}`
+                            document.body.appendChild(a)
+                            a.click()
+                            setTimeout(() => document.body.removeChild(a), 100)
+                          }}
+                          onUploadDocForField={openUploadForField}
+                          onDeleteCustomField={_handleDeleteCustomField}
+                        />
+                      </div>
+                    )
+                  })}
+              </div>
+            ) : (
+              /* Single Clean Empty State: shown ONLY when zero fields are stored */
+              <div className="py-12 px-6 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-[var(--color-bg-subtle)] border border-[var(--color-border)] flex items-center justify-center mb-3">
+                  <Shield className="w-6 h-6 text-[var(--color-text-muted)]" />
+                </div>
+                <h4 className="text-sm font-bold text-[var(--color-text-main)]">No information stored yet</h4>
+                <p className="text-xs text-[var(--color-text-muted)] mt-1 max-w-sm">
+                  Add confidential details like your Aadhaar, PAN, Current & Permanent Address, or custom credentials with end-to-end encryption.
+                </p>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => setShowNewCustomField(true)}
+                  icon={<Plus className="w-3.5 h-3.5" />}
+                  className="mt-4 text-xs font-semibold"
+                >
+                  Add Field
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* BANK ACCOUNTS & REALISTIC PASSBOOK SECTION */}
+          <div className="border border-[var(--color-border)] rounded-[var(--radius-lg)] bg-[var(--color-bg-surface)] p-5">
+            <BankPassbookSection
+              bankAccounts={bankAccounts}
+              onSaveBank={handleSaveBankAccount}
+              onDeleteBank={handleDeleteBankAccount}
+              onUploadDocForField={openUploadForField}
+              onDownloadDoc={(docId) => {
+                const a = document.createElement('a')
+                a.href = `/api/vault/download/${docId}`
+                document.body.appendChild(a)
+                a.click()
+                setTimeout(() => document.body.removeChild(a), 100)
+              }}
+            />
           </div>
 
           {/* BOTTOM 3-COLUMN GRID */}
@@ -1495,10 +1582,10 @@ export function VaultPanel() {
         </div>
       )}
 
-      {/* Encryption Footer */}
-      <div className="flex items-center justify-center gap-2 pt-4 border-t border-[var(--color-border)]">
-        <Shield className="w-4 h-4 text-emerald-500" />
-        <span className="text-xs font-semibold text-[var(--color-text-muted)]">All documents encrypted with AES-256-GCM at rest</span>
+      {/* Encryption Security Status Footer */}
+      <div className="flex items-center justify-center gap-2 pt-4 text-xs text-[var(--color-text-muted)] font-medium">
+        <Shield className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+        <span>End-to-end zero-knowledge encryption with AES-256-GCM &amp; SHA-256 client authentication</span>
       </div>
 
       {/* Upload Document Modal */}
@@ -1655,24 +1742,77 @@ export function VaultPanel() {
         )}
       </Modal>
 
-      {/* New Custom Field Modal */}
-      <Modal isOpen={showNewCustomField} onClose={() => setShowNewCustomField(false)} title="New Custom Field" size="sm">
+      {/* Add Stored Field Modal */}
+      <Modal isOpen={showNewCustomField} onClose={() => setShowNewCustomField(false)} title="Add Stored Information" size="sm">
         <div className="space-y-4 pt-1">
-          <Input type="text" label="Field Label" placeholder="e.g. Insurance Policy Number" value={customFieldLabel} onChange={e => setCustomFieldLabel(e.target.value)} autoFocus />
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-[var(--color-text-muted)]">Category</label>
-            <select value={customFieldCategory} onChange={e => setCustomFieldCategory(e.target.value as InfoCategory)}
-              className="w-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] p-2 text-sm text-[var(--color-text-main)] focus:outline-none">
-              <option value="IDENTITY">Identity</option>
-              <option value="BANKING">Banking</option>
-              <option value="PERSONAL">Personal</option>
-              <option value="OTHER">Other</option>
-            </select>
+          {/* Quick preset selector for standard unpopulated fields */}
+          {quickInfoFields.filter(f => !f.hasValue && !f.id.startsWith('custom_')).length > 0 && (
+            <div className="flex flex-col gap-1.5 pb-1">
+              <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">Select Field</label>
+              <select
+                value={customFieldLabel && quickInfoFields.some(f => !f.hasValue && f.label === customFieldLabel) ? customFieldLabel : ''}
+                onChange={e => {
+                  const selectedLabel = e.target.value
+                  if (selectedLabel) {
+                    const matched = quickInfoFields.find(f => f.label === selectedLabel)
+                    if (matched) {
+                      setCustomFieldLabel(matched.label)
+                      setCustomFieldCategory(matched.category as InfoCategory)
+                    }
+                  } else {
+                    setCustomFieldLabel('')
+                  }
+                }}
+                className="w-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] p-2 text-sm text-[var(--color-text-main)] focus:outline-none"
+              >
+                <option value="">Custom Field...</option>
+                {quickInfoFields
+                  .filter(f => !f.hasValue && !f.id.startsWith('custom_'))
+                  .map(f => (
+                    <option key={f.id} value={f.label}>
+                      {f.label}
+                    </option>
+                  ))}
+              </select>
+            </div>
+          )}
+
+          <Input
+            type="text"
+            label="Field Label"
+            placeholder="e.g. Aadhaar number, PAN number, Bank Name"
+            value={customFieldLabel}
+            onChange={e => setCustomFieldLabel(e.target.value)}
+            autoFocus
+          />
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase">Field Value</label>
+            <Input
+              type="text"
+              placeholder="Enter value"
+              value={customFieldValue}
+              onChange={e => setCustomFieldValue(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && customFieldLabel.trim() && customFieldValue.trim()) {
+                  handleSaveCustomField()
+                }
+              }}
+            />
           </div>
-          <Input type="text" label="Field Value" placeholder="e.g. POL-987654321" value={customFieldValue} onChange={e => setCustomFieldValue(e.target.value)} />
-          <div className="flex justify-end gap-2">
+
+          <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" size="sm" onClick={() => setShowNewCustomField(false)}>Cancel</Button>
-            <Button variant="primary" size="sm" onClick={handleSaveCustomField} disabled={!customFieldLabel.trim()||!customFieldValue.trim()} isLoading={actionLoading} icon={<Check className="w-4 h-4" />}>Add Field</Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleSaveCustomField}
+              disabled={!customFieldLabel.trim() || !customFieldValue.trim()}
+              isLoading={actionLoading}
+              icon={<Check className="w-4 h-4" />}
+            >
+              Add Field
+            </Button>
           </div>
         </div>
       </Modal>

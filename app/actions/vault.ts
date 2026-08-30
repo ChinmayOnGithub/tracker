@@ -79,13 +79,43 @@ export interface VaultBreadcrumb {
 export interface VaultCursor {
   id: string
   updatedAt: string
-}export interface VaultSettingsConfig {
+}
+
+export interface BankAccountDTO {
+  id: string
+  bankName: string
+  accountHolder: string
+  accountNumber: string
+  maskedAccountNumber: string
+  ifscCode: string
+  branch?: string
+  accountType?: string
+  upiId?: string
+  documentId?: string | null
+  updatedAt: string
+}
+
+export interface BankAccountConfig {
+  id: string
+  bankName: string
+  accountHolder: string
+  encryptedAccountNumber: string
+  ifscCode: string
+  branch?: string
+  accountType?: string
+  upiId?: string
+  documentId?: string | null
+  updatedAt: string
+}
+
+export interface VaultSettingsConfig {
   fields?: Record<string, {
     category: string
     label: string
     encryptedValue: string
     updatedAt: string
   }>
+  bankAccounts?: BankAccountConfig[]
   quickActions?: string[]
   pinnedDocuments?: string[]
   signatureDocId?: string | null
@@ -698,6 +728,7 @@ export interface QuickInfoFieldDTO {
 export interface VaultDashboardData {
   success: boolean
   quickInfoFields: QuickInfoFieldDTO[]
+  bankAccounts: BankAccountDTO[]
   quickActions: string[]
   pinnedDocuments: VaultItem[]
   signatureDocId: string | null
@@ -723,6 +754,7 @@ export async function getVaultDashboardData(): Promise<VaultDashboardData> {
           module: VAULT_SETTINGS_MODULE,
           config: {
             fields: {},
+            bankAccounts: [],
             quickActions: ['identity_aadhaar', 'identity_pan', 'banking_account_number', 'banking_ifsc', 'signature', 'photo'],
             pinnedDocuments: [],
             signatureDocId: null,
@@ -734,6 +766,7 @@ export async function getVaultDashboardData(): Promise<VaultDashboardData> {
     
     const config = (setting.config as unknown as VaultSettingsConfig) || {}
     const fieldsConfig = config.fields || {}
+    const bankAccountsConfig = config.bankAccounts || []
     const quickActions = config.quickActions || []
     const pinnedDocIds = config.pinnedDocuments || []
     const signatureDocId = config.signatureDocId || null
@@ -785,6 +818,14 @@ export async function getVaultDashboardData(): Promise<VaultDashboardData> {
       { id: 'identity_voter', category: 'IDENTITY', label: 'Voter ID' },
       { id: 'identity_other', category: 'IDENTITY', label: 'Other identity number' },
       
+      { id: 'personal_full_name', category: 'PERSONAL', label: 'Full name' },
+      { id: 'personal_dob', category: 'PERSONAL', label: 'Date of birth' },
+      { id: 'personal_phone', category: 'PERSONAL', label: 'Phone number' },
+      { id: 'personal_email', category: 'PERSONAL', label: 'Email' },
+      { id: 'personal_current_address', category: 'PERSONAL', label: 'Current Address' },
+      { id: 'personal_permanent_address', category: 'PERSONAL', label: 'Permanent Address' },
+      { id: 'personal_address', category: 'PERSONAL', label: 'Address' },
+
       { id: 'banking_bank_name', category: 'BANKING', label: 'Bank name' },
       { id: 'banking_holder_name', category: 'BANKING', label: 'Account holder name' },
       { id: 'banking_account_number', category: 'BANKING', label: 'Account number' },
@@ -792,12 +833,6 @@ export async function getVaultDashboardData(): Promise<VaultDashboardData> {
       { id: 'banking_branch', category: 'BANKING', label: 'Branch' },
       { id: 'banking_account_type', category: 'BANKING', label: 'Account type' },
       { id: 'banking_upi_id', category: 'BANKING', label: 'UPI ID' },
-      
-      { id: 'personal_full_name', category: 'PERSONAL', label: 'Full name' },
-      { id: 'personal_dob', category: 'PERSONAL', label: 'Date of birth' },
-      { id: 'personal_phone', category: 'PERSONAL', label: 'Phone number' },
-      { id: 'personal_email', category: 'PERSONAL', label: 'Email' },
-      { id: 'personal_address', category: 'PERSONAL', label: 'Address' }
     ]
     
     // Map existing fields and add defaults if missing
@@ -835,6 +870,30 @@ export async function getVaultDashboardData(): Promise<VaultDashboardData> {
         hasValue,
         updatedAt,
         documentId: findDocId(fId)
+      })
+    }
+
+    // Process Bank Accounts
+    const bankAccounts: BankAccountDTO[] = []
+    for (const b of bankAccountsConfig) {
+      let rawAcc = ''
+      try {
+        rawAcc = decryptTitle(b.encryptedAccountNumber)
+      } catch {
+        rawAcc = ''
+      }
+      bankAccounts.push({
+        id: b.id,
+        bankName: b.bankName,
+        accountHolder: b.accountHolder,
+        accountNumber: rawAcc,
+        maskedAccountNumber: maskValue('account_number', rawAcc),
+        ifscCode: b.ifscCode,
+        branch: b.branch,
+        accountType: b.accountType,
+        upiId: b.upiId,
+        documentId: b.documentId || findDocId('banking_account_number'),
+        updatedAt: b.updatedAt,
       })
     }
     
@@ -878,6 +937,7 @@ export async function getVaultDashboardData(): Promise<VaultDashboardData> {
     return {
       success: true,
       quickInfoFields,
+      bankAccounts,
       quickActions,
       pinnedDocuments,
       signatureDocId,
@@ -888,12 +948,125 @@ export async function getVaultDashboardData(): Promise<VaultDashboardData> {
     return {
       success: false,
       quickInfoFields: [],
+      bankAccounts: [],
       quickActions: [],
       pinnedDocuments: [],
       signatureDocId: null,
       photoDocId: null,
       error: error instanceof Error ? error.message : 'Failed to fetch dashboard data'
     }
+  }
+}
+
+export async function saveVaultBankAccount(
+  bankData: {
+    id?: string
+    bankName: string
+    accountHolder: string
+    accountNumber: string
+    ifscCode: string
+    branch?: string
+    accountType?: string
+    upiId?: string
+    documentId?: string | null
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await requireAuth()
+    
+    const setting = await db.userSetting.findUnique({
+      where: { userId_module: { userId: user.id, module: VAULT_SETTINGS_MODULE } }
+    })
+    
+    const config = setting ? (setting.config as unknown as VaultSettingsConfig) : { fields: {}, bankAccounts: [], quickActions: [], pinnedDocuments: [] }
+    const bankAccounts = config.bankAccounts || []
+    
+    const id = bankData.id || `bank_${Date.now()}`
+    const encryptedAccountNumber = encryptTitle(bankData.accountNumber.trim())
+    
+    const updatedBank: BankAccountConfig = {
+      id,
+      bankName: bankData.bankName.trim(),
+      accountHolder: bankData.accountHolder.trim(),
+      encryptedAccountNumber,
+      ifscCode: bankData.ifscCode.trim().toUpperCase(),
+      branch: bankData.branch?.trim() || undefined,
+      accountType: bankData.accountType?.trim() || undefined,
+      upiId: bankData.upiId?.trim() || undefined,
+      documentId: bankData.documentId || null,
+      updatedAt: new Date().toISOString()
+    }
+    
+    const existingIndex = bankAccounts.findIndex(b => b.id === id)
+    if (existingIndex >= 0) {
+      bankAccounts[existingIndex] = updatedBank
+    } else {
+      bankAccounts.push(updatedBank)
+    }
+    
+    config.bankAccounts = bankAccounts
+    
+    await db.userSetting.upsert({
+      where: { userId_module: { userId: user.id, module: VAULT_SETTINGS_MODULE } },
+      create: { userId: user.id, module: VAULT_SETTINGS_MODULE, config },
+      update: { config }
+    })
+    
+    await db.auditLog.create({
+      data: {
+        userId: user.id,
+        entityType: 'VAULT_BANK_ACCOUNT',
+        entityId: id,
+        action: existingIndex >= 0 ? 'VAULT_BANK_UPDATED' : 'VAULT_BANK_CREATED',
+        performedBy: user.username
+      }
+    })
+    
+    revalidatePath('/')
+    return { success: true }
+  } catch (error) {
+    console.error('saveVaultBankAccount error:', error)
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to save bank account' }
+  }
+}
+
+export async function deleteVaultBankAccount(
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await requireAuth()
+    
+    const setting = await db.userSetting.findUnique({
+      where: { userId_module: { userId: user.id, module: VAULT_SETTINGS_MODULE } }
+    })
+    
+    if (!setting) throw new Error('Settings not found')
+    const config = (setting.config as unknown as VaultSettingsConfig) || {}
+    let bankAccounts = config.bankAccounts || []
+    
+    bankAccounts = bankAccounts.filter(b => b.id !== id)
+    config.bankAccounts = bankAccounts
+    
+    await db.userSetting.update({
+      where: { userId_module: { userId: user.id, module: VAULT_SETTINGS_MODULE } },
+      data: { config }
+    })
+    
+    await db.auditLog.create({
+      data: {
+        userId: user.id,
+        entityType: 'VAULT_BANK_ACCOUNT',
+        entityId: id,
+        action: 'VAULT_BANK_DELETED',
+        performedBy: user.username
+      }
+    })
+    
+    revalidatePath('/')
+    return { success: true }
+  } catch (error) {
+    console.error('deleteVaultBankAccount error:', error)
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to delete bank account' }
   }
 }
 

@@ -252,7 +252,7 @@ export function maskValue(id: string, value: string): string {
     }
     return '••••••••'
   }
-  if (id.includes('phone') || id.includes('email') || id.includes('dob') || id.includes('address') || id.includes('holder_name') || id.includes('full_name')) {
+  if (id.includes('phone') || id.includes('email') || id.includes('dob') || id.includes('holder_name') || id.includes('full_name')) {
     if (trimmed.includes('@')) {
       const [local, domain] = trimmed.split('@')
       if (local.length > 2) {
@@ -264,6 +264,13 @@ export function maskValue(id: string, value: string): string {
       return `••••${trimmed.slice(-4)}`
     }
     return '••••'
+  }
+  if (id.includes('address')) {
+    // Address is helpful to preview first and last words
+    if (trimmed.length > 12) {
+      return `${trimmed.slice(0, 8)}•••• ${trimmed.slice(-6)}`
+    }
+    return trimmed
   }
   if (trimmed.length >= 4) {
     return `••••••••${trimmed.slice(-4)}`
