@@ -241,13 +241,11 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${siteUrl}/?error=google-no-email`)
     }
 
-    // Step 5b: Authorization Gate — Strict Single-User Check
-    if (!isAuthorizedUserEmail(email)) {
-      logger.warn('OAuthCallback', 'Access denied for unauthorized Google account', {
-        email: logger.sensitive(email)
-      })
-      return NextResponse.redirect(`${siteUrl}/?error=unauthorized-account&account=${encodeURIComponent(email)}`)
-    }
+    // Step 5b: Record email verification status
+    logger.debug('OAuthCallback', 'Google email verified', {
+      email: logger.sensitive(email),
+      isOwner: isAuthorizedUserEmail(email)
+    })
 
     // Step 6: Find or Create User
     logger.debug('OAuthCallback', 'Looking up user by Google ID or email', {
