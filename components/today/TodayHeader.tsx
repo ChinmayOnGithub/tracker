@@ -4,6 +4,8 @@ import React from 'react'
 import { ChevronLeft, ChevronRight, RefreshCw, Plus } from 'lucide-react'
 import { Button, PageHeader, IconButton } from '@/design-system'
 
+import { CompactTodayPills } from './CompactTodayPills'
+
 interface TodayHeaderProps {
   todayStr: string
   todayLongDate: string
@@ -71,12 +73,20 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
     </>
   )
 
+  const subtitleNode = (
+    <div className="flex items-center gap-3 flex-wrap">
+      <span>{todayLongDate}</span>
+      {isCurrentToday && <CompactTodayPills />}
+    </div>
+  )
+
   return (
     <PageHeader
       title={isCurrentToday ? 'Today' : 'Timeline'}
-      subtitle={todayLongDate}
+      subtitle={subtitleNode}
       prefix={prefix}
       actions={actions}
     />
   )
 }
+

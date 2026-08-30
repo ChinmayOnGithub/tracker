@@ -5,7 +5,7 @@ import { ExternalLink, MoreVertical, Clock, Edit2 } from 'lucide-react'
 import { TimelineItem, ActivityLog, AnalyzedTemplate, ActivityTemplate, ActivityType, Priority } from '@/types'
 import { Button, Input, Skeleton, EmptyState, IconButton, Section, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, ConfirmDialog } from '@/design-system'
 import { getTemplateColorClasses } from '@/lib/colors'
-import { formatMoney } from '@/lib/formatMoney'
+import { formatMoney, formatMoneyRich } from '@/lib/formatMoney'
 import { SortableTaskList, DragHandle } from './SortableTaskList'
 import { TaskActivityRow } from '@/components/shared/TaskActivityRow'
 import { TaskCreateDialog, TaskFormData } from '@/components/shared/TaskCreateDialog'
@@ -156,7 +156,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
 
   // Money formatting
   const effectiveAmount = occurrence.amount ?? template?.amount ?? null
-  const formattedAmount = formatMoney(effectiveAmount)
+  const formattedAmount = formatMoneyRich(effectiveAmount)
 
   // Accent strip — semantic color by status, then template color
   const colorBgMap: Record<string, string> = {
@@ -187,8 +187,11 @@ export const TaskRow: React.FC<TaskRowProps> = ({
     </span>
   )
   if (formattedAmount) metaParts.push(
-    <span key="amount" className="font-mono text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded-sm border border-emerald-500/20">
-      {formattedAmount}
+    <span key="amount" className="font-mono text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded-sm border border-emerald-500/20 inline-flex items-center gap-1">
+      <span>{formattedAmount.formatted}</span>
+      {formattedAmount.derived && (
+        <span className="text-[8.5px] opacity-75 font-normal">({formattedAmount.derived})</span>
+      )}
     </span>
   )
   if (streak > 1 && !isDone && !isCanceled) metaParts.push(

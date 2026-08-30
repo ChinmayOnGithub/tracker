@@ -4,7 +4,7 @@ interface PageHeaderProps {
   /** The page title rendered as an h1 */
   title: string
   /** Optional subtitle / contextual meta below the title */
-  subtitle?: string
+  subtitle?: React.ReactNode
   /** Optional slot for right-side action buttons */
   actions?: React.ReactNode
   /** Optional slot for left-side prefix (e.g. back button or nav arrows) */
