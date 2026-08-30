@@ -22,7 +22,16 @@ export const SettingsPanel: React.FC = () => {
 
   // Profile Action Loading
   const [profileLoading, setProfileLoading] = useState(true)
-  const [userProfile, setUserProfile] = useState<{ username: string; email: string | null; hasPasscode: boolean } | null>(null)
+  const [userProfile, setUserProfile] = useState<{
+    id: string
+    username: string
+    email: string | null
+    authProvider: 'Google' | 'Passcode'
+    isOwner: boolean
+    accessLevel: 'Private Owner' | 'Shared Tools'
+    hasPasscode: boolean
+    createdAt: string
+  } | null>(null)
   const [pinInput, setPinInput] = useState('')
   const [passcodeError, setPasscodeError] = useState<string | null>(null)
   const [passcodeSuccess, setPasscodeSuccess] = useState<string | null>(null)
@@ -357,71 +366,123 @@ export const SettingsPanel: React.FC = () => {
         {/* Configuration Panel Content */}
         <div className="space-y-6">
           {activeSection === 'profile' && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <User className="w-4.5 h-4.5 text-[var(--color-primary)]" />
-                  <span className="text-xs font-black text-[var(--color-text-main)] uppercase tracking-wider">Profile Customization</span>
-                </div>
-              </CardHeader>
-              <CardBody className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input 
-                    label="Display Name" 
-                    value={displayName} 
-                    onChange={e => { setDisplayName(e.target.value); saveToLocal('personal_display_name', e.target.value); }} 
-                    placeholder="e.g. Chinmay" 
-                  />
-                  <Input 
-                    label="Birthday" 
-                    type="date" 
-                    value={birthday} 
-                    onChange={e => { setBirthday(e.target.value); saveToLocal('personal_birthday', e.target.value); }} 
-                  />
-                  <Select 
-                    label="Timezone" 
-                    value={timezone} 
-                    onChange={e => { setTimezone(e.target.value); saveToLocal('personal_timezone', e.target.value); }}
-                    options={[
-                      { value: 'Asia/Kolkata', label: 'Asia/Kolkata (IST)' },
-                      { value: 'UTC', label: 'UTC' },
-                      { value: 'America/New_York', label: 'America/New_York (EST/EDT)' },
-                      { value: 'Europe/London', label: 'Europe/London (GMT/BST)' },
-                    ]}
-                  />
-                  <Select 
-                    label="Country" 
-                    value={country} 
-                    onChange={e => { setCountry(e.target.value); saveToLocal('personal_country', e.target.value); }}
-                    options={[
-                      { value: 'India', label: 'India' },
-                      { value: 'United States', label: 'United States' },
-                      { value: 'United Kingdom', label: 'United Kingdom' },
-                      { value: 'Canada', label: 'Canada' },
-                    ]}
-                  />
-                  <Select 
-                    label="Date Format" 
-                    value={dateFormat} 
-                    onChange={e => { setDateFormat(e.target.value); saveToLocal('personal_date_format', e.target.value); }}
-                    options={[
-                      { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD' },
-                      { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY' },
-                      { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY' },
-                    ]}
-                  />
-                  <Select 
-                    label="Time Format" 
-                    value={timeFormat} 
-                    onChange={e => { setTimeFormat(e.target.value); saveToLocal('personal_time_format', e.target.value); }}
-                    options={[
-                      { value: '12h', label: '12-Hour (am/pm)' },
-                      { value: '24h', label: '24-Hour (Military)' },
-                    ]}
-                  />
-                </div>
-              </CardBody>
-            </Card>
+            <div className="space-y-6">
+              {/* Account Identity Summary Card */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4.5 h-4.5 text-[var(--color-primary)]" />
+                    <span className="text-xs font-black text-[var(--color-text-main)] uppercase tracking-wider">Account Identity</span>
+                  </div>
+                </CardHeader>
+                <CardBody>
+                  {profileLoading ? (
+                    <div className="space-y-3 py-2">
+                      <Skeleton variant="text" className="h-4 w-3/4" />
+                      <Skeleton variant="text" className="h-4 w-1/2" />
+                    </div>
+                  ) : userProfile ? (
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-850 rounded-xl">
+                      <div className="flex items-center gap-3.5">
+                        {/* Dynamic Avatar (initials with accent gradient) */}
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-indigo-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm shrink-0">
+                          {(userProfile.username || userProfile.email || 'U').charAt(0).toUpperCase()}
+                        </div>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-[var(--color-text-main)]">
+                              {displayName || userProfile.username}
+                            </span>
+                            <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full ${
+                              userProfile.isOwner 
+                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20' 
+                                : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                            }`}>
+                              {userProfile.accessLevel}
+                            </span>
+                          </div>
+                          <div className="text-xs text-[var(--color-text-muted)] font-mono">
+                            {userProfile.email || `@${userProfile.username}`}
+                          </div>
+                          <div className="text-[11px] text-[var(--color-text-muted)] flex items-center gap-2 pt-0.5">
+                            <span>Auth: <strong className="text-[var(--color-text-main)]">{userProfile.authProvider}</strong></span>
+                            <span>·</span>
+                            <span>Calendar: <strong className={connected ? 'text-emerald-500' : 'text-[var(--color-text-muted)]'}>{connected ? 'Connected' : 'Not Connected'}</strong></span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </CardBody>
+              </Card>
+
+              {/* Personal Preferences Card */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <User className="w-4.5 h-4.5 text-[var(--color-primary)]" />
+                    <span className="text-xs font-black text-[var(--color-text-main)] uppercase tracking-wider">Preferences & Locale</span>
+                  </div>
+                </CardHeader>
+                <CardBody className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <Input 
+                      label="Display Name" 
+                      value={displayName} 
+                      onChange={e => { setDisplayName(e.target.value); saveToLocal('personal_display_name', e.target.value); }} 
+                      placeholder="e.g. Chinmay" 
+                    />
+                    <Input 
+                      label="Birthday" 
+                      type="date" 
+                      value={birthday} 
+                      onChange={e => { setBirthday(e.target.value); saveToLocal('personal_birthday', e.target.value); }} 
+                    />
+                    <Select 
+                      label="Timezone" 
+                      value={timezone} 
+                      onChange={e => { setTimezone(e.target.value); saveToLocal('personal_timezone', e.target.value); }}
+                      options={[
+                        { value: 'Asia/Kolkata', label: 'Asia/Kolkata (IST)' },
+                        { value: 'UTC', label: 'UTC' },
+                        { value: 'America/New_York', label: 'America/New_York (EST/EDT)' },
+                        { value: 'Europe/London', label: 'Europe/London (GMT/BST)' },
+                      ]}
+                    />
+                    <Select 
+                      label="Country" 
+                      value={country} 
+                      onChange={e => { setCountry(e.target.value); saveToLocal('personal_country', e.target.value); }}
+                      options={[
+                        { value: 'India', label: 'India' },
+                        { value: 'United States', label: 'United States' },
+                        { value: 'United Kingdom', label: 'United Kingdom' },
+                        { value: 'Canada', label: 'Canada' },
+                      ]}
+                    />
+                    <Select 
+                      label="Date Format" 
+                      value={dateFormat} 
+                      onChange={e => { setDateFormat(e.target.value); saveToLocal('personal_date_format', e.target.value); }}
+                      options={[
+                        { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD' },
+                        { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY' },
+                        { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY' },
+                      ]}
+                    />
+                    <Select 
+                      label="Time Format" 
+                      value={timeFormat} 
+                      onChange={e => { setTimeFormat(e.target.value); saveToLocal('personal_time_format', e.target.value); }}
+                      options={[
+                        { value: '12h', label: '12-Hour (am/pm)' },
+                        { value: '24h', label: '24-Hour (Military)' },
+                      ]}
+                    />
+                  </div>
+                </CardBody>
+              </Card>
+            </div>
           )}
 
           {activeSection === 'appearance' && (

@@ -5,6 +5,7 @@ import crypto from 'crypto'
 import { cookies } from 'next/headers'
 import { signSession, verifySession } from '@/lib/session'
 import { DefaultActivitiesService } from '@/lib/services/DefaultActivitiesService'
+import { isAuthorizedUserEmail } from '@/lib/constants'
 
 const SALT = process.env.AUTH_SALT || 'personal-dashboard-ops-salt-108-prayer-beads'
 
@@ -184,29 +185,31 @@ export async function isPinSetup(): Promise<boolean> {
 }
 
 /**
- * Gets the current user's profile details.
+ * Gets the current user's profile details and access capabilities.
  */
-export async function getUserProfileAction(): Promise<{ success: boolean; user?: { id: string; username: string; email: string | null; hasPasscode: boolean } }> {
+export async function getUserProfileAction(): Promise<{
+  success: boolean
+  user?: {
+    id: string
+    username: string
+    email: string | null
+    authProvider: 'Google' | 'Passcode'
+    isOwner: boolean
+    accessLevel: 'Private Owner' | 'Shared Tools'
+    hasPasscode: boolean
+    createdAt: string
+  }
+}> {
   try {
     const loggedUser = await getLoggedUser()
     if (!loggedUser) return { success: false }
     const user = await db.user.findUnique({
       where: { id: loggedUser.id },
-      select: { id: true, username: true, email: true, passwordHash: true }
+      select: { id: true, username: true, email: true, googleId: true, passwordHash: true, createdAt: true }
     })
     if (!user) return { success: false }
 
-    // Auto-align username for chinmaydpatil09@gmail.com as requested
-    if (user.email === 'chinmaydpatil09@gmail.com' && user.username !== 'chinmaydpatil09') {
-      const existing = await db.user.findUnique({ where: { username: 'chinmaydpatil09' } })
-      if (!existing) {
-        await db.user.update({
-          where: { id: user.id },
-          data: { username: 'chinmaydpatil09' }
-        })
-        user.username = 'chinmaydpatil09'
-      }
-    }
+    const isOwner = user.username === 'admin' || isAuthorizedUserEmail(user.email || user.username)
 
     return {
       success: true,
@@ -214,7 +217,11 @@ export async function getUserProfileAction(): Promise<{ success: boolean; user?:
         id: user.id,
         username: user.username,
         email: user.email,
-        hasPasscode: !!user.passwordHash
+        authProvider: user.googleId ? 'Google' : 'Passcode',
+        isOwner,
+        accessLevel: isOwner ? 'Private Owner' : 'Shared Tools',
+        hasPasscode: !!user.passwordHash,
+        createdAt: user.createdAt.toISOString()
       }
     }
   } catch (error) {
