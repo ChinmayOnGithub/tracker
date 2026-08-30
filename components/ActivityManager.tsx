@@ -23,6 +23,7 @@ interface ActivityManagerProps {
   analyzedTemplates: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]
   onAddTemplate: () => void
   onEditTemplate: (template: ActivityTemplate) => void
+  onReorderTemplatesAction?: (orderedIds: string[]) => Promise<void>
 }
 
 const RECURRENCE_FILTERS = [
@@ -38,9 +39,11 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
   analyzedTemplates,
   onAddTemplate,
   onEditTemplate,
+  onReorderTemplatesAction,
 }) => {
   const [isProcessing, setIsProcessing] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
+  const [manualOrderIds, setManualOrderIds] = useState<string[] | null>(null)
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('')
@@ -69,16 +72,32 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
       )
     }
 
-    // Sort by manual sortOrder
-    return [...list].sort((a, b) => a.template.sortOrder - b.template.sortOrder)
-  }, [showArchived, activeTemplates, archivedTemplates, activeRecurrence, searchQuery])
+    // Sort by optimistic manual drag-and-drop order first, then template.sortOrder
+    return [...list].sort((a, b) => {
+      if (manualOrderIds) {
+        const ia = manualOrderIds.indexOf(a.template.id)
+        const ib = manualOrderIds.indexOf(b.template.id)
+        if (ia !== -1 && ib !== -1) return ia - ib
+        if (ia !== -1) return -1
+        if (ib !== -1) return 1
+      }
+      return a.template.sortOrder - b.template.sortOrder
+    })
+  }, [showArchived, activeTemplates, archivedTemplates, activeRecurrence, searchQuery, manualOrderIds])
 
-  // Drag and drop reordering handler
+  // Drag and drop reordering handler with instant optimistic response
   const handleReorder = async (reordered: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]) => {
     const ids = reordered.map(item => item.template.id)
+    setManualOrderIds(ids)
     setIsProcessing('reorder')
     try {
-      await reorderActivityTemplates(ids)
+      if (onReorderTemplatesAction) {
+        await onReorderTemplatesAction(ids)
+      } else {
+        await reorderActivityTemplates(ids)
+      }
+    } catch (err) {
+      console.error('Failed to reorder templates:', err)
     } finally {
       setIsProcessing(null)
     }

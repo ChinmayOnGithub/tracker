@@ -1,11 +1,12 @@
 "use client"
 
-import React, { useState, useContext } from 'react'
+import React, { useState, useContext, useMemo } from 'react'
 import { CalendarDataContext } from './DashboardLayout'
 import { ActivityManager } from './ActivityManager'
 import { DayLogsModal } from './DayLogsModal'
 import { ActivityTemplate, ActivityLog, Tag, RecurrenceAnalysis, Note } from '@/types'
-import { getTodayDateStr } from '@/lib/recurrence'
+import { getTodayDateStr, analyzeRecurrence } from '@/lib/recurrence'
+import { useStore } from '@/lib/store/store'
 
 interface ActivitiesWrapperProps {
   analyzedTemplates: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]
@@ -17,14 +18,15 @@ interface ActivitiesWrapperProps {
 }
 
 export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
-  analyzedTemplates,
+  analyzedTemplates: initialAnalyzedTemplates,
   recentLogs: _recentLogs,
   tags: _tags,
-  templates,
-  logs,
-  notes,
+  templates: initialTemplates,
+  logs: initialLogs,
+  notes: initialNotes,
 }) => {
   const context = useContext(CalendarDataContext)
+  const { state, reorderActivityTemplatesAction } = useStore()
 
   if (!context) {
     throw new Error('ActivitiesWrapper must be rendered inside a DashboardLayout')
@@ -37,9 +39,34 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
   const [isDayLogsOpen, setIsDayLogsOpen] = useState(false)
   const [dayLogsModalTab] = useState<'activities' | 'notes'>('activities')
 
+  // Use global reactive store if populated, otherwise fallback to server initial props
+  const effectiveTemplates = state.templates.length > 0 ? state.templates : initialTemplates
+  const effectiveLogs = state.logs.length > 0 ? state.logs : initialLogs
+  const effectiveNotes = state.journalEntries.length > 0 
+    ? state.journalEntries.map(j => ({
+        id: j.id,
+        date: typeof j.journalDate === 'string' ? j.journalDate.split('T')[0] : j.journalDate.toISOString().split('T')[0],
+        title: null,
+        content: j.content,
+        userId: j.userId || '',
+        createdAt: typeof j.createdAt === 'string' ? new Date(j.createdAt) : j.createdAt,
+        updatedAt: typeof j.updatedAt === 'string' ? new Date(j.updatedAt) : j.updatedAt,
+        deletedAt: null
+      }))
+    : initialNotes
+
+  const analyzedTemplates = useMemo(() => {
+    const todayStr = getTodayDateStr()
+    return effectiveTemplates.map(template => {
+      const templateLogs = effectiveLogs.filter(log => log.activityId === template.id)
+      const analysis = analyzeRecurrence(template, templateLogs, todayStr)
+      return { template, analysis }
+    })
+  }, [effectiveTemplates, effectiveLogs])
+
   // Filter logs and note for selected date
-  const selectedDayLogs = logs.filter(log => log.date === selectedDateStr)
-  const selectedDayNote = notes.find(note => note.date === selectedDateStr) || null
+  const selectedDayLogs = effectiveLogs.filter(log => log.date === selectedDateStr)
+  const selectedDayNote = effectiveNotes.find(note => note.date === selectedDateStr) || null
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -52,9 +79,10 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
       
       <div className="w-full">
         <ActivityManager
-          analyzedTemplates={analyzedTemplates}
+          analyzedTemplates={analyzedTemplates.length > 0 ? analyzedTemplates : initialAnalyzedTemplates}
           onAddTemplate={onOpenCreateActivity}
           onEditTemplate={onEditTemplate}
+          onReorderTemplatesAction={reorderActivityTemplatesAction}
         />
       </div>
 
@@ -64,11 +92,11 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
           isOpen={isDayLogsOpen}
           onClose={() => setIsDayLogsOpen(false)}
           dateStr={selectedDateStr}
-          templates={templates.filter(t => t.isActive)}
+          templates={effectiveTemplates.filter(t => t.isActive)}
           logs={selectedDayLogs}
           note={selectedDayNote}
           initialTab={dayLogsModalTab}
-          allLogs={logs}
+          allLogs={effectiveLogs}
         />
       )}
     </div>
