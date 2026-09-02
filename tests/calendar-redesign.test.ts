@@ -1,8 +1,13 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, mock } from 'bun:test'
 import { OccurrenceService } from '@/modules/calendar/services/OccurrenceService'
 import { CalendarService } from '@/modules/calendar/services/CalendarService'
 import { CalendarRepository } from '@/modules/calendar/repositories/CalendarRepository'
 import { CalendarEvent, CalendarEventType } from '@prisma/client'
+import { db } from '@/lib/db'
+
+// Prevent DB network query during unit tests
+db.googleCredential.count = mock(() => Promise.resolve(0)) as any
 
 describe('Calendar Module Redesign (Phase 1)', () => {
   describe('OccurrenceService', () => {

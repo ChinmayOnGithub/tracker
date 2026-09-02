@@ -15,6 +15,7 @@ describe("GoogleCalendarService", () => {
   const originalDisconnect = GoogleCredentialService.disconnect
   const originalSaveCredentials = GoogleCredentialService.saveCredentials
   const originalDbUpdate = db.googleCredential.update
+  const originalDbFindUnique = db.googleCredential.findUnique
 
   beforeEach(() => {
     // Clear caches before each test
@@ -22,6 +23,7 @@ describe("GoogleCalendarService", () => {
     
     // Default db mock
     db.googleCredential.update = (async () => ({})) as any
+    db.googleCredential.findUnique = (async () => ({ calendarId: 'primary' })) as any
   })
 
   afterEach(() => {
@@ -31,6 +33,7 @@ describe("GoogleCalendarService", () => {
     GoogleCredentialService.disconnect = originalDisconnect
     GoogleCredentialService.saveCredentials = originalSaveCredentials
     db.googleCredential.update = originalDbUpdate
+    db.googleCredential.findUnique = originalDbFindUnique
   })
 
   test("should refresh access token successfully and cache it", async () => {
