@@ -17,6 +17,7 @@ import {
   Link2
 } from 'lucide-react'
 import { Button } from '@/design-system'
+import { isAuthorizedUserEmail } from '@/lib/constants'
 
 export interface NavigationItem {
   id: string
@@ -88,7 +89,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     return () => window.removeEventListener('personal_settings_changed', handleSettingsUpdate)
   }, [])
 
-  const isOwner = user?.username === 'admin' || user?.username === 'chinmaydpatil09' || (user as { isOwner?: boolean })?.isOwner === true
+  const isOwner = user?.username === 'admin' || (user as { isOwner?: boolean })?.isOwner === true || isAuthorizedUserEmail(user?.username)
 
   // Fetch guest permissions for non-owner accounts
   const [guestPerms, setGuestPerms] = React.useState<Record<string, boolean>>({

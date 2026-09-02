@@ -29,9 +29,21 @@ export async function getLoggedUser(): Promise<{ id: string; username: string; e
     const session = verifySession(token)
     if (!session) return null
     
-    // Check if user is owner
-    const isOwner = session.username === 'admin' || isAuthorizedUserEmail(session.username)
-    return { id: session.userId, username: session.username, isOwner }
+    // Check if session username directly matches legacy admin or email format
+    if (session.username === 'admin' || isAuthorizedUserEmail(session.username)) {
+      return { id: session.userId, username: session.username, email: session.username, isOwner: true }
+    }
+
+    // Look up user in database to obtain associated email and verify owner status
+    const user = await db.user.findUnique({
+      where: { id: session.userId },
+      select: { id: true, username: true, email: true }
+    })
+
+    if (!user) return null
+
+    const isOwner = user.username === 'admin' || isAuthorizedUserEmail(user.email || user.username)
+    return { id: user.id, username: user.username, email: user.email, isOwner }
   } catch (error) {
     console.error('Failed to get logged user:', error)
     return null

@@ -2,6 +2,7 @@
 
 import { db } from '@/lib/db'
 import { getLoggedUser } from '@/app/actions/auth'
+import { canAccess } from '@/lib/auth-guards'
 import { Prisma } from '@prisma/client'
 
 export async function getGuestPermissionsAction(): Promise<{
@@ -50,8 +51,7 @@ export async function saveGuestPermissionsAction(permissions: Record<string, boo
       return { success: false, error: 'Unauthorized' }
     }
 
-    const isOwner = loggedUser.username === 'admin' || loggedUser.username === 'chinmaydpatil09'
-    if (!isOwner) {
+    if (!canAccess(loggedUser, 'settings.manage')) {
       return { success: false, error: 'Forbidden: Owner access required' }
     }
 
