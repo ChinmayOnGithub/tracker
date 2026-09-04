@@ -73,16 +73,29 @@ const ActivityItemRow: React.FC<ActivityItemRowProps> = ({
 }) => {
   const { template, analysis } = item
 
+  // Left accent strip map matching Today's TaskActivityRow
+  const colorBgMap: Record<string, string> = {
+    red: 'bg-red-500', orange: 'bg-orange-500', amber: 'bg-amber-500',
+    green: 'bg-green-500', blue: 'bg-blue-500', purple: 'bg-purple-500',
+    pink: 'bg-pink-500', zinc: 'bg-zinc-400',
+  }
+  const accentStripColor = isTemplateActive 
+    ? (colorBgMap[template.color || 'zinc'] || 'bg-zinc-400')
+    : 'bg-zinc-300 dark:bg-zinc-700'
+
   return (
     <div
-      className={`flex items-center justify-between gap-3 p-3 border rounded-xl transition-all duration-[var(--motion-duration-fast)] group hover:shadow-2xs select-none ${
-        isTemplateActive ? `${colorClasses.bg} ${colorClasses.border}` : 'bg-transparent border-slate-200 dark:border-zinc-800 opacity-40'
+      className={`relative flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-[var(--color-border)]/60 bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)]/20 transition-all duration-[var(--motion-duration-fast)] group select-none ${
+        !isTemplateActive ? 'opacity-40' : 'shadow-2xs'
       } ${isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''} ${
         isDragOverlay ? 'shadow-lg border-[var(--color-primary)] scale-[1.01] bg-[var(--color-bg-surface)] cursor-grabbing z-50' : ''
       }`}
     >
+      {/* Left semantic indicator strip */}
+      <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${accentStripColor}`} />
+
       {/* Left elements: drag handle, checkbox, icon, details */}
-      <div className="flex items-center gap-2.5 min-w-0">
+      <div className="flex items-center gap-2.5 min-w-0 pl-1">
         {/* Drag Handle with attached listeners */}
         {isTemplateActive && !showArchived && (
           <DragHandle
@@ -100,25 +113,23 @@ const ActivityItemRow: React.FC<ActivityItemRowProps> = ({
           className="w-3.5 h-3.5 accent-[var(--color-primary)] bg-[var(--color-bg-surface)] border-[var(--color-border)] dark:bg-zinc-800 dark:border-zinc-700 rounded-sm cursor-pointer shrink-0"
         />
 
-        {/* Colorful visual Icon wrapper */}
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center border shrink-0 ${
-          isTemplateActive ? `${colorClasses.bg} ${colorClasses.border}` : 'bg-slate-100 dark:bg-zinc-800 border-slate-200 dark:border-zinc-700'
-        }`}>
-          <Icon name={template.icon} className={colorClasses.text} size={15} />
+        {/* Clean visual Icon wrapper matching TaskActivityRow */}
+        <div className="shrink-0 w-6 h-6 rounded-md border border-[var(--color-border)]/60 bg-[var(--color-bg-subtle)]/40 flex items-center justify-center text-xs">
+          <Icon name={template.icon} className={colorClasses.text} size={13} />
         </div>
 
         <div className="min-w-0">
-          <span className="font-semibold text-[var(--color-text-main)] text-xs block truncate">
+          <span className="font-semibold text-[var(--color-text-main)] text-xs block truncate leading-snug">
             {template.name}
           </span>
           <span className="text-[9px] text-[var(--color-text-muted)] font-medium capitalize flex items-center gap-1.5 mt-0.5">
-            <span className="bg-[var(--color-accent)] px-1.5 py-0.5 rounded text-[8px] font-bold">
+            <span className="bg-[var(--color-accent)] px-1.5 py-0.2 rounded text-[8px] font-bold">
               {template.recurrenceType}
             </span>
             {template.amount !== null && (
               <>
                 <span>•</span>
-                <span className="text-green-600 dark:text-green-400 font-bold font-mono">₹{template.amount.toFixed(2)}</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold font-mono">₹{template.amount.toFixed(2)}</span>
               </>
             )}
             {analysis.daysSinceLast !== null && (

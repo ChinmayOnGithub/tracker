@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/design-system'
 import { isAuthorizedUserEmail } from '@/lib/constants'
+import { QuickAppearancePopover } from '@/components/QuickAppearancePopover'
 
 export interface NavigationItem {
   id: string
@@ -232,15 +233,19 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         <div className="p-4 border-t border-[var(--color-border)] flex flex-col gap-2">
           {user && (
             <div className="flex items-center justify-between px-2">
-              <span className="text-[10px] font-bold text-[var(--color-text-muted)] truncate max-w-[120px]">
+              <span className="text-[10px] font-bold text-[var(--color-text-muted)] truncate max-w-[100px]">
                 {user.username}
               </span>
-              <button
-                onClick={onToggleTheme}
-                className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-[var(--color-accent)] hover:text-[var(--color-text-main)] transition-colors duration-150"
-              >
-                {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-              </button>
+              <div className="flex items-center gap-1">
+                <QuickAppearancePopover />
+                <button
+                  onClick={onToggleTheme}
+                  title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+                  className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-[var(--color-accent)] hover:text-[var(--color-text-main)] transition-colors duration-150 cursor-pointer"
+                >
+                  {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                </button>
+              </div>
             </div>
           )}
           <button
@@ -367,12 +372,15 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               {user && (
                 <div className="flex items-center justify-between px-2 text-xs font-semibold text-[var(--color-text-muted)]">
                   <span>Logged in as: {user.username}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={onToggleTheme}
-                    icon={theme === 'dark' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-blue-500" />}
-                  />
+                  <div className="flex items-center gap-1.5">
+                    <QuickAppearancePopover />
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={onToggleTheme}
+                      icon={theme === 'dark' ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-blue-500" />}
+                    />
+                  </div>
                 </div>
               )}
               <Button

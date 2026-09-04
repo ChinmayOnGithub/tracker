@@ -39,6 +39,15 @@ describe('Centralized Capability and Authorization Guard (canAccess)', () => {
     expect(canAccess(guestUser, 'settings.manage')).toBe(false)
   })
 
+  it('should deny unknown or unconfigured capabilities by default', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(canAccess(ownerUser, 'unknown.module.doSomething' as any)).toBe(false)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(canAccess(guestUser, 'future.shared.tool' as any)).toBe(false)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(canAccess(legacyAdminUser, 'nonexistent.capability' as any)).toBe(false)
+  })
+
   it('should permit authenticated guest/shared accounts to access future shared tools', () => {
     expect(canAccess(guestUser, 'room-turn.read')).toBe(true)
     expect(canAccess(guestUser, 'room-turn.write')).toBe(true)

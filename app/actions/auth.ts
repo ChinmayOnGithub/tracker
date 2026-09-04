@@ -212,6 +212,7 @@ export async function getUserProfileAction(): Promise<{
     isOwner: boolean
     accessLevel: 'Private Owner' | 'Shared Tools'
     hasPasscode: boolean
+    avatarUrl?: string | null
     createdAt: string
   }
 }> {
@@ -223,6 +224,12 @@ export async function getUserProfileAction(): Promise<{
       select: { id: true, username: true, email: true, googleId: true, passwordHash: true, createdAt: true }
     })
     if (!user) return { success: false }
+
+    const profileSetting = await db.userSetting.findUnique({
+      where: { userId_module: { userId: user.id, module: 'PROFILE' } }
+    })
+    const profileConfig = (profileSetting?.config as Record<string, unknown>) || {}
+    const avatarUrl = (profileConfig.avatarUrl || profileConfig.picture) as string | undefined | null
 
     const isOwner = user.username === 'admin' || isAuthorizedUserEmail(user.email || user.username)
 
@@ -236,6 +243,7 @@ export async function getUserProfileAction(): Promise<{
         isOwner,
         accessLevel: isOwner ? 'Private Owner' : 'Shared Tools',
         hasPasscode: !!user.passwordHash,
+        avatarUrl: avatarUrl || null,
         createdAt: user.createdAt.toISOString()
       }
     }

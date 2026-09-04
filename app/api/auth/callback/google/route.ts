@@ -335,6 +335,31 @@ export async function GET(request: Request) {
       }
     }
 
+    // Step 6b: Save Google Profile Avatar / Picture if available
+    const picture = payload.picture as string | undefined
+    if (picture) {
+      try {
+        const existingProfileSetting = await db.userSetting.findUnique({
+          where: { userId_module: { userId: user.id, module: 'PROFILE' } }
+        })
+        const currentConfig = (existingProfileSetting?.config as Record<string, unknown>) || {}
+        await db.userSetting.upsert({
+          where: { userId_module: { userId: user.id, module: 'PROFILE' } },
+          create: {
+            userId: user.id,
+            module: 'PROFILE',
+            config: { ...currentConfig, avatarUrl: picture, picture }
+          },
+          update: {
+            config: { ...currentConfig, avatarUrl: picture, picture }
+          }
+        })
+        logger.info('OAuthCallback', 'Saved Google profile picture for user', { userId: user.id })
+      } catch (avatarErr) {
+        logger.warn('OAuthCallback', 'Failed to save Google profile picture setting', avatarErr)
+      }
+    }
+
     // Step 7: Save refresh token securely
     if (tokens.refresh_token) {
       await GoogleCredentialService.saveCredentials(user.id, tokens.refresh_token)

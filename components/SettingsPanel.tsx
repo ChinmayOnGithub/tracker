@@ -31,6 +31,7 @@ export const SettingsPanel: React.FC = () => {
     isOwner: boolean
     accessLevel: 'Private Owner' | 'Shared Tools'
     hasPasscode: boolean
+    avatarUrl?: string | null
     createdAt: string
   } | null>(null)
   const [pinInput, setPinInput] = useState('')
@@ -197,15 +198,32 @@ export const SettingsPanel: React.FC = () => {
     setLoading(false)
   }, [])
 
-  // Load backend status on client mount
+  // Load backend status and listen to real-time style changes on client mount
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchProfile()
       fetchConnection()
       fetchGuestPermissions()
     }, 0)
-    return () => clearTimeout(timer)
-  }, [fetchProfile, fetchConnection, fetchGuestPermissions])
+
+    const handleSettingsChanged = () => {
+      if (typeof window === 'undefined') return
+      const col = localStorage.getItem('personal_accent_color')
+      if (col && col !== accentColor) setAccentColor(col)
+      const fs = localStorage.getItem('personal_font_size')
+      if (fs && fs !== fontSize) setFontSize(fs)
+      const rc = localStorage.getItem('personal_rounded_corners')
+      if (rc && rc !== roundedCorners) setRoundedCorners(rc)
+      const anim = localStorage.getItem('personal_animations')
+      if (anim && anim !== animations) setAnimations(anim)
+    }
+
+    window.addEventListener('personal_settings_changed', handleSettingsChanged)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('personal_settings_changed', handleSettingsChanged)
+    }
+  }, [fetchProfile, fetchConnection, fetchGuestPermissions, accentColor, fontSize, roundedCorners, animations])
 
   const handleToggleGuestPermission = async (moduleKey: string) => {
     const updated = {
@@ -435,10 +453,22 @@ export const SettingsPanel: React.FC = () => {
                   ) : userProfile ? (
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-850 rounded-xl">
                       <div className="flex items-center gap-3.5">
-                        {/* Dynamic Avatar (initials with accent gradient) */}
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-indigo-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm shrink-0">
-                          {(userProfile.username || userProfile.email || 'U').charAt(0).toUpperCase()}
-                        </div>
+                        {/* Dynamic Avatar (Google Profile Picture or initials with accent gradient) */}
+                        {userProfile.avatarUrl ? (
+                          <div className="relative w-12 h-12 rounded-full overflow-hidden border border-[var(--color-border)] shadow-xs shrink-0">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={userProfile.avatarUrl}
+                              alt={userProfile.username}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[var(--color-primary)] to-indigo-600 flex items-center justify-center text-white font-extrabold text-lg shadow-sm shrink-0">
+                            {(userProfile.username || userProfile.email || 'U').charAt(0).toUpperCase()}
+                          </div>
+                        )}
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-[var(--color-text-main)]">
@@ -555,6 +585,10 @@ export const SettingsPanel: React.FC = () => {
                       { id: 'green', label: 'Green', color: 'bg-green-500' },
                       { id: 'orange', label: 'Orange', color: 'bg-orange-500' },
                       { id: 'indigo', label: 'Indigo', color: 'bg-indigo-400' },
+                      { id: 'rose', label: 'Rose', color: 'bg-rose-500' },
+                      { id: 'emerald', label: 'Emerald', color: 'bg-emerald-500' },
+                      { id: 'amber', label: 'Amber', color: 'bg-amber-500' },
+                      { id: 'cyan', label: 'Cyan', color: 'bg-cyan-500' },
                     ] as const).map(col => (
                       <button
                         key={col.id}

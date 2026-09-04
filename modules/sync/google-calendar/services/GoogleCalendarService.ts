@@ -97,7 +97,10 @@ class SizeBoundedMap<K, V> {
 // In-memory caching maps (size-bounded to prevent memory leaks in production)
 const calendarCache = new SizeBoundedMap<string, CacheEntry>(1000)
 const accessTokenCache = new SizeBoundedMap<string, AccessTokenCacheEntry>(500)
+const userCacheGenerations = new Map<string, number>()
 const refreshPromises = new Map<string, Promise<string>>()
+
+const MAX_PAGINATION_PAGES = 50
 
 /**
  * Exponential backoff helper for network requests.
@@ -159,10 +162,22 @@ async function fetchWithRetry(
 
 export class GoogleCalendarService {
   /**
+   * Gets or initializes the current event cache generation for a user.
+   */
+  private static getUserGeneration(userId: string): number {
+    let gen = userCacheGenerations.get(userId)
+    if (gen === undefined) {
+      gen = 1
+      userCacheGenerations.set(userId, gen)
+    }
+    return gen
+  }
+
+  /**
    * Refreshes and returns a temporary access token from Google.
    * Caches access tokens in-memory until they approach expiry.
    */
-  private static async getAccessToken(userId: string): Promise<string> {
+  static async getAccessToken(userId: string): Promise<string> {
     const cachedToken = accessTokenCache.get(userId)
 
     // If cache is valid and not close to expiry, reuse it
@@ -271,7 +286,48 @@ export class GoogleCalendarService {
   }
 
   /**
+   * Performs an authenticated Google Calendar API HTTP request.
+   * If Google returns 401 Unauthorized, automatically invalidates the cached access token,
+   * refreshes it, and retries the original request exactly once.
+   */
+  static async requestWithAuth(
+    userId: string,
+    url: string,
+    options: RequestInit = {}
+  ): Promise<Response> {
+    const accessToken = await this.getAccessToken(userId)
+    const requestHeaders = new Headers(options.headers || {})
+    requestHeaders.set('Authorization', `Bearer ${accessToken}`)
+
+    let response = await fetchWithRetry(url, {
+      ...options,
+      headers: requestHeaders,
+    })
+
+    if (response.status === 401) {
+      logger.warn('GoogleCalendarService', 'Received 401 from Google API. Invalidating token and retrying once...', { userId })
+      accessTokenCache.delete(userId)
+      
+      const freshToken = await this.getAccessToken(userId)
+      const retryHeaders = new Headers(options.headers || {})
+      retryHeaders.set('Authorization', `Bearer ${freshToken}`)
+
+      response = await fetchWithRetry(url, {
+        ...options,
+        headers: retryHeaders,
+      })
+
+      if (response.status === 401) {
+        logger.error('GoogleCalendarService', 'Retry after token refresh also returned 401. Failing request.', { userId })
+      }
+    }
+
+    return response
+  }
+
+  /**
    * Retrieves user schedule events from primary calendar between timeMin and timeMax.
+   * Consumes all nextPageToken pages reliably and combines event items.
    * Leverages caching and auto-expands recurring events.
    */
   static async getEvents(
@@ -280,7 +336,8 @@ export class GoogleCalendarService {
     timeMax: Date,
     forceRefresh = false
   ): Promise<ParsedCalendarEvent[]> {
-    const cacheKey = `${userId}:${timeMin.getTime()}:${timeMax.getTime()}`
+    const currentGen = this.getUserGeneration(userId)
+    const cacheKey = `${userId}:gen${currentGen}:${timeMin.getTime()}:${timeMax.getTime()}`
 
     if (!forceRefresh) {
       const cached = calendarCache.get(cacheKey)
@@ -300,52 +357,65 @@ export class GoogleCalendarService {
     }
 
     try {
-      const accessToken = await this.getAccessToken(userId)
-
       const credential = await db.googleCredential.findUnique({
         where: { userId }
       })
       const calendarId = credential?.calendarId || 'primary'
 
-      const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`)
-      url.searchParams.set('timeMin', timeMin.toISOString())
-      url.searchParams.set('timeMax', timeMax.toISOString())
-      url.searchParams.set('singleEvents', 'true') // Expand recurring events
-      url.searchParams.set('orderBy', 'startTime')
+      const allItems: GoogleCalendarEventPayload[] = []
+      let pageToken: string | undefined = undefined
+      let pageCount = 0
 
-      logger.debug('GoogleCalendarService', 'Fetching calendar events', {
-        userId,
-        timeMin: timeMin.toISOString(),
-        timeMax: timeMax.toISOString()
-      })
-
-      const response = await fetchWithRetry(url.toString(), {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
-
-      if (!response.ok) {
-        const errText = await response.text()
-        logger.error('GoogleCalendarService', 'Calendar events fetch failed', {
-          userId,
-          status: response.status,
-          error: errText.substring(0, 500)
-        })
-
-        // If 401, the access token may be stale — clear it and try again
-        if (response.status === 401) {
-          accessTokenCache.delete(userId)
-          logger.warn('GoogleCalendarService', 'Access token rejected — clearing cache. Will retry on next request.', { userId })
+      do {
+        pageCount++
+        if (pageCount > MAX_PAGINATION_PAGES) {
+          logger.error('GoogleCalendarService', 'Defensive maximum pagination page limit reached in getEvents', {
+            userId,
+            pageCount,
+            maxPages: MAX_PAGINATION_PAGES
+          })
+          throw new GoogleApiError(`Defensive maximum pagination page limit (${MAX_PAGINATION_PAGES}) reached while fetching calendar events`, 500)
         }
 
-        throw new GoogleApiError(`Failed to fetch Google Calendar events: ${errText}`, response.status)
-      }
+        const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`)
+        url.searchParams.set('timeMin', timeMin.toISOString())
+        url.searchParams.set('timeMax', timeMax.toISOString())
+        url.searchParams.set('singleEvents', 'true') // Expand recurring events
+        url.searchParams.set('orderBy', 'startTime')
 
-      const data = await response.json()
-      const items = data.items || []
+        if (pageToken) {
+          url.searchParams.set('pageToken', pageToken)
+        }
 
-      const parsedEvents: ParsedCalendarEvent[] = items.map((item: GoogleCalendarEventPayload) => {
+        logger.debug('GoogleCalendarService', 'Fetching calendar events page', {
+          userId,
+          page: pageCount,
+          timeMin: timeMin.toISOString(),
+          timeMax: timeMax.toISOString()
+        })
+
+        const response = await this.requestWithAuth(userId, url.toString())
+
+        if (!response.ok) {
+          const errText = await response.text()
+          logger.error('GoogleCalendarService', 'Calendar events fetch failed', {
+            userId,
+            status: response.status,
+            error: errText.substring(0, 500)
+          })
+
+          throw new GoogleApiError(`Failed to fetch Google Calendar events: ${errText}`, response.status)
+        }
+
+        const data = await response.json()
+        if (Array.isArray(data.items)) {
+          allItems.push(...data.items)
+        }
+
+        pageToken = data.nextPageToken || undefined
+      } while (pageToken)
+
+      const parsedEvents: ParsedCalendarEvent[] = allItems.map((item: GoogleCalendarEventPayload) => {
         const isAllDay = !item.start.dateTime
         return {
           id: item.id,
@@ -362,6 +432,7 @@ export class GoogleCalendarService {
       logger.info('GoogleCalendarService', 'Calendar events fetched and parsed', {
         userId,
         totalEvents: parsedEvents.length,
+        pagesFetched: pageCount,
         allDayEvents: parsedEvents.filter(e => e.isAllDay).length,
         timedEvents: parsedEvents.filter(e => !e.isAllDay).length
       })
@@ -388,22 +459,32 @@ export class GoogleCalendarService {
   }
 
   /**
-   * Clears cached events for a user.
+   * Clears cached events for a user by advancing their cache generation.
+   * Does NOT invalidate valid access tokens unless clearAccessToken is explicitly true.
    */
-  static clearCache(userId: string) {
-    let cleared = 0
+  static clearCache(userId: string, clearAccessToken = false) {
+    const nextGen = (userCacheGenerations.get(userId) || 1) + 1
+    userCacheGenerations.set(userId, nextGen)
+
+    let entriesCleared = 0
     for (const key of calendarCache.keys()) {
       if (key.startsWith(`${userId}:`)) {
         calendarCache.delete(key)
-        cleared++
+        entriesCleared++
       }
     }
-    // Also clear access token cache
-    if (accessTokenCache.has(userId)) {
+
+    if (clearAccessToken && accessTokenCache.has(userId)) {
       accessTokenCache.delete(userId)
-      cleared++
+      entriesCleared++
     }
-    logger.debug('GoogleCalendarService', 'Cache cleared', { userId, entriesCleared: cleared })
+
+    logger.debug('GoogleCalendarService', 'Cache cleared (generation bumped)', {
+      userId,
+      newGeneration: nextGen,
+      entriesCleared,
+      clearedAccessToken: clearAccessToken
+    })
   }
 
   /**
@@ -459,7 +540,6 @@ export class GoogleCalendarService {
   ): Promise<ParsedCalendarEvent> {
     this.validateEventInput(event)
     
-    const accessToken = await this.getAccessToken(userId)
     const calendarId = await this.getPrimaryCalendarId(userId)
     
     const body = {
@@ -476,10 +556,9 @@ export class GoogleCalendarService {
     }
     
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`
-    const res = await fetchWithRetry(url, {
+    const res = await this.requestWithAuth(userId, url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(body)
@@ -493,7 +572,7 @@ export class GoogleCalendarService {
     
     const data = await res.json()
     
-    // Invalidate local cache
+    // Invalidate local cache (bumping generation without destroying token)
     this.clearCache(userId)
     
     const isAllDay = !data.start.dateTime
@@ -519,7 +598,6 @@ export class GoogleCalendarService {
   ): Promise<ParsedCalendarEvent> {
     this.validateEventInput(event, true)
     
-    const accessToken = await this.getAccessToken(userId)
     const calendarId = await this.getPrimaryCalendarId(userId)
     
     const body: Record<string, unknown> = {}
@@ -538,10 +616,9 @@ export class GoogleCalendarService {
     }
     
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`
-    const res = await fetchWithRetry(url, {
+    const res = await this.requestWithAuth(userId, url, {
       method: 'PATCH',
       headers: {
-        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(body)
@@ -582,15 +659,11 @@ export class GoogleCalendarService {
     userId: string,
     eventId: string
   ): Promise<boolean> {
-    const accessToken = await this.getAccessToken(userId)
     const calendarId = await this.getPrimaryCalendarId(userId)
     
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`
-    const res = await fetchWithRetry(url, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
+    const res = await this.requestWithAuth(userId, url, {
+      method: 'DELETE'
     })
     
     // Invalidate cache in all cases (since it's a deletion write)
@@ -618,7 +691,6 @@ export class GoogleCalendarService {
     userId: string,
     syncToken?: string
   ): Promise<{ items: unknown[]; nextSyncToken: string | null }> {
-    const accessToken = await this.getAccessToken(userId)
     const credential = await db.googleCredential.findUnique({
       where: { userId }
     })
@@ -627,8 +699,19 @@ export class GoogleCalendarService {
     let allItems: unknown[] = []
     let pageToken: string | undefined = undefined
     let nextSyncToken: string | null = null
+    let pageCount = 0
 
     do {
+      pageCount++
+      if (pageCount > MAX_PAGINATION_PAGES) {
+        logger.error('GoogleCalendarService', 'Defensive maximum pagination page limit reached in listEventsWithSyncToken', {
+          userId,
+          pageCount,
+          maxPages: MAX_PAGINATION_PAGES
+        })
+        throw new GoogleApiError(`Defensive maximum pagination page limit (${MAX_PAGINATION_PAGES}) reached while synchronizing calendar events`, 500)
+      }
+
       const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`)
       if (syncToken) {
         url.searchParams.set('syncToken', syncToken)
@@ -648,15 +731,12 @@ export class GoogleCalendarService {
 
       logger.debug('GoogleCalendarService', 'Fetching events page with sync/page token', {
         userId,
+        page: pageCount,
         hasSyncToken: !!syncToken,
         hasPageToken: !!pageToken,
       })
 
-      const response = await fetchWithRetry(url.toString(), {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      })
+      const response = await this.requestWithAuth(userId, url.toString())
 
       if (!response.ok) {
         const errText = await response.text()
@@ -673,7 +753,7 @@ export class GoogleCalendarService {
         allItems = allItems.concat(data.items)
       }
 
-      pageToken = data.nextPageToken
+      pageToken = data.nextPageToken || undefined
       if (data.nextSyncToken) {
         nextSyncToken = data.nextSyncToken
       }
@@ -693,7 +773,6 @@ export class GoogleCalendarService {
     channelId: string,
     address: string
   ): Promise<{ resourceId: string; expiration: Date }> {
-    const accessToken = await this.getAccessToken(userId)
     const credential = await db.googleCredential.findUnique({
       where: { userId }
     })
@@ -706,10 +785,9 @@ export class GoogleCalendarService {
       address
     }
 
-    const response = await fetchWithRetry(url, {
+    const response = await this.requestWithAuth(userId, url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(body)
@@ -741,17 +819,15 @@ export class GoogleCalendarService {
     channelId: string,
     resourceId: string
   ): Promise<boolean> {
-    const accessToken = await this.getAccessToken(userId)
     const url = 'https://www.googleapis.com/calendar/v3/channels/stop'
     const body = {
       id: channelId,
       resourceId
     }
 
-    const response = await fetchWithRetry(url, {
+    const response = await this.requestWithAuth(userId, url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(body)

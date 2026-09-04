@@ -206,6 +206,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       blue: { primary: '#007aff', hover: '#0056b3' },
       orange: { primary: '#f97316', hover: '#ea580c' },
       indigo: { primary: '#818cf8', hover: '#6366f1' },
+      rose: { primary: '#f43f5e', hover: '#e11d48' },
+      emerald: { primary: '#10b981', hover: '#059669' },
+      amber: { primary: '#f59e0b', hover: '#d97706' },
+      cyan: { primary: '#06b6d4', hover: '#0891b2' },
     }
 
     const match = colors[accent] || colors.blue

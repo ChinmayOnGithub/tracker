@@ -52,8 +52,23 @@ export function canAccess(
     return isOwner
   }
 
-  // 3. Shared tools capability evaluation (open to authenticated users / extensible)
-  return true
+  // 3. Known Shared Tools Capability Model (Deny-by-default for unknown capabilities)
+  const knownSharedCapabilities: TrackerCapability[] = [
+    'room-turn.read',
+    'room-turn.write',
+    'grocery.read',
+    'grocery.write',
+    'shared-finance.read',
+    'shared-finance.write',
+  ]
+
+  if (knownSharedCapabilities.includes(capability)) {
+    // Authenticated users can access known shared tools, or owner
+    return true
+  }
+
+  // Deny by default for any unrecognized capability
+  return false
 }
 
 export async function requireAuth() {
@@ -98,7 +113,9 @@ export async function requireOwnership(
   
   const collection = record.collection as Record<string, unknown> | undefined
   const ownerId = model === 'savedLink' && collection ? collection.userId : record.userId
-  const isOwner = ownerId === user.id || (ownerId === null && user.username === 'admin')
+  
+  // Explicit ownership validation (canonical user match or legacy migration admin check)
+  const isOwner = ownerId ? ownerId === user.id : user.username === 'admin'
   if (!isOwner) {
     throw new Error(`Unauthorized ${model} access`)
   }

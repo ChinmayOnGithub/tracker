@@ -136,19 +136,97 @@ export class CalendarService {
     if (syncState && syncState.syncToken) {
       try {
         result = await provider.incrementalSync(userId, syncState.syncToken)
-      } catch (err) {
-        logger.warn('CalendarService', 'Incremental sync failed, falling back to full sync', err)
+      } catch (err: unknown) {
+        const is410 = (err && typeof err === 'object' && 'statusCode' in err && (err as { statusCode: number }).statusCode === 410) ||
+          (err instanceof Error && (err.message.includes('410') || err.message.includes('Sync token is invalid')));
+
+        if (is410) {
+          logger.warn('CalendarService', 'Sync token invalidated (HTTP 410). Clearing sync token and performing full resync', { userId })
+          // Reset sync token to null on 410
+          await CalendarRepository.updateSyncState(userId, 'google', {
+            syncToken: null
+          })
+        } else {
+          logger.warn('CalendarService', 'Incremental sync failed, attempting fallback full sync', err)
+        }
         result = await provider.fullSync(userId)
       }
     } else {
       result = await provider.fullSync(userId)
     }
 
-    await CalendarRepository.updateSyncState(userId, 'google', {
-      syncToken: result.nextSyncToken,
-      lastSyncAt: new Date()
-    })
+    // Persist new valid sync token only after sync completed without throwing
+    if (result && result.nextSyncToken !== undefined) {
+      await CalendarRepository.updateSyncState(userId, 'google', {
+        syncToken: result.nextSyncToken,
+        lastSyncAt: new Date()
+      })
+    }
 
     return result
+  }
+
+  /**
+   * Ensures an active Google Calendar push notification watch channel exists.
+   * If existing channel is expired or near expiration (< 24h), renews it and persists channel metadata.
+   */
+  static async ensureWatchChannel(userId: string): Promise<{ channelId: string; resourceId: string; expiration: Date } | null> {
+    const provider = await this.getProvider(userId)
+    if (!provider) return null
+
+    const syncState = await CalendarRepository.getSyncState(userId, 'google')
+    const now = Date.now()
+    const oneDayMs = 24 * 60 * 60 * 1000
+
+    if (
+      syncState?.channelId &&
+      syncState.resourceId &&
+      syncState.expiration &&
+      syncState.expiration.getTime() - now > oneDayMs
+    ) {
+      // Channel is active and not close to expiration
+      return {
+        channelId: syncState.channelId,
+        resourceId: syncState.resourceId,
+        expiration: syncState.expiration,
+      }
+    }
+
+    // Stop previous channel if present
+    if (syncState?.channelId && syncState.resourceId) {
+      try {
+        await provider.stopWatch(syncState.channelId, syncState.resourceId)
+      } catch (err) {
+        logger.warn('CalendarService', 'Failed to stop old watch channel before renewing', err)
+      }
+    }
+
+    // Create new watch channel
+    const watchChannel = await provider.watch(userId)
+    await CalendarRepository.updateSyncState(userId, 'google', {
+      channelId: watchChannel.channelId,
+      resourceId: watchChannel.resourceId,
+      expiration: watchChannel.expiration,
+    })
+
+    return watchChannel
+  }
+
+  /**
+   * Stops and clears the active watch channel for a user.
+   */
+  static async stopWatchChannel(userId: string): Promise<void> {
+    const provider = await this.getProvider(userId)
+    if (!provider) return
+
+    const syncState = await CalendarRepository.getSyncState(userId, 'google')
+    if (syncState?.channelId && syncState.resourceId) {
+      await provider.stopWatch(syncState.channelId, syncState.resourceId)
+      await CalendarRepository.updateSyncState(userId, 'google', {
+        channelId: null,
+        resourceId: null,
+        expiration: null,
+      })
+    }
   }
 }
