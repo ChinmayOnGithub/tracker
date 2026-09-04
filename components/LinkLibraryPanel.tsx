@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { writeQueue } from '@/lib/store/write-queue'
 import {
   FolderPlus, Grid, List, Folder, Loader2,
@@ -61,10 +62,21 @@ interface LinkLibraryPanelProps {
 }
 
 export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialCollections }) => {
+  const searchParams = useSearchParams()
+  const targetLinkId = searchParams?.get('id') || searchParams?.get('linkId')
+  const targetColId = searchParams?.get('colId') || searchParams?.get('collectionId')
+
   const [collections, setCollections] = useState<LinkCollection[]>(initialCollections)
-  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(
-    initialCollections.length > 0 ? initialCollections[0].id : null
-  )
+  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(() => {
+    if (targetColId && initialCollections.some(c => c.id === targetColId)) {
+      return targetColId
+    }
+    if (targetLinkId) {
+      const foundCol = initialCollections.find(c => c.links?.some(l => l.id === targetLinkId))
+      if (foundCol) return foundCol.id
+    }
+    return initialCollections.length > 0 ? initialCollections[0].id : null
+  })
 
   // Search & Filters
   const [linkSearchQuery, setLinkSearchQuery] = useState('')
@@ -78,6 +90,25 @@ export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialColle
 
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false)
   const [editingLink, setEditingLink] = useState<SavedLink | null>(null)
+
+  // Handle deep-link target link opening
+  const openedLinkRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (targetLinkId && openedLinkRef.current !== targetLinkId) {
+      for (const col of collections) {
+        const found = col.links?.find(l => l.id === targetLinkId)
+        if (found) {
+          openedLinkRef.current = targetLinkId
+          setTimeout(() => {
+            setActiveCollectionId(col.id)
+            setEditingLink(found)
+            setIsLinkModalOpen(true)
+          }, 0)
+          break
+        }
+      }
+    }
+  }, [targetLinkId, collections])
 
 
   const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null)

@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useState, useContext, useMemo } from 'react'
+import React, { useState, useContext, useMemo, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { CalendarDataContext } from './DashboardLayout'
 import { ActivityManager } from './ActivityManager'
 import { DayLogsModal } from './DayLogsModal'
@@ -27,6 +28,8 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
   logs: initialLogs,
   notes: initialNotes,
 }) => {
+  const searchParams = useSearchParams()
+  const targetId = searchParams?.get('id') || searchParams?.get('activityId')
   const context = useContext(CalendarDataContext)
   const { state, reorderActivityTemplatesAction } = useStore()
 
@@ -35,6 +38,19 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
   }
 
   const { onOpenCreateActivity, onEditTemplate } = context
+
+  // Auto-open target activity from deep link
+  const openedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (targetId && openedRef.current !== targetId) {
+      const allT = state.templates.length > 0 ? state.templates : initialTemplates
+      const matched = allT.find(t => t.id === targetId)
+      if (matched) {
+        openedRef.current = targetId
+        onEditTemplate(matched)
+      }
+    }
+  }, [targetId, state.templates, initialTemplates, onEditTemplate])
 
   // Local DayLogsModal states
   const [selectedDateStr, _setSelectedDateStr] = useState<string>(getTodayDateStr())

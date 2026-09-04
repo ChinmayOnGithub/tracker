@@ -146,14 +146,20 @@ async function decryptBufferClientSide(
   return decrypted;
 }
 
+import { useSearchParams } from 'next/navigation'
+
 // --- Main Component -----------------------------------------------------------
 
 export function VaultPanel() {
+  const searchParams = useSearchParams()
+  const _targetDocId = searchParams?.get('id') || searchParams?.get('docId')
+  const targetFolderId = searchParams?.get('folderId')
+
   // --- State --------------------------------------------------------
   const [vaultKey, setVaultKey] = useState<string | null>(null)
   const [items, setItems] = useState<VaultItem[]>([])
   const [_breadcrumbs, setBreadcrumbs] = useState<VaultBreadcrumb[]>([{ id: null, name: 'Vault' }])
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(() => targetFolderId || null)
   const [_stats, setStats] = useState({ totalFiles: 0, totalFolders: 0, totalSize: 0 })
   const [loading, setLoading] = useState(true)
   const [_uploading, setUploading] = useState(false)

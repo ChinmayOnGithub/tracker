@@ -10,7 +10,7 @@ import {
   Palette, Bell, RefreshCw, Lock, Database, User, ShieldCheck,
   Sparkles
 } from 'lucide-react'
-import { toYMD, fmtDateMed } from '@/lib/dateUtils'
+import { MasterSearchEngine, SearchResult } from '@/lib/search/MasterSearchEngine'
 
 // ─── Public interface ─────────────────────────────────────────────────────────
 
@@ -31,10 +31,6 @@ interface TrackerCommand {
   icon: React.ReactNode
   keywords?: string
   action: (props: CommandPaletteProps, router: ReturnType<typeof useRouter>) => void
-}
-
-function stripHtml(html: string) {
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 const COMMANDS: TrackerCommand[] = [
@@ -262,7 +258,7 @@ const COMMANDS: TrackerCommand[] = [
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
-  const { isOpen, onClose, onNavigate } = props
+  const { isOpen, onClose } = props
   const router = useRouter()
   const { state, setActiveJournalDateAction } = useStore()
   const [rawSearch, setRawSearch] = useState('')
@@ -277,107 +273,42 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
   const search = isOpen ? rawSearch : ''
   const setSearch = setRawSearch
 
-  // Aggregate and index real-time matching data
+  // Live filtered data results using MasterSearchEngine
   const dataResults = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) {
-      return {
-        notes: [],
-        journal: [],
-        tasks: [],
-        links: [],
-        vault: [],
-        weight: [],
-        leave: [],
-      }
+    if (!search.trim()) {
+      return { notes: [], journal: [], tasks: [], links: [], vault: [], weight: [], leave: [] }
     }
 
-    // 1. Notes matches
-    const matchedNotes = state.notes
-      .filter(n => {
-        const titleMatch = (n.title || '').toLowerCase().includes(q)
-        const contentMatch = stripHtml(n.content || '').toLowerCase().includes(q)
-        return titleMatch || contentMatch
-      })
-      .slice(0, 5)
-
-    // 2. Journal matches
-    const matchedJournal = state.journalEntries
-      .filter(j => {
-        const dateStr = toYMD(j.journalDate)
-        const dateMatch = dateStr.includes(q)
-        const contentMatch = stripHtml(j.content || '').toLowerCase().includes(q)
-        const moodMatch = (j.mood || '').toLowerCase().includes(q)
-        const reflectMatch = (j.reflections || '').toLowerCase().includes(q)
-        const gratitudeMatch = (j.gratitude || '').toLowerCase().includes(q)
-        const lessonsMatch = (j.lessonsLearned || '').toLowerCase().includes(q)
-        const tomorrowMatch = (j.tomorrowPlan || '').toLowerCase().includes(q)
-        return dateMatch || contentMatch || moodMatch || reflectMatch || gratitudeMatch || lessonsMatch || tomorrowMatch
-      })
-      .slice(0, 5)
-
-    // 3. Task / Activity templates
-    const matchedTasks = state.templates
-      .filter(t => {
-        const nameMatch = (t.name || '').toLowerCase().includes(q)
-        const catMatch = (t.category || '').toLowerCase().includes(q)
-        const notesMatch = (t.notes || '').toLowerCase().includes(q)
-        const typeMatch = (t.type || '').toLowerCase().includes(q)
-        return nameMatch || catMatch || notesMatch || typeMatch
-      })
-      .slice(0, 5)
-
-    // 4. Links / Bookmarks
-    const matchedLinks = state.links
-      .filter(l => {
-        const titleMatch = (l.title || '').toLowerCase().includes(q)
-        const urlMatch = (l.url || '').toLowerCase().includes(q)
-        const descMatch = (l.description || '').toLowerCase().includes(q)
-        return titleMatch || urlMatch || descMatch
-      })
-      .slice(0, 5)
-
-    // 5. Vault files / folders
-    const matchedVault = state.vaultItems
-      .filter(v => {
-        const nameMatch = (v.name || '').toLowerCase().includes(q)
-        const groupMatch = (v.mimeGroup || '').toLowerCase().includes(q)
-        return nameMatch || groupMatch
-      })
-      .slice(0, 5)
-
-    // 6. Weight logs
-    const matchedWeight = state.weightRecords
-      .filter(w => {
-        const dateStr = typeof w.date === 'string' ? w.date : toYMD(w.date)
-        const dateMatch = dateStr.includes(q)
-        const weightMatch = `${w.weight} kg`.includes(q) || `${w.weight}`.includes(q)
-        const notesMatch = (w.notes || '').toLowerCase().includes(q)
-        return dateMatch || weightMatch || notesMatch
-      })
-      .slice(0, 4)
-
-    // 7. Leave records
-    const matchedLeave = state.leaveRecords
-      .filter(lr => {
-        const typeMatch = (lr.leaveType || '').toLowerCase().includes(q)
-        const statusMatch = (lr.status || '').toLowerCase().includes(q)
-        const notesMatch = (lr.notes || '').toLowerCase().includes(q)
-        const startStr = typeof lr.startDate === 'string' ? lr.startDate : toYMD(lr.startDate)
-        const endStr = typeof lr.endDate === 'string' ? lr.endDate : toYMD(lr.endDate)
-        return typeMatch || statusMatch || notesMatch || startStr.includes(q) || endStr.includes(q)
-      })
-      .slice(0, 4)
-
-    return {
-      notes: matchedNotes,
-      journal: matchedJournal,
-      tasks: matchedTasks,
-      links: matchedLinks,
-      vault: matchedVault,
-      weight: matchedWeight,
-      leave: matchedLeave,
+    const allResults = MasterSearchEngine.search(search, state, 'all')
+    const map: {
+      notes: SearchResult[]
+      journal: SearchResult[]
+      tasks: SearchResult[]
+      links: SearchResult[]
+      vault: SearchResult[]
+      weight: SearchResult[]
+      leave: SearchResult[]
+    } = {
+      notes: [],
+      journal: [],
+      tasks: [],
+      links: [],
+      vault: [],
+      weight: [],
+      leave: [],
     }
+
+    for (const item of allResults) {
+      if (item.type === 'note') map.notes.push(item)
+      else if (item.type === 'journal') map.journal.push(item)
+      else if (item.type === 'activity') map.tasks.push(item)
+      else if (item.type === 'link') map.links.push(item)
+      else if (item.type === 'document') map.vault.push(item)
+      else if (item.type === 'weight') map.weight.push(item)
+      else if (item.type === 'leave') map.leave.push(item)
+    }
+
+    return map
   }, [search, state])
 
   if (!isOpen) return null
@@ -449,38 +380,35 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
               heading="Notes"
               className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-emerald-500"
             >
-              {dataResults.notes.map(note => {
-                const snippet = stripHtml(note.content || '') || 'Empty note'
-                const displayTitle = note.title?.trim() || snippet.slice(0, 32) || 'Untitled Note'
-
-                return (
-                  <Command.Item
-                    key={note.id}
-                    value={`note ${note.title || ''} ${snippet} ${note.id}`}
-                    onSelect={() => {
-                      router.push(`/notes?id=${note.id}`)
-                      onClose()
-                    }}
-                    className={[
-                      'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
-                      'text-xs font-semibold text-[var(--color-text-main)]',
-                      'cursor-pointer select-none',
-                      'transition-colors duration-[var(--motion-duration-fast)]',
-                      'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
-                      '[&_svg]:aria-selected:text-white',
-                      'hover:bg-[var(--color-accent)]',
-                    ].join(' ')}
-                  >
-                    <FileText className="w-4 h-4 text-emerald-500 shrink-0" />
-                    <div className="flex-1 min-w-0 flex flex-col">
-                      <span className="truncate font-bold text-xs">{displayTitle}</span>
-                      <span className="truncate text-[10px] text-[var(--color-text-muted)] group-aria-selected:text-white/80">
-                        {snippet}
+              {dataResults.notes.map(note => (
+                <Command.Item
+                  key={note.id}
+                  value={`${note.title} ${note.snippet || ''}`}
+                  onSelect={() => {
+                    router.push(note.href)
+                    onClose()
+                  }}
+                  className={[
+                    'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
+                    'text-xs font-semibold text-[var(--color-text-main)]',
+                    'cursor-pointer select-none',
+                    'transition-colors duration-[var(--motion-duration-fast)]',
+                    'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
+                    '[&_svg]:aria-selected:text-white',
+                    'hover:bg-[var(--color-accent)]',
+                  ].join(' ')}
+                >
+                  <FileText className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <span className="truncate font-bold text-xs">{note.title}</span>
+                    {note.snippet && (
+                      <span className="truncate text-[10px] text-[var(--color-text-muted)]">
+                        {note.snippet}
                       </span>
-                    </div>
-                  </Command.Item>
-                )
-              })}
+                    )}
+                  </div>
+                </Command.Item>
+              ))}
             </Command.Group>
           )}
 
@@ -490,54 +418,53 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
               heading="Journal Entries"
               className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-teal-500"
             >
-              {dataResults.journal.map(entry => {
-                const dateStr = toYMD(entry.journalDate)
-                const snippet = stripHtml(entry.content || '') || entry.reflections || entry.gratitude || 'Daily reflection'
-
-                return (
-                  <Command.Item
-                    key={entry.id}
-                    value={`journal ${dateStr} ${entry.mood || ''} ${snippet}`}
-                    onSelect={() => {
-                      setActiveJournalDateAction(dateStr)
-                      router.push(`/journal?date=${dateStr}`)
-                      onClose()
-                    }}
-                    className={[
-                      'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
-                      'text-xs font-semibold text-[var(--color-text-main)]',
-                      'cursor-pointer select-none',
-                      'transition-colors duration-[var(--motion-duration-fast)]',
-                      'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
-                      '[&_svg]:aria-selected:text-white',
-                      'hover:bg-[var(--color-accent)]',
-                    ].join(' ')}
-                  >
-                    <BookOpen className="w-4 h-4 text-teal-500 shrink-0" />
-                    <div className="flex-1 min-w-0 flex flex-col">
-                      <span className="truncate font-bold text-xs">{fmtDateMed(entry.journalDate)} {entry.mood ? `· ${entry.mood}` : ''}</span>
+              {dataResults.journal.map(entry => (
+                <Command.Item
+                  key={entry.id}
+                  value={`${entry.title} ${entry.subtitle || ''} ${entry.snippet || ''}`}
+                  onSelect={() => {
+                    if (entry.payload?.date) {
+                      setActiveJournalDateAction(entry.payload.date)
+                    }
+                    router.push(entry.href)
+                    onClose()
+                  }}
+                  className={[
+                    'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
+                    'text-xs font-semibold text-[var(--color-text-main)]',
+                    'cursor-pointer select-none',
+                    'transition-colors duration-[var(--motion-duration-fast)]',
+                    'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
+                    '[&_svg]:aria-selected:text-white',
+                    'hover:bg-[var(--color-accent)]',
+                  ].join(' ')}
+                >
+                  <BookOpen className="w-4 h-4 text-teal-500 shrink-0" />
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <span className="truncate font-bold text-xs">{entry.title} {entry.subtitle ? `· ${entry.subtitle}` : ''}</span>
+                    {entry.snippet && (
                       <span className="truncate text-[10px] text-[var(--color-text-muted)]">
-                        {snippet}
+                        {entry.snippet}
                       </span>
-                    </div>
-                  </Command.Item>
-                )
-              })}
+                    )}
+                  </div>
+                </Command.Item>
+              ))}
             </Command.Group>
           )}
 
-          {/* ── ACTIVITIES / TASKS RESULTS ── */}
+          {/* ── ACTIVITIES RESULTS ── */}
           {dataResults.tasks.length > 0 && (
             <Command.Group
-              heading="Activities & Tasks"
+              heading="Activities"
               className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-amber-500"
             >
               {dataResults.tasks.map(task => (
                 <Command.Item
                   key={task.id}
-                  value={`activity task ${task.name} ${task.category} ${task.notes || ''}`}
+                  value={`${task.title} ${task.subtitle || ''} ${task.snippet || ''}`}
                   onSelect={() => {
-                    onNavigate('activities')
+                    router.push(task.href)
                     onClose()
                   }}
                   className={[
@@ -552,9 +479,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
                 >
                   <CheckSquare className="w-4 h-4 text-amber-500 shrink-0" />
                   <div className="flex-1 min-w-0 flex flex-col">
-                    <span className="truncate font-bold text-xs">{task.name}</span>
+                    <span className="truncate font-bold text-xs">{task.title}</span>
                     <span className="truncate text-[10px] text-[var(--color-text-muted)]">
-                      {task.category} · {task.recurrenceType} {task.notes ? `· ${task.notes}` : ''}
+                      {task.subtitle} {task.snippet ? `· ${task.snippet}` : ''}
                     </span>
                   </div>
                 </Command.Item>
@@ -571,12 +498,12 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
               {dataResults.links.map(link => (
                 <Command.Item
                   key={link.id}
-                  value={`link bookmark ${link.title} ${link.url} ${link.description || ''}`}
+                  value={`${link.title} ${link.subtitle || ''} ${link.snippet || ''}`}
                   onSelect={() => {
-                    if (link.url.startsWith('http://') || link.url.startsWith('https://')) {
-                      window.open(link.url, '_blank', 'noopener,noreferrer')
+                    if (link.payload?.externalUrl && (link.payload.externalUrl.startsWith('http://') || link.payload.externalUrl.startsWith('https://'))) {
+                      window.open(link.payload.externalUrl, '_blank', 'noopener,noreferrer')
                     } else {
-                      onNavigate('links')
+                      router.push(link.href)
                     }
                     onClose()
                   }}
@@ -597,7 +524,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
                       <ExternalLink className="w-3 h-3 text-[var(--color-text-muted)] shrink-0" />
                     </div>
                     <span className="truncate text-[10px] text-[var(--color-text-muted)] font-mono">
-                      {link.url}
+                      {link.subtitle || link.snippet}
                     </span>
                   </div>
                 </Command.Item>
@@ -608,15 +535,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
           {/* ── VAULT DOCUMENTS RESULTS ── */}
           {dataResults.vault.length > 0 && (
             <Command.Group
-              heading="Vault Documents"
+              heading="Documents & Vault"
               className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-rose-500"
             >
               {dataResults.vault.map(item => (
                 <Command.Item
                   key={item.id}
-                  value={`vault document ${item.name} ${item.mimeGroup || ''}`}
+                  value={`${item.title} ${item.subtitle || ''}`}
                   onSelect={() => {
-                    onNavigate('documents')
+                    router.push(item.href)
                     onClose()
                   }}
                   className={[
@@ -629,11 +556,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
                     'hover:bg-[var(--color-accent)]',
                   ].join(' ')}
                 >
-                  {item.isFolder ? <Folder className="w-4 h-4 text-rose-500 shrink-0" /> : <FileText className="w-4 h-4 text-rose-500 shrink-0" />}
+                  <Folder className="w-4 h-4 text-rose-500 shrink-0" />
                   <div className="flex-1 min-w-0 flex flex-col">
-                    <span className="truncate font-bold text-xs">{item.name}</span>
+                    <span className="truncate font-bold text-xs">{item.title}</span>
                     <span className="truncate text-[10px] text-[var(--color-text-muted)]">
-                      {item.isFolder ? 'Folder' : `${item.mimeGroup || 'File'}`}
+                      {item.subtitle}
                     </span>
                   </div>
                 </Command.Item>
@@ -647,39 +574,35 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
               heading="Weight & Health"
               className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-indigo-500"
             >
-              {dataResults.weight.map(rec => {
-                const dateStr = typeof rec.date === 'string' ? rec.date : toYMD(rec.date)
-
-                return (
-                  <Command.Item
-                    key={rec.id}
-                    value={`weight health ${dateStr} ${rec.weight} ${rec.notes || ''}`}
-                    onSelect={() => {
-                      onNavigate('weight')
-                      onClose()
-                    }}
-                    className={[
-                      'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
-                      'text-xs font-semibold text-[var(--color-text-main)]',
-                      'cursor-pointer select-none',
-                      'transition-colors duration-[var(--motion-duration-fast)]',
-                      'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
-                      '[&_svg]:aria-selected:text-white',
-                      'hover:bg-[var(--color-accent)]',
-                    ].join(' ')}
-                  >
-                    <Scale className="w-4 h-4 text-indigo-500 shrink-0" />
-                    <div className="flex-1 min-w-0 flex flex-col">
-                      <span className="truncate font-bold text-xs">{rec.weight} kg · {fmtDateMed(rec.date)}</span>
-                      {rec.notes && (
-                        <span className="truncate text-[10px] text-[var(--color-text-muted)]">
-                          {rec.notes}
-                        </span>
-                      )}
-                    </div>
-                  </Command.Item>
-                )
-              })}
+              {dataResults.weight.map(rec => (
+                <Command.Item
+                  key={rec.id}
+                  value={`${rec.title} ${rec.subtitle || ''} ${rec.snippet || ''}`}
+                  onSelect={() => {
+                    router.push(rec.href)
+                    onClose()
+                  }}
+                  className={[
+                    'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
+                    'text-xs font-semibold text-[var(--color-text-main)]',
+                    'cursor-pointer select-none',
+                    'transition-colors duration-[var(--motion-duration-fast)]',
+                    'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
+                    '[&_svg]:aria-selected:text-white',
+                    'hover:bg-[var(--color-accent)]',
+                  ].join(' ')}
+                >
+                  <Scale className="w-4 h-4 text-indigo-500 shrink-0" />
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <span className="truncate font-bold text-xs">{rec.title} · {rec.subtitle}</span>
+                    {rec.snippet && (
+                      <span className="truncate text-[10px] text-[var(--color-text-muted)]">
+                        {rec.snippet}
+                      </span>
+                    )}
+                  </div>
+                </Command.Item>
+              ))}
             </Command.Group>
           )}
 
@@ -689,38 +612,33 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
               heading="Time Off / Leave"
               className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-purple-500"
             >
-              {dataResults.leave.map(record => {
-                const start = typeof record.startDate === 'string' ? record.startDate : toYMD(record.startDate)
-                const end = typeof record.endDate === 'string' ? record.endDate : toYMD(record.endDate)
-
-                return (
-                  <Command.Item
-                    key={record.id}
-                    value={`leave vacation pto ${record.leaveType} ${start} ${end} ${record.status} ${record.notes || ''}`}
-                    onSelect={() => {
-                      onNavigate('leave')
-                      onClose()
-                    }}
-                    className={[
-                      'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
-                      'text-xs font-semibold text-[var(--color-text-main)]',
-                      'cursor-pointer select-none',
-                      'transition-colors duration-[var(--motion-duration-fast)]',
-                      'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
-                      '[&_svg]:aria-selected:text-white',
-                      'hover:bg-[var(--color-accent)]',
-                    ].join(' ')}
-                  >
-                    <Briefcase className="w-4 h-4 text-purple-500 shrink-0" />
-                    <div className="flex-1 min-w-0 flex flex-col">
-                      <span className="truncate font-bold text-xs capitalize">{record.leaveType} ({record.totalDays}d) · {record.status}</span>
-                      <span className="truncate text-[10px] text-[var(--color-text-muted)]">
-                        {start} to {end} {record.notes ? `· ${record.notes}` : ''}
-                      </span>
-                    </div>
-                  </Command.Item>
-                )
-              })}
+              {dataResults.leave.map(record => (
+                <Command.Item
+                  key={record.id}
+                  value={`${record.title} ${record.subtitle || ''} ${record.snippet || ''}`}
+                  onSelect={() => {
+                    router.push(record.href)
+                    onClose()
+                  }}
+                  className={[
+                    'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
+                    'text-xs font-semibold text-[var(--color-text-main)]',
+                    'cursor-pointer select-none',
+                    'transition-colors duration-[var(--motion-duration-fast)]',
+                    'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
+                    '[&_svg]:aria-selected:text-white',
+                    'hover:bg-[var(--color-accent)]',
+                  ].join(' ')}
+                >
+                  <Briefcase className="w-4 h-4 text-purple-500 shrink-0" />
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <span className="truncate font-bold text-xs">{record.title}</span>
+                    <span className="truncate text-[10px] text-[var(--color-text-muted)]">
+                      {record.subtitle}
+                    </span>
+                  </div>
+                </Command.Item>
+              ))}
             </Command.Group>
           )}
 

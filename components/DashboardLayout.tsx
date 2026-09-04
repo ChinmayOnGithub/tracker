@@ -9,6 +9,7 @@ import { DashboardShell } from '@/modules/core/dashboard'
 import { getAgendaAction } from '@/modules/sync/google-calendar/actions'
 import { ParsedCalendarEvent } from '@/modules/sync/google-calendar/services/GoogleCalendarService'
 import { CommandPalette } from './CommandPalette'
+import { MobileSearchModal } from './MobileSearchModal'
 import { Card, CardBody, Button, Input, Modal } from '@/design-system'
 import { TemplateModal } from './TemplateModal'
 import { getTodayDateStr } from '@/lib/recurrence'
@@ -54,21 +55,30 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
   const [templateToEdit, setTemplateToEdit] = useState<ActivityTemplate | null>(null)
 
-  // Command Palette & Placeholder dialog state
+  // Command Palette, Mobile Search & Placeholder dialog state
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false)
   const [placeholderDialog, setPlaceholderDialog] = useState<{ isOpen: boolean; title: string; message: string } | null>(null)
+
+  const handleOpenSearch = useCallback(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setIsMobileSearchOpen(true)
+    } else {
+      setIsCommandPaletteOpen(true)
+    }
+  }, [])
 
   // Listen to Ctrl + K globally
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault()
-        setIsCommandPaletteOpen(prev => !prev)
+        handleOpenSearch()
       }
     }
     window.addEventListener('keydown', handleGlobalKeyDown)
     return () => window.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [])
+  }, [handleOpenSearch])
 
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!currentUser)
@@ -600,7 +610,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         onLogout={handleLogout}
         theme={theme}
         onToggleTheme={toggleTheme}
-        onOpenSearch={() => setIsCommandPaletteOpen(true)}
+        onOpenSearch={handleOpenSearch}
       >
         {children}
 
@@ -620,6 +630,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           onShowPlaceholder={(title, message) => {
             setPlaceholderDialog({ isOpen: true, title, message })
           }}
+        />
+
+        <MobileSearchModal
+          isOpen={isMobileSearchOpen}
+          onClose={() => setIsMobileSearchOpen(false)}
         />
 
         {placeholderDialog && (

@@ -298,34 +298,48 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           </div>
         </header>
 
-        {/* Navigation Header (Mobile Top Bar) */}
-        <header className="lg:hidden flex h-13 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] items-center justify-between px-3 z-30 shrink-0 gap-2">
-          <div className="flex items-center gap-2 shrink-0">
+        {/* Navigation Header (Mobile Top Bar: [menu] Tracker [search] [more]) */}
+        <header className="lg:hidden flex h-13 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] items-center justify-between px-3 z-30 shrink-0">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setIsSidebarOpen(true)}
-              className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-[var(--color-accent)] cursor-pointer"
+              className="p-2 -ml-1 rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] active:bg-[var(--color-accent)] cursor-pointer touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
               title="Open Navigation"
+              aria-label="Open sidebar menu"
             >
               <Menu className="w-5 h-5" />
             </button>
-            <span className="text-xs font-bold text-[var(--color-text-main)] truncate max-w-[100px]">
-              {currentItem?.label || 'Dashboard'}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-6 rounded-[var(--radius-xs)] bg-[var(--color-primary)] flex items-center justify-center text-white font-black text-xs">
+                T
+              </div>
+              <span className="text-sm font-extrabold text-[var(--color-text-main)] tracking-tight">
+                Tracker
+              </span>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onOpenSearch}
-            className="flex-1 flex items-center justify-between gap-2 px-2.5 py-1.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-xs text-[var(--color-text-muted)] shadow-3xs cursor-pointer"
-          >
-            <div className="flex items-center gap-2 truncate">
-              <Search className="w-3.5 h-3.5 text-[var(--color-text-muted)] shrink-0" />
-              <span className="truncate text-[11px] font-medium">Search anything...</span>
-            </div>
-            <kbd className="px-1 py-0.2 text-[9px] font-bold font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded">
-              ⌘K
-            </kbd>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onOpenSearch}
+              className="flex items-center justify-center p-2 rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] active:bg-[var(--color-accent)] border border-[var(--color-border)] min-w-[44px] min-h-[44px] cursor-pointer touch-manipulation shadow-3xs"
+              title="Search Tracker"
+              aria-label="Search Tracker"
+            >
+              <Search className="w-4.5 h-4.5" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsMoreOpen(true)}
+              className="flex items-center justify-center p-2 rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] active:bg-[var(--color-accent)] min-w-[44px] min-h-[44px] cursor-pointer touch-manipulation"
+              title="More Modules"
+              aria-label="Open more modules"
+            >
+              <span className="text-xs font-bold text-[var(--color-text-muted)]">•••</span>
+            </button>
+          </div>
         </header>
 
         {/* Dashboard Workspace */}

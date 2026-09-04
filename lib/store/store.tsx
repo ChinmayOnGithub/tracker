@@ -279,12 +279,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const weightRepo = new WeightRepository();
         const leaveRepo = new LeaveRepository();
 
-        const localTemplates = await templateRepo.getAll();
-        const localLogs = await logRepo.getAll();
-        const localJournals = await journalRepo.getAll();
-        const localWeights = await weightRepo.getAll();
-        const localLeaves = await leaveRepo.getAll();
-
         const mergeById = <T extends { id: string; updatedAt?: any }>(serverItems: T[], localItems: T[]): T[] => {
           const map = new Map<string, T>()
           serverItems.forEach(item => map.set(item.id, item))
@@ -303,13 +297,79 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           return Array.from(map.values())
         }
 
+        const localTemplates = await templateRepo.getAll()
+        const localLogs = await logRepo.getAll()
+        const localJournals = await journalRepo.getAll()
+        const localWeights = await weightRepo.getAll()
+        const localLeaves = await leaveRepo.getAll()
+
+        let localNotes: Note[] = []
+        try {
+          const { NoteRepository } = await import('@/modules/notes/repository/NoteRepository')
+          const noteRepo = new NoteRepository()
+          localNotes = await noteRepo.getAll()
+        } catch (_) {}
+
+        // Hydrate Link Library collections & links if empty
+        let initialLinks: LinkItem[] = []
+        let initialCollections: LinkCollection[] = []
+        try {
+          const { listLinkCollections } = await import('@/app/actions/links')
+          const linkRes = await listLinkCollections()
+          if (linkRes.success && linkRes.collections) {
+            initialCollections = linkRes.collections.map(c => ({
+              id: c.id,
+              name: c.name,
+              description: null,
+              icon: c.icon || null,
+              color: c.color || null,
+              createdAt: c.createdAt,
+              updatedAt: c.updatedAt
+            }))
+            initialLinks = linkRes.collections.flatMap(c => (c.links || []).map(l => ({
+              id: l.id,
+              title: l.title,
+              url: l.url,
+              description: l.notes || null,
+              collectionId: l.collectionId,
+              clicks: l.openCount ?? 0,
+              isStarred: l.isPinned ?? false,
+              createdAt: l.createdAt,
+              updatedAt: l.updatedAt
+            })))
+          }
+        } catch (_) {}
+
+        // Hydrate Vault items metadata if empty
+        let initialVault: VaultItem[] = []
+        try {
+          const { listVaultItems } = await import('@/app/actions/vault')
+          const vaultRes = await listVaultItems(null, undefined, 200, true)
+          if (vaultRes.success && vaultRes.items) {
+            initialVault = vaultRes.items.map(v => ({
+              id: v.id,
+              name: v.name,
+              isFolder: v.isFolder,
+              parentId: v.parentId,
+              size: v.fileSize,
+              mimeGroup: v.mimeGroup,
+              updatedAt: v.updatedAt,
+              createdAt: v.createdAt
+            }))
+          }
+        } catch (_) {}
+
         setState(prev => ({
           ...prev,
           templates: mergeById(prev.templates, localTemplates),
           logs: mergeById(prev.logs, localLogs),
           journalEntries: mergeById(prev.journalEntries, localJournals),
+          notes: prev.notes.length > 0 ? prev.notes : (localNotes.length > 0 ? localNotes : prev.notes),
           weightRecords: mergeById(prev.weightRecords, localWeights),
-          leaveRecords: mergeById(prev.leaveRecords, localLeaves)
+          leaveRecords: mergeById(prev.leaveRecords, localLeaves),
+          links: prev.links.length > 0 ? prev.links : initialLinks,
+          collections: prev.collections.length > 0 ? prev.collections : initialCollections,
+          vaultItems: prev.vaultItems.length > 0 ? prev.vaultItems : initialVault,
         }));
       } catch (err) {
         console.error('Failed to load offline data into store:', err);
