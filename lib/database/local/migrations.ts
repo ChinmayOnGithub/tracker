@@ -4,7 +4,7 @@ export interface MigrationCallback {
   (db: IDBDatabase, transaction: IDBTransaction): void;
 }
 
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 
 export const MIGRATIONS: Record<number, MigrationCallback> = {
   1: (db) => {
@@ -73,6 +73,18 @@ export const MIGRATIONS: Record<number, MigrationCallback> = {
       if (!store.indexNames.contains('updatedAt')) {
         store.createIndex('updatedAt', 'updatedAt', { unique: false });
       }
+    }
+  },
+  5: (db) => {
+    // Version 5 adds the notes store
+    if (!db.objectStoreNames.contains('notes')) {
+      const store = db.createObjectStore('notes', {
+        keyPath: 'id',
+        autoIncrement: false,
+      });
+      store.createIndex('userId', 'userId', { unique: false });
+      store.createIndex('updatedAt', 'updatedAt', { unique: false });
+      store.createIndex('deletedAt', 'deletedAt', { unique: false });
     }
   }
 };

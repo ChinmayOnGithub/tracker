@@ -30,6 +30,7 @@ export function setupMockIndexedDB() {
 
   const localStore: Record<string, Record<string, unknown>[]> = {
     journal_entries: [],
+    notes: [],
     activity_templates: [],
     activity_logs: [],
     weight_records: [],
