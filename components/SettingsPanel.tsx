@@ -11,10 +11,22 @@ import { checkGoogleConnection, disconnectGoogleAccount } from '@/modules/sync/g
 import { getUserProfileAction, setPasscodeAction } from '@/app/actions/auth'
 import { getGuestPermissionsAction, saveGuestPermissionsAction } from '@/app/actions/settings'
 import { BackupService } from '@/lib/database/local/BackupService'
+import { useSearchParams } from 'next/navigation'
 import { OfflineDebugPanel } from './OfflineDebugPanel'
 
 export const SettingsPanel: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave' | 'admin'>('profile')
+  const searchParams = useSearchParams()
+  const tabParam = searchParams?.get('tab') as 'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave' | 'admin' | null
+
+  const [activeSection, setActiveSection] = useState<'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave' | 'admin'>(() => {
+    return tabParam || 'profile'
+  })
+  const [prevTabParam, setPrevTabParam] = useState<string | null>(tabParam)
+
+  if (tabParam && tabParam !== prevTabParam) {
+    setPrevTabParam(tabParam)
+    setActiveSection(tabParam)
+  }
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
   const [lastSync, setLastSync] = useState<string | null>(null)

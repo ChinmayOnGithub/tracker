@@ -97,4 +97,17 @@ describe('Master Search Data Filtering & Indexing Logic', () => {
     expect(matched.length).toBe(1)
     expect(matched[0].id).toBe('lv-1')
   })
+
+  it('should match settings sections by keyword', () => {
+    const settingsCmds = [
+      { id: 'settings-appearance', label: 'Settings: Appearance & Theme', keywords: 'appearance theme colors accent dark light mode' },
+      { id: 'settings-profile', label: 'Settings: Profile & Account', keywords: 'profile account username timezone pin passcode' },
+      { id: 'settings-calendar', label: 'Settings: Calendar & Working Hours', keywords: 'calendar view working hours weekly goal' }
+    ]
+
+    const q = 'appearance'
+    const matched = settingsCmds.filter(c => `${c.label} ${c.keywords}`.toLowerCase().includes(q))
+    expect(matched.length).toBe(1)
+    expect(matched[0].id).toBe('settings-appearance')
+  })
 })

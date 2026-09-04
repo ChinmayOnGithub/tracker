@@ -6,7 +6,9 @@ import { useStore } from '@/lib/store/store'
 import {
   Calendar, FileText, CheckSquare, Scale, Briefcase,
   Plus, Settings, LayoutDashboard, BookOpen, Link as LinkIcon,
-  LogIn, LogOut, Timer, ExternalLink, Search, Folder
+  LogIn, LogOut, Timer, ExternalLink, Search, Folder,
+  Palette, Bell, RefreshCw, Lock, Database, User, ShieldCheck,
+  Sparkles
 } from 'lucide-react'
 import { toYMD, fmtDateMed } from '@/lib/dateUtils'
 
@@ -122,8 +124,89 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Open Settings',
     group: 'Navigation',
     icon: <Settings className="w-4 h-4 text-[var(--color-text-muted)]" />,
-    keywords: 'settings preferences config profile theme appearance colors guest',
+    keywords: 'settings preferences config profile theme appearance colors guest personal center',
     action: ({ onNavigate, onClose }) => { onNavigate('settings'); onClose() },
+  },
+  // Settings & Preferences
+  {
+    id: 'settings-appearance',
+    label: 'Settings: Appearance & Theme',
+    group: 'Settings',
+    icon: <Palette className="w-4 h-4 text-purple-500" />,
+    keywords: 'appearance theme colors accent font size dark light mode rounded corners styling personal customize',
+    action: ({ onClose }, router) => { router.push('/settings?tab=appearance'); onClose() },
+  },
+  {
+    id: 'settings-profile',
+    label: 'Settings: Profile & Account',
+    group: 'Settings',
+    icon: <User className="w-4 h-4 text-blue-500" />,
+    keywords: 'profile account username email timezone country birthday date time format pin passcode',
+    action: ({ onClose }, router) => { router.push('/settings?tab=profile'); onClose() },
+  },
+  {
+    id: 'settings-calendar',
+    label: 'Settings: Calendar & Working Hours',
+    group: 'Settings',
+    icon: <Calendar className="w-4 h-4 text-amber-500" />,
+    keywords: 'calendar view agenda week month start of week working hours default task duration weekly goal',
+    action: ({ onClose }, router) => { router.push('/settings?tab=calendar'); onClose() },
+  },
+  {
+    id: 'settings-dashboard',
+    label: 'Settings: Dashboard Widgets & Modules',
+    group: 'Settings',
+    icon: <LayoutDashboard className="w-4 h-4 text-emerald-500" />,
+    keywords: 'dashboard widgets visibility modules personal toggle leetcode gfg tasks work hours leave',
+    action: ({ onClose }, router) => { router.push('/settings?tab=dashboard'); onClose() },
+  },
+  {
+    id: 'settings-notifications',
+    label: 'Settings: Notifications & Sounds',
+    group: 'Settings',
+    icon: <Bell className="w-4 h-4 text-yellow-500" />,
+    keywords: 'notifications sound browser alerts summary missed task reminders audio',
+    action: ({ onClose }, router) => { router.push('/settings?tab=notifications'); onClose() },
+  },
+  {
+    id: 'settings-integrations',
+    label: 'Settings: Integrations (Google Calendar)',
+    group: 'Settings',
+    icon: <RefreshCw className="w-4 h-4 text-cyan-500" />,
+    keywords: 'integrations google calendar sync account connection sync agenda oauth',
+    action: ({ onClose }, router) => { router.push('/settings?tab=integrations'); onClose() },
+  },
+  {
+    id: 'settings-security',
+    label: 'Settings: Security & Passcode',
+    group: 'Settings',
+    icon: <Lock className="w-4 h-4 text-rose-500" />,
+    keywords: 'security passcode pin timeout session lock privacy authentication',
+    action: ({ onClose }, router) => { router.push('/settings?tab=security'); onClose() },
+  },
+  {
+    id: 'settings-backup',
+    label: 'Settings: Backup & Recovery',
+    group: 'Settings',
+    icon: <Database className="w-4 h-4 text-teal-500" />,
+    keywords: 'backup export import restore recovery json database local data snapshot',
+    action: ({ onClose }, router) => { router.push('/settings?tab=backup'); onClose() },
+  },
+  {
+    id: 'settings-admin',
+    label: 'Settings: Guest Access Admin',
+    group: 'Settings',
+    icon: <ShieldCheck className="w-4 h-4 text-indigo-500" />,
+    keywords: 'guest access permissions admin shared user roles authorization',
+    action: ({ onClose }, router) => { router.push('/settings?tab=admin'); onClose() },
+  },
+  {
+    id: 'settings-advanced',
+    label: 'Settings: Advanced & Developer Mode',
+    group: 'Settings',
+    icon: <Sparkles className="w-4 h-4 text-orange-500" />,
+    keywords: 'advanced developer mode experimental debug offline status reset factory defaults',
+    action: ({ onClose }, router) => { router.push('/settings?tab=advanced'); onClose() },
   },
   // Actions
   {
