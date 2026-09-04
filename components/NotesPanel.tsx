@@ -13,6 +13,8 @@ import {
   DropdownMenuContent, DropdownMenuItem, IconButton
 } from '@/design-system'
 
+import { useSearchParams } from 'next/navigation'
+
 function fmtRelativeTime(dateInput: Date | string) {
   try {
     const d = new Date(dateInput)
@@ -41,6 +43,8 @@ interface NotesPanelProps {
 }
 
 export const NotesPanel: React.FC<NotesPanelProps> = ({ initialNotes = [] }) => {
+  const searchParams = useSearchParams()
+  const noteParam = searchParams?.get('id') || searchParams?.get('noteId')
   const { state, initialize, upsertNoteAction, deleteNoteAction } = useStore()
 
   useEffect(() => {
@@ -51,12 +55,22 @@ export const NotesPanel: React.FC<NotesPanelProps> = ({ initialNotes = [] }) => 
 
   const notes = state.notes.length > 0 ? state.notes : initialNotes
 
-  const [rawSelectedNoteId, setSelectedNoteId] = useState<string | null>(null)
-  const selectedNoteId = rawSelectedNoteId || (notes.length > 0 ? notes[0].id : null)
-
+  const [rawSelectedNoteId, setSelectedNoteId] = useState<string | null>(() => noteParam || null)
+  const [prevNoteParam, setPrevNoteParam] = useState<string | null>(noteParam)
+  const [mobileView, setMobileView] = useState<'list' | 'editor'>(() => noteParam ? 'editor' : 'list')
   const [search, setSearch] = useState('')
-  const [mobileView, setMobileView] = useState<'list' | 'editor'>('list')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
+  // Synchronously synchronize noteParam changes into render state
+  if (noteParam !== prevNoteParam) {
+    setPrevNoteParam(noteParam)
+    if (noteParam) {
+      setSelectedNoteId(noteParam)
+      setMobileView('editor')
+    }
+  }
+
+  const selectedNoteId = rawSelectedNoteId || (notes.length > 0 ? notes[0].id : null)
 
   const activeNote = notes.find(n => n.id === selectedNoteId) || null
 

@@ -14,7 +14,8 @@ import {
   Sun,
   Moon,
   Scale,
-  Link2
+  Link2,
+  Search
 } from 'lucide-react'
 import { Button } from '@/design-system'
 import { isAuthorizedUserEmail } from '@/lib/constants'
@@ -34,6 +35,7 @@ interface DashboardShellProps {
   onLogout: () => void
   theme: 'light' | 'dark'
   onToggleTheme: () => void
+  onOpenSearch?: () => void
 }
 
 export const DashboardShell: React.FC<DashboardShellProps> = ({
@@ -43,7 +45,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   user,
   onLogout,
   theme,
-  onToggleTheme
+  onToggleTheme,
+  onOpenSearch
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
@@ -262,23 +265,67 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Navigation Header */}
-        <header className="hidden lg:flex h-14 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] items-center justify-between px-4 lg:px-6 z-30 shrink-0">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="p-1 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-[var(--color-accent)] lg:hidden"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
+        {/* Navigation Header (Desktop) */}
+        <header className="hidden lg:flex h-14 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] items-center justify-between px-4 lg:px-6 z-30 shrink-0 gap-4">
+          <div className="flex items-center gap-4 shrink-0">
             <h1 className="text-sm font-bold text-[var(--color-text-main)] tracking-tight">
               {currentItem?.label || 'Dashboard'}
             </h1>
           </div>
+
+          {/* Master Search Bar (Global Instant Search) */}
+          <div className="flex-1 max-w-md mx-auto">
+            <button
+              type="button"
+              onClick={onOpenSearch}
+              className="w-full flex items-center justify-between gap-3 px-3.5 py-1.5 bg-[var(--color-bg-base)] hover:bg-[var(--color-accent)] border border-[var(--color-border)] hover:border-[var(--color-primary)] rounded-[var(--radius-md)] text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] transition-all duration-150 shadow-2xs group cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5 truncate">
+                <Search className="w-3.5 h-3.5 text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] shrink-0 transition-colors" />
+                <span className="truncate font-medium">Search notes, tasks, journal, files...</span>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-[var(--radius-xs)] shadow-3xs">
+                  ⌘K
+                </kbd>
+              </div>
+            </button>
+          </div>
+
           {/* Header Action Date Info */}
-          <div className="flex items-center gap-3 text-[11px] font-semibold text-[var(--color-text-muted)]">
+          <div className="flex items-center gap-3 text-[11px] font-semibold text-[var(--color-text-muted)] shrink-0">
             <span>{new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
           </div>
+        </header>
+
+        {/* Navigation Header (Mobile Top Bar) */}
+        <header className="lg:hidden flex h-13 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] items-center justify-between px-3 z-30 shrink-0 gap-2">
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-[var(--color-accent)] cursor-pointer"
+              title="Open Navigation"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <span className="text-xs font-bold text-[var(--color-text-main)] truncate max-w-[100px]">
+              {currentItem?.label || 'Dashboard'}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={onOpenSearch}
+            className="flex-1 flex items-center justify-between gap-2 px-2.5 py-1.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-xs text-[var(--color-text-muted)] shadow-3xs cursor-pointer"
+          >
+            <div className="flex items-center gap-2 truncate">
+              <Search className="w-3.5 h-3.5 text-[var(--color-text-muted)] shrink-0" />
+              <span className="truncate text-[11px] font-medium">Search anything...</span>
+            </div>
+            <kbd className="px-1 py-0.2 text-[9px] font-bold font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded">
+              ⌘K
+            </kbd>
+          </button>
         </header>
 
         {/* Dashboard Workspace */}

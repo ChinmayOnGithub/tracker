@@ -1,27 +1,16 @@
 "use client"
-
-/**
- * Tracker Command Palette
- *
- * Powered by cmdk underneath — all cmdk API is contained here.
- * External consumers use the same CommandPaletteProps interface as before.
- *
- * Keyboard shortcut: Cmd/Ctrl + K
- * Mobile: open via the button rendered in DashboardLayout's mobile header.
- *
- * Rule: do NOT add business logic here. Every command calls an existing
- * action prop passed in from DashboardLayout.
- */
-
-import React, { useEffect } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Command } from 'cmdk'
+import { useRouter } from 'next/navigation'
+import { useStore } from '@/lib/store/store'
 import {
   Calendar, FileText, CheckSquare, Scale, Briefcase,
-  Plus, Settings, LayoutDashboard, BookOpen, Link,
-  LogIn, LogOut, Timer,
+  Plus, Settings, LayoutDashboard, BookOpen, Link as LinkIcon,
+  LogIn, LogOut, Timer, ExternalLink, Search, Folder
 } from 'lucide-react'
+import { toYMD, fmtDateMed } from '@/lib/dateUtils'
 
-// ─── Public interface (unchanged — DashboardLayout is unaffected) ─────────────
+// ─── Public interface ─────────────────────────────────────────────────────────
 
 export interface CommandPaletteProps {
   isOpen: boolean
@@ -39,7 +28,11 @@ interface TrackerCommand {
   group: string
   icon: React.ReactNode
   keywords?: string
-  action: (props: CommandPaletteProps) => void
+  action: (props: CommandPaletteProps, router: ReturnType<typeof useRouter>) => void
+}
+
+function stripHtml(html: string) {
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 const COMMANDS: TrackerCommand[] = [
@@ -49,7 +42,7 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Go to Today',
     group: 'Navigation',
     icon: <LayoutDashboard className="w-4 h-4 text-[var(--color-primary)]" />,
-    keywords: 'home dashboard today',
+    keywords: 'home dashboard today timeline overview',
     action: ({ onNavigate, onClose }) => { onNavigate('today'); onClose() },
   },
   {
@@ -57,7 +50,7 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Go to Calendar',
     group: 'Navigation',
     icon: <Calendar className="w-4 h-4 text-blue-500" />,
-    keywords: 'calendar schedule events',
+    keywords: 'calendar schedule events google agenda month week day',
     action: ({ onNavigate, onClose }) => { onNavigate('calendar'); onClose() },
   },
   {
@@ -65,7 +58,7 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Go to Activities',
     group: 'Navigation',
     icon: <CheckSquare className="w-4 h-4 text-amber-500" />,
-    keywords: 'activities tasks habits',
+    keywords: 'activities tasks habits recurring routines templates tracker',
     action: ({ onNavigate, onClose }) => { onNavigate('activities'); onClose() },
   },
   {
@@ -73,7 +66,7 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Go to Journal',
     group: 'Navigation',
     icon: <BookOpen className="w-4 h-4 text-teal-500" />,
-    keywords: 'journal diary daily',
+    keywords: 'journal diary daily thoughts memories gratitude reflection',
     action: ({ onNavigate, onClose }) => { onNavigate('journal'); onClose() },
   },
   {
@@ -81,7 +74,7 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Go to Notes',
     group: 'Navigation',
     icon: <FileText className="w-4 h-4 text-emerald-500" />,
-    keywords: 'notes scratchpad thought quick memos',
+    keywords: 'notes scratchpad thought quick memos ideas document writing',
     action: ({ onNavigate, onClose }) => { onNavigate('notes'); onClose() },
   },
   {
@@ -89,7 +82,7 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Go to Work Tracker',
     group: 'Navigation',
     icon: <Timer className="w-4 h-4 text-green-500" />,
-    keywords: 'work hours tracker sessions',
+    keywords: 'work hours tracker sessions timer attendance office wfh presence',
     action: ({ onNavigate, onClose }) => { onNavigate('work'); onClose() },
   },
   {
@@ -97,7 +90,7 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Go to Time Off',
     group: 'Navigation',
     icon: <Briefcase className="w-4 h-4 text-purple-500" />,
-    keywords: 'leave vacation time off pto sick',
+    keywords: 'leave vacation time off pto sick holiday absence balance',
     action: ({ onNavigate, onClose }) => { onNavigate('leave'); onClose() },
   },
   {
@@ -105,23 +98,23 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Go to Weight',
     group: 'Navigation',
     icon: <Scale className="w-4 h-4 text-indigo-500" />,
-    keywords: 'weight health bmi',
+    keywords: 'weight health bmi fitness scale log kilograms pounds',
     action: ({ onNavigate, onClose }) => { onNavigate('weight'); onClose() },
   },
   {
     id: 'go-links',
     label: 'Go to Links',
     group: 'Navigation',
-    icon: <Link className="w-4 h-4 text-cyan-500" />,
-    keywords: 'links bookmarks library',
+    icon: <LinkIcon className="w-4 h-4 text-cyan-500" />,
+    keywords: 'links bookmarks library collections url websites resources',
     action: ({ onNavigate, onClose }) => { onNavigate('links'); onClose() },
   },
   {
     id: 'go-vault',
     label: 'Go to Vault',
     group: 'Navigation',
-    icon: <FileText className="w-4 h-4 text-rose-500" />,
-    keywords: 'vault documents secure files',
+    icon: <Folder className="w-4 h-4 text-rose-500" />,
+    keywords: 'vault documents secure files aadhaar pan passport pdf id storage',
     action: ({ onNavigate, onClose }) => { onNavigate('documents'); onClose() },
   },
   {
@@ -129,16 +122,16 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Open Settings',
     group: 'Navigation',
     icon: <Settings className="w-4 h-4 text-[var(--color-text-muted)]" />,
-    keywords: 'settings preferences config profile',
+    keywords: 'settings preferences config profile theme appearance colors guest',
     action: ({ onNavigate, onClose }) => { onNavigate('settings'); onClose() },
   },
   // Actions
   {
     id: 'new-activity',
-    label: 'Create Activity',
+    label: 'Create Activity / Task',
     group: 'Actions',
     icon: <Plus className="w-4 h-4 text-emerald-500" />,
-    keywords: 'new create activity task habit template',
+    keywords: 'new create activity task habit template reminder schedule',
     action: ({ onNewActivity, onClose }) => { onNewActivity(); onClose() },
   },
   {
@@ -146,15 +139,23 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Open Journal for Today',
     group: 'Actions',
     icon: <BookOpen className="w-4 h-4 text-teal-500" />,
-    keywords: 'write journal entry today new',
+    keywords: 'write journal entry today new memo reflection',
     action: ({ onNavigate, onClose }) => { onNavigate('journal'); onClose() },
   },
   {
+    id: 'new-note',
+    label: 'Open Notes Workspace',
+    group: 'Actions',
+    icon: <FileText className="w-4 h-4 text-emerald-500" />,
+    keywords: 'create note write thoughts draft document',
+    action: ({ onNavigate, onClose }) => { onNavigate('notes'); onClose() },
+  },
+  {
     id: 'log-weight',
-    label: 'Log Weight',
+    label: 'Log Weight Entry',
     group: 'Actions',
     icon: <Scale className="w-4 h-4 text-indigo-500" />,
-    keywords: 'log weight track health',
+    keywords: 'log weight track health scale progress metrics',
     action: ({ onNavigate, onClose }) => { onNavigate('weight'); onClose() },
   },
   {
@@ -162,7 +163,7 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Request Time Off',
     group: 'Actions',
     icon: <LogOut className="w-4 h-4 text-purple-500" />,
-    keywords: 'request leave time off vacation sick pto',
+    keywords: 'request leave time off vacation sick pto holiday',
     action: ({ onNavigate, onClose }) => { onNavigate('leave'); onClose() },
   },
   {
@@ -170,7 +171,7 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Log Work Presence',
     group: 'Actions',
     icon: <LogIn className="w-4 h-4 text-green-500" />,
-    keywords: 'start work log hours presence office wfh',
+    keywords: 'start work log hours presence office wfh checkin clock',
     action: ({ onNavigate, onClose }) => { onNavigate('today'); onClose() },
   },
 ]
@@ -178,41 +179,145 @@ const COMMANDS: TrackerCommand[] = [
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
-  const { isOpen, onClose } = props
+  const { isOpen, onClose, onNavigate } = props
+  const router = useRouter()
+  const { state, setActiveJournalDateAction } = useStore()
+  const [rawSearch, setRawSearch] = useState('')
+  const [prevOpen, setPrevOpen] = useState(isOpen)
+  if (isOpen !== prevOpen) {
+    setPrevOpen(isOpen)
+    if (!isOpen) {
+      setRawSearch('')
+    }
+  }
 
-  // Cmd/Ctrl + K toggle — handled here as well as in DashboardLayout for resilience
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault()
-        if (isOpen) onClose()
+  const search = isOpen ? rawSearch : ''
+  const setSearch = setRawSearch
+
+  // Aggregate and index real-time matching data
+  const dataResults = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) {
+      return {
+        notes: [],
+        journal: [],
+        tasks: [],
+        links: [],
+        vault: [],
+        weight: [],
+        leave: [],
       }
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [isOpen, onClose])
+
+    // 1. Notes matches
+    const matchedNotes = state.notes
+      .filter(n => {
+        const titleMatch = (n.title || '').toLowerCase().includes(q)
+        const contentMatch = stripHtml(n.content || '').toLowerCase().includes(q)
+        return titleMatch || contentMatch
+      })
+      .slice(0, 5)
+
+    // 2. Journal matches
+    const matchedJournal = state.journalEntries
+      .filter(j => {
+        const dateStr = toYMD(j.journalDate)
+        const dateMatch = dateStr.includes(q)
+        const contentMatch = stripHtml(j.content || '').toLowerCase().includes(q)
+        const moodMatch = (j.mood || '').toLowerCase().includes(q)
+        const reflectMatch = (j.reflections || '').toLowerCase().includes(q)
+        const gratitudeMatch = (j.gratitude || '').toLowerCase().includes(q)
+        const lessonsMatch = (j.lessonsLearned || '').toLowerCase().includes(q)
+        const tomorrowMatch = (j.tomorrowPlan || '').toLowerCase().includes(q)
+        return dateMatch || contentMatch || moodMatch || reflectMatch || gratitudeMatch || lessonsMatch || tomorrowMatch
+      })
+      .slice(0, 5)
+
+    // 3. Task / Activity templates
+    const matchedTasks = state.templates
+      .filter(t => {
+        const nameMatch = (t.name || '').toLowerCase().includes(q)
+        const catMatch = (t.category || '').toLowerCase().includes(q)
+        const notesMatch = (t.notes || '').toLowerCase().includes(q)
+        const typeMatch = (t.type || '').toLowerCase().includes(q)
+        return nameMatch || catMatch || notesMatch || typeMatch
+      })
+      .slice(0, 5)
+
+    // 4. Links / Bookmarks
+    const matchedLinks = state.links
+      .filter(l => {
+        const titleMatch = (l.title || '').toLowerCase().includes(q)
+        const urlMatch = (l.url || '').toLowerCase().includes(q)
+        const descMatch = (l.description || '').toLowerCase().includes(q)
+        return titleMatch || urlMatch || descMatch
+      })
+      .slice(0, 5)
+
+    // 5. Vault files / folders
+    const matchedVault = state.vaultItems
+      .filter(v => {
+        const nameMatch = (v.name || '').toLowerCase().includes(q)
+        const groupMatch = (v.mimeGroup || '').toLowerCase().includes(q)
+        return nameMatch || groupMatch
+      })
+      .slice(0, 5)
+
+    // 6. Weight logs
+    const matchedWeight = state.weightRecords
+      .filter(w => {
+        const dateStr = typeof w.date === 'string' ? w.date : toYMD(w.date)
+        const dateMatch = dateStr.includes(q)
+        const weightMatch = `${w.weight} kg`.includes(q) || `${w.weight}`.includes(q)
+        const notesMatch = (w.notes || '').toLowerCase().includes(q)
+        return dateMatch || weightMatch || notesMatch
+      })
+      .slice(0, 4)
+
+    // 7. Leave records
+    const matchedLeave = state.leaveRecords
+      .filter(lr => {
+        const typeMatch = (lr.leaveType || '').toLowerCase().includes(q)
+        const statusMatch = (lr.status || '').toLowerCase().includes(q)
+        const notesMatch = (lr.notes || '').toLowerCase().includes(q)
+        const startStr = typeof lr.startDate === 'string' ? lr.startDate : toYMD(lr.startDate)
+        const endStr = typeof lr.endDate === 'string' ? lr.endDate : toYMD(lr.endDate)
+        return typeMatch || statusMatch || notesMatch || startStr.includes(q) || endStr.includes(q)
+      })
+      .slice(0, 4)
+
+    return {
+      notes: matchedNotes,
+      journal: matchedJournal,
+      tasks: matchedTasks,
+      links: matchedLinks,
+      vault: matchedVault,
+      weight: matchedWeight,
+      leave: matchedLeave,
+    }
+  }, [search, state])
 
   if (!isOpen) return null
 
-  // Group commands
+  // Command groups
   const groups = Array.from(new Set(COMMANDS.map(c => c.group)))
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 bg-slate-900/40 dark:bg-black/70 backdrop-blur-md"
-      aria-label="Command palette overlay"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-20 sm:pt-24 px-4 bg-slate-900/40 dark:bg-black/70 backdrop-blur-md"
+      aria-label="Master Search & Command palette"
     >
       {/* Backdrop */}
       <div className="fixed inset-0 cursor-default" onClick={onClose} aria-hidden />
 
       {/* cmdk dialog */}
       <Command
-        label="Command palette"
+        label="Universal Search & Command palette"
         className={[
-          'relative w-full max-w-lg overflow-hidden',
+          'relative w-full max-w-xl overflow-hidden',
           'bg-[var(--color-bg-surface)] border border-[var(--color-border)]',
-          'rounded-xl shadow-2xl flex flex-col',
-          'max-h-[420px]',
+          'rounded-2xl shadow-2xl flex flex-col',
+          'max-h-[520px]',
           'animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-200',
         ].join(' ')}
         // Dismiss on Escape
@@ -220,37 +325,323 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
           if (e.key === 'Escape') { e.preventDefault(); onClose() }
         }}
       >
-        {/* Search input */}
-        <div className="flex items-center gap-3 px-4 border-b border-[var(--color-border)] h-12 shrink-0">
-          <svg
-            className="w-4 h-4 text-[var(--color-text-muted)] shrink-0"
-            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            aria-hidden
-          >
-            <circle cx="11" cy="11" r="8" strokeWidth="2" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" strokeWidth="2" strokeLinecap="round" />
-          </svg>
+        {/* Search input bar */}
+        <div className="flex items-center gap-3 px-4 border-b border-[var(--color-border)] h-13 shrink-0 bg-[var(--color-bg-subtle)]/30">
+          <Search className="w-4.5 h-4.5 text-[var(--color-text-muted)] shrink-0" />
           <Command.Input
             autoFocus
-            placeholder="Type a command or search…"
+            value={search}
+            onValueChange={setSearch}
+            placeholder="Search notes, journal, tasks, files, links, weight, or commands…"
             className={[
-              'flex-1 bg-transparent text-xs font-bold',
+              'flex-1 bg-transparent text-xs sm:text-sm font-semibold',
               'text-[var(--color-text-main)]',
               'placeholder:text-[var(--color-text-muted)]',
               'focus:outline-none',
             ].join(' ')}
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="text-[10px] font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] px-1.5 py-0.5 rounded bg-[var(--color-bg-base)] border border-[var(--color-border)] cursor-pointer"
+            >
+              Clear
+            </button>
+          )}
           <kbd className="hidden sm:inline-flex px-1.5 py-0.5 text-[9px] font-bold font-mono text-[var(--color-text-muted)] bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded">
             ESC
           </kbd>
         </div>
 
         {/* Results */}
-        <Command.List className="flex-1 overflow-y-auto py-2 px-1.5 space-y-3">
-          <Command.Empty className="py-8 text-center text-xs text-[var(--color-text-muted)] font-medium italic">
-            No matching commands found.
+        <Command.List className="flex-1 overflow-y-auto py-2 px-2 space-y-3">
+          <Command.Empty className="py-10 text-center text-xs text-[var(--color-text-muted)] font-medium italic">
+            {search.trim() ? `No matches found for "${search}"` : 'Type anything to search across all data…'}
           </Command.Empty>
 
+          {/* ── NOTES RESULTS ── */}
+          {dataResults.notes.length > 0 && (
+            <Command.Group
+              heading="Notes"
+              className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-emerald-500"
+            >
+              {dataResults.notes.map(note => {
+                const snippet = stripHtml(note.content || '') || 'Empty note'
+                const displayTitle = note.title?.trim() || snippet.slice(0, 32) || 'Untitled Note'
+
+                return (
+                  <Command.Item
+                    key={note.id}
+                    value={`note ${note.title || ''} ${snippet} ${note.id}`}
+                    onSelect={() => {
+                      router.push(`/notes?id=${note.id}`)
+                      onClose()
+                    }}
+                    className={[
+                      'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
+                      'text-xs font-semibold text-[var(--color-text-main)]',
+                      'cursor-pointer select-none',
+                      'transition-colors duration-[var(--motion-duration-fast)]',
+                      'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
+                      '[&_svg]:aria-selected:text-white',
+                      'hover:bg-[var(--color-accent)]',
+                    ].join(' ')}
+                  >
+                    <FileText className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <span className="truncate font-bold text-xs">{displayTitle}</span>
+                      <span className="truncate text-[10px] text-[var(--color-text-muted)] group-aria-selected:text-white/80">
+                        {snippet}
+                      </span>
+                    </div>
+                  </Command.Item>
+                )
+              })}
+            </Command.Group>
+          )}
+
+          {/* ── JOURNAL RESULTS ── */}
+          {dataResults.journal.length > 0 && (
+            <Command.Group
+              heading="Journal Entries"
+              className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-teal-500"
+            >
+              {dataResults.journal.map(entry => {
+                const dateStr = toYMD(entry.journalDate)
+                const snippet = stripHtml(entry.content || '') || entry.reflections || entry.gratitude || 'Daily reflection'
+
+                return (
+                  <Command.Item
+                    key={entry.id}
+                    value={`journal ${dateStr} ${entry.mood || ''} ${snippet}`}
+                    onSelect={() => {
+                      setActiveJournalDateAction(dateStr)
+                      router.push(`/journal?date=${dateStr}`)
+                      onClose()
+                    }}
+                    className={[
+                      'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
+                      'text-xs font-semibold text-[var(--color-text-main)]',
+                      'cursor-pointer select-none',
+                      'transition-colors duration-[var(--motion-duration-fast)]',
+                      'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
+                      '[&_svg]:aria-selected:text-white',
+                      'hover:bg-[var(--color-accent)]',
+                    ].join(' ')}
+                  >
+                    <BookOpen className="w-4 h-4 text-teal-500 shrink-0" />
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <span className="truncate font-bold text-xs">{fmtDateMed(entry.journalDate)} {entry.mood ? `· ${entry.mood}` : ''}</span>
+                      <span className="truncate text-[10px] text-[var(--color-text-muted)]">
+                        {snippet}
+                      </span>
+                    </div>
+                  </Command.Item>
+                )
+              })}
+            </Command.Group>
+          )}
+
+          {/* ── ACTIVITIES / TASKS RESULTS ── */}
+          {dataResults.tasks.length > 0 && (
+            <Command.Group
+              heading="Activities & Tasks"
+              className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-amber-500"
+            >
+              {dataResults.tasks.map(task => (
+                <Command.Item
+                  key={task.id}
+                  value={`activity task ${task.name} ${task.category} ${task.notes || ''}`}
+                  onSelect={() => {
+                    onNavigate('activities')
+                    onClose()
+                  }}
+                  className={[
+                    'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
+                    'text-xs font-semibold text-[var(--color-text-main)]',
+                    'cursor-pointer select-none',
+                    'transition-colors duration-[var(--motion-duration-fast)]',
+                    'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
+                    '[&_svg]:aria-selected:text-white',
+                    'hover:bg-[var(--color-accent)]',
+                  ].join(' ')}
+                >
+                  <CheckSquare className="w-4 h-4 text-amber-500 shrink-0" />
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <span className="truncate font-bold text-xs">{task.name}</span>
+                    <span className="truncate text-[10px] text-[var(--color-text-muted)]">
+                      {task.category} · {task.recurrenceType} {task.notes ? `· ${task.notes}` : ''}
+                    </span>
+                  </div>
+                </Command.Item>
+              ))}
+            </Command.Group>
+          )}
+
+          {/* ── LINKS & BOOKMARKS RESULTS ── */}
+          {dataResults.links.length > 0 && (
+            <Command.Group
+              heading="Links & Bookmarks"
+              className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-cyan-500"
+            >
+              {dataResults.links.map(link => (
+                <Command.Item
+                  key={link.id}
+                  value={`link bookmark ${link.title} ${link.url} ${link.description || ''}`}
+                  onSelect={() => {
+                    if (link.url.startsWith('http://') || link.url.startsWith('https://')) {
+                      window.open(link.url, '_blank', 'noopener,noreferrer')
+                    } else {
+                      onNavigate('links')
+                    }
+                    onClose()
+                  }}
+                  className={[
+                    'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
+                    'text-xs font-semibold text-[var(--color-text-main)]',
+                    'cursor-pointer select-none',
+                    'transition-colors duration-[var(--motion-duration-fast)]',
+                    'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
+                    '[&_svg]:aria-selected:text-white',
+                    'hover:bg-[var(--color-accent)]',
+                  ].join(' ')}
+                >
+                  <LinkIcon className="w-4 h-4 text-cyan-500 shrink-0" />
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <div className="flex items-center gap-1.5 truncate">
+                      <span className="truncate font-bold text-xs">{link.title}</span>
+                      <ExternalLink className="w-3 h-3 text-[var(--color-text-muted)] shrink-0" />
+                    </div>
+                    <span className="truncate text-[10px] text-[var(--color-text-muted)] font-mono">
+                      {link.url}
+                    </span>
+                  </div>
+                </Command.Item>
+              ))}
+            </Command.Group>
+          )}
+
+          {/* ── VAULT DOCUMENTS RESULTS ── */}
+          {dataResults.vault.length > 0 && (
+            <Command.Group
+              heading="Vault Documents"
+              className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-rose-500"
+            >
+              {dataResults.vault.map(item => (
+                <Command.Item
+                  key={item.id}
+                  value={`vault document ${item.name} ${item.mimeGroup || ''}`}
+                  onSelect={() => {
+                    onNavigate('documents')
+                    onClose()
+                  }}
+                  className={[
+                    'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
+                    'text-xs font-semibold text-[var(--color-text-main)]',
+                    'cursor-pointer select-none',
+                    'transition-colors duration-[var(--motion-duration-fast)]',
+                    'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
+                    '[&_svg]:aria-selected:text-white',
+                    'hover:bg-[var(--color-accent)]',
+                  ].join(' ')}
+                >
+                  {item.isFolder ? <Folder className="w-4 h-4 text-rose-500 shrink-0" /> : <FileText className="w-4 h-4 text-rose-500 shrink-0" />}
+                  <div className="flex-1 min-w-0 flex flex-col">
+                    <span className="truncate font-bold text-xs">{item.name}</span>
+                    <span className="truncate text-[10px] text-[var(--color-text-muted)]">
+                      {item.isFolder ? 'Folder' : `${item.mimeGroup || 'File'}`}
+                    </span>
+                  </div>
+                </Command.Item>
+              ))}
+            </Command.Group>
+          )}
+
+          {/* ── WEIGHT LOGS RESULTS ── */}
+          {dataResults.weight.length > 0 && (
+            <Command.Group
+              heading="Weight & Health"
+              className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-indigo-500"
+            >
+              {dataResults.weight.map(rec => {
+                const dateStr = typeof rec.date === 'string' ? rec.date : toYMD(rec.date)
+
+                return (
+                  <Command.Item
+                    key={rec.id}
+                    value={`weight health ${dateStr} ${rec.weight} ${rec.notes || ''}`}
+                    onSelect={() => {
+                      onNavigate('weight')
+                      onClose()
+                    }}
+                    className={[
+                      'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
+                      'text-xs font-semibold text-[var(--color-text-main)]',
+                      'cursor-pointer select-none',
+                      'transition-colors duration-[var(--motion-duration-fast)]',
+                      'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
+                      '[&_svg]:aria-selected:text-white',
+                      'hover:bg-[var(--color-accent)]',
+                    ].join(' ')}
+                  >
+                    <Scale className="w-4 h-4 text-indigo-500 shrink-0" />
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <span className="truncate font-bold text-xs">{rec.weight} kg · {fmtDateMed(rec.date)}</span>
+                      {rec.notes && (
+                        <span className="truncate text-[10px] text-[var(--color-text-muted)]">
+                          {rec.notes}
+                        </span>
+                      )}
+                    </div>
+                  </Command.Item>
+                )
+              })}
+            </Command.Group>
+          )}
+
+          {/* ── TIME OFF / LEAVE RESULTS ── */}
+          {dataResults.leave.length > 0 && (
+            <Command.Group
+              heading="Time Off / Leave"
+              className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1 [&_[cmdk-group-heading]]:text-[9px] [&_[cmdk-group-heading]]:font-extrabold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest [&_[cmdk-group-heading]]:text-purple-500"
+            >
+              {dataResults.leave.map(record => {
+                const start = typeof record.startDate === 'string' ? record.startDate : toYMD(record.startDate)
+                const end = typeof record.endDate === 'string' ? record.endDate : toYMD(record.endDate)
+
+                return (
+                  <Command.Item
+                    key={record.id}
+                    value={`leave vacation pto ${record.leaveType} ${start} ${end} ${record.status} ${record.notes || ''}`}
+                    onSelect={() => {
+                      onNavigate('leave')
+                      onClose()
+                    }}
+                    className={[
+                      'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
+                      'text-xs font-semibold text-[var(--color-text-main)]',
+                      'cursor-pointer select-none',
+                      'transition-colors duration-[var(--motion-duration-fast)]',
+                      'aria-selected:bg-[var(--color-primary)] aria-selected:text-white',
+                      '[&_svg]:aria-selected:text-white',
+                      'hover:bg-[var(--color-accent)]',
+                    ].join(' ')}
+                  >
+                    <Briefcase className="w-4 h-4 text-purple-500 shrink-0" />
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      <span className="truncate font-bold text-xs capitalize">{record.leaveType} ({record.totalDays}d) · {record.status}</span>
+                      <span className="truncate text-[10px] text-[var(--color-text-muted)]">
+                        {start} to {end} {record.notes ? `· ${record.notes}` : ''}
+                      </span>
+                    </div>
+                  </Command.Item>
+                )
+              })}
+            </Command.Group>
+          )}
+
+          {/* ── STANDARD NAVIGATION & SYSTEM COMMANDS ── */}
           {groups.map(group => {
             const groupCmds = COMMANDS.filter(c => c.group === group)
             return (
@@ -263,7 +654,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
                   <Command.Item
                     key={cmd.id}
                     value={`${cmd.label} ${cmd.keywords ?? ''}`}
-                    onSelect={() => cmd.action(props)}
+                    onSelect={() => cmd.action(props, router)}
                     className={[
                       'flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]',
                       'text-xs font-semibold text-[var(--color-text-main)]',
@@ -286,3 +677,4 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
     </div>
   )
 }
+

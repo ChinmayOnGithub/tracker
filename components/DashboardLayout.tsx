@@ -600,6 +600,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         onLogout={handleLogout}
         theme={theme}
         onToggleTheme={toggleTheme}
+        onOpenSearch={() => setIsCommandPaletteOpen(true)}
       >
         {children}
 
