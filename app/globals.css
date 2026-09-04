@@ -140,8 +140,13 @@ a, button, input, select, textarea {
 }
 
 /* Contenteditable editor styling */
-.contenteditable-editor {
+.contenteditable-editor,
+.contenteditable-editor .tiptap,
+.contenteditable-editor .ProseMirror {
   outline: none;
+  min-height: inherit;
+  height: 100%;
+  cursor: text;
 }
 .contenteditable-editor ul {
   list-style-type: disc !important;

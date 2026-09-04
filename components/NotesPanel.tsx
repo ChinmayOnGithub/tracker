@@ -144,6 +144,30 @@ export const NotesPanel: React.FC<NotesPanelProps> = ({ initialNotes = [] }) => 
     }
   }
 
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const uploadImage = (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image exceeds maximum recommended size (5MB). Please choose a smaller image.')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string
+      const imgHtml = `<img src="${base64}" alt="${file.name}" style="max-height: 500px; object-fit: contain; display: block;" />`
+      setContent(prev => prev + imgHtml)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (files) {
+      Array.from(files).forEach(file => uploadImage(file))
+    }
+    e.target.value = ''
+  }
+
   const filteredNotes = notes.filter(n => {
     if (!search.trim()) return true
     const q = search.toLowerCase()
@@ -236,13 +260,13 @@ export const NotesPanel: React.FC<NotesPanelProps> = ({ initialNotes = [] }) => 
       </aside>
 
       {/* ── RIGHT WORKSPACE: Note Canvas ── */}
-      <main className={`flex-1 flex flex-col bg-[var(--color-bg-base)] relative overflow-hidden ${mobileView === 'list' ? 'hidden md:flex' : 'flex'}`}>
+      <main className={`flex-1 flex flex-col bg-[var(--color-bg-base)] relative overflow-hidden h-full min-h-0 ${mobileView === 'list' ? 'hidden md:flex' : 'flex'}`}>
         {activeNote ? (
-          <div className="flex-1 overflow-y-auto px-4 sm:px-8 md:px-12 py-6 sm:py-8 pb-24">
-            <div className="max-w-4xl mx-auto w-full flex flex-col gap-4">
+          <div className="flex-1 flex flex-col overflow-y-auto px-4 sm:px-8 md:px-12 py-6 sm:py-8 pb-24 h-full min-h-0">
+            <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col gap-4 min-h-0">
               
               {/* Top Navigation & Status */}
-              <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border)]/40 pb-3">
+              <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border)]/40 pb-3 shrink-0">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -281,6 +305,11 @@ export const NotesPanel: React.FC<NotesPanelProps> = ({ initialNotes = [] }) => 
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        Insert Image
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
                         onClick={() => handleDeleteNote(activeNote.id)}
                         className="text-rose-500 hover:text-rose-600"
                       >
@@ -291,22 +320,33 @@ export const NotesPanel: React.FC<NotesPanelProps> = ({ initialNotes = [] }) => 
                 </div>
               </div>
 
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+                multiple
+              />
+
               {/* Editable Title Input */}
               <input
                 type="text"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 placeholder="Untitled Note"
-                className="w-full bg-transparent text-2xl sm:text-3xl font-black text-[var(--color-text-main)] placeholder-[var(--color-text-muted)]/50 focus:outline-hidden tracking-tight border-0 p-0"
+                className="w-full bg-transparent text-2xl sm:text-3xl font-black text-[var(--color-text-main)] placeholder-[var(--color-text-muted)]/50 focus:outline-hidden tracking-tight border-0 p-0 shrink-0"
               />
 
-              {/* Always-editable Rich Text Editor */}
-              <div className="mt-2">
+              {/* Always-editable Rich Text Editor spanning the whole available card area */}
+              <div className="mt-2 flex-1 flex flex-col min-h-0">
                 <RichTextEditor
                   value={content}
                   onChange={(html) => setContent(html)}
+                  onImageUploadRequested={() => fileInputRef.current?.click()}
                   placeholder="Start typing your note..."
-                  minHeight="450px"
+                  minHeight="100%"
+                  className="flex-1 h-full min-h-0"
                 />
               </div>
             </div>

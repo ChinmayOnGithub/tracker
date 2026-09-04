@@ -532,13 +532,13 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
       </aside>
 
       {/* ── RIGHT WORKSPACE: Canvas ── */}
-      <main className={`flex-1 flex flex-col xl:flex-row bg-[var(--color-bg-base)] relative overflow-hidden ${mobileView === 'list' ? 'hidden md:flex' : 'flex'}`}>
+      <main className={`flex-1 flex flex-col xl:flex-row bg-[var(--color-bg-base)] relative overflow-hidden h-full min-h-0 ${mobileView === 'list' ? 'hidden md:flex' : 'flex'}`}>
         
         {/* Editor Writing Area */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 md:px-12 py-6 sm:py-8 pb-24 border-r border-[var(--color-border)]/50">
-          <div className="max-w-4xl mx-auto w-full flex flex-col gap-5">
+        <div className="flex-1 flex flex-col overflow-y-auto px-4 sm:px-6 md:px-12 py-6 sm:py-8 pb-24 border-r border-[var(--color-border)]/50 h-full min-h-0">
+          <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col gap-5 min-h-0">
             
-            <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center justify-between flex-wrap gap-3 shrink-0">
               {dateParam ? (
                 <Button
                   variant="outline"
@@ -579,7 +579,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
               </div>
             </div>
 
-            <div className="border-b border-[var(--color-border)]/50 pb-3">
+            <div className="border-b border-[var(--color-border)]/50 pb-3 shrink-0">
               <h1 className="text-xl sm:text-2xl font-black text-[var(--color-text-main)] tracking-tight">
                 {fmtDateFull(activeDate + 'T12:00:00Z')}
               </h1>
@@ -595,7 +595,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
             />
 
             {/* Always-editable Rich Text Editor with slide-down toolbar on focus */}
-            <div className="mt-2">
+            <div className="mt-2 flex-1 flex flex-col min-h-0">
               <RichTextEditor
                 value={content}
                 onChange={(html) => {
@@ -604,7 +604,8 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
                   saveJournalDraftAction(activeDate, { content: html })
                 }}
                 onImageUploadRequested={() => fileInputRef.current?.click()}
-                minHeight="400px"
+                minHeight="100%"
+                className="flex-1 h-full min-h-0"
               />
             </div>
 

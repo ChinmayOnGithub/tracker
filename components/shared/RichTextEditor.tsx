@@ -214,10 +214,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   }
 
   return (
-    <div className={`relative flex flex-col w-full ${className}`}>
+    <div className={`relative flex flex-col w-full flex-1 h-full min-h-0 ${className}`}>
       {/* ── Slide-Down Formatting Toolbar on Focus ── */}
       <div
-        className={`sticky top-0 z-30 mb-2 transition-all duration-200 ease-out ${
+        className={`sticky top-0 z-30 mb-2 transition-all duration-200 ease-out shrink-0 ${
           isFocused
             ? 'opacity-100 translate-y-0 pointer-events-auto max-h-24'
             : 'opacity-0 -translate-y-2 pointer-events-none max-h-0 overflow-hidden'
@@ -268,7 +268,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             <Button
               variant="ghost"
               size="icon-sm"
-              onMouseDown={e => { e.preventDefault(); editor?.chain().focus().toggleHighlight({ color: '#fef08a' }).run() }}
+              onMouseDown={e => { e.preventDefault(); editor?.chain().focus().toggleHighlight().run() }}
               title="Highlight"
               icon={<Highlighter size={13} />}
               className={editor?.isActive('highlight') ? 'bg-[var(--color-accent)] font-bold text-[var(--color-primary)]' : ''}
@@ -286,7 +286,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               variant="ghost"
               size="icon-sm"
               onMouseDown={e => { e.preventDefault(); editor?.chain().focus().toggleTaskList().run() }}
-              title="Checklist / Task List"
+              title="Checklist"
               icon={<CheckSquare size={13} />}
               className={editor?.isActive('taskList') ? 'bg-[var(--color-accent)] font-bold text-[var(--color-primary)]' : ''}
             />
@@ -294,7 +294,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
               variant="ghost"
               size="icon-sm"
               onMouseDown={e => { e.preventDefault(); setLink() }}
-              title="Add / Edit Link"
+              title="Add Link"
               icon={<LinkIcon size={13} />}
               className={editor?.isActive('link') ? 'bg-[var(--color-accent)] font-bold text-[var(--color-primary)]' : ''}
             />
@@ -347,9 +347,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
         </div>
       </div>
 
-      {/* ── Editor Canvas: Always Clickable & Editable ── */}
+      {/* ── Editor Canvas: Always Clickable & Editable taking full available area ── */}
       <div
-        className="w-full cursor-text"
+        className="w-full flex-1 h-full min-h-[350px] cursor-text flex flex-col"
         onClick={() => {
           if (editor && !editor.isFocused) {
             editor.commands.focus()
@@ -358,7 +358,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       >
         <EditorContent
           editor={editor}
-          className="w-full bg-transparent text-[15px] sm:text-[16px] text-[var(--color-text-main)] placeholder-[var(--color-text-muted)] focus:outline-hidden leading-[1.75] resize-none font-sans min-h-[300px] border-0 p-0 outline-hidden contenteditable-editor"
+          className="w-full flex-1 h-full bg-transparent text-[15px] sm:text-[16px] text-[var(--color-text-main)] placeholder-[var(--color-text-muted)] focus:outline-hidden leading-[1.75] resize-none font-sans border-0 p-0 outline-hidden contenteditable-editor"
           style={{ minHeight }}
         />
       </div>
