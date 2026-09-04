@@ -38,6 +38,8 @@ import { getWeekDates } from '@/lib/recurrence'
 import { LeaveRecord, LeaveAllowance, WeightRecord, JournalEntry, CalendarData } from '@/lib/store/store'
 import { Button, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/design-system'
 
+import { DailyCodingWidget } from './today/DailyCodingWidget'
+
 interface WidgetDefinition {
   id: string
   title: string
@@ -52,6 +54,8 @@ const WIDGET_REGISTRY: WidgetDefinition[] = [
   { id: 'leaveBalance', title: 'Leave Balance', description: 'View vacation and personal leave statistics', category: 'Work', defaultEnabled: true },
   { id: 'weight', title: 'Weight Tracker', description: 'Log and monitor body weight stats', category: 'Health', defaultEnabled: true },
   { id: 'recentDocuments', title: 'Recent Vault Documents', description: 'Quick access to recently decrypted files', category: 'Vault', defaultEnabled: true },
+  { id: 'leetcodePOTD', title: 'LeetCode POTD', description: "Today's daily LeetCode coding problem", category: 'Coding', defaultEnabled: false },
+  { id: 'gfgPOTD', title: 'GFG POTD', description: "Today's GeeksforGeeks problem of the day", category: 'Coding', defaultEnabled: false },
 ]
 
 // ─── Sortable widget row (used inside the customizer dialog) ──────────────────
@@ -220,15 +224,38 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   // Widget config — standard Next.js isomorphic hydration approach
   const WIDGET_DEFAULTS = {
-    order: ['journal', 'workHours', 'leaveBalance', 'weight', 'recentDocuments'] as string[],
-    hidden: [] as string[],
+    order: ['journal', 'workHours', 'leaveBalance', 'weight', 'recentDocuments', 'leetcodePOTD', 'gfgPOTD'] as string[],
+    hidden: ['leetcodePOTD', 'gfgPOTD'] as string[],
   }
+
+  const reconcileWidgetConfig = (config: { order: string[]; hidden: string[] }) => {
+    // Preserve existing order, append any newly registered widgets
+    const registryIds = WIDGET_REGISTRY.map(w => w.id)
+    const existingOrder = config.order.filter(id => registryIds.includes(id))
+    const missingIds = registryIds.filter(id => !existingOrder.includes(id))
+    const finalOrder = [...existingOrder, ...missingIds]
+
+    // If a missing widget has defaultEnabled: false and isn't in hidden, mark it hidden
+    const newHidden = new Set(config.hidden)
+    for (const missingId of missingIds) {
+      const def = WIDGET_REGISTRY.find(w => w.id === missingId)
+      if (def && !def.defaultEnabled) {
+        newHidden.add(missingId)
+      }
+    }
+
+    return {
+      order: finalOrder,
+      hidden: Array.from(newHidden),
+    }
+  }
+
   const [widgetsConfig, setWidgetsConfig] = useState<{ order: string[]; hidden: string[] }>(() => {
     if (initialDashboardConfig) {
-      return {
+      return reconcileWidgetConfig({
         order: initialDashboardConfig.order || WIDGET_DEFAULTS.order,
         hidden: initialDashboardConfig.hidden || WIDGET_DEFAULTS.hidden,
-      }
+      })
     }
     return WIDGET_DEFAULTS
   })
@@ -242,7 +269,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
       if (saved) {
         const parsed = JSON.parse(saved)
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        setWidgetsConfig(prev => ({ ...prev, ...parsed }))
+        setWidgetsConfig(reconcileWidgetConfig(parsed))
       }
     } catch (e) {
       console.error('[TodayDashboard] Failed to load widget config:', e)
@@ -582,6 +609,22 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                     key="recentDocs"
                     isVisible={true}
                     onTabChange={onTabChange}
+                  />
+                )
+              case 'leetcodePOTD':
+                return (
+                  <DailyCodingWidget
+                    key="leetcodePOTD"
+                    platform="leetcode"
+                    todayStr={todayStr}
+                  />
+                )
+              case 'gfgPOTD':
+                return (
+                  <DailyCodingWidget
+                    key="gfgPOTD"
+                    platform="gfg"
+                    todayStr={todayStr}
                   />
                 )
               default:
