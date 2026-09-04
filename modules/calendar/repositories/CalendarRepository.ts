@@ -4,7 +4,7 @@ import { CalendarEvent, CalendarSyncState, Prisma } from '@prisma/client'
 export class CalendarRepository {
   static async findEventsForUser(
     userId: string,
-    _start: Date,
+    start: Date,
     end: Date
   ): Promise<CalendarEvent[]> {
     return db.calendarEvent.findMany({
@@ -12,6 +12,7 @@ export class CalendarRepository {
         userId,
         deletedAt: null,
         start: { lte: end },
+        end: { gte: start },
       },
       orderBy: {
         start: 'asc',
@@ -19,21 +20,24 @@ export class CalendarRepository {
     })
   }
 
-  static async findEventById(id: string): Promise<CalendarEvent | null> {
+  static async findEventById(userId: string, id: string): Promise<CalendarEvent | null> {
     return db.calendarEvent.findFirst({
       where: {
         id,
+        userId,
         deletedAt: null,
       },
     })
   }
 
   static async findEventByArtifact(
+    userId: string,
     trackerArtifactId: string,
     trackerArtifactType: string
   ): Promise<CalendarEvent | null> {
     return db.calendarEvent.findFirst({
       where: {
+        userId,
         trackerArtifactId,
         trackerArtifactType,
         deletedAt: null,
@@ -55,9 +59,15 @@ export class CalendarRepository {
   }
 
   static async updateEvent(
+    userId: string,
     id: string,
     data: Partial<Omit<CalendarEvent, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'deletedAt'>>
   ): Promise<CalendarEvent> {
+    const existing = await this.findEventById(userId, id)
+    if (!existing) {
+      throw new Error(`Calendar event not found or unauthorized for update: ${id}`)
+    }
+
     return db.calendarEvent.update({
       where: { id },
       data: {
@@ -67,7 +77,12 @@ export class CalendarRepository {
     })
   }
 
-  static async deleteEvent(id: string): Promise<CalendarEvent> {
+  static async deleteEvent(userId: string, id: string): Promise<CalendarEvent> {
+    const existing = await this.findEventById(userId, id)
+    if (!existing) {
+      throw new Error(`Calendar event not found or unauthorized for deletion: ${id}`)
+    }
+
     // Database Safety Safeguard: Always soft delete CalendarEvent using deletedAt
     return db.calendarEvent.update({
       where: { id },
@@ -76,12 +91,13 @@ export class CalendarRepository {
   }
 
   static async deleteEventByArtifact(
+    userId: string,
     trackerArtifactId: string,
     trackerArtifactType: string
   ): Promise<void> {
-    const existing = await this.findEventByArtifact(trackerArtifactId, trackerArtifactType)
+    const existing = await this.findEventByArtifact(userId, trackerArtifactId, trackerArtifactType)
     if (existing) {
-      await this.deleteEvent(existing.id)
+      await this.deleteEvent(userId, existing.id)
     }
   }
 

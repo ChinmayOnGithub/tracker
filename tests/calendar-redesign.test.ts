@@ -112,7 +112,7 @@ describe('Calendar Module Redesign (Phase 1)', () => {
       const createdEvents: CalendarEvent[] = []
       
       // Mock repository calls
-      CalendarRepository.findEventByArtifact = mock(() => Promise.resolve(null))
+      CalendarRepository.findEventByArtifact = mock((_userId: string, _taskId: string, _type: string) => Promise.resolve(null))
       CalendarRepository.createEvent = mock((userId, data) => {
         const evt = { id: 'evt-mock', userId, ...data } as unknown as CalendarEvent
         createdEvents.push(evt)

@@ -36,7 +36,7 @@ export class CalendarService {
       const provider = await this.getProvider(userId)
       if (provider) {
         const externalId = await provider.createExternalEvent(localEvent)
-        return await CalendarRepository.updateEvent(localEvent.id, {
+        return await CalendarRepository.updateEvent(userId, localEvent.id, {
           externalId,
           externalProvider: 'GOOGLE'
         })
@@ -49,13 +49,14 @@ export class CalendarService {
   }
 
   static async updateEvent(
+    userId: string,
     eventId: string,
     data: Partial<Omit<CalendarEvent, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'deletedAt'>>
   ): Promise<CalendarEvent> {
-    const localEvent = await CalendarRepository.updateEvent(eventId, data)
+    const localEvent = await CalendarRepository.updateEvent(userId, eventId, data)
 
     try {
-      const provider = await this.getProvider(localEvent.userId)
+      const provider = await this.getProvider(userId)
       if (provider && localEvent.externalId) {
         await provider.updateExternalEvent(localEvent)
       }
@@ -66,11 +67,11 @@ export class CalendarService {
     return localEvent
   }
 
-  static async deleteEvent(eventId: string): Promise<CalendarEvent> {
-    const localEvent = await CalendarRepository.deleteEvent(eventId)
+  static async deleteEvent(userId: string, eventId: string): Promise<CalendarEvent> {
+    const localEvent = await CalendarRepository.deleteEvent(userId, eventId)
 
     try {
-      const provider = await this.getProvider(localEvent.userId)
+      const provider = await this.getProvider(userId)
       if (provider && localEvent.externalId) {
         await provider.deleteExternalEvent(localEvent.externalId)
       }
@@ -89,9 +90,9 @@ export class CalendarService {
     end: Date,
     color?: string
   ): Promise<CalendarEvent> {
-    const existing = await CalendarRepository.findEventByArtifact(taskId, 'task')
+    const existing = await CalendarRepository.findEventByArtifact(userId, taskId, 'task')
     if (existing) {
-      return this.updateEvent(existing.id, {
+      return this.updateEvent(userId, existing.id, {
         title: taskTitle,
         start,
         end,
@@ -117,10 +118,10 @@ export class CalendarService {
     })
   }
 
-  static async unscheduleTask(taskId: string): Promise<void> {
-    const existing = await CalendarRepository.findEventByArtifact(taskId, 'task')
+  static async unscheduleTask(userId: string, taskId: string): Promise<void> {
+    const existing = await CalendarRepository.findEventByArtifact(userId, taskId, 'task')
     if (existing) {
-      await this.deleteEvent(existing.id)
+      await this.deleteEvent(userId, existing.id)
     }
   }
 

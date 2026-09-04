@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardBody, Button, Skeleton, Select, Input } from '@/design-system'
+import { Card, CardHeader, CardBody, Button, Skeleton, Select, Input, ConfirmDialog } from '@/design-system'
 import { 
   User, Palette, Calendar, Layout, Bell, RefreshCw, Lock, 
   Settings2, Database, Shield, CheckCircle2, AlertCircle, 
@@ -301,8 +301,10 @@ export const SettingsPanel: React.FC = () => {
     setPasscodeActionLoading(false)
   }
 
-  const handleDisablePasscode = async () => {
-    if (!confirm('Disable passcode login? You will need to login using Google authentication next time.')) return
+  const [showDisablePasscodeDialog, setShowDisablePasscodeDialog] = useState(false)
+
+  const handleDisablePasscodeConfirm = async () => {
+    setShowDisablePasscodeDialog(false)
     setPasscodeError(null)
     setPasscodeSuccess(null)
     setPasscodeActionLoading(true)
@@ -314,6 +316,10 @@ export const SettingsPanel: React.FC = () => {
       setPasscodeError(res.error || 'Failed to disable passcode.')
     }
     setPasscodeActionLoading(false)
+  }
+
+  const handleDisablePasscode = () => {
+    setShowDisablePasscodeDialog(true)
   }
 
   const handleExportBackup = async () => {
@@ -1081,6 +1087,18 @@ export const SettingsPanel: React.FC = () => {
                     Could not fetch security profile metadata.
                   </div>
                 )}
+                
+                <ConfirmDialog
+                  isOpen={showDisablePasscodeDialog}
+                  onClose={() => setShowDisablePasscodeDialog(false)}
+                  onConfirm={handleDisablePasscodeConfirm}
+                  title="Disable Passcode Login"
+                  description="Disable passcode login? You will need to login using Google authentication next time."
+                  confirmText="Disable Passcode"
+                  cancelText="Cancel"
+                  variant="danger"
+                  isLoading={passcodeActionLoading}
+                />
               </CardBody>
             </Card>
           )}

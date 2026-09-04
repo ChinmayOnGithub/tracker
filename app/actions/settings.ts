@@ -109,3 +109,120 @@ export async function saveDashboardConfigAction(config: { order: string[]; hidde
     return { success: false, error: 'Database error while saving config.' }
   }
 }
+
+export async function getUserSettingsAction(): Promise<{
+  success: boolean
+  settings?: {
+    appearance?: {
+      accent?: string
+      fontSize?: string
+      rounded?: string
+      animations?: string
+    }
+    weeklyGoal?: number
+    dashboard?: { order: string[]; hidden: string[] }
+  }
+  error?: string
+}> {
+  try {
+    const loggedUser = await getLoggedUser()
+    if (!loggedUser) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    const records = await db.userSetting.findMany({
+      where: {
+        userId: loggedUser.id,
+        module: { in: ['APPEARANCE', 'WORK_HOURS', 'DASHBOARD'] },
+      },
+    })
+
+    const appearanceRecord = records.find(r => r.module === 'APPEARANCE')
+    const workHoursRecord = records.find(r => r.module === 'WORK_HOURS')
+    const dashboardRecord = records.find(r => r.module === 'DASHBOARD')
+
+    return {
+      success: true,
+      settings: {
+        appearance: (appearanceRecord?.config as {
+          accent?: string
+          fontSize?: string
+          rounded?: string
+          animations?: string
+        }) || undefined,
+        weeklyGoal: (workHoursRecord?.config as { weeklyGoal?: number })?.weeklyGoal,
+        dashboard: (dashboardRecord?.config as { order: string[]; hidden: string[] }) || undefined,
+      },
+    }
+  } catch (error) {
+    console.error('Failed to get user settings:', error)
+    return { success: false, error: 'Database error fetching user settings' }
+  }
+}
+
+export async function saveUserAppearanceAction(appearance: {
+  accent?: string
+  fontSize?: string
+  rounded?: string
+  animations?: string
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const loggedUser = await getLoggedUser()
+    if (!loggedUser) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    await db.userSetting.upsert({
+      where: {
+        userId_module: {
+          userId: loggedUser.id,
+          module: 'APPEARANCE',
+        },
+      },
+      update: {
+        config: appearance as unknown as Prisma.InputJsonValue,
+      },
+      create: {
+        userId: loggedUser.id,
+        module: 'APPEARANCE',
+        config: appearance as unknown as Prisma.InputJsonValue,
+      },
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to save appearance settings:', error)
+    return { success: false, error: 'Database error saving appearance' }
+  }
+}
+
+export async function saveWeeklyGoalAction(weeklyGoal: number): Promise<{ success: boolean; error?: string }> {
+  try {
+    const loggedUser = await getLoggedUser()
+    if (!loggedUser) {
+      return { success: false, error: 'Unauthorized' }
+    }
+
+    await db.userSetting.upsert({
+      where: {
+        userId_module: {
+          userId: loggedUser.id,
+          module: 'WORK_HOURS',
+        },
+      },
+      update: {
+        config: { weeklyGoal } as unknown as Prisma.InputJsonValue,
+      },
+      create: {
+        userId: loggedUser.id,
+        module: 'WORK_HOURS',
+        config: { weeklyGoal } as unknown as Prisma.InputJsonValue,
+      },
+    })
+
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to save weekly goal setting:', error)
+    return { success: false, error: 'Database error saving weekly goal' }
+  }
+}

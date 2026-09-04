@@ -70,7 +70,7 @@ export async function updateCalendarEventAction(
       return { success: false, error: 'Event not found or unauthorized' }
     }
 
-    const updated = await CalendarService.updateEvent(id, {
+    const updated = await CalendarService.updateEvent(user.id, id, {
       title: data.title,
       start: data.start ? new Date(data.start) : undefined,
       end: data.end ? new Date(data.end) : undefined,
@@ -100,7 +100,7 @@ export async function deleteCalendarEventAction(id: string) {
       return { success: false, error: 'Event not found or unauthorized' }
     }
 
-    await CalendarService.deleteEvent(id)
+    await CalendarService.deleteEvent(user.id, id)
 
     revalidatePath('/')
     return { success: true }

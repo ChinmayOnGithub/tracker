@@ -26,8 +26,9 @@ export interface SparklineProps {
 
 export function Sparkline({ data, width = 600, height = 160 }: SparklineProps) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+  const gradId = React.useId()
   
-  if (data.length < 2) return null
+  if (data.length === 0) return null
 
   // Margins
   const padLeft = 45
@@ -36,6 +37,65 @@ export function Sparkline({ data, width = 600, height = 160 }: SparklineProps) {
   const padBottom = 25
   const chartW = width - padLeft - padRight
   const chartH = height - padTop - padBottom
+
+  // Single-record state: render a clear single point indicator without fabricating a trend
+  if (data.length === 1) {
+    const single = data[0]
+    const x = padLeft + chartW / 2
+    const y = padTop + chartH / 2
+
+    return (
+      <div className="relative">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full select-none" style={{ height }}>
+          <line
+            x1={padLeft}
+            y1={y}
+            x2={width - padRight}
+            y2={y}
+            stroke="currentColor"
+            strokeOpacity="0.1"
+            strokeDasharray="3 3"
+            strokeWidth="1"
+          />
+          <text
+            x={padLeft - 8}
+            y={y + 3}
+            textAnchor="end"
+            className="text-[9px] font-mono fill-[var(--color-text-muted)] tabular-nums"
+          >
+            {single.weight.toFixed(1)}
+          </text>
+          <text
+            x={x}
+            y={height - 8}
+            textAnchor="middle"
+            className="text-[9px] font-mono fill-[var(--color-text-muted)]"
+          >
+            {fmtDateMed(single.date)}
+          </text>
+          <circle
+            cx={x}
+            cy={y}
+            r="6"
+            fill="var(--color-primary)"
+            stroke="var(--color-bg-surface)"
+            strokeWidth="2"
+          />
+          <text
+            x={x}
+            y={y - 12}
+            textAnchor="middle"
+            className="text-[11px] font-bold fill-[var(--color-text-main)]"
+          >
+            {single.weight.toFixed(1)} kg
+          </text>
+        </svg>
+        <div className="text-center text-[10px] text-[var(--color-text-muted)] mt-1 font-medium">
+          Single measurement recorded ({fmtDateMed(single.date)}). Add more entries to visualize your weight trend.
+        </div>
+      </div>
+    )
+  }
 
   const weights = data.map(d => d.weight)
   const minW = Math.min(...weights)
@@ -83,7 +143,7 @@ export function Sparkline({ data, width = 600, height = 160 }: SparklineProps) {
     <div className="relative">
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full select-none" style={{ height }}>
         <defs>
-          <linearGradient id="wGrad" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.2" />
             <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0" />
           </linearGradient>
@@ -132,7 +192,7 @@ export function Sparkline({ data, width = 600, height = 160 }: SparklineProps) {
         })}
 
         {/* Area fill */}
-        <path d={areaD} fill="url(#wGrad)" />
+        <path d={areaD} fill={`url(#${gradId})`} />
 
         {/* Rolling average dashed line */}
         <path
@@ -500,7 +560,7 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
       )}
 
       {/* Chart */}
-      {chartData.length >= 2 ? (
+      {chartData.length >= 1 ? (
         <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl p-4 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>
@@ -508,34 +568,38 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
                 Weight Trend
               </h2>
               <span className="text-[10px] text-[var(--color-text-muted)]">
-                {fmtDateShort(chartData[0].date)} → {fmtDateShort(chartData[chartData.length - 1].date)}
+                {chartData.length > 1
+                  ? `${fmtDateShort(chartData[0].date)} → ${fmtDateShort(chartData[chartData.length - 1].date)}`
+                  : fmtDateShort(chartData[0].date)}
               </span>
             </div>
-            <div className="flex bg-slate-100 dark:bg-zinc-900/60 p-0.5 rounded-[9px] shadow-inner text-[10px] self-start">
-              {(['30D', '60D', '90D', 'All'] as const).map(p => (
-                <Button
-                  key={p}
-                  type="button"
-                  variant={period === p ? 'secondary' : 'outline'}
-                  size="sm"
-                  onClick={() => setPeriod(p)}
-                  className={`px-2.5 py-1 text-center font-bold rounded-md transition-all duration-200 cursor-pointer ${
-                    period === p
-                      ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
-                      : 'text-slate-500 dark:text-zinc-550 hover:text-slate-700 dark:hover:text-zinc-300 border-none bg-transparent shadow-none hover:bg-transparent'
-                  }`}
-                >
-                  {p}
-                </Button>
-              ))}
-            </div>
+            {chartData.length > 1 && (
+              <div className="flex bg-slate-100 dark:bg-zinc-900/60 p-0.5 rounded-[9px] shadow-inner text-[10px] self-start">
+                {(['30D', '60D', '90D', 'All'] as const).map(p => (
+                  <Button
+                    key={p}
+                    type="button"
+                    variant={period === p ? 'secondary' : 'outline'}
+                    size="sm"
+                    onClick={() => setPeriod(p)}
+                    className={`px-2.5 py-1 text-center font-bold rounded-md transition-all duration-200 cursor-pointer ${
+                      period === p
+                        ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                        : 'text-slate-500 dark:text-zinc-550 hover:text-slate-700 dark:hover:text-zinc-300 border-none bg-transparent shadow-none hover:bg-transparent'
+                    }`}
+                  >
+                    {p}
+                  </Button>
+                ))}
+              </div>
+            )}
           </div>
           <Sparkline data={chartData} />
         </div>
       ) : (
         <div className="bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl p-6 text-center text-xs text-[var(--color-text-muted)] space-y-2">
           <p className="font-bold">📈 Weight Trend Graph</p>
-          <p className="opacity-75">You have logged {records.length} record{records.length !== 1 ? 's' : ''}. Please add at least 2 logs with different dates to plot your weight graph trend.</p>
+          <p className="opacity-75">No logs recorded yet. Please log your weight above to view your progress graph.</p>
         </div>
       )}
 

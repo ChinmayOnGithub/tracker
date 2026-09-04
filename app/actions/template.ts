@@ -311,7 +311,9 @@ async function syncTemplateToCalendarEvent(template: ActivityTemplate) {
   }
 
   if (!template.scheduledTime) {
-    await CalendarService.unscheduleTask(template.id)
+    if (template.userId) {
+      await CalendarService.unscheduleTask(template.userId, template.id)
+    }
     return
   }
 

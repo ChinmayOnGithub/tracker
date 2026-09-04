@@ -21,6 +21,7 @@ describe('Journal Offline Domain Tests', () => {
       const db = IndexedDBEngine.getInstance();
       db.putAtomic = mock(async () => {});
       db.get = mock(async () => null);
+      db.queryIndex = mock(async () => []);
 
       const entry: JournalEntry = {
         id: 'jr-1',

@@ -95,6 +95,36 @@ export async function GET(request: Request) {
   }
 }
 
+// In-memory sync lock map to prevent concurrent duplicate full/incremental syncs for the same user
+const activeSyncPromises = new Map<string, Promise<unknown>>()
+
+function scheduleUserSync(userId: string) {
+  if (activeSyncPromises.has(userId)) {
+    logger.info('BackgroundSyncApi', 'Sync already in-progress for user, reusing active run', { userId })
+    return activeSyncPromises.get(userId)
+  }
+
+  const syncPromise = (async () => {
+    try {
+      const syncResult = await CalendarService.sync(userId)
+      logger.info('BackgroundSyncApi', 'Webhook background sync completed successfully', {
+        userId,
+        result: syncResult,
+      })
+    } catch (err) {
+      logger.error('BackgroundSyncApi', 'Webhook background sync execution failed', {
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      activeSyncPromises.delete(userId)
+    }
+  })()
+
+  activeSyncPromises.set(userId, syncPromise)
+  return syncPromise
+}
+
 /**
  * POST handler for Google Calendar webhook push notifications.
  * Processes incremental sync updates when changes are detected externally.
@@ -113,7 +143,7 @@ export async function POST(request: Request) {
     })
 
     if (!channelId || !resourceId) {
-      return NextResponse.json({ error: 'Missing webhook headers' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing required webhook identity headers' }, { status: 400 })
     }
 
     // Ignore sync channel establishment confirmation
@@ -124,7 +154,7 @@ export async function POST(request: Request) {
 
     // Find the sync state record mapped to this channel ID
     const syncState = await db.calendarSyncState.findFirst({
-      where: { channelId }
+      where: { channelId },
     })
 
     if (!syncState) {
@@ -132,16 +162,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Channel not recognized' }, { status: 404 })
     }
 
-    // Trigger sync for the user
-    const syncResult = await CalendarService.sync(syncState.userId)
-    logger.info('BackgroundSyncApi', 'Webhook sync completed successfully', {
-      userId: syncState.userId,
-      result: syncResult
-    })
+    // Security Hardening: Validate both channel ID and resource ID
+    if (syncState.resourceId && syncState.resourceId !== resourceId) {
+      logger.warn('BackgroundSyncApi', 'Webhook resourceId mismatch for channel', {
+        channelId,
+        expectedResourceId: syncState.resourceId,
+        receivedResourceId: resourceId,
+      })
+      return NextResponse.json({ error: 'Resource mismatch for channel' }, { status: 403 })
+    }
 
-    return new Response(null, { status: 204 })
+    // Issue #5: Acknowledge fast without blocking on long external API synchronization
+    // Schedule background synchronization with concurrency lock
+    scheduleUserSync(syncState.userId)
+
+    return NextResponse.json({ success: true, acknowledged: true })
   } catch (error) {
-    logger.error('BackgroundSyncApi', 'Webhook sync trigger failed', error)
+    const errorMsg = error instanceof Error ? `${error.message}\n${error.stack}` : String(error)
+    logger.error('BackgroundSyncApi', `Webhook sync trigger failed: ${errorMsg}`)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
