@@ -30,9 +30,16 @@ const CATEGORY_TABS: { id: SearchCategory; label: string }[] = [
 export const MobileSearchModal: React.FC<MobileSearchModalProps> = ({ isOpen, onClose }) => {
   const router = useRouter()
   const { state, setActiveJournalDateAction } = useStore()
+  const [mounted, setMounted] = useState(false)
   const [query, setQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState<SearchCategory>('all')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Prevent React #418 hydration mismatch — modal renders dynamic client-only state.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true)
+  }, [])
 
   // Auto focus input on open and lock body scroll
   useEffect(() => {
@@ -66,7 +73,8 @@ export const MobileSearchModal: React.FC<MobileSearchModalProps> = ({ isOpen, on
     return MasterSearchEngine.search(query, state, activeCategory)
   }, [query, state, activeCategory])
 
-  if (!isOpen) return null
+  if (!isOpen || !mounted) return null
+
 
   const handleSelectResult = (res: SearchResult) => {
     if (res.payload?.externalUrl && (res.payload.externalUrl.startsWith('http://') || res.payload.externalUrl.startsWith('https://'))) {

@@ -1,5 +1,5 @@
 "use client"
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { Command } from 'cmdk'
 import { useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store/store'
@@ -261,8 +261,16 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
   const { isOpen, onClose } = props
   const router = useRouter()
   const { state, setActiveJournalDateAction } = useStore()
+  const [mounted, setMounted] = useState(false)
   const [rawSearch, setRawSearch] = useState('')
   const [prevOpen, setPrevOpen] = useState(isOpen)
+
+  // Prevent React #418 hydration mismatch — cmdk uses aria-live regions that differ SSR vs client.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true)
+  }, [])
+
   if (isOpen !== prevOpen) {
     setPrevOpen(isOpen)
     if (!isOpen) {
@@ -311,7 +319,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
     return map
   }, [search, state])
 
-  if (!isOpen) return null
+  if (!isOpen || !mounted) return null
 
   // Command groups
   const groups = Array.from(new Set(COMMANDS.map(c => c.group)))
@@ -371,7 +379,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
         {/* Results */}
         <Command.List className="flex-1 overflow-y-auto py-2 px-2 space-y-3">
           <Command.Empty className="py-10 text-center text-xs text-[var(--color-text-muted)] font-medium italic">
-            {search.trim() ? `No matches found for "${search}"` : 'Type anything to search across all data…'}
+            {search.trim() ? 'No matches found' : 'Type anything to search across all data…'}
           </Command.Empty>
 
           {/* ── NOTES RESULTS ── */}
