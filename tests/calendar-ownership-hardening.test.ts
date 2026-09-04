@@ -82,9 +82,12 @@ describe('Issue #2 & #3 & #9 & #8: Calendar User-Scoped Queries, Overlap, Mutati
       return Promise.resolve(null)
     }) as unknown as typeof db.calendarEvent.findFirst
 
-    db.calendarEvent.update = mock((args?: { data?: unknown }) =>
-      Promise.resolve(args?.data as CalendarEvent)
-    ) as unknown as typeof db.calendarEvent.update
+    db.calendarEvent.updateMany = mock((args?: { where?: Prisma.CalendarEventWhereInput }) => {
+      if (args?.where?.id === 'event-user-a' && args?.where?.userId === userA) {
+        return Promise.resolve({ count: 1 })
+      }
+      return Promise.resolve({ count: 0 })
+    }) as unknown as typeof db.calendarEvent.updateMany
 
     // userA updating userA event succeeds
     const updated = await CalendarRepository.updateEvent(userA, 'event-user-a', { title: 'Updated Title' })

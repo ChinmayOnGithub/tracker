@@ -63,31 +63,49 @@ export class CalendarRepository {
     id: string,
     data: Partial<Omit<CalendarEvent, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'deletedAt'>>
   ): Promise<CalendarEvent> {
-    const existing = await this.findEventById(userId, id)
-    if (!existing) {
-      throw new Error(`Calendar event not found or unauthorized for update: ${id}`)
-    }
-
-    return db.calendarEvent.update({
-      where: { id },
+    // Atomic mutation predicate: strictly bound by both id and userId
+    const updateResult = await db.calendarEvent.updateMany({
+      where: {
+        id,
+        userId,
+        deletedAt: null,
+      },
       data: {
         ...data,
         externalMetadata: data.externalMetadata !== undefined ? (data.externalMetadata as Prisma.InputJsonValue) : undefined,
       },
     })
+
+    if (updateResult.count === 0) {
+      throw new Error(`Calendar event not found or unauthorized for update: ${id}`)
+    }
+
+    const updated = await this.findEventById(userId, id)
+    if (!updated) {
+      throw new Error(`Calendar event not found after update: ${id}`)
+    }
+    return updated
   }
 
   static async deleteEvent(userId: string, id: string): Promise<CalendarEvent> {
-    const existing = await this.findEventById(userId, id)
-    if (!existing) {
+    // Soft delete safeguard: strictly bound by both id and userId in atomic mutation
+    const deleteResult = await db.calendarEvent.updateMany({
+      where: {
+        id,
+        userId,
+        deletedAt: null,
+      },
+      data: { deletedAt: new Date() },
+    })
+
+    if (deleteResult.count === 0) {
       throw new Error(`Calendar event not found or unauthorized for deletion: ${id}`)
     }
 
-    // Database Safety Safeguard: Always soft delete CalendarEvent using deletedAt
-    return db.calendarEvent.update({
-      where: { id },
-      data: { deletedAt: new Date() },
+    const deleted = await db.calendarEvent.findFirst({
+      where: { id, userId },
     })
+    return deleted!
   }
 
   static async deleteEventByArtifact(

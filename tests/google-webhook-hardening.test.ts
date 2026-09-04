@@ -37,24 +37,27 @@ describe('Issue #4 & #5: Google Calendar Webhook Hardening', () => {
     const res = await POST(req)
     expect(res.status).toBe(404)
     const json = await res.json()
-    expect(json.error).toBe('Channel not recognized')
+    expect(json.error).toBe('Channel or resource not recognized')
   })
 
   it('Issue #4: Reject when resourceId does not match stored sync state', async () => {
-    db.calendarSyncState.findFirst = mock(() =>
-      Promise.resolve({
-        id: 'sync-state-1',
-        userId,
-        provider: 'google',
-        syncToken: null,
-        channelId,
-        resourceId: validResourceId,
-        expiration: null,
-        lastSyncAt: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-    ) as unknown as typeof db.calendarSyncState.findFirst
+    db.calendarSyncState.findFirst = mock((args?: { where?: { channelId?: string; resourceId?: string } }) => {
+      if (args?.where?.channelId === channelId && args?.where?.resourceId === validResourceId) {
+        return Promise.resolve({
+          id: 'sync-state-1',
+          userId,
+          provider: 'google',
+          syncToken: null,
+          channelId,
+          resourceId: validResourceId,
+          expiration: null,
+          lastSyncAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+      }
+      return Promise.resolve(null)
+    }) as unknown as typeof db.calendarSyncState.findFirst
 
     const req = new Request('http://localhost:3000/api/sync/calendar', {
       method: 'POST',
@@ -65,9 +68,9 @@ describe('Issue #4 & #5: Google Calendar Webhook Hardening', () => {
     })
 
     const res = await POST(req)
-    expect(res.status).toBe(403)
+    expect(res.status).toBe(404)
     const json = await res.json()
-    expect(json.error).toBe('Resource mismatch for channel')
+    expect(json.error).toBe('Channel or resource not recognized')
   })
 
   it('Issue #5: Accept valid webhook immediately with 204 without blocking on sync execution', async () => {

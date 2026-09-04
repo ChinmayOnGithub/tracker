@@ -172,6 +172,18 @@ export async function saveUserAppearanceAction(appearance: {
       return { success: false, error: 'Unauthorized' }
     }
 
+    const existing = await db.userSetting.findUnique({
+      where: {
+        userId_module: {
+          userId: loggedUser.id,
+          module: 'APPEARANCE',
+        },
+      },
+    })
+
+    const existingConfig = (existing?.config as Record<string, unknown>) || {}
+    const mergedConfig = { ...existingConfig, ...appearance }
+
     await db.userSetting.upsert({
       where: {
         userId_module: {
@@ -180,12 +192,12 @@ export async function saveUserAppearanceAction(appearance: {
         },
       },
       update: {
-        config: appearance as unknown as Prisma.InputJsonValue,
+        config: mergedConfig as unknown as Prisma.InputJsonValue,
       },
       create: {
         userId: loggedUser.id,
         module: 'APPEARANCE',
-        config: appearance as unknown as Prisma.InputJsonValue,
+        config: mergedConfig as unknown as Prisma.InputJsonValue,
       },
     })
 
@@ -203,6 +215,18 @@ export async function saveWeeklyGoalAction(weeklyGoal: number): Promise<{ succes
       return { success: false, error: 'Unauthorized' }
     }
 
+    const existing = await db.userSetting.findUnique({
+      where: {
+        userId_module: {
+          userId: loggedUser.id,
+          module: 'WORK_HOURS',
+        },
+      },
+    })
+
+    const existingConfig = (existing?.config as Record<string, unknown>) || {}
+    const mergedConfig = { ...existingConfig, weeklyGoal }
+
     await db.userSetting.upsert({
       where: {
         userId_module: {
@@ -211,12 +235,12 @@ export async function saveWeeklyGoalAction(weeklyGoal: number): Promise<{ succes
         },
       },
       update: {
-        config: { weeklyGoal } as unknown as Prisma.InputJsonValue,
+        config: mergedConfig as unknown as Prisma.InputJsonValue,
       },
       create: {
         userId: loggedUser.id,
         module: 'WORK_HOURS',
-        config: { weeklyGoal } as unknown as Prisma.InputJsonValue,
+        config: mergedConfig as unknown as Prisma.InputJsonValue,
       },
     })
 

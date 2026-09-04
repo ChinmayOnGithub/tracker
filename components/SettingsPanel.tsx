@@ -242,10 +242,36 @@ export const SettingsPanel: React.FC = () => {
     setSavingPermissions(false)
   }
 
-  // Save Settings Helper (updates localStorage & dispatches change event)
+  // Save Settings Helper (updates localStorage, dispatches change event, and syncs canonical UserSetting to server)
   const saveToLocal = (key: string, value: string) => {
     localStorage.setItem(key, value)
     window.dispatchEvent(new Event('personal_settings_changed'))
+
+    // Canonical server sync for account-scoped settings
+    if (key === 'personal_accent_color') {
+      import('@/app/actions/settings').then(({ saveUserAppearanceAction }) => {
+        saveUserAppearanceAction({ accent: value }).catch(console.error)
+      })
+    } else if (key === 'personal_font_size') {
+      import('@/app/actions/settings').then(({ saveUserAppearanceAction }) => {
+        saveUserAppearanceAction({ fontSize: value }).catch(console.error)
+      })
+    } else if (key === 'personal_rounded_corners') {
+      import('@/app/actions/settings').then(({ saveUserAppearanceAction }) => {
+        saveUserAppearanceAction({ rounded: value }).catch(console.error)
+      })
+    } else if (key === 'personal_animations') {
+      import('@/app/actions/settings').then(({ saveUserAppearanceAction }) => {
+        saveUserAppearanceAction({ animations: value }).catch(console.error)
+      })
+    } else if (key === 'personal_weekly_goal') {
+      import('@/app/actions/settings').then(({ saveWeeklyGoalAction }) => {
+        const goalNum = Number(value)
+        if (!isNaN(goalNum) && goalNum > 0) {
+          saveWeeklyGoalAction(goalNum).catch(console.error)
+        }
+      })
+    }
   }
 
   const saveWidgetVisibility = (widgetKey: string, visible: boolean) => {

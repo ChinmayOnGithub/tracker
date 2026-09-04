@@ -152,28 +152,24 @@ export async function POST(request: Request) {
       return new Response(null, { status: 200 })
     }
 
-    // Find the sync state record mapped to this channel ID
+    // Direct query validation: Match both channelId AND resourceId directly at query time
     const syncState = await db.calendarSyncState.findFirst({
-      where: { channelId },
+      where: {
+        channelId,
+        resourceId,
+      },
     })
 
     if (!syncState) {
-      logger.warn('BackgroundSyncApi', 'No sync state record matches channel ID', { channelId })
-      return NextResponse.json({ error: 'Channel not recognized' }, { status: 404 })
-    }
-
-    // Security Hardening: Validate both channel ID and resource ID
-    if (syncState.resourceId && syncState.resourceId !== resourceId) {
-      logger.warn('BackgroundSyncApi', 'Webhook resourceId mismatch for channel', {
+      // Channel or resource unrecognized or mismatched
+      logger.warn('BackgroundSyncApi', 'No sync state matches channel/resource identity pair', {
         channelId,
-        expectedResourceId: syncState.resourceId,
-        receivedResourceId: resourceId,
+        resourceId,
       })
-      return NextResponse.json({ error: 'Resource mismatch for channel' }, { status: 403 })
+      return NextResponse.json({ error: 'Channel or resource not recognized' }, { status: 404 })
     }
 
-    // Issue #5: Acknowledge fast without blocking on long external API synchronization
-    // Schedule background synchronization with concurrency lock
+    // Acknowledge webhook quickly and execute sync reliably
     scheduleUserSync(syncState.userId)
 
     return NextResponse.json({ success: true, acknowledged: true })

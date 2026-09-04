@@ -62,6 +62,21 @@ export const QuickAppearancePopover: React.FC<{ className?: string }> = ({ class
   const saveSetting = (key: string, val: string) => {
     localStorage.setItem(key, val)
     window.dispatchEvent(new Event('personal_settings_changed'))
+    
+    // Asynchronously sync with canonical server UserSetting
+    if (key === 'personal_accent_color') {
+      import('@/app/actions/settings').then(({ saveUserAppearanceAction }) => {
+        saveUserAppearanceAction({ accent: val }).catch(console.error)
+      })
+    } else if (key === 'personal_font_size') {
+      import('@/app/actions/settings').then(({ saveUserAppearanceAction }) => {
+        saveUserAppearanceAction({ fontSize: val }).catch(console.error)
+      })
+    } else if (key === 'personal_rounded_corners') {
+      import('@/app/actions/settings').then(({ saveUserAppearanceAction }) => {
+        saveUserAppearanceAction({ rounded: val }).catch(console.error)
+      })
+    }
   }
 
   return (
