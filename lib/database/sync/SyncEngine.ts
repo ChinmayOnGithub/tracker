@@ -112,6 +112,27 @@ export class SyncEngine {
       }
     });
 
+    // Register sync handler for notes
+    this.registerHandler('notes', async (op, payload) => {
+      const { RemoteNoteRepository } = await import('@/modules/notes/repository/RemoteNoteRepository');
+      const remote = new RemoteNoteRepository();
+      const p = payload as Record<string, unknown>;
+      try {
+        if (op === 'CREATE') {
+          const res = await remote.create(p as unknown as Parameters<typeof remote.create>[0]);
+          return res as { success: boolean; error?: string; data?: unknown };
+        } else if (op === 'UPDATE') {
+          const res = await remote.update(p['id'] as string, p as unknown as Parameters<typeof remote.update>[1]);
+          return res as { success: boolean; error?: string; data?: unknown };
+        } else {
+          await remote.delete(p['id'] as string);
+          return { success: true };
+        }
+      } catch (err) {
+        return { success: false, error: err instanceof Error ? err.message : 'Remote note sync failed.' };
+      }
+    });
+
     // Register sync handler for weight records
     this.registerHandler('weight_records', async (op, payload) => {
       const { RemoteWeightRepository } = await import('@/modules/weight/repository/RemoteWeightRepository');

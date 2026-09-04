@@ -122,6 +122,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     { id: 'calendar', label: 'Calendar', icon: CalendarDays },
     { id: 'activities', label: 'Activities', icon: CheckSquare },
     { id: 'journal', label: 'Journal', icon: BookOpen },
+    { id: 'notes', label: 'Notes', icon: FileText },
     { id: 'leave', label: 'Time Off', icon: CalendarX },
     { id: 'weight', label: 'Weight', icon: Scale },
     { id: 'links', label: 'Link Library', icon: Link2 },
@@ -141,7 +142,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     { id: 'today', label: 'Today', icon: LayoutDashboard },
     { id: 'calendar', label: 'Calendar', icon: CalendarDays },
     { id: 'journal', label: 'Journal', icon: BookOpen },
-    { id: 'weight', label: 'Weight', icon: Scale },
+    { id: 'notes', label: 'Notes', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
   ].filter(item => {
     if (!isOwner) {
@@ -154,6 +155,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   const moreNavItems = [
     { id: 'activities', label: 'Activities', icon: CheckSquare },
     { id: 'leave', label: 'Time Off', icon: CalendarX },
+    { id: 'weight', label: 'Weight', icon: Scale },
     { id: 'links', label: 'Link Library', icon: Link2 },
     { id: 'documents', label: 'Secure Vault', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },

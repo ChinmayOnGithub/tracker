@@ -95,11 +95,13 @@ export interface ActivityLog {
 
 export interface Note {
   id: string
-  date: string // YYYY-MM-DD
+  date: string // YYYY-MM-DD or date identifier
   title: string | null
   content: string
-  createdAt: Date
-  updatedAt: Date
+  userId?: string
+  createdAt: Date | string
+  updatedAt: Date | string
+  deletedAt?: Date | string | null
 }
 
 export interface WorkoutSet {

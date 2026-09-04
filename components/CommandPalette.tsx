@@ -73,8 +73,16 @@ const COMMANDS: TrackerCommand[] = [
     label: 'Go to Journal',
     group: 'Navigation',
     icon: <BookOpen className="w-4 h-4 text-teal-500" />,
-    keywords: 'journal diary notes',
+    keywords: 'journal diary daily',
     action: ({ onNavigate, onClose }) => { onNavigate('journal'); onClose() },
+  },
+  {
+    id: 'go-notes',
+    label: 'Go to Notes',
+    group: 'Navigation',
+    icon: <FileText className="w-4 h-4 text-emerald-500" />,
+    keywords: 'notes scratchpad thought quick memos',
+    action: ({ onNavigate, onClose }) => { onNavigate('notes'); onClose() },
   },
   {
     id: 'go-work',

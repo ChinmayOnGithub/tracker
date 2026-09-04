@@ -43,6 +43,15 @@ export const STORES: StoreConfig[] = [
     ]
   },
   {
+    name: 'notes',
+    keyPath: 'id',
+    indexes: [
+      { name: 'userId', keyPath: 'userId' },
+      { name: 'updatedAt', keyPath: 'updatedAt' },
+      { name: 'deletedAt', keyPath: 'deletedAt' }
+    ]
+  },
+  {
     name: 'weight_records',
     keyPath: 'id',
     indexes: [

@@ -845,6 +845,7 @@ export const SettingsPanel: React.FC = () => {
                       { key: 'calendar', label: "Unified Calendar Planner" },
                       { key: 'activities', label: "Activities & Habits Manager" },
                       { key: 'journal', label: "Personal Diary & Journaling" },
+                      { key: 'notes', label: "Quick Notes & Thought Pad" },
                       { key: 'leave', label: "Leave Requests & Time Off" },
                       { key: 'weight', label: "Weight Metrics Panel" },
                       { key: 'links', label: "Personal Bookmark Link Library" },

@@ -904,17 +904,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const upsertNoteAction = async (dateStr: string, content: string, title?: string | null, noteId?: string) => {
     const previousNotes = [...state.notes]
+    const finalId = noteId || `temp-note-${Date.now()}`
 
     setState(prev => {
       let updatedNotes = [...prev.notes]
       const existing = noteId ? prev.notes.find(n => n.id === noteId) : prev.notes.find(n => n.date === dateStr)
 
       if (existing) {
-        updatedNotes = updatedNotes.map(n => n.id === existing.id ? { ...n, content, title: title || null, updatedAt: new Date() } : n)
+        updatedNotes = updatedNotes.map(n => n.id === existing.id ? { ...n, content, title: title !== undefined ? title : n.title, updatedAt: new Date() } : n)
       } else {
-        updatedNotes.push({
-          id: noteId || `temp-note-${Date.now()}`,
-          date: dateStr,
+        updatedNotes.unshift({
+          id: finalId,
+          date: dateStr || new Date().toISOString().split('T')[0],
           title: title || null,
           content,
           createdAt: new Date(),
@@ -924,45 +925,43 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return { ...prev, notes: updatedNotes }
     })
 
-    writeQueue.add({
-      id: `note-upsert-${dateStr}-${Date.now()}`,
-      dedupKey: `note-upsert-${dateStr}`,
-      run: async () => {
-        const { createNote, updateNote } = await import('@/app/actions/note')
-        if (noteId) {
-          return updateNote(noteId, content, title || null)
-        } else {
-          const res = await createNote(dateStr, content, title || null)
-          if (res.success && res.note) {
-            setState(prev => ({
-              ...prev,
-              notes: prev.notes.map(n => n.date === dateStr ? (res.note as Note) : n)
-            }))
-          }
-          return res
-        }
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, notes: previousNotes }))
+    try {
+      const { NoteRepository } = await import('@/modules/notes/repository/NoteRepository')
+      const noteRepo = new NoteRepository()
+
+      const existing = noteId ? state.notes.find(n => n.id === noteId) : state.notes.find(n => n.date === dateStr)
+      const payload = {
+        id: existing ? existing.id : finalId,
+        date: dateStr || (existing ? existing.date : new Date().toISOString().split('T')[0]),
+        title: title !== undefined ? (title || null) : (existing ? existing.title : null),
+        content,
+        createdAt: existing ? (typeof existing.createdAt === 'string' ? existing.createdAt : existing.createdAt.toISOString()) : new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       }
-    })
+
+      await noteRepo.save(payload)
+      const allNotes = await noteRepo.getAll()
+      setState(prev => ({ ...prev, notes: allNotes }))
+    } catch (err) {
+      console.error('[Store] Note upsert failed:', err)
+      setState(prev => ({ ...prev, notes: previousNotes }))
+    }
   }
 
   const deleteNoteAction = async (noteId: string) => {
     const previousNotes = [...state.notes]
     setState(prev => ({ ...prev, notes: prev.notes.filter(n => n.id !== noteId) }))
 
-    writeQueue.add({
-      id: `note-delete-${noteId}`,
-      dedupKey: `note-delete-${noteId}`,
-      run: async () => {
-        const { deleteNote } = await import('@/app/actions/note')
-        return deleteNote(noteId)
-      },
-      rollback: () => {
-        setState(prev => ({ ...prev, notes: previousNotes }))
-      }
-    })
+    try {
+      const { NoteRepository } = await import('@/modules/notes/repository/NoteRepository')
+      const noteRepo = new NoteRepository()
+      await noteRepo.delete(noteId)
+      const allNotes = await noteRepo.getAll()
+      setState(prev => ({ ...prev, notes: allNotes }))
+    } catch (err) {
+      console.error('[Store] Note delete failed:', err)
+      setState(prev => ({ ...prev, notes: previousNotes }))
+    }
   }
 
   const updateLeaveAllowanceAction = async (leaveType: string, year: number, val: number) => {

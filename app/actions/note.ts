@@ -3,24 +3,38 @@
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
 import { requireAuth, requireOwnership } from '@/lib/auth-guards'
+import { todayYMD } from '@/lib/dateUtils'
+
+export interface NoteItem {
+  id: string
+  title: string | null
+  content: string
+  date: string
+  userId: string
+  createdAt: Date
+  updatedAt: Date
+  deletedAt?: Date | null
+}
 
 export async function createNote(
-  date: string, // YYYY-MM-DD
-  content: string,
-  title?: string | null
+  content: string = '',
+  title?: string | null,
+  dateStr?: string
 ) {
   try {
     const user = await requireAuth()
+    const finalDate = dateStr || `${todayYMD()}_${Date.now()}`
 
     const note = await db.note.create({
       data: {
-        date,
-        content,
-        title: title ?? null,
+        date: finalDate,
+        content: content ?? '',
+        title: title ? title.trim() : null,
         userId: user.id,
       },
     })
 
+    revalidatePath('/notes')
     revalidatePath('/')
     return { success: true, note }
   } catch (error) {
@@ -41,11 +55,12 @@ export async function updateNote(
     const note = await db.note.update({
       where: { id },
       data: {
-        content,
-        title: title ?? null,
+        content: content ?? '',
+        title: title !== undefined ? (title ? title.trim() : null) : undefined,
       },
     })
 
+    revalidatePath('/notes')
     revalidatePath('/')
     return { success: true, note }
   } catch (error) {
@@ -55,50 +70,20 @@ export async function updateNote(
   }
 }
 
-/**
- * Atomically upsert (create or update) the note for a given date.
- * Also heals any duplicate records created by concurrent client calls.
- */
-export async function upsertNote(
-  date: string, // YYYY-MM-DD
-  content: string,
-  title?: string | null
-) {
+export async function listNotes() {
   try {
     const user = await requireAuth()
 
-    const existingNotes = await db.note.findMany({
-      where: { date, userId: user.id, deletedAt: null },
-      orderBy: { createdAt: 'asc' },
+    const notes = await db.note.findMany({
+      where: { userId: user.id, deletedAt: null },
+      orderBy: { updatedAt: 'desc' },
     })
 
-    let note
-    if (existingNotes.length > 0) {
-      // Update the primary record
-      note = await db.note.update({
-        where: { id: existingNotes[0].id },
-        data: { content, title: title ?? existingNotes[0].title },
-      })
-      // Delete any duplicates created by concurrent saves
-      if (existingNotes.length > 1) {
-        const duplicateIds = existingNotes.slice(1).map(n => n.id)
-        await db.note.updateMany({
-          where: { id: { in: duplicateIds } },
-          data: { deletedAt: new Date() }
-        })
-      }
-    } else {
-      note = await db.note.create({
-        data: { date, content, title: title ?? null, userId: user.id },
-      })
-    }
-
-    revalidatePath('/')
-    return { success: true, note }
+    return { success: true, notes }
   } catch (error) {
-    console.error('Failed to upsert note:', error)
+    console.error('Failed to list notes:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
-    return { success: false, error: message }
+    return { success: false, error: message, notes: [] }
   }
 }
 
@@ -111,6 +96,7 @@ export async function deleteNote(id: string) {
       data: { deletedAt: new Date() }
     })
 
+    revalidatePath('/notes')
     revalidatePath('/')
     return { success: true }
   } catch (error) {
