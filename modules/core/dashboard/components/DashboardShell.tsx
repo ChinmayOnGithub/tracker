@@ -120,6 +120,32 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     }
   }, [isOwner])
 
+  // P1 Proactive Page Route Prefetching:
+  // Warm up Next.js route bundles on mount so navigating to any tab is instantaneous
+  React.useEffect(() => {
+    const routes = [
+      '/',
+      '/calendar',
+      '/activities',
+      '/journal',
+      '/notes',
+      '/leave',
+      '/weight',
+      '/links',
+      '/documents',
+      '/settings'
+    ]
+    // Use requestIdleCallback or small delay to avoid competing with initial hydration
+    const timer = setTimeout(() => {
+      routes.forEach(route => {
+        try {
+          router.prefetch(route)
+        } catch (_) {}
+      })
+    }, 150)
+    return () => clearTimeout(timer)
+  }, [router])
+
   const allNavItems: NavigationItem[] = [
     { id: 'today', label: 'Today', icon: LayoutDashboard },
     { id: 'calendar', label: 'Calendar', icon: CalendarDays },

@@ -6,8 +6,10 @@ import { TodayDashboard } from './TodayDashboard'
 import { ActivityLog, AnalyzedTemplate } from '@/types'
 import { useStore, JournalEntry, LeaveRecord, LeaveAllowance, WeightRecord } from '@/lib/store/store'
 import { analyzeRecurrence } from '@/lib/recurrence'
-import { fetchDashboardDataAction } from '@/app/actions/queries'
+import { fetchDashboardDataAction, prefetchSecondaryDataAction } from '@/app/actions/queries'
 import { Skeleton } from '@/design-system'
+import { DashboardConfig, LegacyDashboardConfig } from '@/lib/dashboard/types'
+import { requestDeduplicator } from '@/lib/store/requestDeduplicator'
 
 interface TodayDashboardWrapperProps {
   analyzedTemplates?: AnalyzedTemplate[]
@@ -17,10 +19,11 @@ interface TodayDashboardWrapperProps {
   leaveRecords?: LeaveRecord[]
   leaveAllowances?: LeaveAllowance[]
   weightRecords?: WeightRecord[]
-  initialDashboardConfig?: { order: string[]; hidden: string[] } | null
+  initialDashboardConfig?: DashboardConfig | LegacyDashboardConfig | null
 }
 
 const TODAY_TTL = 30000 // 30 seconds freshness TTL for Today dashboard
+const SECONDARY_TTL = 300000 // 5 minutes freshness TTL for secondary prefetch (links, vault, notes)
 
 export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
   todayStr,
@@ -35,19 +38,25 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     stateRef.current = state
   }, [state])
 
-  // Background fetch/revalidate logic (SWR)
+  // Background fetch/revalidate logic (SWR) with Request Deduplication
+  const dateCacheKey = `today:${todayStr}`
+  const isValidating = !!state.cacheMetadata.isValidating[dateCacheKey]
+
   useEffect(() => {
     let active = true
-    const lastFetched = stateRef.current.cacheMetadata.lastFetched['today'] || 0
-    const isValidating = stateRef.current.cacheMetadata.isValidating['today']
+    const lastFetched = stateRef.current.cacheMetadata.lastFetched[dateCacheKey] || 0
+    const validating = stateRef.current.cacheMetadata.isValidating[dateCacheKey]
     const templatesLength = stateRef.current.templates.length
     const isStale = Date.now() - lastFetched > TODAY_TTL
 
-    if (!isValidating && (isStale || templatesLength === 0)) {
+    if (!validating && (isStale || templatesLength === 0)) {
       const revalidate = async () => {
-        setCacheMetadata('today', lastFetched, true) // set validation in progress
+        setCacheMetadata(dateCacheKey, lastFetched, true) // set validation in progress
         try {
-          const res = await fetchDashboardDataAction(todayStr)
+          // P0: In-flight deduplication prevents duplicate identical requests
+          const res = await requestDeduplicator.dedupe(`dashboard:${todayStr}`, () =>
+            fetchDashboardDataAction(todayStr)
+          )
           if (active && res.success && res.data) {
             initialize({
               templates: res.data.templates,
@@ -57,14 +66,44 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
               leaveAllowances: res.data.leaveAllowances,
               weightRecords: res.data.weightRecords,
             })
-            setCacheMetadata('today', Date.now(), false)
+            setCacheMetadata(dateCacheKey, Date.now(), false)
+
+            // P2: Speculative background prefetch for secondary domains after Today is hydrated
+            const lastSecondaryFetched = stateRef.current.cacheMetadata.lastFetched['secondary_prefetch'] || 0
+            if (Date.now() - lastSecondaryFetched > SECONDARY_TTL) {
+              // Defer to idle callback or microtask so Today UI remains completely fluid
+              const runSecondary = async () => {
+                try {
+                  const secRes = await requestDeduplicator.dedupe('prefetch:secondary', () =>
+                    prefetchSecondaryDataAction()
+                  )
+                  if (active && secRes.success && secRes.data) {
+                    initialize({
+                      collections: secRes.data.collections,
+                      links: secRes.data.links,
+                      vaultItems: secRes.data.vaultItems,
+                      notes: secRes.data.notes,
+                    })
+                    setCacheMetadata('secondary_prefetch', Date.now(), false)
+                  }
+                } catch (secErr) {
+                  console.debug('[TodayDashboardWrapper] Background secondary prefetch skipped:', secErr)
+                }
+              }
+
+              if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+                window.requestIdleCallback(() => runSecondary())
+              } else {
+                setTimeout(runSecondary, 200)
+              }
+            }
           } else if (active) {
-            setCacheMetadata('today', lastFetched, false)
+            setCacheMetadata(dateCacheKey, lastFetched, false)
           }
         } catch (err) {
           console.error('[TodayDashboardWrapper] Background sync failed:', err)
           if (active) {
-            setCacheMetadata('today', lastFetched, false)
+            setCacheMetadata(dateCacheKey, lastFetched, false)
           }
         }
       }
@@ -73,7 +112,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     return () => {
       active = false
     }
-  }, [todayStr, initialize, setCacheMetadata])
+  }, [todayStr, dateCacheKey, initialize, setCacheMetadata])
 
   if (!context) {
     throw new Error('TodayDashboardWrapper must be rendered inside a DashboardLayout')
@@ -125,6 +164,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
       weightRecords={state.weightRecords}
       onTabChange={onTabChange}
       initialDashboardConfig={initialDashboardConfig}
+      isValidating={isValidating}
     />
   )
 }

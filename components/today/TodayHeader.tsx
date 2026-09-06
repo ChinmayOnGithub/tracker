@@ -1,10 +1,17 @@
 "use client"
 
 import React from 'react'
-import { ChevronLeft, ChevronRight, RefreshCw, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RefreshCw, Plus, Loader2 } from 'lucide-react'
 import { Button, IconButton } from '@/design-system'
 
 import { CompactTodayPills } from './CompactTodayPills'
+
+/**
+ * TodayHeader
+ * Header bar for the Today dashboard and timeline view.
+ * Displays current date navigation (prev/next day, jump to today), live weather pills,
+ * real-time data synchronization loading spinner, and dashboard customization controls.
+ */
 
 interface TodayHeaderProps {
   todayStr: string
@@ -15,6 +22,10 @@ interface TodayHeaderProps {
   onOpenCreateActivity: () => void
   onNavigateDate: (offset: number) => void
   onGoToToday: () => void
+  isEditing?: boolean
+  onToggleEdit?: () => void
+  onOpenCustomize?: () => void
+  isValidating?: boolean
 }
 
 export const TodayHeader: React.FC<TodayHeaderProps> = ({
@@ -26,6 +37,10 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
   onOpenCreateActivity,
   onNavigateDate,
   onGoToToday,
+  isEditing = false,
+  onToggleEdit,
+  onOpenCustomize,
+  isValidating = false,
 }) => {
   const isCurrentToday = todayStr === new Date().toISOString().split('T')[0]
 
@@ -55,6 +70,26 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
 
   const actionButtons = (
     <div className="flex items-center gap-2">
+      {onOpenCustomize && isEditing && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onOpenCustomize}
+          className="font-semibold text-xs"
+        >
+          Add Widgets
+        </Button>
+      )}
+      {onToggleEdit && (
+        <Button
+          variant={isEditing ? 'primary' : 'ghost'}
+          size="sm"
+          onClick={onToggleEdit}
+          className="font-semibold text-xs"
+        >
+          {isEditing ? 'Done' : 'Edit Dashboard'}
+        </Button>
+      )}
       {calendarConnected && (
         <Button
           variant="outline"
@@ -84,9 +119,20 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
           </div>
 
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-main)] leading-tight truncate">
-              {isCurrentToday ? 'Today' : 'Timeline'}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-main)] leading-tight truncate">
+                {isCurrentToday ? 'Today' : 'Timeline'}
+              </h1>
+              {isValidating && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20 animate-in fade-in duration-200"
+                  title="Fetching latest updates for this date…"
+                >
+                  <Loader2 className="w-3 h-3 animate-spin shrink-0" />
+                  <span className="hidden md:inline">Updating</span>
+                </span>
+              )}
+            </div>
             <div className="text-sm text-[var(--color-text-muted)] mt-0.5 font-normal leading-snug flex items-center gap-3 flex-wrap">
               <span>{todayLongDate}</span>
               {isCurrentToday && <CompactTodayPills />}
@@ -110,3 +156,4 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
     </div>
   )
 }
+

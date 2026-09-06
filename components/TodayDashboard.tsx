@@ -6,158 +6,32 @@ import { saveDashboardConfigAction } from '@/app/actions/settings'
 import { useRouter } from 'next/navigation'
 import { TodayHeader } from './today/TodayHeader'
 import { TodayTasks } from './today/TodayTasks'
-import { WorkHoursWidget } from './today/WorkHoursWidget'
-import { JournalWidget } from './today/JournalWidget'
-import { RecentDocumentsWidget } from './today/RecentDocumentsWidget'
-import { LeaveWidget } from './today/LeaveWidget'
-import { WeightWidget } from './today/WeightWidget'
+import {
+  WorkHoursWidget,
+  JournalWidget,
+  RecentDocumentsWidget,
+  LeaveWidget,
+  WeightWidget,
+  DailyCodingWidget,
+} from './today/widgets'
 import { CompletionDialog } from './CompletionDialog'
 import { CompletionService } from '@/lib/services/CompletionService'
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core'
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-  arrayMove,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
-import { GripVertical } from 'lucide-react'
 import { ActivityTemplate, ActivityLog, TimelineItem, AnalyzedTemplate } from '@/types'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
 import { getWeekDates } from '@/lib/recurrence'
 
 import { LeaveRecord, LeaveAllowance, WeightRecord, JournalEntry, CalendarData } from '@/lib/store/store'
-import { Button, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/design-system'
+import { Button } from '@/design-system'
 
-import { DailyCodingWidget } from './today/DailyCodingWidget'
-
-interface WidgetDefinition {
-  id: string
-  title: string
-  description: string
-  category: string
-  defaultEnabled: boolean
-}
-
-const WIDGET_REGISTRY: WidgetDefinition[] = [
-  { id: 'journal', title: 'Journal', description: 'Write daily journal reflections', category: 'Habits', defaultEnabled: true },
-  { id: 'workHours', title: 'Work Hours', description: 'Track work presence and goal status', category: 'Work', defaultEnabled: true },
-  { id: 'leaveBalance', title: 'Leave Balance', description: 'View vacation and personal leave statistics', category: 'Work', defaultEnabled: true },
-  { id: 'weight', title: 'Weight Tracker', description: 'Log and monitor body weight stats', category: 'Health', defaultEnabled: true },
-  { id: 'recentDocuments', title: 'Recent Vault Documents', description: 'Quick access to recently decrypted files', category: 'Vault', defaultEnabled: true },
-  { id: 'leetcodePOTD', title: 'LeetCode POTD', description: "Today's daily LeetCode coding problem", category: 'Coding', defaultEnabled: false },
-  { id: 'gfgPOTD', title: 'GFG POTD', description: "Today's GeeksforGeeks problem of the day", category: 'Coding', defaultEnabled: false },
-]
-
-// ─── Sortable widget row (used inside the customizer dialog) ──────────────────
-
-function SortableWidgetRow({
-  widgetId,
-  index,
-  total,
-  isHidden,
-  onMoveUp,
-  onMoveDown,
-  onToggleHidden,
-}: {
-  widgetId: string
-  index: number
-  total: number
-  isHidden: boolean
-  onMoveUp: () => void
-  onMoveDown: () => void
-  onToggleHidden: () => void
-}) {
-  const widget = WIDGET_REGISTRY.find(w => w.id === widgetId)
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    setActivatorNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: widgetId })
-
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : undefined,
-  }
-
-  if (!widget) return null
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="flex items-center justify-between p-3 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-[var(--radius-lg)]"
-    >
-      {/* Drag handle */}
-      <button
-        ref={setActivatorNodeRef}
-        {...listeners}
-        {...attributes}
-        type="button"
-        aria-label="Drag to reorder widget"
-        className="shrink-0 mr-2 text-[var(--color-border)] hover:text-[var(--color-text-muted)] cursor-grab active:cursor-grabbing touch-none focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)]/50 rounded-sm"
-      >
-        <GripVertical className="w-4 h-4" aria-hidden />
-      </button>
-
-      {/* Label */}
-      <div className="flex-1 min-w-0">
-        <span className="block text-xs font-bold text-[var(--color-text-main)]">{widget.title}</span>
-        <span className="block text-[10px] text-[var(--color-text-muted)] truncate">{widget.description}</span>
-      </div>
-
-      {/* Accessible fallback controls */}
-      <div className="flex items-center gap-1.5 ml-2">
-        <button
-          type="button"
-          disabled={index === 0}
-          onClick={onMoveUp}
-          aria-label={`Move ${widget.title} up`}
-          className="w-6 h-6 flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] disabled:opacity-30 rounded transition-colors"
-        >
-          ▲
-        </button>
-        <button
-          type="button"
-          disabled={index === total - 1}
-          onClick={onMoveDown}
-          aria-label={`Move ${widget.title} down`}
-          className="w-6 h-6 flex items-center justify-center text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] disabled:opacity-30 rounded transition-colors"
-        >
-          ▼
-        </button>
-        <button
-          type="button"
-          onClick={onToggleHidden}
-          className="text-xs font-bold px-2 py-1 rounded-[var(--radius-sm)] transition-colors"
-          aria-label={`Toggle ${widget.title} visibility`}
-        >
-          <span className={`px-2 py-0.5 rounded-[var(--radius-sm)] text-[10px] font-bold ${
-            isHidden
-              ? 'bg-rose-500/10 text-[var(--color-overdue)]'
-              : 'bg-emerald-500/10 text-[var(--color-completed)]'
-          }`}>
-            {isHidden ? 'Hidden' : 'Visible'}
-          </span>
-        </button>
-      </div>
-    </div>
-  )
-}
+import { TodayGrid } from './today/grid/TodayGrid'
+import { EditDashboardModal } from './today/grid/EditDashboardModal'
+import { DashboardConfig, LegacyDashboardConfig } from '@/lib/dashboard/types'
+import {
+  migrateAndNormalizeDashboardConfig,
+  generateDefaultDashboardLayout,
+  findNextAvailablePosition,
+} from '@/lib/dashboard/layoutEngine'
+import { getWidgetDefinition, GRID_COLUMNS } from '@/lib/dashboard/registry'
 
 export interface TodayDashboardProps {
   analyzedTemplates: AnalyzedTemplate[]
@@ -171,7 +45,8 @@ export interface TodayDashboardProps {
   leaveAllowances: LeaveAllowance[]
   weightRecords: WeightRecord[]
   onTabChange: (tabId: string) => void
-  initialDashboardConfig?: { order: string[]; hidden: string[] } | null
+  initialDashboardConfig?: DashboardConfig | LegacyDashboardConfig | null
+  isValidating?: boolean
 }
 
 export const TodayDashboard: React.FC<TodayDashboardProps> = ({
@@ -187,6 +62,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   weightRecords,
   onTabChange,
   initialDashboardConfig,
+  isValidating = false,
 }) => {
   const router = useRouter()
   const {
@@ -222,110 +98,97 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     return () => clearInterval(timer)
   }, [])
 
-  // Widget config — standard Next.js isomorphic hydration approach
-  const WIDGET_DEFAULTS = {
-    order: ['journal', 'workHours', 'leaveBalance', 'weight', 'recentDocuments', 'leetcodePOTD', 'gfgPOTD'] as string[],
-    hidden: ['leetcodePOTD', 'gfgPOTD'] as string[],
-  }
+  const [prevInitial, setPrevInitial] = useState(initialDashboardConfig)
+  const [dashboardConfig, setDashboardConfig] = useState<DashboardConfig>(() =>
+    migrateAndNormalizeDashboardConfig(initialDashboardConfig)
+  )
 
-  const reconcileWidgetConfig = (config: { order: string[]; hidden: string[] }) => {
-    // Preserve existing order, append any newly registered widgets
-    const registryIds = WIDGET_REGISTRY.map(w => w.id)
-    const existingOrder = config.order.filter(id => registryIds.includes(id))
-    const missingIds = registryIds.filter(id => !existingOrder.includes(id))
-    const finalOrder = [...existingOrder, ...missingIds]
-
-    // If a missing widget has defaultEnabled: false and isn't in hidden, mark it hidden
-    const newHidden = new Set(config.hidden)
-    for (const missingId of missingIds) {
-      const def = WIDGET_REGISTRY.find(w => w.id === missingId)
-      if (def && !def.defaultEnabled) {
-        newHidden.add(missingId)
-      }
-    }
-
-    return {
-      order: finalOrder,
-      hidden: Array.from(newHidden),
-    }
-  }
-
-  const [widgetsConfig, setWidgetsConfig] = useState<{ order: string[]; hidden: string[] }>(() => {
+  if (initialDashboardConfig !== prevInitial) {
+    setPrevInitial(initialDashboardConfig)
     if (initialDashboardConfig) {
-      return reconcileWidgetConfig({
-        order: initialDashboardConfig.order || WIDGET_DEFAULTS.order,
-        hidden: initialDashboardConfig.hidden || WIDGET_DEFAULTS.hidden,
-      })
+      setDashboardConfig(migrateAndNormalizeDashboardConfig(initialDashboardConfig))
     }
-    return WIDGET_DEFAULTS
-  })
+  }
+
   const [saveError, setSaveError] = useState(false)
+  const [isEditingGrid, setIsEditingGrid] = useState(false)
+  const [isCustomizing, setIsCustomizing] = useState(false)
 
-  // Load config client-side only after mounting if server-sent config is not present
-  useEffect(() => {
-    if (initialDashboardConfig) return
-    try {
-      const saved = localStorage.getItem('personal_dashboard_config')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setWidgetsConfig(reconcileWidgetConfig(parsed))
-      }
-    } catch (e) {
-      console.error('[TodayDashboard] Failed to load widget config:', e)
-    }
-  }, [initialDashboardConfig])
+  // Persist dashboardConfig when modified (debounced 500ms to avoid flooding server on rapid gestures)
+  const isInitialMount = useRef(true)
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Persist widgetsConfig when changed
-  const initialMount = useRef(true)
   useEffect(() => {
-    if (initialMount.current) {
-      initialMount.current = false
+    if (isInitialMount.current) {
+      isInitialMount.current = false
       return
     }
-    localStorage.setItem('personal_dashboard_config', JSON.stringify(widgetsConfig))
 
-    let active = true
-    const saveConfig = async () => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
       try {
-        const res = await saveDashboardConfigAction(widgetsConfig)
-        if (active) {
-          if (!res.success) {
-            setSaveError(true)
-          } else {
-            setSaveError(false)
-          }
+        const res = await saveDashboardConfigAction(dashboardConfig)
+        if (!res.success) {
+          setSaveError(true)
+        } else {
+          setSaveError(false)
         }
       } catch (err) {
         console.error('[TodayDashboard] Exception saving dashboard config:', err)
-        if (active) setSaveError(true)
+        setSaveError(true)
       }
-    }
-    saveConfig()
+    }, 500)
+
     return () => {
-      active = false
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
     }
-  }, [widgetsConfig])
+  }, [dashboardConfig])
 
-  const [isCustomizing, setIsCustomizing] = useState(false)
+  const handleToggleWidget = useCallback((widgetId: string) => {
+    setDashboardConfig(prev => {
+      const isHidden = prev.hidden.includes(widgetId)
+      if (isHidden) {
+        // Unhide widget: place it at next available position if not already placed
+        const existing = prev.items.find(i => i.id === widgetId)
+        const items = [...prev.items]
+        if (!existing) {
+          const def = getWidgetDefinition(widgetId)
+          if (def) {
+            const pos = findNextAvailablePosition(items, def.defaultW, def.defaultH, GRID_COLUMNS)
+            items.push({
+              id: def.id,
+              x: pos.x,
+              y: pos.y,
+              w: def.defaultW,
+              h: def.defaultH,
+            })
+          }
+        }
+        return {
+          ...prev,
+          items,
+          hidden: prev.hidden.filter(id => id !== widgetId),
+        }
+      } else {
+        // Hide widget
+        return {
+          ...prev,
+          hidden: [...prev.hidden, widgetId],
+        }
+      }
+    })
+  }, [])
 
-  // dnd-kit sensors for widget customizer
-  const widgetSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
-
-  const handleWidgetDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIndex = widgetsConfig.order.indexOf(String(active.id))
-    const newIndex = widgetsConfig.order.indexOf(String(over.id))
-    if (oldIndex === -1 || newIndex === -1) return
-    setWidgetsConfig(prev => ({
-      ...prev,
-      order: arrayMove(prev.order, oldIndex, newIndex),
+  const handleResetLayout = useCallback(() => {
+    const defaults = generateDefaultDashboardLayout()
+    setDashboardConfig(prev => ({
+      ...defaults,
+      hidden: prev.hidden, // Preserve user's visibility preferences!
     }))
-  }, [widgetsConfig.order])
+  }, [])
 
   // Weekly goal — isomorphic hydration
   const [weeklyGoal, setWeeklyGoal] = useState(27)
@@ -498,7 +361,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   return (
     <div className="w-full">
-      {/* Compose TodayHeader */}
+      {/* Compose TodayHeader with Edit controls */}
       <TodayHeader
         todayStr={todayStr}
         todayLongDate={todayLongDate}
@@ -508,6 +371,10 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         onOpenCreateActivity={onOpenCreateActivity}
         onNavigateDate={handleNavigateDate}
         onGoToToday={() => router.push('/')}
+        isEditing={isEditingGrid}
+        onToggleEdit={() => setIsEditingGrid(prev => !prev)}
+        onOpenCustomize={() => setIsCustomizing(true)}
+        isValidating={isValidating}
       />
 
       {saveError && (
@@ -519,7 +386,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
             className="h-6 text-[10px] hover:bg-rose-500/20 text-rose-600 dark:text-rose-400"
             onClick={async () => {
               try {
-                const res = await saveDashboardConfigAction(widgetsConfig)
+                const res = await saveDashboardConfigAction(dashboardConfig)
                 if (res.success) setSaveError(false)
               } catch (_) {}
             }}
@@ -529,180 +396,127 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,3.25fr)_minmax(0,1.25fr)] gap-8 items-start">
-        {/* Left Column: Tasks Feed */}
-        <div className="space-y-6 min-w-0">
-          <TodayTasks
-            timeline={debouncedTimeline}
-            analyzedTemplates={analyzedTemplates}
-            logs={logs}
-            todayStr={todayStr}
-            isTodayHydrated={isTasksHydrated}
-            completingHabitId={completingHabitId}
-            activeMenuId={activeMenuId}
-            setActiveMenuId={setActiveMenuId}
-            cycleTaskStatus={cycleTaskStatus}
-            setTaskStatusAction={typedSetTaskStatus}
-            deleteActivityLog={deleteActivityLog}
-            createActivityTemplateAction={createActivityTemplateAction}
-            updateActivityTemplateAction={updateActivityTemplateAction}
-            reorderActivityTemplatesAction={reorderActivityTemplatesAction}
-            onOpenCreateActivity={onOpenCreateActivity}
-          />
-        </div>
+      {/* 20-Column Desktop Grid with Mobile Responsive Stack */}
+      <TodayGrid
+        config={dashboardConfig}
+        isEditing={isEditingGrid}
+        onChangeConfig={setDashboardConfig}
+        onHideWidget={handleToggleWidget}
+        renderWidget={(widgetId, w, h) => {
+          switch (widgetId) {
+            case 'tasks':
+              return (
+                <TodayTasks
+                  timeline={debouncedTimeline}
+                  analyzedTemplates={analyzedTemplates}
+                  logs={logs}
+                  todayStr={todayStr}
+                  isTodayHydrated={isTasksHydrated}
+                  completingHabitId={completingHabitId}
+                  activeMenuId={activeMenuId}
+                  setActiveMenuId={setActiveMenuId}
+                  cycleTaskStatus={cycleTaskStatus}
+                  setTaskStatusAction={typedSetTaskStatus}
+                  deleteActivityLog={deleteActivityLog}
+                  createActivityTemplateAction={createActivityTemplateAction}
+                  updateActivityTemplateAction={updateActivityTemplateAction}
+                  reorderActivityTemplatesAction={reorderActivityTemplatesAction}
+                  onOpenCreateActivity={onOpenCreateActivity}
+                  gridW={w}
+                  gridH={h}
+                />
+              )
+            case 'journal':
+              return (
+                <JournalWidget
+                  key="journal"
+                  todayJournal={todayJournal}
+                  onOpenJournal={() => onTabChange('journal')}
+                  gridW={w}
+                  gridH={h}
+                />
+              )
+            case 'workHours':
+              return workTemplateId ? (
+                <WorkHoursWidget
+                  key={workTemplateId}
+                  todayWorkLog={todayWorkLog}
+                  workTemplateId={workTemplateId}
+                  todayStr={todayStr}
+                  weekDates={weekDates}
+                  logs={logs}
+                  weeklyGoal={weeklyGoal}
+                  logWorkPresenceAction={logWorkPresenceAction}
+                  gridW={w}
+                  gridH={h}
+                />
+              ) : null
+            case 'leaveBalance':
+              return (
+                <LeaveWidget
+                  key="leave"
+                  isVisible={true}
+                  leaveRecords={leaveRecords}
+                  leaveAllowances={leaveAllowances}
+                  onTabChange={onTabChange}
+                  gridW={w}
+                  gridH={h}
+                />
+              )
+            case 'weight':
+              return (
+                <WeightWidget
+                  key="weight"
+                  isVisible={true}
+                  weightRecords={weightRecords}
+                  gridW={w}
+                  gridH={h}
+                />
+              )
+            case 'recentDocuments':
+              return (
+                <RecentDocumentsWidget
+                  key="recentDocs"
+                  isVisible={true}
+                  onTabChange={onTabChange}
+                  gridW={w}
+                  gridH={h}
+                />
+              )
+            case 'leetcodePOTD':
+              return (
+                <DailyCodingWidget
+                  key="leetcodePOTD"
+                  platform="leetcode"
+                  todayStr={todayStr}
+                  gridW={w}
+                  gridH={h}
+                />
+              )
+            case 'gfgPOTD':
+              return (
+                <DailyCodingWidget
+                  key="gfgPOTD"
+                  platform="gfg"
+                  todayStr={todayStr}
+                  gridW={w}
+                  gridH={h}
+                />
+              )
+            default:
+              return null
+          }
+        }}
+      />
 
-        {/* Right Column: Widgets */}
-        <div className="space-y-6 xl:sticky xl:top-6">
-          <div className="flex justify-between items-center pb-2 border-b border-[var(--color-border)]/40">
-            <span className="text-xs font-bold text-[var(--color-text-muted)]">Dashboard Widgets</span>
-            <Button variant="ghost" size="sm" onClick={() => setIsCustomizing(true)} className="text-xs font-semibold">
-              Edit Dashboard
-            </Button>
-          </div>
-
-          {widgetsConfig.order.map((widgetId) => {
-            if (widgetsConfig.hidden.includes(widgetId)) return null
-
-            switch (widgetId) {
-              case 'journal':
-                return (
-                  <JournalWidget
-                    key="journal"
-                    todayJournal={todayJournal}
-                    onOpenJournal={() => onTabChange('journal')}
-                  />
-                )
-              case 'workHours':
-                return workTemplateId ? (
-                  <WorkHoursWidget
-                    key={workTemplateId}
-                    todayWorkLog={todayWorkLog}
-                    workTemplateId={workTemplateId}
-                    todayStr={todayStr}
-                    weekDates={weekDates}
-                    logs={logs}
-                    weeklyGoal={weeklyGoal}
-                    logWorkPresenceAction={logWorkPresenceAction}
-                  />
-                ) : null
-              case 'leaveBalance':
-                return (
-                  <LeaveWidget
-                    key="leave"
-                    isVisible={true}
-                    leaveRecords={leaveRecords}
-                    leaveAllowances={leaveAllowances}
-                    onTabChange={onTabChange}
-                  />
-                )
-              case 'weight':
-                return (
-                  <WeightWidget
-                    key="weight"
-                    isVisible={true}
-                    weightRecords={weightRecords}
-                  />
-                )
-              case 'recentDocuments':
-                return (
-                  <RecentDocumentsWidget
-                    key="recentDocs"
-                    isVisible={true}
-                    onTabChange={onTabChange}
-                  />
-                )
-              case 'leetcodePOTD':
-                return (
-                  <DailyCodingWidget
-                    key="leetcodePOTD"
-                    platform="leetcode"
-                    todayStr={todayStr}
-                  />
-                )
-              case 'gfgPOTD':
-                return (
-                  <DailyCodingWidget
-                    key="gfgPOTD"
-                    platform="gfg"
-                    todayStr={todayStr}
-                  />
-                )
-              default:
-                return null
-            }
-          })}
-        </div>
-      </div>
-
-      <Dialog open={isCustomizing} onOpenChange={setIsCustomizing}>
-        <DialogContent size="sm">
-          <DialogHeader>
-            <DialogTitle>Edit Dashboard Widgets</DialogTitle>
-            <DialogDescription>
-              Toggle visibility and arrange the order of your home screen widgets.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="p-5 space-y-4">
-            <div className="space-y-2.5">
-              <DndContext
-                sensors={widgetSensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleWidgetDragEnd}
-              >
-                <SortableContext
-                  items={widgetsConfig.order}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {widgetsConfig.order.map((widgetId, index) => {
-                    const isHidden = widgetsConfig.hidden.includes(widgetId)
-                    return (
-                      <SortableWidgetRow
-                        key={widgetId}
-                        widgetId={widgetId}
-                        index={index}
-                        total={widgetsConfig.order.length}
-                        isHidden={isHidden}
-                        onMoveUp={() => {
-                          const newOrder = [...widgetsConfig.order]
-                          ;[newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]]
-                          setWidgetsConfig(prev => ({ ...prev, order: newOrder }))
-                        }}
-                        onMoveDown={() => {
-                          const newOrder = [...widgetsConfig.order]
-                          ;[newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]]
-                          setWidgetsConfig(prev => ({ ...prev, order: newOrder }))
-                        }}
-                        onToggleHidden={() => {
-                          const newHidden = isHidden
-                            ? widgetsConfig.hidden.filter(id => id !== widgetId)
-                            : [...widgetsConfig.hidden, widgetId]
-                          setWidgetsConfig(prev => ({ ...prev, hidden: newHidden }))
-                        }}
-                      />
-                    )
-                  })}
-                </SortableContext>
-              </DndContext>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setWidgetsConfig({
-                  order: ['journal', 'workHours', 'leaveBalance', 'weight', 'recentDocuments'],
-                  hidden: []
-                })
-              }}
-            >
-              Reset to Defaults
-            </Button>
-            <Button variant="primary" onClick={() => setIsCustomizing(false)}>
-              Save & Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Edit Dashboard Widgets Modal */}
+      <EditDashboardModal
+        isOpen={isCustomizing}
+        onClose={() => setIsCustomizing(false)}
+        hiddenWidgets={dashboardConfig.hidden}
+        onToggleWidget={handleToggleWidget}
+        onResetLayout={handleResetLayout}
+      />
 
       <CompletionDialog
         key={activeCompletion ? `${activeCompletion.occurrence.id}-${activeCompletion.occurrence.templateId}` : 'closed'}

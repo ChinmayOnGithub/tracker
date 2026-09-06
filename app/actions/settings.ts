@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { getLoggedUser } from '@/app/actions/auth'
 import { canAccess } from '@/lib/auth-guards'
 import { Prisma } from '@prisma/client'
+import { DashboardConfig, LegacyDashboardConfig } from '@/lib/dashboard/types'
 
 export async function getGuestPermissionsAction(): Promise<{
   success: boolean
@@ -79,7 +80,7 @@ export async function saveGuestPermissionsAction(permissions: Record<string, boo
   }
 }
 
-export async function saveDashboardConfigAction(config: { order: string[]; hidden: string[] }): Promise<{ success: boolean; error?: string }> {
+export async function saveDashboardConfigAction(config: { order?: string[]; hidden?: string[]; items?: unknown[]; version?: number }): Promise<{ success: boolean; error?: string }> {
   try {
     const loggedUser = await getLoggedUser()
     if (!loggedUser) {
@@ -120,7 +121,7 @@ export async function getUserSettingsAction(): Promise<{
       animations?: string
     }
     weeklyGoal?: number
-    dashboard?: { order: string[]; hidden: string[] }
+    dashboard?: DashboardConfig | LegacyDashboardConfig
   }
   error?: string
 }> {
@@ -151,7 +152,7 @@ export async function getUserSettingsAction(): Promise<{
           animations?: string
         }) || undefined,
         weeklyGoal: (workHoursRecord?.config as { weeklyGoal?: number })?.weeklyGoal,
-        dashboard: (dashboardRecord?.config as { order: string[]; hidden: string[] }) || undefined,
+        dashboard: (dashboardRecord?.config as DashboardConfig | LegacyDashboardConfig) || undefined,
       },
     }
   } catch (error) {

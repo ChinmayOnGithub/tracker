@@ -11,6 +11,8 @@ import { fetchCalendarDataAction } from '@/app/actions/queries'
 import { analyzeRecurrence } from '@/lib/recurrence'
 import { Skeleton } from '@/design-system'
 
+import { requestDeduplicator } from '@/lib/store/requestDeduplicator'
+
 interface CalendarWrapperProps {
   logs: ActivityLog[]
   templates: ActivityTemplate[]
@@ -36,7 +38,7 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
     stateRef.current = state
   }, [state])
 
-  // Background fetch/revalidate (SWR)
+  // Background fetch/revalidate (SWR) with deduplication
   useEffect(() => {
     let active = true
     const lastFetched = stateRef.current.cacheMetadata.lastFetched['calendar'] || 0
@@ -48,7 +50,9 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
       const revalidate = async () => {
         setCacheMetadata('calendar', lastFetched, true)
         try {
-          const res = await fetchCalendarDataAction()
+          const res = await requestDeduplicator.dedupe('calendar:data', () =>
+            fetchCalendarDataAction()
+          )
           if (active && res.success && res.data) {
             initialize({
               templates: res.data.templates,

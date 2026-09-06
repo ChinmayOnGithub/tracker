@@ -1,5 +1,6 @@
 import { TodayDashboardWrapper } from '@/components/TodayDashboardWrapper'
 import { getLoggedUser } from '@/app/actions/auth'
+import { getUserSettingsAction } from '@/app/actions/settings'
 import { redirect } from 'next/navigation'
 import { getTodayDateStr } from '@/lib/recurrence'
 import { canAccess } from '@/lib/auth-guards'
@@ -25,6 +26,17 @@ export default async function Page(props: { searchParams: Promise<{ date?: strin
 
   const todayStr = dateParam || getTodayDateStr()
 
+  // Load canonical user dashboard configuration server-side
+  let initialDashboardConfig = null
+  try {
+    const settingsRes = await getUserSettingsAction()
+    if (settingsRes.success && settingsRes.settings?.dashboard) {
+      initialDashboardConfig = settingsRes.settings.dashboard
+    }
+  } catch (err) {
+    console.error('[Page] Failed to fetch initial dashboard config:', err)
+  }
+
   return (
     <TodayDashboardWrapper
       todayStr={todayStr}
@@ -34,7 +46,7 @@ export default async function Page(props: { searchParams: Promise<{ date?: strin
       leaveRecords={[]}
       leaveAllowances={[]}
       weightRecords={[]}
-      initialDashboardConfig={null}
+      initialDashboardConfig={initialDashboardConfig}
     />
   )
 }

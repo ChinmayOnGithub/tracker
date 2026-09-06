@@ -46,13 +46,22 @@ export async function fetchRecurrenceLogs(
     orderBy: { logDate: 'desc' }
   }) : []
 
-  // 4. Get all logs of the last 7 days to cover general recent completions list
+  // 4. Get all logs of the ±7 days window to cover recent history and upcoming scheduled tasks
   const sevenDaysAgo = new Date()
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-  const lastSevenDaysLogs = await db.activityLog.findMany({
+  sevenDaysAgo.setHours(0, 0, 0, 0)
+
+  const sevenDaysAhead = new Date()
+  sevenDaysAhead.setDate(sevenDaysAhead.getDate() + 7)
+  sevenDaysAhead.setHours(23, 59, 59, 999)
+
+  const windowLogs = await db.activityLog.findMany({
     where: {
       ...whereClause,
-      logDate: { gte: sevenDaysAgo }
+      logDate: {
+        gte: sevenDaysAgo,
+        lte: sevenDaysAhead,
+      }
     },
     orderBy: { logDate: 'desc' }
   })
@@ -62,7 +71,7 @@ export async function fetchRecurrenceLogs(
   latestLogs.forEach(l => logsMap.set(l.id, l as unknown as ActivityLog))
   latestCompletions.forEach(l => logsMap.set(l.id, l as unknown as ActivityLog))
   recentDailyLogs.forEach(l => logsMap.set(l.id, l as unknown as ActivityLog))
-  lastSevenDaysLogs.forEach(l => logsMap.set(l.id, l as unknown as ActivityLog))
+  windowLogs.forEach(l => logsMap.set(l.id, l as unknown as ActivityLog))
 
   return Array.from(logsMap.values())
 }

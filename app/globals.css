@@ -93,6 +93,9 @@ a, button, input, select, textarea {
 }
 
 /* Tailwind-compatible alias utilities */
+.grid-cols-20 {
+  grid-template-columns: repeat(20, minmax(0, 1fr));
+}
 .border-zinc-750 { border-color: #3f3f46; }
 .border-zinc-850 { border-color: #1f1f23; }
 .border-zinc-855 { border-color: #1c1c20; }
