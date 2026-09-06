@@ -10,4 +10,5 @@ export * from './WeightWidget'
 export * from './RecentDocumentsWidget'
 export * from './DailyCodingWidget'
 export * from './CompactTodayPills'
+export * from './HourlyWeatherWidget'
 

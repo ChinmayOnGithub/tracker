@@ -13,7 +13,9 @@ import {
   LeaveWidget,
   WeightWidget,
   DailyCodingWidget,
+  HourlyWeatherWidget,
 } from './today/widgets'
+
 import { CompletionDialog } from './CompletionDialog'
 import { CompletionService } from '@/lib/services/CompletionService'
 import { ActivityTemplate, ActivityLog, TimelineItem, AnalyzedTemplate } from '@/types'
@@ -503,8 +505,17 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                   gridH={h}
                 />
               )
+            case 'weather':
+              return (
+                <HourlyWeatherWidget
+                  key="weather"
+                  gridW={w}
+                  gridH={h}
+                />
+              )
             default:
               return null
+
           }
         }}
       />

@@ -108,6 +108,19 @@ export const WIDGET_REGISTRY: WidgetDefinition[] = [
     minH: 3,
     maxH: 8,
   },
+  {
+    id: 'weather',
+    title: 'Hourly Weather',
+    description: "Today's hourly forecast, local time, and current conditions",
+    category: 'Health',
+    defaultEnabled: true,
+    defaultW: 7,
+    defaultH: 4,
+    minW: 5,
+    maxW: 14,
+    minH: 3,
+    maxH: 6,
+  },
 ]
 
 export function getWidgetDefinition(id: string): WidgetDefinition | undefined {

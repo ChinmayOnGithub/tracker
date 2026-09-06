@@ -3,9 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "prisma generate && bun test tests/ lib/services/ && next build --webpack",
     "test": "bun test tests/ lib/services/",
+
     "start": "next start",
     "lint": "eslint",
     "prepare": "husky"
