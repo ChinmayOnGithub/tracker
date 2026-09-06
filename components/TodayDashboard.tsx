@@ -509,10 +509,12 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
               return (
                 <HourlyWeatherWidget
                   key="weather"
+                  displayedDate={todayStr}
                   gridW={w}
                   gridH={h}
                 />
               )
+
             default:
               return null
 

@@ -17,6 +17,7 @@ export interface WeatherSnapshot {
 export interface HourlyWeather {
   timestamp: string // ISO string
   time: number     // Unix timestamp ms
+  localDate: string // e.g. "2026-09-06"
   localTimeStr: string // e.g. "4:00 PM"
   hourLabel: string // e.g. "4 PM"
   hour: number     // 0-23
@@ -30,6 +31,7 @@ export interface HourlyWeather {
   description: string
   icon: string
 }
+
 
 export interface WeatherForecastData {
   locationName: string
@@ -50,8 +52,9 @@ export interface WeatherForecastData {
 }
 
 const WEATHER_CACHE_KEY = 'tracker_weather_snapshot_v2'
-const WEATHER_FORECAST_CACHE_KEY = 'tracker_weather_forecast_v1'
+const WEATHER_FORECAST_CACHE_KEY = 'tracker_weather_forecast_v2'
 const WEATHER_CACHE_TTL = 60 * 60 * 1000 // 1 hour
+
 
 // WMO Weather interpretation codes (WW)
 export function interpretWeatherCode(code: number, isDay = true): { description: string; icon: string } {
@@ -125,6 +128,16 @@ export class WeatherService {
   }
 
   /**
+   * Returns the hourly forecast entries specifically for the given displayedDate (YYYY-MM-DD).
+   * Filters by localDate strictly without timezone drift or falling back to other dates.
+   */
+  static getForecastForDate(forecast: WeatherForecastData | null, targetDateStr: string): HourlyWeather[] {
+    if (!forecast || !forecast.hourly || !Array.isArray(forecast.hourly)) return []
+    return forecast.hourly.filter(h => h.localDate === targetDateStr)
+  }
+
+
+  /**
    * Retrieves cached weather snapshot if valid.
    */
   static getCachedSnapshot(): WeatherSnapshot | null {
@@ -143,6 +156,17 @@ export class WeatherService {
   }
 
   /**
+   * Generates standard cache key for forecast based on location and unit.
+   */
+  static getForecastCacheKey(
+    lat = 18.5597,
+    lon = 73.7868,
+    temperatureUnit: 'celsius' | 'fahrenheit' = 'celsius'
+  ): string {
+    return `${WEATHER_FORECAST_CACHE_KEY}_${lat}_${lon}_${temperatureUnit}`
+  }
+
+  /**
    * Retrieves cached weather forecast if valid.
    */
   static getCachedForecast(key = WEATHER_FORECAST_CACHE_KEY): WeatherForecastData | null {
@@ -151,7 +175,12 @@ export class WeatherService {
       const raw = localStorage.getItem(key)
       if (!raw) return null
       const parsed: WeatherForecastData = JSON.parse(raw)
-      if (Date.now() - parsed.cachedAt < WEATHER_CACHE_TTL) {
+      // Check if cache is fresh and has localDate on hourly items
+      if (
+        Date.now() - parsed.cachedAt < WEATHER_CACHE_TTL &&
+        Array.isArray(parsed.hourly) &&
+        (parsed.hourly.length === 0 || !!parsed.hourly[0].localDate)
+      ) {
         return parsed
       }
     } catch {
@@ -159,6 +188,7 @@ export class WeatherService {
     }
     return null
   }
+
 
   /**
    * Fetches the current weather snapshot using default or detected coordinates.
@@ -236,9 +266,10 @@ export class WeatherService {
     return requestDeduplicator.dedupe(dedupeKey, async () => {
       try {
         const tempParam = temperatureUnit === 'fahrenheit' ? '&temperature_unit=fahrenheit' : ''
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m,relative_humidity_2m,is_day&timezone=auto&forecast_days=2${tempParam}`
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m,relative_humidity_2m,is_day&timezone=auto&forecast_days=7${tempParam}`
 
         const res = await fetch(url)
+
         if (!res.ok) throw new Error(`Weather API error: ${res.status}`)
 
         const data = await res.json()
@@ -271,13 +302,15 @@ export class WeatherService {
           const code = codes[i] ?? 0
           const { description, icon } = interpretWeatherCode(code, isItemDay)
 
-          // Parse hour directly from ISO format ("YYYY-MM-DDTHH:MM") to preserve weather location's local hour
-          const hourPart = timeIso.split('T')[1] || '00:00'
+          // Parse localDate and hour directly from ISO format ("YYYY-MM-DDTHH:MM") to preserve weather location's local calendar
+          const [datePart, hourPartRaw] = timeIso.split('T')
+          const hourPart = hourPartRaw || '00:00'
           const hourNum = parseInt(hourPart.split(':')[0], 10) || 0
 
           hourlyList.push({
             timestamp: timeIso,
             time: new Date(timeIso).getTime(),
+            localDate: datePart,
             localTimeStr: `${hourNum % 12 === 0 ? 12 : hourNum % 12}:${hourPart.split(':')[1] || '00'} ${hourNum >= 12 ? 'PM' : 'AM'}`,
             hourLabel: WeatherService.formatHourLabel(hourNum),
             hour: hourNum,
@@ -292,6 +325,7 @@ export class WeatherService {
             icon
           })
         }
+
 
         const normalizedForecast: WeatherForecastData = {
           locationName,

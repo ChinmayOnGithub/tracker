@@ -117,16 +117,25 @@ describe('WeatherService Domain & Hourly Normalization', () => {
       expect(result?.current.windSpeed).toBe(14)
 
       expect(result?.hourly.length).toBe(3)
+      expect(result?.hourly[0].localDate).toBe('2026-09-06')
       expect(result?.hourly[0].hour).toBe(14)
       expect(result?.hourly[0].hourLabel).toBe('2 PM')
       expect(result?.hourly[0].temperature).toBe(29)
       expect(result?.hourly[0].precipitationProbability).toBe(0)
 
+      expect(result?.hourly[2].localDate).toBe('2026-09-06')
       expect(result?.hourly[2].hour).toBe(16)
       expect(result?.hourly[2].hourLabel).toBe('4 PM')
       expect(result?.hourly[2].precipitationProbability).toBe(60)
       expect(result?.hourly[2].description).toBe('Slight rain')
+
+      // Test getForecastForDate helper
+      const dateFiltered = WeatherService.getForecastForDate(result, '2026-09-06')
+      expect(dateFiltered.length).toBe(3)
+      const emptyFiltered = WeatherService.getForecastForDate(result, '2026-09-07')
+      expect(emptyFiltered.length).toBe(0)
     })
+
 
     it('handles missing optional fields in hourly data without throwing', async () => {
       const partialResponse = {
@@ -177,7 +186,7 @@ describe('WeatherService Domain & Hourly Normalization', () => {
         cachedAt: Date.now(),
       }
 
-      const cacheKey = 'tracker_weather_forecast_v1_18.5597_73.7868_celsius'
+      const cacheKey = WeatherService.getForecastCacheKey(18.5597, 73.7868, 'celsius')
       localStorage.setItem(cacheKey, JSON.stringify(cachedData))
 
       const fetchMock = mock(() => Promise.resolve({ ok: true } as Response))
@@ -205,8 +214,9 @@ describe('WeatherService Domain & Hourly Normalization', () => {
         cachedAt: Date.now() - 3600 * 1000 * 5,
       }
 
-      const cacheKey = 'tracker_weather_forecast_v1_18.5597_73.7868_celsius'
+      const cacheKey = WeatherService.getForecastCacheKey(18.5597, 73.7868, 'celsius')
       localStorage.setItem(cacheKey, JSON.stringify(staleData))
+
 
       // Network returns 500 error
       global.fetch = mock(() => Promise.resolve({ ok: false, status: 500 } as Response)) as unknown as typeof fetch
