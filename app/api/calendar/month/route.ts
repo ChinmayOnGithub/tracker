@@ -17,11 +17,13 @@ export async function GET(req: NextRequest) {
     const year = yearStr ? parseInt(yearStr, 10) : now.getFullYear()
     const month = monthStr ? parseInt(monthStr, 10) : now.getMonth() + 1
 
+    const timezone = searchParams.get('timezone') || undefined
+
     if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
       return NextResponse.json({ error: 'Invalid year or month' }, { status: 400 })
     }
 
-    const data = await CalendarAggregationService.getMonthSummary(user.id, year, month)
+    const data = await CalendarAggregationService.getMonthSummary(user.id, year, month, timezone)
     return NextResponse.json({ success: true, data })
   } catch (error) {
     console.error('Failed to get calendar month summary:', error)

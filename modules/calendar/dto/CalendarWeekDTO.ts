@@ -8,6 +8,7 @@ export interface CalendarWeekEventDTO {
   type: string
   trackerArtifactId: string | null
   trackerArtifactType: string | null
+  status?: string
 }
 
 export interface CalendarWeekDayDTO {

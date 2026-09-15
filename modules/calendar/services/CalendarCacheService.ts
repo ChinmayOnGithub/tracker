@@ -277,16 +277,96 @@ export class CalendarCacheService {
   }
 
   /**
-   * Explicit cache invalidation for all or single user.
+   * Explicit cache invalidation for all or single user across both memory and IndexedDB.
    */
-  public static invalidateAll(userId?: string | null): void {
+  public static async invalidateAll(userId?: string | null): Promise<void> {
     if (!userId) {
       this.inMemory.clear()
-      return
+    } else {
+      for (const key of Array.from(this.inMemory.keys())) {
+        if (key.includes(`_${userId}_`)) {
+          this.inMemory.delete(key)
+        }
+      }
     }
-    for (const key of this.inMemory.keys()) {
-      if (key.includes(`_${userId}_`)) {
+
+    if (this.isClient()) {
+      try {
+        const db = IndexedDBEngine.getInstance()
+        const allSettings = await db.getAll<UserCalendarCacheEnvelope<unknown>>('settings')
+        for (const item of allSettings) {
+          if (item && item.key && item.key.startsWith('cal_')) {
+            if (!userId || item.userId === userId || item.key.includes(`_${userId}_`)) {
+              await db.delete('settings', item.key)
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[CalendarCacheService] IndexedDB clear failed:', e)
+      }
+    }
+  }
+
+  /**
+   * Invalidates cached week data for a user in memory and IndexedDB.
+   */
+  public static async invalidateWeekData(userId: string, startStr?: string): Promise<void> {
+    if (!userId || userId === 'anonymous') return
+
+    const prefix = `cal_week_${userId}_`
+    for (const key of Array.from(this.inMemory.keys())) {
+      if (startStr ? key === `${prefix}${startStr}` : key.startsWith(prefix)) {
         this.inMemory.delete(key)
+      }
+    }
+
+    if (this.isClient()) {
+      try {
+        const db = IndexedDBEngine.getInstance()
+        if (startStr) {
+          await db.delete('settings', `${prefix}${startStr}`)
+        } else {
+          const allSettings = await db.getAll<UserCalendarCacheEnvelope<unknown>>('settings')
+          for (const item of allSettings) {
+            if (item && item.key && item.key.startsWith(prefix)) {
+              await db.delete('settings', item.key)
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[CalendarCacheService] IndexedDB week invalidate failed:', e)
+      }
+    }
+  }
+
+  /**
+   * Invalidates cached agenda for a user in memory and IndexedDB.
+   */
+  public static async invalidateAgenda(userId: string, todayStr?: string): Promise<void> {
+    if (!userId || userId === 'anonymous') return
+
+    const prefix = `cal_agenda_${userId}_`
+    for (const key of Array.from(this.inMemory.keys())) {
+      if (todayStr ? key === `${prefix}${todayStr}` : key.startsWith(prefix)) {
+        this.inMemory.delete(key)
+      }
+    }
+
+    if (this.isClient()) {
+      try {
+        const db = IndexedDBEngine.getInstance()
+        if (todayStr) {
+          await db.delete('settings', `${prefix}${todayStr}`)
+        } else {
+          const allSettings = await db.getAll<UserCalendarCacheEnvelope<unknown>>('settings')
+          for (const item of allSettings) {
+            if (item && item.key && item.key.startsWith(prefix)) {
+              await db.delete('settings', item.key)
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[CalendarCacheService] IndexedDB agenda invalidate failed:', e)
       }
     }
   }

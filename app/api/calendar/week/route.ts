@@ -11,12 +11,13 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const startOfWeek = searchParams.get('startOfWeek')
+    const timezone = searchParams.get('timezone') || undefined
 
     if (!startOfWeek || !/^\d{4}-\d{2}-\d{2}$/.test(startOfWeek)) {
       return NextResponse.json({ error: 'Missing or invalid startOfWeek format (YYYY-MM-DD)' }, { status: 400 })
     }
 
-    const data = await CalendarAggregationService.getWeekView(user.id, startOfWeek)
+    const data = await CalendarAggregationService.getWeekView(user.id, startOfWeek, timezone)
     return NextResponse.json({ success: true, data })
   } catch (error) {
     console.error('Failed to get calendar week view:', error)

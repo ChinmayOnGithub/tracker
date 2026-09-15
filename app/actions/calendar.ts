@@ -40,6 +40,7 @@ export async function createCalendarEventAction(data: {
     })
 
     revalidatePath('/')
+    revalidatePath('/calendar')
     return { success: true, event }
   } catch (error) {
     console.error('Failed to create calendar event:', error)
@@ -70,15 +71,27 @@ export async function updateCalendarEventAction(
       return { success: false, error: 'Event not found or unauthorized' }
     }
 
+    const nextStart = data.start ? new Date(data.start) : existing.start
+    const nextEnd = data.end ? new Date(data.end) : existing.end
+
+    if (isNaN(nextStart.getTime()) || isNaN(nextEnd.getTime())) {
+      return { success: false, error: 'Invalid date values' }
+    }
+
+    if (nextStart.getTime() >= nextEnd.getTime()) {
+      return { success: false, error: 'Event start must be strictly before end time' }
+    }
+
     const updated = await CalendarService.updateEvent(user.id, id, {
       title: data.title,
-      start: data.start ? new Date(data.start) : undefined,
-      end: data.end ? new Date(data.end) : undefined,
+      start: data.start ? nextStart : undefined,
+      end: data.end ? nextEnd : undefined,
       allDay: data.allDay,
       color: data.color,
     })
 
     revalidatePath('/')
+    revalidatePath('/calendar')
     return { success: true, event: updated }
   } catch (error) {
     console.error('Failed to update calendar event:', error)
@@ -103,6 +116,7 @@ export async function deleteCalendarEventAction(id: string) {
     await CalendarService.deleteEvent(user.id, id)
 
     revalidatePath('/')
+    revalidatePath('/calendar')
     return { success: true }
   } catch (error) {
     console.error('Failed to delete calendar event:', error)

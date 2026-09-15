@@ -189,6 +189,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     }
   }, [isAuthenticated, fetchCalendar, dateParam])
 
+  // Listen to calendar data changes from Calendar / Today mutations to auto-refresh
+  useEffect(() => {
+    const handleCalendarChanged = () => {
+      fetchCalendar(true)
+    }
+    window.addEventListener('calendar_data_changed', handleCalendarChanged)
+    return () => window.removeEventListener('calendar_data_changed', handleCalendarChanged)
+  }, [fetchCalendar])
+
   // Load client-specific states on mount
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null

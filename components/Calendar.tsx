@@ -8,9 +8,20 @@ import { Card, Button } from '@/design-system'
 import { CalendarMonthSummaryDTO } from '@/modules/calendar/dto/CalendarMonthSummaryDTO'
 import { CalendarWeekDTO, CalendarWeekEventDTO } from '@/modules/calendar/dto/CalendarWeekDTO'
 import { checkGoogleConnection, syncCalendarAction } from '@/modules/sync/google-calendar/actions'
+import { updateCalendarEventAction } from '@/app/actions/calendar'
 import { getWeekDates } from '@/lib/recurrence'
 import { CalendarCacheService } from '@/modules/calendar/services/CalendarCacheService'
 import { CalendarDataContext } from './DashboardLayout'
+import {
+  calculateContentOffsetY,
+  timeToPixelOffset,
+  durationToPixelHeight,
+  calculateDragDestination,
+  calculateResizeDestination,
+  getCurrentTimeIndicatorPosition,
+  DEFAULT_GRID_CONFIG,
+} from '@/modules/calendar/utils/timeGrid'
+import { toast } from 'sonner'
 
 interface TestAnalyzedTemplate {
   template: ActivityTemplate
@@ -41,6 +52,21 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [currentDate, setCurrentDate] = useState(() => new Date())
   const [view, setView] = useState<'month' | 'week'>('month')
   const [settingsVer, setSettingsVer] = useState(0)
+  const [refreshVer, setRefreshVer] = useState(0)
+
+  // Current local time clock (ticking every 30s)
+  const [currentTime, setCurrentTime] = useState(() => new Date())
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 30000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Auto-refresh when calendar mutations happen across the app
+  useEffect(() => {
+    const handleCalendarChanged = () => setRefreshVer(v => v + 1)
+    window.addEventListener('calendar_data_changed', handleCalendarChanged)
+    return () => window.removeEventListener('calendar_data_changed', handleCalendarChanged)
+  }, [])
 
   useEffect(() => {
     const handleSettingsChange = () => setSettingsVer(v => v + 1)
@@ -58,6 +84,9 @@ export const Calendar: React.FC<CalendarProps> = ({
   }, [])
   
   const startOfWeekPref = typeof window !== 'undefined' && localStorage.getItem('calendar_start_of_week') === 'monday' ? 'monday' : 'sunday'
+  const userTimezone = typeof window !== 'undefined'
+    ? localStorage.getItem('personal_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    : 'UTC'
   
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth()
@@ -66,6 +95,27 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [monthSummaries, setMonthSummaries] = useState<CalendarMonthSummaryDTO[]>([])
   const [weekData, setWeekData] = useState<CalendarWeekDTO | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // Drag & drop interaction state
+  const [dragState, setDragState] = useState<{
+    event: CalendarWeekEventDTO
+    originDate: string
+    targetDateStr: string
+    offsetY: number
+    previewStart: Date
+    previewEnd: Date
+    durationMs: number
+  } | null>(null)
+
+  // Resizing interaction state
+  const [resizeState, setResizeState] = useState<{
+    event: CalendarWeekEventDTO
+    handle: 'top' | 'bottom'
+    dateStr: string
+    offsetY: number
+    previewStart: Date
+    previewEnd: Date
+  } | null>(null)
 
   // Sync state
   const [googleConnected, setGoogleConnected] = useState(false)
@@ -130,13 +180,13 @@ export const Calendar: React.FC<CalendarProps> = ({
           if (cachedMonth && active) {
             setMonthSummaries(cachedMonth)
             setLoading(false)
-            if (!isStale) return // Warm & fresh: zero network request!
+            if (!isStale && refreshVer === 0) return // Warm & fresh: zero network request!
           } else if (active) {
             setLoading(true)
           }
 
           // 2. Background revalidation
-          const res = await fetch(`/api/calendar/month?year=${year}&month=${month + 1}`)
+          const res = await fetch(`/api/calendar/month?year=${year}&month=${month + 1}&timezone=${encodeURIComponent(userTimezone)}`)
           const json = await res.json()
           if (active && json.success) {
             setMonthSummaries(json.data)
@@ -150,13 +200,13 @@ export const Calendar: React.FC<CalendarProps> = ({
           if (cachedWeek && active) {
             setWeekData(cachedWeek)
             setLoading(false)
-            if (!isStale) return // Warm & fresh: zero network request!
+            if (!isStale && refreshVer === 0) return // Warm & fresh: zero network request!
           } else if (active) {
             setLoading(true)
           }
 
           // 2. Background revalidation
-          const res = await fetch(`/api/calendar/week?startOfWeek=${startStr}`)
+          const res = await fetch(`/api/calendar/week?startOfWeek=${startStr}&timezone=${encodeURIComponent(userTimezone)}`)
           const json = await res.json()
           if (active && json.success) {
             setWeekData(json.data)
@@ -173,7 +223,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     return () => {
       active = false
     }
-  }, [view, currentDate, startOfWeekDate, year, month, userId])
+  }, [view, currentDate, startOfWeekDate, year, month, userId, refreshVer, userTimezone])
 
   const handlePrev = () => {
     if (view === 'month') {
@@ -259,19 +309,256 @@ export const Calendar: React.FC<CalendarProps> = ({
     return { officeHours, wfhHours, rangeLabel, remaining, goalMet, weeklyGoal, settingsVer }
   }, [logs, _templates, view, weekDaysList, selectedDateStr, todayStr, startOfWeekPref, settingsVer])
 
-  // Helper to map event elements to absolute timeline grid offsets
+  // Canonical time-grid mapping
   const getEventPosition = (event: CalendarWeekEventDTO) => {
+    const topPx = timeToPixelOffset(event.start, DEFAULT_GRID_CONFIG, userTimezone)
+    const heightPx = durationToPixelHeight(event.start, event.end, DEFAULT_GRID_CONFIG)
+    return { top: `${Math.max(0, topPx)}px`, height: `${heightPx}px` }
+  }
+
+  const handleStartDrag = (
+    e: React.PointerEvent,
+    event: CalendarWeekEventDTO,
+    dateStr: string
+  ) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    e.preventDefault()
+
     const sDate = new Date(event.start)
     const eDate = new Date(event.end)
-    const startMinutes = sDate.getHours() * 60 + sDate.getMinutes()
-    const endMinutes = eDate.getHours() * 60 + eDate.getMinutes()
-    const gridStartMinutes = 6 * 60 // 6 AM
-    const gridEndMinutes = 22 * 60 // 10 PM
-    const totalGridMinutes = gridEndMinutes - gridStartMinutes
+    const durationMs = eDate.getTime() - sDate.getTime()
 
-    const top = Math.max(0, ((startMinutes - gridStartMinutes) / totalGridMinutes) * 100)
-    const height = Math.max(20, ((endMinutes - startMinutes) / totalGridMinutes) * 100)
-    return { top: `${top}%`, height: `${height}%` }
+    setDragState({
+      event,
+      originDate: dateStr,
+      targetDateStr: dateStr,
+      offsetY: timeToPixelOffset(event.start, DEFAULT_GRID_CONFIG, userTimezone),
+      previewStart: sDate,
+      previewEnd: eDate,
+      durationMs,
+    })
+
+    const gridContainer = (e.currentTarget as HTMLElement).closest<HTMLDivElement>('[data-calendar-grid="true"]')
+
+    const onPointerMove = (moveEv: PointerEvent) => {
+      let targetCol = dateStr
+      if (gridContainer) {
+        for (const day of weekDaysList) {
+          const dStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
+          const el = gridContainer.querySelector<HTMLDivElement>(`[data-column-date="${dStr}"]`)
+          if (el) {
+            const rect = el.getBoundingClientRect()
+            if (moveEv.clientX >= rect.left && moveEv.clientX <= rect.right) {
+              targetCol = dStr
+              break
+            }
+          }
+        }
+      }
+
+      const colEl = gridContainer?.querySelector<HTMLDivElement>(`[data-column-date="${targetCol}"]`)
+      if (!colEl) return
+
+      const colRect = colEl.getBoundingClientRect()
+      const offsetY = calculateContentOffsetY(moveEv.clientY, colRect.top, 0)
+      const destination = calculateDragDestination({
+        originalStart: event.start,
+        originalEnd: event.end,
+        targetDateStr: targetCol,
+        offsetY,
+        config: DEFAULT_GRID_CONFIG,
+      })
+
+      if (destination.isValid) {
+        setDragState({
+          event,
+          originDate: dateStr,
+          targetDateStr: targetCol,
+          offsetY,
+          previewStart: destination.newStart,
+          previewEnd: destination.newEnd,
+          durationMs,
+        })
+      }
+    }
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+
+      setDragState(current => {
+        if (!current) return null
+
+        const hasChanged =
+          current.targetDateStr !== current.originDate ||
+          current.previewStart.toISOString() !== new Date(event.start).toISOString()
+
+        if (hasChanged) {
+          const previousWeekData = weekData
+          // Optimistic update
+          setWeekData(prev => {
+            if (!prev) return prev
+            const nextDays = prev.days.map(d => {
+              if (d.date === current.originDate) {
+                return { ...d, events: d.events.filter(ev => ev.id !== event.id) }
+              }
+              return d
+            }).map(d => {
+              if (d.date === current.targetDateStr) {
+                const updatedEv: CalendarWeekEventDTO = {
+                  ...event,
+                  start: current.previewStart.toISOString(),
+                  end: current.previewEnd.toISOString(),
+                }
+                return { ...d, events: [...d.events, updatedEv] }
+              }
+              return d
+            })
+            return { ...prev, days: nextDays }
+          })
+
+          // Async persist
+          updateCalendarEventAction(event.id, {
+            start: current.previewStart.toISOString(),
+            end: current.previewEnd.toISOString(),
+          }).then(res => {
+            if (!res.success) {
+              setWeekData(previousWeekData)
+              toast.error(res.error || 'Failed to move event')
+            } else {
+              CalendarCacheService.invalidateAll(userId)
+              window.dispatchEvent(new CustomEvent('calendar_data_changed'))
+            }
+          }).catch(err => {
+            setWeekData(previousWeekData)
+            toast.error('Failed to move event: ' + (err instanceof Error ? err.message : String(err)))
+          })
+        }
+
+        return null
+      })
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+  }
+
+  const handleStartResize = (
+    e: React.PointerEvent,
+    event: CalendarWeekEventDTO,
+    handle: 'top' | 'bottom',
+    dateStr: string
+  ) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    e.preventDefault()
+
+    const sDate = new Date(event.start)
+    const eDate = new Date(event.end)
+
+    setResizeState({
+      event,
+      handle,
+      dateStr,
+      offsetY: handle === 'top'
+        ? timeToPixelOffset(event.start, DEFAULT_GRID_CONFIG, userTimezone)
+        : timeToPixelOffset(event.end, DEFAULT_GRID_CONFIG, userTimezone),
+      previewStart: sDate,
+      previewEnd: eDate,
+    })
+
+    const gridContainer = (e.currentTarget as HTMLElement).closest<HTMLDivElement>('[data-calendar-grid="true"]')
+
+    const onPointerMove = (moveEv: PointerEvent) => {
+      const colEl = gridContainer?.querySelector<HTMLDivElement>(`[data-column-date="${dateStr}"]`)
+      if (!colEl) return
+
+      const colRect = colEl.getBoundingClientRect()
+      const offsetY = calculateContentOffsetY(moveEv.clientY, colRect.top, 0)
+
+      const destination = calculateResizeDestination({
+        originalStart: event.start,
+        originalEnd: event.end,
+        handle,
+        targetDateStr: dateStr,
+        offsetY,
+        config: DEFAULT_GRID_CONFIG,
+      })
+
+      if (destination.isValid) {
+        setResizeState({
+          event,
+          handle,
+          dateStr,
+          offsetY,
+          previewStart: destination.newStart,
+          previewEnd: destination.newEnd,
+        })
+      }
+    }
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+
+      setResizeState(current => {
+        if (!current) return null
+
+        const hasChanged =
+          current.previewStart.toISOString() !== new Date(event.start).toISOString() ||
+          current.previewEnd.toISOString() !== new Date(event.end).toISOString()
+
+        if (hasChanged) {
+          const previousWeekData = weekData
+          // Optimistic update
+          setWeekData(prev => {
+            if (!prev) return prev
+            const nextDays = prev.days.map(d => {
+              if (d.date === dateStr) {
+                return {
+                  ...d,
+                  events: d.events.map(ev => {
+                    if (ev.id === event.id) {
+                      return {
+                        ...ev,
+                        start: current.previewStart.toISOString(),
+                        end: current.previewEnd.toISOString(),
+                      }
+                    }
+                    return ev
+                  })
+                }
+              }
+              return d
+            })
+            return { ...prev, days: nextDays }
+          })
+
+          // Async persist
+          updateCalendarEventAction(event.id, {
+            start: current.previewStart.toISOString(),
+            end: current.previewEnd.toISOString(),
+          }).then(res => {
+            if (!res.success) {
+              setWeekData(previousWeekData)
+              toast.error(res.error || 'Failed to resize event')
+            } else {
+              CalendarCacheService.invalidateAll(userId)
+              window.dispatchEvent(new CustomEvent('calendar_data_changed'))
+            }
+          }).catch(err => {
+            setWeekData(previousWeekData)
+            toast.error('Failed to resize event: ' + (err instanceof Error ? err.message : String(err)))
+          })
+        }
+
+        return null
+      })
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
   }
 
   const monthName = currentDate.toLocaleString('default', { month: 'long' })
@@ -504,7 +791,7 @@ export const Calendar: React.FC<CalendarProps> = ({
           </div>
 
           {/* Time-Grid Scroll Container */}
-          <div className="flex-1 min-h-[480px] max-h-[700px] overflow-y-auto relative select-none">
+          <div data-calendar-grid="true" className="flex-1 min-h-[480px] max-h-[700px] overflow-y-auto relative select-none">
             
             {/* Absolute positioning container for time grids */}
             <div className="grid grid-cols-8 relative" style={{ height: `${HOURS.length * 60}px` }}>
@@ -529,6 +816,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                 return (
                   <div
                     key={dateStr}
+                    data-column-date={dateStr}
                     className={`border-r border-[var(--color-border)]/60 h-full relative group transition-colors ${
                       isToday 
                         ? 'bg-[var(--color-primary)]/5 hover:bg-[var(--color-primary)]/10' 
@@ -537,6 +825,66 @@ export const Calendar: React.FC<CalendarProps> = ({
                           : 'hover:bg-[var(--color-accent)]/5'
                     }`}
                   >
+                    {/* Current-time Indicator Line */}
+                    {(() => {
+                      const indicator = getCurrentTimeIndicatorPosition({
+                        columnDateStr: dateStr,
+                        currentLocalDateStr: todayStr,
+                        currentTime,
+                        config: DEFAULT_GRID_CONFIG,
+                      })
+                      if (!indicator.isVisible) return null
+                      return (
+                        <div
+                          data-testid="current-time-indicator"
+                          className="absolute left-0 right-0 z-20 pointer-events-none flex items-center"
+                          style={{ top: `${indicator.topPx}px` }}
+                        >
+                          <div className="w-2.5 h-2.5 rounded-full bg-red-500 -ml-1.25 shadow-xs border border-white dark:border-zinc-900" />
+                          <div className="flex-1 border-t-2 border-red-500 shadow-xs" />
+                          <span className="text-[8px] font-bold bg-red-500 text-white px-1 py-0.5 rounded-xs leading-none ml-1 shadow-xs font-mono">
+                            {indicator.timeLabel}
+                          </span>
+                        </div>
+                      )
+                    })()}
+
+                    {/* Drag preview overlay */}
+                    {dragState && dragState.targetDateStr === dateStr && (
+                      <div
+                        className="absolute rounded-lg border-2 border-dashed border-[var(--color-primary)] bg-[var(--color-primary)]/20 px-1.5 py-1 text-[9px] font-bold z-30 pointer-events-none shadow-md overflow-hidden"
+                        style={{
+                          top: `${timeToPixelOffset(dragState.previewStart, DEFAULT_GRID_CONFIG, userTimezone)}px`,
+                          height: `${durationToPixelHeight(dragState.previewStart, dragState.previewEnd, DEFAULT_GRID_CONFIG)}px`,
+                          left: '2px',
+                          right: '2px',
+                        }}
+                      >
+                        <div className="truncate text-[var(--color-primary)] font-extrabold">{dragState.event.title}</div>
+                        <div className="text-[8px] opacity-90 mt-0.5 font-mono">
+                          {dragState.previewStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })} – {dragState.previewEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Resize preview overlay */}
+                    {resizeState && resizeState.dateStr === dateStr && (
+                      <div
+                        className="absolute rounded-lg border-2 border-dashed border-indigo-500 bg-indigo-500/20 px-1.5 py-1 text-[9px] font-bold z-30 pointer-events-none shadow-md overflow-hidden"
+                        style={{
+                          top: `${timeToPixelOffset(resizeState.previewStart, DEFAULT_GRID_CONFIG, userTimezone)}px`,
+                          height: `${durationToPixelHeight(resizeState.previewStart, resizeState.previewEnd, DEFAULT_GRID_CONFIG)}px`,
+                          left: '2px',
+                          right: '2px',
+                        }}
+                      >
+                        <div className="truncate text-indigo-600 dark:text-indigo-400 font-extrabold">{resizeState.event.title}</div>
+                        <div className="text-[8px] opacity-90 mt-0.5 font-mono">
+                          {resizeState.previewStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })} – {resizeState.previewEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Hour cell borders */}
                     {HOURS.map((hour) => (
                       <div
@@ -555,13 +903,12 @@ export const Calendar: React.FC<CalendarProps> = ({
                         const evStart = new Date(ev.start).getTime()
                         const evEnd   = new Date(ev.end).getTime()
                         // Find which column slot this event fits into
-                        // A column is available if no previously-placed event in it overlaps
                         const usedCols = laid
                           .filter(l => new Date(l.end).getTime() > evStart && new Date(l.start).getTime() < evEnd)
                           .map(l => l.col)
                         let col = 0
                         while (usedCols.includes(col)) col++
-                        laid.push({ ...ev, col, totalCols: 1 }) // totalCols resolved below
+                        laid.push({ ...ev, col, totalCols: 1 })
                       }
                       // Second pass: for each event, count how many columns its overlap group spans
                       for (const ev of laid) {
@@ -590,11 +937,14 @@ export const Calendar: React.FC<CalendarProps> = ({
                         return (
                           <div
                             key={event.id}
+                            onPointerDown={(e) => handleStartDrag(e, event, dateStr)}
                             onClick={(e) => {
                               e.stopPropagation()
                               onDayClick(dateStr)
                             }}
-                            className={`absolute rounded-lg border px-1.5 py-1 text-[9px] font-bold overflow-hidden shadow-xs hover:shadow-sm cursor-pointer select-none transition-all ${colorClass}`}
+                            className={`absolute rounded-lg border px-1.5 py-1 text-[9px] font-bold overflow-hidden shadow-xs hover:shadow-sm cursor-grab active:cursor-grabbing select-none transition-all ${colorClass} ${
+                              dragState?.event.id === event.id ? 'opacity-30' : ''
+                            }`}
                             style={{
                               top: pos.top,
                               height: pos.height,
@@ -602,10 +952,27 @@ export const Calendar: React.FC<CalendarProps> = ({
                               width: `calc(${colWidth}% - 4px)`,
                             }}
                           >
-                            <div className="truncate leading-tight">{event.title}</div>
-                            <div className="text-[8px] opacity-75 mt-0.5">
+                            {/* Top Resize Handle */}
+                            <div
+                              onPointerDown={(e) => handleStartResize(e, event, 'top', dateStr)}
+                              className="absolute top-0 left-0 right-0 h-2 cursor-ns-resize z-20 hover:bg-black/15 dark:hover:bg-white/20 transition-colors"
+                              title="Drag to resize start time"
+                            />
+
+                            <div className="truncate leading-tight pointer-events-none flex items-center gap-1">
+                              {event.status === 'done' && <span className="text-emerald-500 font-extrabold">✓</span>}
+                              <span className={event.status === 'done' ? 'line-through opacity-75' : ''}>{event.title}</span>
+                            </div>
+                            <div className="text-[8px] opacity-75 mt-0.5 pointer-events-none font-mono">
                               {new Date(event.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                             </div>
+
+                            {/* Bottom Resize Handle */}
+                            <div
+                              onPointerDown={(e) => handleStartResize(e, event, 'bottom', dateStr)}
+                              className="absolute bottom-0 left-0 right-0 h-2 cursor-ns-resize z-20 hover:bg-black/15 dark:hover:bg-white/20 transition-colors"
+                              title="Drag to resize end time"
+                            />
                           </div>
                         )
                       })

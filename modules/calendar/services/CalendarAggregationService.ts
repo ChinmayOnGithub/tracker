@@ -4,6 +4,30 @@ import { CalendarMonthSummaryDTO } from '../dto/CalendarMonthSummaryDTO'
 import { CalendarWeekDTO, CalendarWeekDayDTO, CalendarWeekEventDTO } from '../dto/CalendarWeekDTO'
 import { CalendarDayDTO, CalendarDayEventDTO } from '../dto/CalendarDayDTO'
 
+function getDateStrInTimezone(d: Date, timezone?: string): string {
+  if (!timezone) {
+    const y = d.getUTCFullYear()
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+    const day = String(d.getUTCDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(d)
+    const y = parts.find(p => p.type === 'year')?.value
+    const m = parts.find(p => p.type === 'month')?.value
+    const day = parts.find(p => p.type === 'day')?.value
+    if (y && m && day) return `${y}-${m}-${day}`
+  } catch {
+    // Fallback if timezone is invalid
+  }
+  return d.toISOString().split('T')[0]
+}
+
 export class CalendarAggregationService {
   /**
    * Generates month DTO summary list for a given year and month (1-indexed).
@@ -11,14 +35,17 @@ export class CalendarAggregationService {
   static async getMonthSummary(
     userId: string,
     year: number,
-    month: number
+    month: number,
+    timezone?: string
   ): Promise<CalendarMonthSummaryDTO[]> {
     // Determine start and end of the month
     const startOfMonth = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0))
     const endOfMonth = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999))
+    const queryStart = new Date(startOfMonth.getTime() - 24 * 3600 * 1000)
+    const queryEnd = new Date(endOfMonth.getTime() + 24 * 3600 * 1000)
 
-    // 1. Fetch CalendarEvents
-    const occurrences = await CalendarService.getEvents(userId, startOfMonth, endOfMonth)
+    // 1. Fetch CalendarEvents with 24h buffer for timezone safety
+    const occurrences = await CalendarService.getEvents(userId, queryStart, queryEnd)
 
     // 2. Fetch Tasks (activity templates of type TASK)
     const taskTemplates = await db.activityTemplate.findMany({
@@ -43,8 +70,8 @@ export class CalendarAggregationService {
         userId,
         deletedAt: null,
         logDate: {
-          gte: startOfMonth,
-          lte: endOfMonth,
+          gte: queryStart,
+          lte: queryEnd,
         },
       },
     })
@@ -75,10 +102,11 @@ export class CalendarAggregationService {
     for (let day = 1; day <= daysCount; day++) {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 
-      // Filter events occurring on this day
+      // Filter events occurring on this day using timezone-aware dates
       const dayOccurrences = occurrences.filter(occ => {
-        const occStartStr = occ.start.toISOString().split('T')[0]
-        const occEndStr = occ.end.toISOString().split('T')[0]
+        const occStartStr = getDateStrInTimezone(occ.start, timezone)
+        const adjustedEnd = new Date(Math.max(occ.start.getTime(), occ.end.getTime() - 1))
+        const occEndStr = getDateStrInTimezone(adjustedEnd, timezone)
         return dateStr >= occStartStr && dateStr <= occEndStr
       })
 
@@ -152,13 +180,16 @@ export class CalendarAggregationService {
    */
   static async getWeekView(
     userId: string,
-    startOfWeekStr: string
+    startOfWeekStr: string,
+    timezone?: string
   ): Promise<CalendarWeekDTO> {
     const startOfWeek = new Date(`${startOfWeekStr}T00:00:00.000Z`)
     const endOfWeek = new Date(startOfWeek.getTime() + 7 * 24 * 3600 * 1000 - 1)
+    const queryStart = new Date(startOfWeek.getTime() - 24 * 3600 * 1000)
+    const queryEnd = new Date(endOfWeek.getTime() + 24 * 3600 * 1000)
 
-    // 1. Get occurrences in the range
-    const occurrences = await CalendarService.getEvents(userId, startOfWeek, endOfWeek)
+    // 1. Get occurrences in the range with 24h buffer for timezone safety
+    const occurrences = await CalendarService.getEvents(userId, queryStart, queryEnd)
 
     // 2. Fetch Work Tracker template ID and logs
     const workTemplate = await db.activityTemplate.findFirst({
@@ -170,7 +201,7 @@ export class CalendarAggregationService {
       where: {
         userId,
         deletedAt: null,
-        logDate: { gte: startOfWeek, lte: endOfWeek },
+        logDate: { gte: queryStart, lte: queryEnd },
       },
     })
 
@@ -191,27 +222,39 @@ export class CalendarAggregationService {
       const d = new Date(startOfWeek.getTime() + i * 24 * 3600 * 1000)
       const dateStr = d.toISOString().split('T')[0]
 
-      // Filter events occurring on this day
+      // Filter events occurring on this day using timezone-aware dates
       const dayOccurrences = occurrences.filter(occ => {
-        const occStartStr = occ.start.toISOString().split('T')[0]
-        const occEndStr = occ.end.toISOString().split('T')[0]
+        const occStartStr = getDateStrInTimezone(occ.start, timezone)
+        const adjustedEnd = new Date(Math.max(occ.start.getTime(), occ.end.getTime() - 1))
+        const occEndStr = getDateStrInTimezone(adjustedEnd, timezone)
         return dateStr >= occStartStr && dateStr <= occEndStr
       })
 
-      const dayEvents: CalendarWeekEventDTO[] = dayOccurrences.map(occ => ({
-        id: occ.id,
-        title: occ.title,
-        start: occ.start.toISOString(),
-        end: occ.end.toISOString(),
-        allDay: occ.allDay,
-        color: occ.color,
-        type: occ.type,
-        trackerArtifactId: occ.trackerArtifactId,
-        trackerArtifactType: occ.trackerArtifactType,
-      }))
+      const dayLogs = logs.filter(l => l.logDate.toISOString().split('T')[0] === dateStr)
+
+      const dayEvents: CalendarWeekEventDTO[] = dayOccurrences.map(occ => {
+        let status: string | undefined = undefined
+        if (occ.trackerArtifactType === 'task' && occ.trackerArtifactId) {
+          const matchingLog = dayLogs.find(l => l.activityId === occ.trackerArtifactId)
+          if (matchingLog && (matchingLog.status === 'done' || matchingLog.status === 'paid')) {
+            status = 'done'
+          }
+        }
+        return {
+          id: occ.id,
+          title: occ.title,
+          start: occ.start.toISOString(),
+          end: occ.end.toISOString(),
+          allDay: occ.allDay,
+          color: occ.color,
+          type: occ.type,
+          trackerArtifactId: occ.trackerArtifactId,
+          trackerArtifactType: occ.trackerArtifactType,
+          status,
+        }
+      })
 
       // Get worked hours from logs
-      const dayLogs = logs.filter(l => l.logDate.toISOString().split('T')[0] === dateStr)
       const workLog = workTemplateId ? dayLogs.find(l => l.activityId === workTemplateId) : null
       const workedHours = workLog ? (workLog.amount ?? 0) : 0
 
