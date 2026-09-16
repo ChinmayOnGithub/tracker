@@ -8,6 +8,7 @@ export interface WorkSession {
   durationMinutes: number;
   loggingMode: 'timer' | 'manual';
   manualMinutes: number;
+  inTime?: string;
   createdAt?: string | Date;
   updatedAt?: string | Date;
   deletedAt?: string | Date | null;

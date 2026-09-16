@@ -8,6 +8,7 @@ import { requireOwnership } from '@/lib/auth-guards'
 import { ActivityService } from '@/lib/services/ActivityService'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import { SyncedActivityService } from '@/lib/services/SyncedActivityService'
+import { createLocalDateTime } from '@/lib/dateUtils'
 
 export async function createLog(data: {
   id?: string
@@ -290,8 +291,8 @@ export async function logWorkPresence(data: {
             userId: user.id,
             date: data.date,
             mode: data.status,
-            startedAt: data.currentSegmentStartedAt ? new Date(data.currentSegmentStartedAt) : (data.inTime ? new Date(`${data.date}T${data.inTime}:00`) : null),
-            endedAt: sessionState === 'completed' && data.outTime ? new Date(`${data.date}T${data.outTime}:00`) : null,
+            startedAt: data.currentSegmentStartedAt ? new Date(data.currentSegmentStartedAt) : (data.inTime ? createLocalDateTime(data.date, data.inTime) : null),
+            endedAt: sessionState === 'completed' && data.outTime ? createLocalDateTime(data.date, data.outTime) : null,
             durationMinutes: Math.round(accumulatedSeconds / 60),
             loggingMode: data.loggingMode || 'timer',
             manualMinutes: data.manualHours ? Math.round(data.manualHours * 60) : 0,
@@ -304,7 +305,7 @@ export async function logWorkPresence(data: {
           data: {
             mode: data.status,
             startedAt: data.currentSegmentStartedAt ? new Date(data.currentSegmentStartedAt) : undefined,
-            endedAt: sessionState === 'completed' && data.outTime ? new Date(`${data.date}T${data.outTime}:00`) : (sessionState === 'running' ? null : undefined),
+            endedAt: sessionState === 'completed' && data.outTime ? createLocalDateTime(data.date, data.outTime) : (sessionState === 'running' ? null : undefined),
             durationMinutes: Math.round(accumulatedSeconds / 60),
             loggingMode: data.loggingMode || 'timer',
             manualMinutes: data.manualHours ? Math.round(data.manualHours * 60) : 0,

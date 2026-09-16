@@ -1,11 +1,18 @@
 import { db } from '@/lib/db';
 import { ActivityService } from '@/lib/services/ActivityService';
+import { createLocalDateTime } from '@/lib/dateUtils';
 
 export class WorkSessionService {
   /**
    * Starts a new work session using a timer.
    */
-  public static async startSession(userId: string, date: string, mode: 'office' | 'wfh', id?: string) {
+  public static async startSession(
+    userId: string,
+    date: string,
+    mode: 'office' | 'wfh',
+    id?: string,
+    requestedStartTime?: string
+  ) {
     // Check if there is already an active session (endedAt is null)
     const active = await db.workSession.findFirst({
       where: { userId, endedAt: null, deletedAt: null }
@@ -18,13 +25,25 @@ export class WorkSessionService {
       throw new Error('A work session is already active on another date.');
     }
 
+    const now = new Date();
+    const effectiveStart = requestedStartTime
+      ? createLocalDateTime(date, requestedStartTime)
+      : now;
+
+    if (effectiveStart.getTime() > now.getTime()) {
+      throw new Error('Work session start time cannot be in the future.');
+    }
+
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const inTime = `${pad(effectiveStart.getHours())}:${pad(effectiveStart.getMinutes())}`;
+
     const session = await db.workSession.create({
       data: {
         id: id || undefined,
         userId,
         date,
         mode,
-        startedAt: new Date(),
+        startedAt: effectiveStart,
         loggingMode: 'timer',
         durationMinutes: 0
       }
@@ -39,10 +58,6 @@ export class WorkSessionService {
       'amber'
     );
 
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const inTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
-
     // Create corresponding ActivityLog
     await ActivityService.logActivity({
       userId,
@@ -55,7 +70,7 @@ export class WorkSessionService {
       payload: {
         sessionState: 'running',
         accumulatedSeconds: 0,
-        currentSegmentStartedAt: now.toISOString(),
+        currentSegmentStartedAt: effectiveStart.toISOString(),
         inTime,
         outTime: null,
         loggingMode: 'time',

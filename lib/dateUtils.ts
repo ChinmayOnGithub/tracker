@@ -147,3 +147,59 @@ export function daysFromToday(n: number): string {
   d.setDate(d.getDate() + n)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+
+/**
+ * Constructs a local Date object from a YYYY-MM-DD calendar date and HH:mm time.
+ * Adheres to Tracker's canonical local date/time policy.
+ */
+export function createLocalDateTime(dateStr: string, timeStr: string): Date {
+  if (!dateStr || !timeStr) {
+    throw new Error(`dateStr and timeStr are required. Received dateStr: "${dateStr}", timeStr: "${timeStr}"`)
+  }
+
+  // If timeStr is already a full ISO timestamp, parse directly
+  if (timeStr.includes('T') || (timeStr.includes('-') && timeStr.length >= 19)) {
+    const parsed = new Date(timeStr)
+    if (!isNaN(parsed.getTime())) return parsed
+  }
+
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim())
+  if (!dateMatch) {
+    throw new Error(`Invalid date format: "${dateStr}". Expected YYYY-MM-DD`)
+  }
+
+  const timeMatch = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(timeStr.trim())
+  if (!timeMatch) {
+    throw new Error(`Invalid time format: "${timeStr}". Expected HH:mm`)
+  }
+
+  const year = parseInt(dateMatch[1], 10)
+  const month = parseInt(dateMatch[2], 10)
+  const day = parseInt(dateMatch[3], 10)
+  const hours = parseInt(timeMatch[1], 10)
+  const minutes = parseInt(timeMatch[2], 10)
+  const seconds = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0
+
+  if (month < 1 || month > 12) {
+    throw new Error(`Invalid month: ${month}. Must be between 1 and 12.`)
+  }
+  if (day < 1 || day > 31) {
+    throw new Error(`Invalid day: ${day}. Must be between 1 and 31.`)
+  }
+  if (hours < 0 || hours > 23) {
+    throw new Error(`Invalid hours: ${hours}. Must be between 0 and 23.`)
+  }
+  if (minutes < 0 || minutes > 59) {
+    throw new Error(`Invalid minutes: ${minutes}. Must be between 0 and 59.`)
+  }
+  if (seconds < 0 || seconds > 59) {
+    throw new Error(`Invalid seconds: ${seconds}. Must be between 0 and 59.`)
+  }
+
+  const result = new Date(year, month - 1, day, hours, minutes, seconds, 0)
+  if (isNaN(result.getTime())) {
+    throw new Error(`Invalid date constructed from "${dateStr} ${timeStr}"`)
+  }
+
+  return result
+}

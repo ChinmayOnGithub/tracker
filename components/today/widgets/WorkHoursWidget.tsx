@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Briefcase, Clock, Play, Square, Pencil, Pause, RotateCcw } from 'lucide-react'
 import { Card, CardHeader, CardBody, Button, Input } from '@/design-system'
 import { ActivityLog } from '@/types'
+import { createLocalDateTime } from '@/lib/dateUtils'
 
 interface WorkHoursWidgetProps {
   todayWorkLog: ActivityLog | null
@@ -233,16 +234,35 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   // Explicit Start (Transitions from IDLE to RUNNING)
   const handleStartSession = async (chosenStatus: 'office' | 'wfh') => {
     if (isLoggingWork || formState.sessionState === 'running') return
+    setValidationError(null)
+
+    const now = new Date()
     const nowTime = getLocalTimeStr()
-    const nowIso = new Date().toISOString()
+    const effectiveInTime = formState.inTime || nowTime
+    let effectiveStart: Date
+
+    try {
+      effectiveStart = formState.inTime
+        ? createLocalDateTime(todayStr, effectiveInTime)
+        : now
+    } catch (err) {
+      setValidationError(err instanceof Error ? err.message : 'Invalid start time')
+      return
+    }
+
+    if (effectiveStart.getTime() > now.getTime()) {
+      setValidationError('Start time cannot be in the future.')
+      return
+    }
+
     const updated: WorkFormState = {
       ...formState,
       status: chosenStatus,
       mode: 'time',
       sessionState: 'running',
-      inTime: formState.inTime || nowTime,
+      inTime: effectiveInTime,
       outTime: '',
-      currentSegmentStartedAt: nowIso,
+      currentSegmentStartedAt: effectiveStart.toISOString(),
       // If starting fresh from IDLE, accumulatedSeconds is preserved if restarting same day or 0
       accumulatedSeconds: formState.sessionState === 'completed' ? formState.accumulatedSeconds : 0,
     }
@@ -543,9 +563,24 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                         />
                       </div>
                     ) : (
-                      <div className="py-2 flex flex-col items-center">
+                      <div className="space-y-2 py-1">
+                        <div>
+                          <Input
+                            type="time"
+                            label="Start Time"
+                            value={formState.inTime}
+                            onChange={(e) => {
+                              setValidationError(null)
+                              setFormState(prev => ({ ...prev, inTime: e.target.value }))
+                            }}
+                            className="font-mono text-xs"
+                          />
+                        </div>
+                        {validationError && (
+                          <p className="text-[10px] text-rose-500 font-semibold text-center">{validationError}</p>
+                        )}
                         <Button
-                          onClick={() => handleStartSession(formState.status as 'office' | 'wfh')}
+                          onClick={() => handleStartSession(formState.status === 'office' ? 'office' : 'wfh')}
                           isLoading={isLoggingWork}
                           variant="primary"
                           size="sm"
@@ -592,6 +627,23 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                         }
                         setFormState(updated)
                         handleSaveWorkPresence(updated)
+                      } else if (isEditingTimes && formState.mode === 'time' && formState.sessionState === 'running' && formState.inTime) {
+                        try {
+                          const effectiveStart = createLocalDateTime(todayStr, formState.inTime)
+                          if (effectiveStart.getTime() > Date.now()) {
+                            setValidationError('Start time cannot be in the future.')
+                            return
+                          }
+                          const updated: WorkFormState = {
+                            ...formState,
+                            currentSegmentStartedAt: effectiveStart.toISOString(),
+                          }
+                          setFormState(updated)
+                          handleSaveWorkPresence(updated)
+                        } catch (err) {
+                          setValidationError(err instanceof Error ? err.message : 'Invalid start time')
+                          return
+                        }
                       } else {
                         handleSaveWorkPresence(formState)
                       }

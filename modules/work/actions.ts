@@ -28,7 +28,8 @@ export async function createWorkSession(session: Partial<WorkSession>) {
         user.id,
         session.date,
         session.mode,
-        session.id
+        session.id,
+        session.inTime
       );
     }
     revalidatePath('/');
