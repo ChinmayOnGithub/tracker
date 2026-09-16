@@ -11,12 +11,13 @@ import {
 import {
   GET as logsGetRoute,
   POST as logsPostRoute,
+  arePayloadsEquivalent,
 } from '@/app/api/mobile/v1/activities/logs/route'
 import {
   PATCH as logPatchRoute,
   DELETE as logDeleteRoute,
 } from '@/app/api/mobile/v1/activities/logs/[id]/route'
-import { ActivityLog, ActivityTemplate, User } from '@prisma/client'
+import { ActivityLog, ActivityTemplate, User, Prisma } from '@prisma/client'
 
 describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
   const aliceId = 'user-alice-mobile'
@@ -713,6 +714,271 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
       const data = await res.json()
       expect(data.success).toBe(false)
       expect(data.error.code).toBe('FORBIDDEN')
+    })
+
+    it('POST concurrent race: P2002 followed by successful re-fetch and equivalent payload returns 200 OK', async () => {
+      const concurrentLogId = 'concurrent-log-uuid-1'
+      const existingRecord: ActivityLog = {
+        id: concurrentLogId,
+        activityId: 'tmpl-alice',
+        userId: aliceId,
+        logDate: new Date('2026-09-17T12:00:00.000Z'),
+        status: 'done',
+        note: 'Concurrent test note',
+        amount: 25,
+        payload: { distance: 10, unit: 'km' },
+        weightRecordId: null,
+        leaveRecordId: null,
+        journalEntryId: null,
+        workSessionId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      }
+
+      // Step 1: Initial findUnique in route.ts returns null (Request B checked before Request A committed)
+      // Step 2: Internal findUnique in ActivityService.logActivity returns null
+      // Step 3: create throws P2002
+      // Step 4: Re-fetch findUnique in route.ts catch block returns existingRecord
+      db.activityLog.findFirst = mock(() => Promise.resolve(null)) as unknown as typeof db.activityLog.findFirst
+      let findCallCount = 0
+      db.activityLog.findUnique = mock((args?: { where?: { id?: string } }) => {
+        if (args?.where?.id === concurrentLogId) {
+          findCallCount++
+          if (findCallCount <= 2) {
+            return Promise.resolve(null)
+          }
+          return Promise.resolve(existingRecord)
+        }
+        return Promise.resolve(null)
+      }) as unknown as typeof db.activityLog.findUnique
+
+      // Step 2: create throws P2002 unique constraint error (Request A created it first)
+      db.activityLog.create = mock(() => {
+        throw new Prisma.PrismaClientKnownRequestError(
+          'Unique constraint failed on the fields: (`id`)',
+          {
+            code: 'P2002',
+            clientVersion: '5.0.0',
+            meta: { target: ['id'] },
+          }
+        )
+      }) as unknown as typeof db.activityLog.create
+
+      // Request B sends equivalent payload (with different key order in payload to test both)
+      const req = new Request('http://localhost/api/mobile/v1/activities/logs', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${aliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: concurrentLogId,
+          activityId: 'tmpl-alice',
+          date: '2026-09-17',
+          status: 'done',
+          note: 'Concurrent test note',
+          amount: 25,
+          payload: { unit: 'km', distance: 10 }, // Key order reversed!
+        }),
+      })
+
+      const res = await logsPostRoute(req)
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data.success).toBe(true)
+      expect(data.data.log.id).toBe(concurrentLogId)
+      expect(data.data.log.status).toBe('done')
+      expect(findCallCount).toBe(3) // Route check + ActivityService check + P2002 recovery re-fetch
+    })
+
+    it('POST concurrent race: P2002 followed by conflicting payload returns 409 CONFLICT', async () => {
+      const concurrentLogId = 'concurrent-log-uuid-2'
+      const existingRecord: ActivityLog = {
+        id: concurrentLogId,
+        activityId: 'tmpl-alice',
+        userId: aliceId,
+        logDate: new Date('2026-09-17T12:00:00.000Z'),
+        status: 'done',
+        note: 'Original note',
+        amount: null,
+        payload: null,
+        weightRecordId: null,
+        leaveRecordId: null,
+        journalEntryId: null,
+        workSessionId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      }
+
+      db.activityLog.findFirst = mock(() => Promise.resolve(null)) as unknown as typeof db.activityLog.findFirst
+      let findCallCount = 0
+      db.activityLog.findUnique = mock((args?: { where?: { id?: string } }) => {
+        if (args?.where?.id === concurrentLogId) {
+          findCallCount++
+          if (findCallCount <= 2) return Promise.resolve(null)
+          return Promise.resolve(existingRecord)
+        }
+        return Promise.resolve(null)
+      }) as unknown as typeof db.activityLog.findUnique
+
+      db.activityLog.create = mock(() => {
+        throw new Prisma.PrismaClientKnownRequestError(
+          'Unique constraint failed on the fields: (`id`)',
+          {
+            code: 'P2002',
+            clientVersion: '5.0.0',
+            meta: { target: ['id'] },
+          }
+        )
+      }) as unknown as typeof db.activityLog.create
+
+      // Request sends different status
+      const req = new Request('http://localhost/api/mobile/v1/activities/logs', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${aliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: concurrentLogId,
+          activityId: 'tmpl-alice',
+          date: '2026-09-17',
+          status: 'skipped', // Conflict!
+        }),
+      })
+
+      const res = await logsPostRoute(req)
+      expect(res.status).toBe(409)
+      const data = await res.json()
+      expect(data.success).toBe(false)
+      expect(data.error.code).toBe('CONFLICT')
+      expect(data.error.message).toContain('different data')
+    })
+
+    it('POST concurrent race: P2002 followed by foreign-user record returns 403 FORBIDDEN', async () => {
+      const concurrentLogId = 'concurrent-log-uuid-3'
+      const foreignRecord: ActivityLog = {
+        id: concurrentLogId,
+        activityId: 'tmpl-bob',
+        userId: bobId, // Belongs to Bob!
+        logDate: new Date('2026-09-17T12:00:00.000Z'),
+        status: 'done',
+        note: null,
+        amount: null,
+        payload: null,
+        weightRecordId: null,
+        leaveRecordId: null,
+        journalEntryId: null,
+        workSessionId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        deletedAt: null,
+      }
+
+      db.activityLog.findFirst = mock(() => Promise.resolve(null)) as unknown as typeof db.activityLog.findFirst
+      let findCallCount = 0
+      db.activityLog.findUnique = mock((args?: { where?: { id?: string } }) => {
+        if (args?.where?.id === concurrentLogId) {
+          findCallCount++
+          if (findCallCount <= 2) return Promise.resolve(null)
+          return Promise.resolve(foreignRecord)
+        }
+        return Promise.resolve(null)
+      }) as unknown as typeof db.activityLog.findUnique
+
+      db.activityLog.create = mock(() => {
+        throw new Prisma.PrismaClientKnownRequestError(
+          'Unique constraint failed on the fields: (`id`)',
+          {
+            code: 'P2002',
+            clientVersion: '5.0.0',
+            meta: { target: ['id'] },
+          }
+        )
+      }) as unknown as typeof db.activityLog.create
+
+      const req = new Request('http://localhost/api/mobile/v1/activities/logs', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${aliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: concurrentLogId,
+          activityId: 'tmpl-alice',
+          date: '2026-09-17',
+          status: 'done',
+        }),
+      })
+
+      const res = await logsPostRoute(req)
+      expect(res.status).toBe(403)
+      const data = await res.json()
+      expect(data.success).toBe(false)
+      expect(data.error.code).toBe('FORBIDDEN')
+    })
+
+    it('POST concurrent race: database error other than P2002 is not treated as idempotency and returns 500', async () => {
+      const testId = 'unrelated-error-uuid'
+
+      db.activityLog.findUnique = mock(() => Promise.resolve(null)) as unknown as typeof db.activityLog.findUnique
+
+      db.activityLog.create = mock(() => {
+        throw new Error('Database connection terminated unexpectedly')
+      }) as unknown as typeof db.activityLog.create
+
+      const req = new Request('http://localhost/api/mobile/v1/activities/logs', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${aliceToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: testId,
+          activityId: 'tmpl-alice',
+          date: '2026-09-17',
+          status: 'done',
+        }),
+      })
+
+      const res = await logsPostRoute(req)
+      expect(res.status).toBe(500)
+      const data = await res.json()
+      expect(data.success).toBe(false)
+      expect(data.error.code).toBe('INTERNAL_ERROR')
+    })
+
+    describe('Deep Payload Equality & Canonicalization', () => {
+      it('arePayloadsEquivalent: treats objects with different key ordering as equivalent', () => {
+        const objA = { distance: 10, unit: 'km', speed: 5.5 }
+        const objB = { speed: 5.5, unit: 'km', distance: 10 }
+        expect(arePayloadsEquivalent(objA, objB)).toBe(true)
+
+        const nestedA = { workout: { sets: 3, reps: 10 }, notes: 'good' }
+        const nestedB = { notes: 'good', workout: { reps: 10, sets: 3 } }
+        expect(arePayloadsEquivalent(nestedA, nestedB)).toBe(true)
+      })
+
+      it('arePayloadsEquivalent: treats arrays with different order as non-equivalent', () => {
+        expect(arePayloadsEquivalent([1, 2], [2, 1])).toBe(false)
+        expect(arePayloadsEquivalent(['a', 'b'], ['b', 'a'])).toBe(false)
+        expect(arePayloadsEquivalent({ tags: ['cardio', 'morning'] }, { tags: ['morning', 'cardio'] })).toBe(false)
+        // Same order returns true
+        expect(arePayloadsEquivalent({ tags: ['cardio', 'morning'] }, { tags: ['cardio', 'morning'] })).toBe(true)
+      })
+
+      it('arePayloadsEquivalent: handles null, undefined, and empty object normalization correctly', () => {
+        expect(arePayloadsEquivalent(null, undefined)).toBe(true)
+        expect(arePayloadsEquivalent({}, null)).toBe(true)
+        expect(arePayloadsEquivalent(undefined, {})).toBe(true)
+        expect(arePayloadsEquivalent({}, {})).toBe(true)
+        expect(arePayloadsEquivalent([], [])).toBe(true)
+        // Array vs empty object must NOT be equal
+        expect(arePayloadsEquivalent([], {})).toBe(false)
+        expect(arePayloadsEquivalent({ val: 1 }, {})).toBe(false)
+      })
     })
   })
 })
