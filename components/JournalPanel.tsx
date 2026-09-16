@@ -132,8 +132,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   }, [activeDate, initialize, setCacheMetadata])
 
   const isSavingRef = useRef(false)
-  const pendingRef = useRef<string | null>(null)
-  const pendingRevisionRef = useRef<number | null>(null)
+
 
   const [search, setSearchState] = useState(state.journalSearchQuery)
   const setSearch = (query: string) => {
@@ -249,46 +248,61 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     }
   }
 
+  const activeDateRef = useRef(activeDate)
+  useEffect(() => {
+    activeDateRef.current = activeDate
+  }, [activeDate])
+
+  const pendingSaveRef = useRef<{ date: string; content: string; revision: number } | null>(null)
+  const autosaveTimerRef = useRef<Timer | null>(null)
+
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
-  const saveContent = useCallback(async (v: string, saveRevision: number) => {
+  const saveContent = useCallback(async (targetDate: string, v: string, saveRevision: number) => {
     if (isSavingRef.current) { 
-      pendingRef.current = v
-      pendingRevisionRef.current = saveRevision
+      pendingSaveRef.current = { date: targetDate, content: v, revision: saveRevision }
       return 
     }
     isSavingRef.current = true
-    setContentStatus('saving')
+    if (targetDate === activeDateRef.current) {
+      setContentStatus('saving')
+    }
     try {
-      await upsertJournalAction(activeDate, { content: v })
+      await upsertJournalAction(targetDate, { content: v })
       if (saveRevision >= savedRevisionRef.current) {
         savedRevisionRef.current = saveRevision
       }
-      if (savedRevisionRef.current === revisionRef.current) {
+      if (savedRevisionRef.current === revisionRef.current && targetDate === activeDateRef.current) {
         setContentStatus('saved')
       }
     } catch (err) {
-      console.error('[JournalPanel] Save error:', err)
-      setContentStatus('error')
+      console.error(`[JournalPanel] Save error for date ${targetDate}:`, err)
+      if (targetDate === activeDateRef.current) {
+        setContentStatus('error')
+      }
     } finally {
       isSavingRef.current = false
-      if (pendingRef.current !== null && pendingRevisionRef.current !== null) {
-        const next = pendingRef.current
-        const nextVer = pendingRevisionRef.current
-        pendingRef.current = null
-        pendingRevisionRef.current = null
-        saveContent(next, nextVer)
+      if (pendingSaveRef.current !== null) {
+        const next = pendingSaveRef.current
+        pendingSaveRef.current = null
+        saveContent(next.date, next.content, next.revision)
       }
     }
-  }, [activeDate, upsertJournalAction])
+  }, [upsertJournalAction])
 
   // Autosave triggers: runs automatically when content changes
   useEffect(() => {
     const dbVal = JournalContentAdapter.toEditor(activeEntry?.content)
     if (content === dbVal) return
     const currentRev = revisionRef.current
-    const t = setTimeout(() => saveContent(content, currentRev), 1000)
-    return () => clearTimeout(t)
-  }, [content, activeEntry?.content, saveContent])
+    const dateToSave = activeDate
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+    autosaveTimerRef.current = setTimeout(() => {
+      saveContent(dateToSave, content, currentRev)
+    }, 1000)
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+    }
+  }, [content, activeDate, activeEntry?.content, saveContent])
 
   const handleDelete = async (id: string, dateStr: string) => {
     if (confirm('Are you sure you want to delete this journal entry?')) {
@@ -298,9 +312,15 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   }
 
   const handleNavigateDate = (targetDateStr: string) => {
+    if (targetDateStr === activeDate) return
+    // Cancel pending autosave timer for the old date
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current)
+      autosaveTimerRef.current = null
+    }
     // Flush any pending content for the previous date before switching
     if (content !== dbValue) {
-      saveContent(content, revisionRef.current)
+      saveContent(activeDate, content, revisionRef.current)
     }
     setActiveDate(targetDateStr)
     setMobileView('editor')
@@ -318,23 +338,51 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const uploadImage = (file: File) => {
+  const uploadImage = async (file: File) => {
     // Client-side size validation (max 5MB per image)
     if (file.size > 5 * 1024 * 1024) {
       alert('Image exceeds maximum recommended size (5MB). Please choose a smaller image.')
       return
     }
 
+    try {
+      setContentStatus('saving')
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await fetch('/api/journal/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.url) {
+          setAttachedImages(prev => {
+            if (prev.some(item => item.data === data.url)) return prev
+            const updated = [...prev, { name: file.name, data: data.url }]
+            setTimeout(() => saveMetadata(updated), 0)
+            return updated
+          })
+          setContentStatus('saved')
+          return
+        }
+      }
+    } catch (err) {
+      console.warn('[JournalPanel] Server upload failed, falling back to local compression:', err)
+    }
+
+    // Fallback if offline
     const reader = new FileReader()
     reader.onload = (event) => {
       const base64 = event.target?.result as string
-
       setAttachedImages(prev => {
         if (prev.some(item => item.data === base64)) return prev
         const updated = [...prev, { name: file.name, data: base64 }]
         setTimeout(() => saveMetadata(updated), 0)
         return updated
       })
+      setContentStatus('saved')
     }
     reader.readAsDataURL(file)
   }

@@ -12,11 +12,30 @@ export async function getGuestPermissionsAction(): Promise<{
   error?: string
 }> {
   try {
-    const setting = await db.userSetting.findFirst({
+    const loggedUser = await getLoggedUser()
+    let ownerId = loggedUser?.id
+
+    if (!ownerId) {
+      const owner = await db.user.findFirst({
+        where: {
+          OR: [
+            { username: 'admin' },
+            { email: { not: null } },
+          ],
+        },
+        orderBy: { createdAt: 'asc' },
+      })
+      ownerId = owner?.id
+    }
+
+    const setting = ownerId ? await db.userSetting.findUnique({
       where: {
-        module: 'GUEST_PERMISSIONS',
+        userId_module: {
+          userId: ownerId,
+          module: 'GUEST_PERMISSIONS',
+        },
       },
-    })
+    }) : null
 
     const defaults: Record<string, boolean> = {
       today: false,

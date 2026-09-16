@@ -208,6 +208,35 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     // Apply personal styles on load
     applyPersonalStyles()
 
+    // Hydrate appearance preferences from server user settings
+    import('@/app/actions/settings').then(({ getUserSettingsAction }) => {
+      getUserSettingsAction().then(res => {
+        if (res.success && res.settings?.appearance) {
+          const app = res.settings.appearance
+          let changed = false
+          if (app.accent && app.accent !== localStorage.getItem('personal_accent_color')) {
+            localStorage.setItem('personal_accent_color', app.accent)
+            changed = true
+          }
+          if (app.fontSize && app.fontSize !== localStorage.getItem('personal_font_size')) {
+            localStorage.setItem('personal_font_size', app.fontSize)
+            changed = true
+          }
+          if (app.rounded && app.rounded !== localStorage.getItem('personal_rounded_corners')) {
+            localStorage.setItem('personal_rounded_corners', app.rounded)
+            changed = true
+          }
+          if (app.animations && app.animations !== localStorage.getItem('personal_animations')) {
+            localStorage.setItem('personal_animations', app.animations)
+            changed = true
+          }
+          if (changed) {
+            applyPersonalStyles()
+          }
+        }
+      }).catch(console.error)
+    })
+
     // Listen to custom settings update events to refresh layout styles instantly
     window.addEventListener('personal_settings_changed', applyPersonalStyles)
     return () => window.removeEventListener('personal_settings_changed', applyPersonalStyles)

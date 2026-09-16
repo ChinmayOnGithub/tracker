@@ -25,8 +25,19 @@ export async function createNote(
     const user = await requireAuth()
     const finalDate = dateStr || `${todayYMD()}_${Date.now()}`
 
-    const note = await db.note.create({
-      data: {
+    const note = await db.note.upsert({
+      where: {
+        userId_date: {
+          userId: user.id,
+          date: finalDate,
+        },
+      },
+      update: {
+        content: content ?? '',
+        title: title !== undefined ? (title ? title.trim() : null) : undefined,
+        deletedAt: null,
+      },
+      create: {
         date: finalDate,
         content: content ?? '',
         title: title ? title.trim() : null,

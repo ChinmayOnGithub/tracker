@@ -48,6 +48,7 @@ export interface TodayDashboardProps {
   weightRecords: WeightRecord[]
   onTabChange: (tabId: string) => void
   initialDashboardConfig?: DashboardConfig | LegacyDashboardConfig | null
+  initialWeeklyGoal?: number | null
   isValidating?: boolean
 }
 
@@ -64,6 +65,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   weightRecords,
   onTabChange,
   initialDashboardConfig,
+  initialWeeklyGoal,
   isValidating = false,
 }) => {
   const router = useRouter()
@@ -192,16 +194,19 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     }))
   }, [])
 
-  // Weekly goal — isomorphic hydration
-  const [weeklyGoal, setWeeklyGoal] = useState(27)
+  // Weekly goal — canonical server authority with local fallback
+  const [weeklyGoal, setWeeklyGoal] = useState(() => {
+    if (initialWeeklyGoal !== undefined && initialWeeklyGoal !== null) {
+      return initialWeeklyGoal
+    }
+    if (typeof window !== 'undefined') {
+      const val = localStorage.getItem('personal_weekly_goal')
+      if (val) return Number(val)
+    }
+    return 27
+  })
 
   useEffect(() => {
-    const val = localStorage.getItem('personal_weekly_goal')
-    if (val) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setWeeklyGoal(Number(val))
-    }
-
     const handleSettingsChange = () => {
       const v = localStorage.getItem('personal_weekly_goal')
       if (v) {

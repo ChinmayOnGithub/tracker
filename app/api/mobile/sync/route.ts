@@ -31,6 +31,15 @@ export async function POST(request: Request) {
           continue
         }
 
+        // Verify template ownership if creating a new log
+        if (!existing) {
+          const template = await db.activityTemplate.findUnique({ where: { id: log.activityId } })
+          if (!template || (template.userId && template.userId !== userId)) {
+            console.warn(`[MobileSync] Unauthorized activity log creation attempt for template: ${log.activityId} by user: ${userId}`)
+            continue
+          }
+        }
+
         // Standardize log dates to UTC noon
         const logDate = new Date(`${log.date}T12:00:00.000Z`)
 
@@ -57,10 +66,10 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Process local notes sent by mobile app
+    // 2. Process local notes sent by mobile app (upsert by unique compound key userId_date)
     if (localChanges?.notes && Array.isArray(localChanges.notes)) {
       for (const note of localChanges.notes) {
-        // Enforce ownership
+        // Enforce ownership if looking up by ID
         const existing = await db.note.findUnique({ where: { id: note.id } })
         if (existing && existing.userId !== userId) {
           console.warn(`[MobileSync] Unauthorized note update attempt on ID: ${note.id} by user: ${userId}`)
@@ -68,7 +77,12 @@ export async function POST(request: Request) {
         }
 
         await db.note.upsert({
-          where: { id: note.id },
+          where: {
+            userId_date: {
+              userId,
+              date: note.date,
+            },
+          },
           create: {
             id: note.id,
             date: note.date,
@@ -79,6 +93,7 @@ export async function POST(request: Request) {
           update: {
             title: note.title || null,
             content: note.content,
+            deletedAt: null,
           }
         })
       }

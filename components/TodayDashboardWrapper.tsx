@@ -20,6 +20,7 @@ interface TodayDashboardWrapperProps {
   leaveAllowances?: LeaveAllowance[]
   weightRecords?: WeightRecord[]
   initialDashboardConfig?: DashboardConfig | LegacyDashboardConfig | null
+  initialWeeklyGoal?: number | null
 }
 
 const TODAY_TTL = 30000 // 30 seconds freshness TTL for Today dashboard
@@ -28,6 +29,7 @@ const SECONDARY_TTL = 300000 // 5 minutes freshness TTL for secondary prefetch (
 export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
   todayStr,
   initialDashboardConfig,
+  initialWeeklyGoal,
 }) => {
   const context = useContext(CalendarDataContext)
   const { state, initialize, setCacheMetadata } = useStore()
@@ -164,6 +166,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
       weightRecords={state.weightRecords}
       onTabChange={onTabChange}
       initialDashboardConfig={initialDashboardConfig}
+      initialWeeklyGoal={initialWeeklyGoal}
       isValidating={isValidating}
     />
   )

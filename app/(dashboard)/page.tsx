@@ -26,15 +26,21 @@ export default async function Page(props: { searchParams: Promise<{ date?: strin
 
   const todayStr = dateParam || getTodayDateStr()
 
-  // Load canonical user dashboard configuration server-side
+  // Load canonical user dashboard configuration and settings server-side
   let initialDashboardConfig = null
+  let initialWeeklyGoal: number | null = null
   try {
     const settingsRes = await getUserSettingsAction()
-    if (settingsRes.success && settingsRes.settings?.dashboard) {
-      initialDashboardConfig = settingsRes.settings.dashboard
+    if (settingsRes.success && settingsRes.settings) {
+      if (settingsRes.settings.dashboard) {
+        initialDashboardConfig = settingsRes.settings.dashboard
+      }
+      if (settingsRes.settings.weeklyGoal !== undefined) {
+        initialWeeklyGoal = settingsRes.settings.weeklyGoal
+      }
     }
   } catch (err) {
-    console.error('[Page] Failed to fetch initial dashboard config:', err)
+    console.error('[Page] Failed to fetch initial settings:', err)
   }
 
   return (
@@ -47,6 +53,7 @@ export default async function Page(props: { searchParams: Promise<{ date?: strin
       leaveAllowances={[]}
       weightRecords={[]}
       initialDashboardConfig={initialDashboardConfig}
+      initialWeeklyGoal={initialWeeklyGoal}
     />
   )
 }

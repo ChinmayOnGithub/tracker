@@ -9,7 +9,14 @@ import {
 } from 'lucide-react'
 import { checkGoogleConnection, disconnectGoogleAccount } from '@/modules/sync/google-calendar/actions'
 import { getUserProfileAction, setPasscodeAction } from '@/app/actions/auth'
-import { getGuestPermissionsAction, saveGuestPermissionsAction } from '@/app/actions/settings'
+import {
+  getGuestPermissionsAction,
+  saveGuestPermissionsAction,
+  getUserSettingsAction,
+  saveDashboardConfigAction,
+  saveUserAppearanceAction,
+  saveWeeklyGoalAction,
+} from '@/app/actions/settings'
 import { BackupService } from '@/lib/database/local/BackupService'
 import { useSearchParams } from 'next/navigation'
 import { OfflineDebugPanel } from './OfflineDebugPanel'
@@ -210,12 +217,60 @@ export const SettingsPanel: React.FC = () => {
     setLoading(false)
   }, [])
 
+  const fetchUserSettings = useCallback(async () => {
+    try {
+      const res = await getUserSettingsAction()
+      if (res.success && res.settings) {
+        if (res.settings.appearance) {
+          const app = res.settings.appearance
+          if (app.accent) {
+            setAccentColor(app.accent)
+            localStorage.setItem('personal_accent_color', app.accent)
+          }
+          if (app.fontSize) {
+            setFontSize(app.fontSize)
+            localStorage.setItem('personal_font_size', app.fontSize)
+          }
+          if (app.rounded) {
+            setRoundedCorners(app.rounded)
+            localStorage.setItem('personal_rounded_corners', app.rounded)
+          }
+          if (app.animations) {
+            setAnimations(app.animations)
+            localStorage.setItem('personal_animations', app.animations)
+          }
+        }
+        if (res.settings.weeklyGoal !== undefined && res.settings.weeklyGoal !== null) {
+          setWeeklyGoal(String(res.settings.weeklyGoal))
+          localStorage.setItem('personal_weekly_goal', String(res.settings.weeklyGoal))
+        }
+        if (res.settings.dashboard) {
+          const cfg = res.settings.dashboard
+          if (Array.isArray(cfg.hidden)) {
+            setWidgetsVisibility(prev => {
+              const updated = { ...prev }
+              for (const key of Object.keys(updated)) {
+                updated[key] = !cfg.hidden?.includes(key)
+              }
+              localStorage.setItem('personal_dashboard_widgets', JSON.stringify(updated))
+              return updated
+            })
+          }
+        }
+        window.dispatchEvent(new Event('personal_settings_changed'))
+      }
+    } catch (err) {
+      console.error('[SettingsPanel] Failed to fetch user settings:', err)
+    }
+  }, [])
+
   // Load backend status and listen to real-time style changes on client mount
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchProfile()
       fetchConnection()
       fetchGuestPermissions()
+      fetchUserSettings()
     }, 0)
 
     const handleSettingsChanged = () => {
@@ -235,7 +290,7 @@ export const SettingsPanel: React.FC = () => {
       clearTimeout(timer)
       window.removeEventListener('personal_settings_changed', handleSettingsChanged)
     }
-  }, [fetchProfile, fetchConnection, fetchGuestPermissions, accentColor, fontSize, roundedCorners, animations])
+  }, [fetchProfile, fetchConnection, fetchGuestPermissions, fetchUserSettings, accentColor, fontSize, roundedCorners, animations])
 
   const handleToggleGuestPermission = async (moduleKey: string) => {
     const updated = {
@@ -261,34 +316,27 @@ export const SettingsPanel: React.FC = () => {
 
     // Canonical server sync for account-scoped settings
     if (key === 'personal_accent_color') {
-      import('@/app/actions/settings').then(({ saveUserAppearanceAction }) => {
-        saveUserAppearanceAction({ accent: value }).catch(console.error)
-      })
+      saveUserAppearanceAction({ accent: value }).catch(console.error)
     } else if (key === 'personal_font_size') {
-      import('@/app/actions/settings').then(({ saveUserAppearanceAction }) => {
-        saveUserAppearanceAction({ fontSize: value }).catch(console.error)
-      })
+      saveUserAppearanceAction({ fontSize: value }).catch(console.error)
     } else if (key === 'personal_rounded_corners') {
-      import('@/app/actions/settings').then(({ saveUserAppearanceAction }) => {
-        saveUserAppearanceAction({ rounded: value }).catch(console.error)
-      })
+      saveUserAppearanceAction({ rounded: value }).catch(console.error)
     } else if (key === 'personal_animations') {
-      import('@/app/actions/settings').then(({ saveUserAppearanceAction }) => {
-        saveUserAppearanceAction({ animations: value }).catch(console.error)
-      })
+      saveUserAppearanceAction({ animations: value }).catch(console.error)
     } else if (key === 'personal_weekly_goal') {
-      import('@/app/actions/settings').then(({ saveWeeklyGoalAction }) => {
-        const goalNum = Number(value)
-        if (!isNaN(goalNum) && goalNum > 0) {
-          saveWeeklyGoalAction(goalNum).catch(console.error)
-        }
-      })
+      const goalNum = Number(value)
+      if (!isNaN(goalNum) && goalNum > 0) {
+        saveWeeklyGoalAction(goalNum).catch(console.error)
+      }
     }
   }
 
   const saveWidgetVisibility = (widgetKey: string, visible: boolean) => {
     const updated = { ...widgetsVisibility, [widgetKey]: visible }
     setWidgetsVisibility(updated)
+    // Synchronize to server authority (DASHBOARD module setting)
+    const hidden = Object.keys(updated).filter(k => !updated[k])
+    saveDashboardConfigAction({ hidden }).catch(console.error)
     localStorage.setItem('personal_dashboard_widgets', JSON.stringify(updated))
     window.dispatchEvent(new Event('personal_settings_changed'))
   }
