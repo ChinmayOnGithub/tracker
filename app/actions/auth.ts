@@ -5,6 +5,7 @@ import crypto from 'crypto'
 import { cookies } from 'next/headers'
 import { signSession, verifySession } from '@/lib/session'
 import { DefaultActivitiesService } from '@/lib/services/DefaultActivitiesService'
+import { AuthService } from '@/lib/services/AuthService'
 import { isAuthorizedUserEmail } from '@/lib/constants'
 
 const SALT = process.env.AUTH_SALT || 'personal-dashboard-ops-salt-108-prayer-beads'
@@ -13,10 +14,6 @@ function hashPin(pin: string, username: string): string {
   // Use unique salt per user by combining global salt with user's lowercase username
   const userSalt = `${SALT}-${username.toLowerCase()}`
   return crypto.pbkdf2Sync(pin, userSalt, 1000, 64, 'sha512').toString('hex')
-}
-
-function legacyHashPin(pin: string): string {
-  return crypto.pbkdf2Sync(pin, SALT, 1000, 64, 'sha512').toString('hex')
 }
 
 /**
@@ -109,55 +106,14 @@ export async function registerUserAction(usernameInput: string, pin: string): Pr
  */
 export async function verifyPinAction(usernameInput: string, pin: string): Promise<{ success: boolean; error?: string; user?: { id: string; username: string } }> {
   try {
-    const username = usernameInput.trim().toLowerCase()
-    if (!username) {
-      return { success: false, error: 'Username is required.' }
-    }
-    if (pin.length !== 4 || !/^\d+$/.test(pin)) {
-      return { success: false, error: 'PIN must be exactly 4 digits.' }
-    }
-
-    const user = await db.user.findUnique({
-      where: { username }
-    })
-
-    if (!user) {
-      return { success: false, error: 'Incorrect username or PIN.' }
-    }
-
-    if (!user.passwordHash) {
-      return { success: false, error: 'You need to login with Google as passcode login is not setup for you.' }
-    }
-
-    const passwordHash = hashPin(pin, username)
-    let isMatch = user.passwordHash === passwordHash
-
-    // Safe migration/fallback for legacy single-user 'admin' account
-    if (!isMatch && username === 'admin') {
-      const legacyHash = legacyHashPin(pin)
-      if (user.passwordHash === legacyHash) {
-        isMatch = true
-        // Upgrade admin's hash to the secure username-salted hash format
-        try {
-          const newHash = hashPin(pin, username)
-          await db.user.update({
-            where: { id: user.id },
-            data: { passwordHash: newHash }
-          })
-        } catch (upgradeError) {
-          console.warn('Failed to upgrade admin password hash format:', upgradeError)
-        }
-      }
-    }
-
-    if (!isMatch) {
-      return { success: false, error: 'Incorrect username or PIN.' }
+    const result = await AuthService.verifyCredentials(usernameInput, pin)
+    if (!result.success) {
+      return { success: false, error: result.error }
     }
 
     // Set signed cookie
-    const token = signSession(user.id, user.username)
     const cookieStore = await cookies()
-    cookieStore.set('session_token', token, {
+    cookieStore.set('session_token', result.token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -165,7 +121,7 @@ export async function verifyPinAction(usernameInput: string, pin: string): Promi
       path: '/'
     })
 
-    return { success: true, user: { id: user.id, username: user.username } }
+    return { success: true, user: { id: result.user.id, username: result.user.username } }
   } catch (error) {
     console.error('Login failed:', error)
     return { success: false, error: 'Database error during login.' }
