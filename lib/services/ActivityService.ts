@@ -59,6 +59,9 @@ export class ActivityService {
 
     let log
     if (existing) {
+      if (existing.userId && existing.userId !== userId) {
+        throw new Error('Log record not found or unauthorized')
+      }
       log = await db.activityLog.update({
         where: { id: existing.id },
         data: {
@@ -119,7 +122,7 @@ export class ActivityService {
     payload?: unknown
   }) {
     const existing = await db.activityLog.findUnique({ where: { id } })
-    if (!existing || existing.userId !== userId) {
+    if (!existing || existing.userId !== userId || existing.deletedAt !== null) {
       throw new Error('Log record not found or unauthorized')
     }
 
@@ -159,6 +162,11 @@ export class ActivityService {
     const existing = await db.activityLog.findUnique({ where: { id: logId } })
     if (!existing || existing.userId !== userId) {
       throw new Error('Log record not found or unauthorized')
+    }
+
+    // If already soft-deleted, return existing record idempotently
+    if (existing.deletedAt) {
+      return existing
     }
 
     // Cascade soft deletions to linked sub-records

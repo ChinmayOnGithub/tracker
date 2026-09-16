@@ -64,6 +64,20 @@ export async function GET(request: Request) {
   }
 }
 
+function arePayloadsEquivalent(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  const isAEmpty =
+    a === undefined || a === null || (typeof a === 'object' && Object.keys(a as object).length === 0)
+  const isBEmpty =
+    b === undefined || b === null || (typeof b === 'object' && Object.keys(b as object).length === 0)
+  if (isAEmpty && isBEmpty) return true
+  try {
+    return JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+  } catch {
+    return false
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const user = await AuthService.resolveAuthFromRequest(request)
@@ -83,7 +97,71 @@ export async function POST(request: Request) {
       return apiZodError(parsed.error)
     }
 
-    // Verify ownership of the template before logging
+    // 1. If client supplies an explicit ID, check for existing record (retry-safe idempotency & conflict handling)
+    if (parsed.data.id) {
+      const existingLog = await db.activityLog.findUnique({
+        where: { id: parsed.data.id },
+      })
+
+      if (existingLog) {
+        // Cross-user isolation: If this ID belongs to another user, deny access
+        if (existingLog.userId !== user.id) {
+          return apiError('FORBIDDEN', 'Log record not found or unauthorized', 403)
+        }
+
+        // Soft-deleted record cannot be modified or recreated normally
+        if (existingLog.deletedAt !== null) {
+          return apiError(
+            'CONFLICT',
+            'Idempotency conflict: A record with this ID has been deleted',
+            409
+          )
+        }
+
+        // Check if data is equivalent
+        const existingDateStr = existingLog.logDate.toISOString().split('T')[0]
+        const isEquivalent =
+          existingLog.activityId === parsed.data.activityId &&
+          existingDateStr === parsed.data.date &&
+          existingLog.status === parsed.data.status &&
+          (existingLog.note ?? null) === (parsed.data.note ?? null) &&
+          (existingLog.amount ?? null) === (parsed.data.amount ?? null) &&
+          arePayloadsEquivalent(existingLog.payload, parsed.data.payload)
+
+        if (isEquivalent) {
+          // Idempotent retry: return existing record deterministically
+          const log = {
+            id: existingLog.id,
+            activityId: existingLog.activityId,
+            date: existingDateStr,
+            status: existingLog.status,
+            note: existingLog.note,
+            amount: existingLog.amount,
+            payload: existingLog.payload,
+            createdAt: existingLog.createdAt,
+            updatedAt: existingLog.updatedAt,
+          }
+          return apiSuccess({ log }, 200)
+        }
+
+        // ID collision with materially different data
+        return apiError(
+          'CONFLICT',
+          'Idempotency conflict: An activity log with this ID already exists with different data',
+          409,
+          {
+            id: parsed.data.id,
+            existing: {
+              activityId: existingLog.activityId,
+              date: existingDateStr,
+              status: existingLog.status,
+            },
+          }
+        )
+      }
+    }
+
+    // 2. Verify ownership of the template before logging
     const template = await db.activityTemplate.findUnique({
       where: { id: parsed.data.activityId },
     })
