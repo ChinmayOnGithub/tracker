@@ -16,7 +16,7 @@ afterEach(() => {
   db.googleCredential.count = originalGoogleCredentialCount
   CalendarRepository.findEventByArtifact = originalFindEventByArtifact
   CalendarRepository.createEvent = originalCreateEvent
-}
+})
 
 describe('Calendar Module Redesign (Phase 1)', () => {
   describe('OccurrenceService', () => {
