@@ -352,9 +352,6 @@ export const SettingsBillingSection: React.FC = () => {
               : PLANS.FREE.featureDetails
             )?.map((detail) => {
               const isLimit = detail.type === 'limit'
-              const plan = summary?.entitlements?.plan
-                ? PLANS[summary.entitlements.plan]
-                : PLANS.FREE
               const value = isLimit
                 ? detail.id === 'vault_storage'
                   ? summary?.entitlements.limits.vault_storage
@@ -377,7 +374,7 @@ export const SettingsBillingSection: React.FC = () => {
                       size="sm"
                     >
                       {isLimit
-                        ? value !== null && value !== undefined
+                        ? typeof value === 'number'
                           ? value.toLocaleString()
                           : '—'
                         : value === false
