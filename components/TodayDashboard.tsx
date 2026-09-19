@@ -80,13 +80,24 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     logWeightAction
   } = useStore()
 
+  const inFlightMutationRef = useRef(new Set<string>())
+
   // Shim: the store's payload is typed `any`; narrow it to `unknown` for strict child props
-  const typedSetTaskStatus = (
+  const typedSetTaskStatus = async (
     occurrence: TimelineItem,
     date: string,
     status: 'cleared' | 'done' | 'skipped' | 'postponed',
     payload?: unknown
-  ) => setTaskStatusAction(occurrence, date, status, payload)
+  ) => {
+    const lockKey = occurrence.templateId || occurrence.id
+    if (inFlightMutationRef.current.has(lockKey)) return
+    inFlightMutationRef.current.add(lockKey)
+    try {
+      await setTaskStatusAction(occurrence, date, status, payload)
+    } finally {
+      inFlightMutationRef.current.delete(lockKey)
+    }
+  }
 
   const [currentTime, setCurrentTime] = useState(() => new Date())
   const [completingHabitId, setCompletingHabitId] = useState<string | null>(null)
@@ -341,6 +352,10 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   }) || null
 
   const cycleTaskStatus = async (occurrence: TimelineItem) => {
+    const lockKey = occurrence.templateId || occurrence.id
+    if (inFlightMutationRef.current.has(lockKey)) return
+    inFlightMutationRef.current.add(lockKey)
+
     const isWeightLogged = weightRecords.some(r => {
       const dStr = typeof r.date === 'string' ? r.date.split('T')[0] : r.date.toISOString().split('T')[0]
       return dStr === todayStr
@@ -350,6 +365,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
     if (template && CompletionService.needsPrompting(template, isWeightLogged)) {
       setActiveCompletion({ template, occurrence })
+      inFlightMutationRef.current.delete(lockKey)
     } else {
       if (occurrence.templateId) {
         setCompletingHabitId(occurrence.templateId)
@@ -357,6 +373,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
       try {
         await cycleTaskStatusAction(occurrence, todayStr)
       } finally {
+        inFlightMutationRef.current.delete(lockKey)
         setCompletingHabitId(null)
       }
     }

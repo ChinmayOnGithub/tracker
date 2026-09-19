@@ -220,8 +220,10 @@ export async function listVaultItems(
 
     return { success: true, items, nextCursor }
   } catch (error) {
-    console.error('List vault items error:', error)
     const message = error instanceof Error ? error.message : 'Failed to load items'
+    if (!message.includes('disabled for guest') && !message.includes('Access denied')) {
+      console.error('List vault items error:', error)
+    }
     return { success: false, items: [], nextCursor: null, error: message }
   }
 }

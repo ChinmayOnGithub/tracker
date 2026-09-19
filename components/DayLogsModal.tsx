@@ -1,12 +1,12 @@
 "use client"
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '@/lib/store/store'
 import { ActivityTemplate, ActivityLog, ActivityType, Note, Priority, TimelineItem, AnalyzedTemplate } from '@/types'
 import { CalendarDayDTO } from '@/modules/calendar/dto/CalendarDayDTO'
 import { analyzeRecurrence } from '@/lib/recurrence'
 import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboardHelpers'
-import { createCalendarEventAction } from '@/app/actions/calendar'
+import { scheduleTaskOccurrenceAction } from '@/app/actions/task-schedule'
 import { Icon } from './Icon'
 import { X, Sparkles, BookOpen, Search, Plus, Clock, Settings, Briefcase, MoreVertical, Edit2 } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
@@ -51,8 +51,31 @@ interface DayLogsModalProps {
 
 const dayDtoCache: Record<string, CalendarDayDTO> = {}
 
-function invalidateCache(dateStr: string) {
-  delete dayDtoCache[dateStr]
+export function clearDayDtoCache(userId?: string) {
+  if (userId) {
+    const prefix = `${userId}:`
+    for (const key of Object.keys(dayDtoCache)) {
+      if (key.startsWith(prefix)) {
+        delete dayDtoCache[key]
+      }
+    }
+  } else {
+    for (const key of Object.keys(dayDtoCache)) {
+      delete dayDtoCache[key]
+    }
+  }
+}
+
+function invalidateCache(dateStr: string, userKey?: string) {
+  if (userKey) {
+    delete dayDtoCache[`${userKey}:${dateStr}`]
+  } else {
+    for (const key of Object.keys(dayDtoCache)) {
+      if (key.endsWith(`:${dateStr}`) || key === dateStr) {
+        delete dayDtoCache[key]
+      }
+    }
+  }
 }
 
 export const DayLogsModal: React.FC<DayLogsModalProps> = ({
@@ -69,10 +92,17 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   const [_isSaving, setIsSaving] = useState(false)
   const router = useRouter()
   const {
+    userId,
     cycleTaskStatusAction, setTaskStatusAction, deleteActivityLog,
     logWorkPresenceAction, upsertJournalAction, logWeightAction,
     createActivityTemplateAction, updateActivityTemplateAction,
   } = useStore()
+
+  const currentUserId = userId || 'guest'
+  const activeUserIdRef = useRef(currentUserId)
+  useEffect(() => {
+    activeUserIdRef.current = currentUserId
+  }, [currentUserId])
 
   // ── Compute timeline from props (instant, no API) ───────────────────────
   const analyzedTemplates: AnalyzedTemplate[] = useMemo(() => {
@@ -141,27 +171,31 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
 
   // ── Lazy DTO fetch with Cache ──────────────────────────────────────────
   const [dayDTO, setDayDTO] = useState<CalendarDayDTO | null>(() => {
-    return dayDtoCache[dateStr] || null
+    return dayDtoCache[`${currentUserId}:${dateStr}`] || null
   })
   const [isDtoLoading, setIsDtoLoading] = useState(false)
 
   const fetchDayDetails = useCallback(async () => {
-    if (dayDtoCache[dateStr]) {
-      setDayDTO(dayDtoCache[dateStr])
+    const activeKey = `${activeUserIdRef.current}:${dateStr}`
+    if (dayDtoCache[activeKey]) {
+      setDayDTO(dayDtoCache[activeKey])
       return
     }
+    const requestedUser = activeUserIdRef.current
     try {
       setIsDtoLoading(true)
       const res = await fetch(`/api/calendar/day?date=${dateStr}`)
       const json = await res.json()
-      if (json.success) {
-        dayDtoCache[dateStr] = json.data
+      if (activeUserIdRef.current === requestedUser && json.success) {
+        dayDtoCache[activeKey] = json.data
         setDayDTO(json.data)
       }
     } catch (err) {
       console.error('Failed to fetch day summary DTO:', err)
     } finally {
-      setIsDtoLoading(false)
+      if (activeUserIdRef.current === requestedUser) {
+        setIsDtoLoading(false)
+      }
     }
   }, [dateStr])
 
@@ -177,10 +211,10 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   // Sync state if selected date changes
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDayDTO(dayDtoCache[dateStr] || null)
+      setDayDTO(dayDtoCache[`${currentUserId}:${dateStr}`] || null)
     }, 0)
     return () => clearTimeout(timer)
-  }, [dateStr])
+  }, [dateStr, currentUserId])
 
   // Merge local state with loaded DTO (preferring local state for instant synchronization of logs)
   const mergedDTO = useMemo(() => {
@@ -213,6 +247,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
 
   // Template selector
   const [activitySearch, setActivitySearch] = useState('')
+  const inFlightMutationRef = useRef(new Set<string>())
 
   // Work Tracker state
 
@@ -359,9 +394,15 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   // ── Status cycling (same logic as TodayDashboard) ───────────────────────
   const cycleTaskStatus = async (occurrence: TimelineItem) => {
     if (!occurrence.templateId) return
+    const lockKey = occurrence.templateId || occurrence.id
+    if (inFlightMutationRef.current.has(lockKey)) return
+    inFlightMutationRef.current.add(lockKey)
 
     const matchedTemplate = templates.find(t => t.id === occurrence.templateId)
-    if (!matchedTemplate) return
+    if (!matchedTemplate) {
+      inFlightMutationRef.current.delete(lockKey)
+      return
+    }
 
     const isDone = occurrence.completed && occurrence.status !== 'skipped' && occurrence.status !== 'postponed'
 
@@ -369,10 +410,11 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
       setCompletingHabitId(occurrence.templateId)
       try {
         await setTaskStatusAction(occurrence, dateStr, 'cleared')
-        invalidateCache(dateStr)
+        invalidateCache(dateStr, currentUserId)
       } catch (err) {
         console.error('Failed to clear task status:', err)
       } finally {
+        inFlightMutationRef.current.delete(lockKey)
         setCompletingHabitId(null)
       }
     } else {
@@ -380,16 +422,18 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
 
       if (CompletionService.needsPrompting(matchedTemplate, isWeightLoggedToday)) {
         setActiveCompletion({ template: matchedTemplate, occurrence })
+        inFlightMutationRef.current.delete(lockKey)
         return
       }
 
       setCompletingHabitId(occurrence.templateId)
       try {
         await setTaskStatusAction(occurrence, dateStr, 'done')
-        invalidateCache(dateStr)
+        invalidateCache(dateStr, currentUserId)
       } catch (err) {
         console.error('Failed to set task status done:', err)
       } finally {
+        inFlightMutationRef.current.delete(lockKey)
         setCompletingHabitId(null)
       }
     }
@@ -437,37 +481,18 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   }
 
   const handleQuickScheduleTemplate = async (template: ActivityTemplate) => {
+    if (inFlightMutationRef.current.has(template.id)) return
+    inFlightMutationRef.current.add(template.id)
     try {
       setIsSaving(true)
-      const isAllDay = !template.scheduledTime
-      let startIso = `${dateStr}T00:00:00.000Z`
-      let endIso = `${dateStr}T23:59:59.000Z`
-
-      if (template.scheduledTime) {
-        const dur = template.estimatedDuration || 30
-        const start = new Date(`${dateStr}T${template.scheduledTime}:00`)
-        const end = new Date(start.getTime() + dur * 60 * 1000)
-        
-        const pad = (n: number) => String(n).padStart(2, '0')
-        startIso = `${dateStr}T${pad(start.getHours())}:${pad(start.getMinutes())}:00.000`
-        endIso = `${dateStr}T${pad(end.getHours())}:${pad(end.getMinutes())}:00.000`
-      }
-
-      await createCalendarEventAction({
-        title: template.name,
-        start: startIso,
-        end: endIso,
-        allDay: isAllDay,
-        type: 'TASK',
-        color: template.color || 'zinc',
-        trackerArtifactId: template.id,
-        trackerArtifactType: 'ACTIVITY_TEMPLATE'
-      })
+      await scheduleTaskOccurrenceAction(template.id, dateStr)
+      invalidateCache(dateStr, currentUserId)
       fetchDayDetails()
       router.refresh()
     } catch (err) {
       console.error('Failed to quick schedule template:', err)
     } finally {
+      inFlightMutationRef.current.delete(template.id)
       setIsSaving(false)
     }
   }

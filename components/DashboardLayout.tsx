@@ -16,6 +16,7 @@ import { Card, CardBody, Button, Input, Modal } from '@/design-system'
 import { TemplateModal } from './TemplateModal'
 import { getTodayDateStr } from '@/lib/recurrence'
 import { CalendarCacheService } from '@/modules/calendar/services/CalendarCacheService'
+import { clearDayDtoCache } from './DayLogsModal'
 import { EntitlementProvider } from '@/lib/context/EntitlementContext'
 
 export interface CalendarData {
@@ -35,6 +36,8 @@ export interface CalendarDataContextType {
   fetchCalendar: (force?: boolean) => Promise<void>
   onOpenCreateActivity: () => void
   onEditTemplate: (template: ActivityTemplate) => void
+  guestPermissions?: Record<string, boolean>
+  isOwner?: boolean
 }
 
 export const CalendarDataContext = React.createContext<CalendarDataContextType | undefined>(undefined)
@@ -125,15 +128,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     return () => window.removeEventListener('personal_settings_changed', fetchPerms)
   }, [user, isOwner])
 
-  // Theme state
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window !== 'undefined') {
-      const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
-      if (savedTheme) return savedTheme
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    }
-    return 'dark'
-  })
+  // Theme state: deterministic server default to ensure initial client render matches SSR (#60)
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark')
+  const [isThemeMounted, setIsThemeMounted] = useState(false)
 
   const changeTab = useCallback((tabId: string) => {
     router.push(tabId === 'today' ? '/' : `/${tabId}`)
@@ -232,11 +229,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     return () => window.removeEventListener('calendar_data_changed', handleCalendarChanged)
   }, [fetchCalendar])
 
-  // Load client-specific states on mount
+  // Load client-specific states on mount post-hydration
   useEffect(() => {
+    setIsThemeMounted(true)
     const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
-    if (savedTheme && savedTheme !== theme) {
+    if (savedTheme) {
       setTheme(savedTheme)
+    } else if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches) {
+      setTheme('light')
     }
 
     // Apply personal styles on load
@@ -352,17 +352,24 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   // Sync theme with document class
   useEffect(() => {
+    if (!isThemeMounted) return
     if (theme === 'dark') {
       document.documentElement.classList.add('dark')
     } else {
       document.documentElement.classList.remove('dark')
     }
-  }, [theme])
+  }, [theme, isThemeMounted])
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark'
     setTheme(nextTheme)
     localStorage.setItem('theme', nextTheme)
+    document.cookie = `theme=${nextTheme}; path=/; max-age=31536000; SameSite=Lax`
+    if (nextTheme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
   }
 
   const handleAuthSubmit = useCallback(async (username: string, pin: string) => {
@@ -416,6 +423,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const handleLogout = async () => {
     if (user?.id) {
       CalendarCacheService.invalidateAll(user.id)
+      clearDayDtoCache(user.id)
+    } else {
+      clearDayDtoCache()
     }
     setIsAuthenticated(false) // Immediately hide calendar data
     setUser(null)
@@ -652,7 +662,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         currentUser: user,
         fetchCalendar,
         onOpenCreateActivity,
-        onEditTemplate
+        onEditTemplate,
+        guestPermissions: guestPerms,
+        isOwner
       }}>
         <DashboardShell
           activeTab={activeTab}

@@ -279,7 +279,7 @@ export function generateTimeline(
       isAllDay,
       location,
       notes: template.notes,
-      completed: !!log,
+      completed: !!log && log.status !== 'cleared' && log.status !== 'pending',
       logId: log?.id,
       status: log?.status,
       icon: template.icon

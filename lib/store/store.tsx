@@ -135,6 +135,7 @@ interface StoreState {
 }
 
 interface StoreContextType {
+  userId?: string | null
   state: StoreState
   isSyncing: boolean
   initialize: (initialData: Partial<StoreState>) => void
@@ -342,24 +343,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
           }
         } catch (_) {}
 
-        // Hydrate Vault items metadata if empty
+        // Hydrate Vault items metadata if empty (only for authenticated users, #61)
         let initialVault: VaultItem[] = []
-        try {
-          const { listVaultItems } = await import('@/app/actions/vault')
-          const vaultRes = await listVaultItems(null, undefined, 200, true)
-          if (vaultRes.success && vaultRes.items) {
-            initialVault = vaultRes.items.map(v => ({
-              id: v.id,
-              name: v.name,
-              isFolder: v.isFolder,
-              parentId: v.parentId,
-              size: v.fileSize,
-              mimeGroup: v.mimeGroup,
-              updatedAt: v.updatedAt,
-              createdAt: v.createdAt
-            }))
-          }
-        } catch (_) {}
+        if (userId) {
+          try {
+            const { listVaultItems } = await import('@/app/actions/vault')
+            const vaultRes = await listVaultItems(null, undefined, 200, true)
+            if (vaultRes.success && vaultRes.items) {
+              initialVault = vaultRes.items.map(v => ({
+                id: v.id,
+                name: v.name,
+                isFolder: v.isFolder,
+                parentId: v.parentId,
+                size: v.fileSize,
+                mimeGroup: v.mimeGroup,
+                updatedAt: v.updatedAt,
+                createdAt: v.createdAt
+              }))
+            }
+          } catch (_) {}
+        }
 
         setState(prev => ({
           ...prev,
@@ -572,7 +575,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
     setState(prev => {
       let updatedLogs = [...prev.logs]
       if (logId) {
-        if (nextCompleted === false && nextStatus === undefined && isDaily) {
+        if (nextCompleted === false && nextStatus === undefined) {
           updatedLogs = updatedLogs.filter(l => l.id !== logId)
         } else {
           updatedLogs = updatedLogs.map(l => 
@@ -600,7 +603,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
       const logRepo = new ActivityLogRepository()
 
       if (logId) {
-        if (nextCompleted === false && nextStatus === undefined && isDaily) {
+        if (nextCompleted === false && nextStatus === undefined) {
           await logRepo.delete(logId)
         } else {
           const log = await logRepo.getById(logId)
@@ -670,7 +673,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
     setState(prev => {
       let updatedLogs = [...prev.logs]
       if (logId) {
-        if (targetStatus === 'cleared' && isDaily) {
+        if (targetStatus === 'cleared') {
           updatedLogs = updatedLogs.filter(l => l.id !== logId)
         } else {
           updatedLogs = updatedLogs.map(l => 
@@ -698,7 +701,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
       const logRepo = new ActivityLogRepository()
 
       if (logId) {
-        if (targetStatus === 'cleared' && isDaily) {
+        if (targetStatus === 'cleared') {
           await logRepo.delete(logId)
         } else {
           const log = await logRepo.getById(logId)
@@ -1559,6 +1562,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
 
   return (
     <StoreContext.Provider value={{
+      userId: userId ?? null,
       state,
       isSyncing,
       initialize,

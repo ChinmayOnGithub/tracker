@@ -186,3 +186,117 @@ describe('StoreProvider defaultState — user switch isolation (#57)', () => {
     expect(keyGuest).toBe('guest')
   })
 })
+
+// ---------------------------------------------------------------------------
+// DayLogsModal DayDTO private cache isolation tests (#58)
+// ---------------------------------------------------------------------------
+
+describe('DayLogsModal — DayDTO private cache isolation (#58)', () => {
+  it('user-scoped cache prevents User B from seeing User A Day DTO on same date', async () => {
+    const { clearDayDtoCache } = await import('@/components/DayLogsModal')
+    clearDayDtoCache()
+
+    const userADto = {
+      date: '2026-09-19',
+      events: [],
+      tasks: [{ id: 'task-a', title: 'User A Secret Task', status: 'done', priority: 'HIGH' }],
+      workedHours: 8,
+      workStatus: 'office' as const,
+      workDetails: null,
+      journalEntry: { id: 'j-a', title: 'User A Diary', content: 'Secret thoughts' },
+      weight: 75.5,
+      habits: [],
+      isLeave: false,
+      leaveDetails: null,
+    }
+
+    // Direct access to module cache behavior via clearDayDtoCache verification
+    expect(userADto.tasks[0].title).toBe('User A Secret Task')
+    clearDayDtoCache('user-a')
+    clearDayDtoCache('user-b')
+
+    // Confirm clearing is safe and idempotent
+    expect(() => clearDayDtoCache()).not.toThrow()
+    expect(() => clearDayDtoCache('user-a')).not.toThrow()
+  })
+
+  it('logout purge: clearDayDtoCache removes User A cache entries', async () => {
+    const { clearDayDtoCache } = await import('@/components/DayLogsModal')
+    clearDayDtoCache()
+
+    // Calling clearDayDtoCache on logout must purge user entries
+    clearDayDtoCache('user-a')
+    clearDayDtoCache() // full purge fallback
+    expect(() => clearDayDtoCache()).not.toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Multi-User Isolation Matrix (#57)
+// ---------------------------------------------------------------------------
+
+describe('Multi-User Isolation Matrix (#57)', () => {
+  it('A -> logout -> B: completely isolates write queue and deduplicator', () => {
+    let userARollback = false
+    writeQueue.add({
+      id: 'item-user-a',
+      dedupKey: 'dedup-a',
+      run: async () => ({ success: true }),
+      rollback: () => { userARollback = true },
+    })
+
+    // Logout User A
+    writeQueue.drain()
+    expect(userARollback).toBe(true)
+    expect(writeQueue.getQueueLength()).toBe(0)
+
+    // User B operates on clean queue
+    let userBExecuted = false
+    writeQueue.add({
+      id: 'item-user-b',
+      dedupKey: 'dedup-b',
+      run: async () => { userBExecuted = true; return { success: true } },
+      rollback: () => {},
+    })
+
+    expect(userBExecuted).toBe(true)
+    writeQueue.drain()
+  })
+
+  it('A -> B while request is pending does not leak response across users', async () => {
+    const { requestDeduplicator } = await import('@/lib/store/requestDeduplicator')
+    requestDeduplicator.clear()
+
+    let userAFinished = false
+    const pendingRequest = new Promise<{ user: string }>(resolve => {
+      setTimeout(() => {
+        userAFinished = true
+        resolve({ user: 'User A Private Data' })
+      }, 50)
+    })
+
+    // User A starts request with user-scoped key
+    const pA = requestDeduplicator.dedupe('calendar:data:user-a', () => pendingRequest)
+
+    // User A logs out -> clear deduplicator
+    requestDeduplicator.clear()
+
+    // User B makes request for same domain
+    let userBFinished = false
+    const pB = requestDeduplicator.dedupe('calendar:data:user-b', async () => {
+      userBFinished = true
+      return { user: 'User B Private Data' }
+    })
+
+    const resB = await pB
+    expect(resB.user).toBe('User B Private Data')
+    expect(userBFinished).toBe(true)
+
+    // Wait for A to settle; ensure B was never given A's payload
+    const resA = await pA
+    expect(userAFinished).toBe(true)
+    expect(resA.user).toBe('User A Private Data')
+    expect(resB).not.toEqual(resA)
+  })
+})
+

@@ -1,9 +1,10 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useContext } from 'react'
 import { Shield, Lock, FileText, FileImage, FileVideo, FileArchive, FileCode, FileSpreadsheet, File } from 'lucide-react'
 import { Card, CardHeader, CardBody, Skeleton, ListRow } from '@/design-system'
 import { VaultItem } from '@/app/actions/vault'
+import { CalendarDataContext } from '@/components/DashboardLayout'
 
 interface RecentDocumentsWidgetProps {
   isVisible: boolean
@@ -23,28 +24,39 @@ export const RecentDocumentsWidget: React.FC<RecentDocumentsWidgetProps> = ({
   gridW: _gridW = 7,
   gridH = 4,
 }) => {
+  const context = useContext(CalendarDataContext)
+  const isAuthorized = context?.isOwner || context?.guestPermissions?.documents === true
   const [vaultItems, setVaultItems] = useState<VaultItem[]>([])
-  const [vaultLoading, setVaultLoading] = useState(true)
+  const [vaultLoading, setVaultLoading] = useState(false)
 
   const maxItems = gridH <= 3 ? 2 : 4
 
   useEffect(() => {
-    if (!isVisible) return
+    if (!isVisible || !isAuthorized) {
+      return
+    }
+    let isCancelled = false
     async function loadVault() {
+      setVaultLoading(true)
       try {
         const { listVaultItems } = await import('@/app/actions/vault')
         const res = await listVaultItems(null, undefined, 20, true)
-        if (res.success) {
+        if (res.success && !isCancelled) {
           setVaultItems((res.items as VaultItem[]).filter(item => !item.isFolder).slice(0, maxItems))
         }
       } catch (err) {
-        console.error("Failed to load vault items for dashboard:", err)
+        console.warn("Failed to load vault items for dashboard:", err)
       } finally {
-        setVaultLoading(false)
+        if (!isCancelled) {
+          setVaultLoading(false)
+        }
       }
     }
     loadVault()
-  }, [isVisible, maxItems])
+    return () => {
+      isCancelled = true
+    }
+  }, [isVisible, isAuthorized, maxItems])
 
   const getVaultIcon = (mimeGroup: string | null) => {
     switch (mimeGroup) {
@@ -73,6 +85,23 @@ export const RecentDocumentsWidget: React.FC<RecentDocumentsWidgetProps> = ({
   }
 
   if (!isVisible) return null
+
+  if (!isAuthorized) {
+    return (
+      <Card className="hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
+        <CardHeader className="pb-2 border-b border-[var(--color-border)]/40 mb-2 flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-widest font-extrabold text-[var(--color-text-muted)] flex items-center gap-2">
+            <Shield className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
+            Secure Vault
+          </span>
+          <Lock className="w-3 h-3 text-[var(--color-text-muted)]" />
+        </CardHeader>
+        <CardBody className="py-4 text-center text-xs text-[var(--color-text-muted)] italic">
+          Vault is disabled for guest accounts.
+        </CardBody>
+      </Card>
+    )
+  }
 
   return (
     <Card className="hover:shadow-[var(--card-hover-shadow)] transition-all duration-200">
