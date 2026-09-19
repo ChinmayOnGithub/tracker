@@ -1,4 +1,5 @@
 import { CanonicalBillingState, PlanId, UserEntitlements } from './types'
+import { PLANS } from './plans'
 
 export interface SubscriptionSnapshot {
   id: string
@@ -17,24 +18,17 @@ const FREE_ENTITLEMENTS: UserEntitlements = {
   plan: 'FREE',
   isPro: false,
   features: {
-    advanced_calendar: false,
-    advanced_journal: false,
-    advanced_vault: false,
-    unlimited_notes: true,
-    priority_sync: false,
-    // Aliases
+    ...PLANS.FREE.capabilities.features,
     premiumVault: false,
     advancedCalendar: false,
     advancedJournal: false,
-    unlimitedNotes: true,
+    unlimitedNotes: PLANS.FREE.capabilities.features.unlimited_notes,
     prioritySupport: false
   },
   limits: {
-    vault_storage: 10,
-    active_activities: 10,
-    // Aliases
-    maxVaultFiles: 10,
-    maxActiveActivities: 10
+    ...PLANS.FREE.capabilities.limits,
+    maxVaultFiles: PLANS.FREE.capabilities.limits.vault_storage,
+    maxActiveActivities: PLANS.FREE.capabilities.limits.active_activities
   },
   subscription: null
 }
@@ -129,29 +123,24 @@ export function calculateEntitlements(
     }
   }
 
+  const capabilities = PLANS[plan].capabilities
+
   return {
     tier: 'PRO',
     plan,
     isPro: true,
     features: {
-      advanced_calendar: true,
-      advanced_journal: true,
-      advanced_vault: true,
-      unlimited_notes: true,
-      priority_sync: true,
-      // Aliases
-      premiumVault: true,
-      advancedCalendar: true,
-      advancedJournal: true,
-      unlimitedNotes: true,
-      prioritySupport: true
+      ...capabilities.features,
+      premiumVault: capabilities.features.advanced_vault,
+      advancedCalendar: capabilities.features.advanced_calendar,
+      advancedJournal: capabilities.features.advanced_journal,
+      unlimitedNotes: capabilities.features.unlimited_notes,
+      prioritySupport: false
     },
     limits: {
-      vault_storage: 10000,
-      active_activities: 10000,
-      // Aliases
-      maxVaultFiles: 10000,
-      maxActiveActivities: 10000
+      ...capabilities.limits,
+      maxVaultFiles: capabilities.limits.vault_storage,
+      maxActiveActivities: capabilities.limits.active_activities
     },
     subscription: {
       id: subscription.id,

@@ -274,30 +274,12 @@ export const PricingPanel: React.FC = () => {
               What&apos;s Included:
             </div>
             <ul className="space-y-3 text-xs text-[var(--color-text-main)]">
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span>Up to 10 Active Habits & Recurring Activities</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span>Unlimited Daily Tasks &amp; Schedule Events</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span>Computed Dynamic Timeline & Calendar</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span>Daily Notes & Journal Reflections</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span>Weight & Health Metric History</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span>Secure Vault Storage (Up to 10 Files)</span>
-              </li>
+              {PLANS.FREE.features.map((feature) => (
+                <li key={feature} className="flex items-center gap-2.5">
+                  <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>{feature}</span>
+                </li>
+              ))}
             </ul>
           </CardBody>
 
@@ -378,35 +360,16 @@ export const PricingPanel: React.FC = () => {
               Everything in Free, plus:
             </div>
             <ul className="space-y-3 text-xs text-[var(--color-text-main)]">
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span className="font-semibold">Unlimited Habits &amp; Recurring Activities</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span className="font-semibold">Unlimited Secure Vault Storage</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span>Automated External Calendar Sync &amp; Writebacks</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span>Rich Journal Exports (Encrypted PDF &amp; JSON)</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span>Unlimited Vault Client-Side Encryption Exports</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span>Priority Cloud Sync &amp; Automated Backup Engine</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span className="font-semibold">Priority Support</span>
-              </li>
+              {PLANS.PRO_MONTHLY.features.map((feature) => (
+                <li key={feature} className="flex items-center gap-2.5">
+                  <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
+                  <span>{feature}</span>
+                </li>
+              ))}
             </ul>
+            <p className="text-[11px] text-[var(--color-text-muted)]">
+              Limits and capabilities are enforced by your active subscription. Pro currently includes up to {PLANS.PRO_MONTHLY.capabilities.limits.active_activities.toLocaleString()} active activities and {PLANS.PRO_MONTHLY.capabilities.limits.vault_storage.toLocaleString()} Vault files.
+            </p>
 
             {/* Plan switch guidance for existing Pro users viewing a different interval */}
             {isPlanSwitchBlocked && (

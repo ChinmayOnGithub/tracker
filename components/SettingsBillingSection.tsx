@@ -341,63 +341,59 @@ export const SettingsBillingSection: React.FC = () => {
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4.5 h-4.5 text-[var(--color-primary)]" />
             <span className="text-xs font-black text-[var(--color-text-main)] uppercase tracking-wider">
-              Included Entitlements
+              What Your Plan Includes
             </span>
           </div>
         </CardHeader>
         <CardBody>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="p-3 bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-850 rounded-xl space-y-1">
-              <div className="text-xs font-bold text-[var(--color-text-main)] flex items-center justify-between">
-                <span>Secure Vault Capacity</span>
-                <span className={isPro ? 'text-emerald-500 font-extrabold' : 'text-[var(--color-text-muted)]'}>
-                  {isPro ? 'Unlimited' : '10 Files max'}
-                </span>
-              </div>
-              <p className="text-[11px] text-[var(--color-text-muted)]">
-                {isPro ? 'Client-side AES-256 encrypted documents with unconstrained upload size.' : 'Standard local encrypted document storage.'}
-              </p>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(summary?.entitlements?.plan
+              ? PLANS[summary.entitlements.plan]?.featureDetails
+              : PLANS.FREE.featureDetails
+            )?.map((detail) => {
+              const isLimit = detail.type === 'limit'
+              const value = isLimit
+                ? detail.id === 'vault_storage'
+                  ? summary?.entitlements.limits.vault_storage
+                  : detail.id === 'active_activities'
+                    ? summary?.entitlements.limits.active_activities
+                    : null
+                : summary?.entitlements.features[detail.id as keyof typeof summary.entitlements.features]
 
-            <div className="p-3 bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-850 rounded-xl space-y-1">
-              <div className="text-xs font-bold text-[var(--color-text-main)] flex items-center justify-between">
-                <span>Calendar Provider Sync</span>
-                <span className={isPro ? 'text-emerald-500 font-extrabold' : 'text-[var(--color-text-muted)]'}>
-                  {isPro ? 'Full Auto-Sync' : 'Standard'}
-                </span>
-              </div>
-              <p className="text-[11px] text-[var(--color-text-muted)]">
-                {isPro ? 'Automated bi-directional Google Calendar sync and task writebacks.' : 'Read-only manual calendar event polling.'}
-              </p>
-            </div>
-
-            <div className="p-3 bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-850 rounded-xl space-y-1">
-              <div className="text-xs font-bold text-[var(--color-text-main)] flex items-center justify-between">
-                <span>Journal Export Analytics</span>
-                <span className={isPro ? 'text-emerald-500 font-extrabold' : 'text-[var(--color-text-muted)]'}>
-                  {isPro ? 'PDF & JSON' : 'In-App Only'}
-                </span>
-              </div>
-              <p className="text-[11px] text-[var(--color-text-muted)]">
-                {isPro ? 'Encrypted bulk reflections export and streak sentiment analysis.' : 'Standard text editing and daily log entry.'}
-              </p>
-            </div>
-
-            <div className="p-3 bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-850 rounded-xl space-y-1">
-              <div className="text-xs font-bold text-[var(--color-text-main)] flex items-center justify-between">
-                <span>Support Tier</span>
-                <span className={isPro ? 'text-emerald-500 font-extrabold' : 'text-[var(--color-text-muted)]'}>
-                  {isPro ? 'Priority' : 'Community'}
-                </span>
-              </div>
-              <p className="text-[11px] text-[var(--color-text-muted)]">
-                Direct technical triage and feature requests prioritized by maintainers.
-              </p>
-            </div>
+              return (
+                <div
+                  key={detail.id}
+                  className="p-3 border border-[var(--color-border)] rounded-xl bg-[var(--color-bg-surface)] space-y-1.5"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="text-xs font-bold text-[var(--color-text-main)]">
+                      {detail.name}
+                    </div>
+                    <Badge
+                      variant={value === false ? 'muted' : 'success'}
+                      size="sm"
+                    >
+                      {isLimit
+                        ? typeof value === 'number'
+                          ? value.toLocaleString()
+                          : '—'
+                        : value === false
+                          ? 'Not included'
+                          : 'Included'}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+                    {detail.description}
+                  </p>
+                </div>
+              )
+            })}
           </div>
+          <p className="mt-4 text-[11px] text-[var(--color-text-muted)]">
+            These capabilities come from the same canonical plan definition used by the server entitlement engine. The UI does not independently decide what your subscription unlocks.
+          </p>
         </CardBody>
       </Card>
-
       {/* 3. Payment & Billing History Card */}
       <Card>
         <CardHeader>

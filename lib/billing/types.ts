@@ -35,6 +35,18 @@ export type SubscriptionStatus =
 
 export type PaymentStatus = 'PENDING' | 'SUCCESS' | 'FAILED' | 'REFUNDED'
 
+export interface PlanCapabilities {
+  features: Record<FeatureKey, boolean>
+  limits: Record<LimitKey, number>
+}
+
+export interface PlanFeatureDetail {
+  id: string
+  name: string
+  description: string
+  type: 'feature' | 'limit'
+}
+
 export interface PlanConfig {
   id: PlanId
   tier: ProductTier
@@ -48,6 +60,8 @@ export interface PlanConfig {
   interval: PlanInterval
   popular?: boolean
   features: string[]
+  capabilities: PlanCapabilities
+  featureDetails: PlanFeatureDetail[]
   providerPlanIdEnvKey?: string
 }
 

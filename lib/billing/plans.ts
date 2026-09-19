@@ -1,45 +1,135 @@
 import { PlanConfig, PlanId, ProductTier } from './types'
 import { ProviderConfigurationError } from './errors'
 
+export const PLAN_FEATURE_CATALOG = [
+  {
+    id: 'active_activities',
+    name: 'Active activities',
+    description: 'Recurring habits and activities you can keep active at once.',
+    type: 'limit' as const
+  },
+  {
+    id: 'vault_storage',
+    name: 'Secure Vault files',
+    description: 'Encrypted files stored in your Tracker Vault.',
+    type: 'limit' as const
+  },
+  {
+    id: 'advanced_calendar',
+    name: 'External calendar sync',
+    description: 'Advanced external calendar sync and writebacks.',
+    type: 'feature' as const
+  },
+  {
+    id: 'advanced_journal',
+    name: 'Advanced journal',
+    description: 'Rich PDF/Markdown exports and deeper reflection analytics.',
+    type: 'feature' as const
+  },
+  {
+    id: 'advanced_vault',
+    name: 'Advanced Vault',
+    description: 'Premium secure-vault operations.',
+    type: 'feature' as const
+  },
+  {
+    id: 'unlimited_notes',
+    name: 'Notes',
+    description: 'Access to the Notes module.',
+    type: 'feature' as const
+  },
+  {
+    id: 'priority_sync',
+    name: 'Priority sync',
+    description: 'Priority cloud sync and offline queue processing.',
+    type: 'feature' as const
+  }
+] as const
+
 export const PLANS: Record<PlanId, PlanConfig> = {
   FREE: {
     id: 'FREE',
     tier: 'FREE',
     name: 'Free',
-    tagline: 'Essential time-centric tracking for individuals',
+    tagline: 'Core tracking for everyday use',
     price: 0,
     priceInPaise: 0,
     currency: 'INR',
     interval: 'none',
     features: [
-      'Daily Habits & Recurring Schedules',
-      'Timeline & Calendar Views',
-      'Standard Journal & Daily Notes',
-      'Weight & Health Tracking',
-      'Up to 10 Secure Vault Files',
-      'Standard Local Storage Sync'
+      'Up to 10 active activities',
+      'Timeline & calendar views',
+      'Standard journal & daily notes',
+      'Weight & health tracking',
+      'Up to 10 secure Vault files',
+      'Notes',
+      'Standard local sync'
+    ],
+    capabilities: {
+      features: {
+        advanced_calendar: false,
+        advanced_journal: false,
+        advanced_vault: false,
+        unlimited_notes: true,
+        priority_sync: false
+      },
+      limits: {
+        vault_storage: 10,
+        active_activities: 10
+      }
+    },
+    featureDetails: [
+      { id: 'active_activities', name: 'Active activities', description: 'Up to 10 active recurring activities.', type: 'limit' },
+      { id: 'vault_storage', name: 'Secure Vault files', description: 'Up to 10 encrypted Vault files.', type: 'limit' },
+      { id: 'advanced_calendar', name: 'External calendar sync', description: 'Not included in Free.', type: 'feature' },
+      { id: 'advanced_journal', name: 'Advanced journal', description: 'Not included in Free.', type: 'feature' },
+      { id: 'advanced_vault', name: 'Advanced Vault', description: 'Not included in Free.', type: 'feature' },
+      { id: 'unlimited_notes', name: 'Notes', description: 'Included.', type: 'feature' },
+      { id: 'priority_sync', name: 'Priority sync', description: 'Not included in Free.', type: 'feature' }
     ]
   },
   PRO_MONTHLY: {
     id: 'PRO_MONTHLY',
     tier: 'PRO',
     name: 'Pro Monthly',
-    tagline: 'Complete power, automated syncing, and unlimited capacity',
+    tagline: 'Full Tracker capabilities with monthly billing',
     price: 99,
     priceInPaise: 9900,
-    introductoryPrice: 29, // ₹29 for first month for eligible new subscribers
+    introductoryPrice: 29,
     introductoryPriceInPaise: 2900,
     currency: 'INR',
     interval: 'monthly',
     popular: true,
     features: [
-      'All Free Plan Capabilities',
-      'Introductory First Month for ₹29',
-      'Unlimited Secure Vault Storage & Encrypted Export',
-      'Automated External Calendar Sync & Writebacks',
-      'Rich Journal & Link Exports (PDF, CSV & JSON)',
-      'Unlimited Historical Notes & Analytics',
-      'Priority Cloud Sync & Offline Queue Engine'
+      'Up to 10,000 active activities',
+      'Up to 10,000 secure Vault files',
+      'External calendar sync & writebacks',
+      'Advanced journal exports & analytics',
+      'Advanced Vault capabilities',
+      'Notes',
+      'Priority cloud sync'
+    ],
+    capabilities: {
+      features: {
+        advanced_calendar: true,
+        advanced_journal: true,
+        advanced_vault: true,
+        unlimited_notes: true,
+        priority_sync: true
+      },
+      limits: {
+        vault_storage: 10000,
+        active_activities: 10000
+      }
+    },
+    featureDetails: [
+      { id: 'active_activities', name: 'Active activities', description: 'Up to 10,000 active recurring activities.', type: 'limit' },
+      { id: 'vault_storage', name: 'Secure Vault files', description: 'Up to 10,000 encrypted Vault files.', type: 'limit' },
+      { id: 'advanced_calendar', name: 'External calendar sync', description: 'Advanced external calendar sync and writebacks.', type: 'feature' },
+      { id: 'advanced_journal', name: 'Advanced journal', description: 'Rich PDF/Markdown exports and deeper reflection analytics.', type: 'feature' },
+      { id: 'advanced_vault', name: 'Advanced Vault', description: 'Premium secure-vault operations.', type: 'feature' },
+      { id: 'unlimited_notes', name: 'Notes', description: 'Included.', type: 'feature' },
+      { id: 'priority_sync', name: 'Priority sync', description: 'Priority cloud sync and offline queue processing.', type: 'feature' }
     ],
     providerPlanIdEnvKey: 'RAZORPAY_PLAN_PRO_MONTHLY'
   },
@@ -47,19 +137,41 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     id: 'PRO_ANNUAL',
     tier: 'PRO',
     name: 'Pro Annual',
-    tagline: 'Best value for committed continuous trackers',
-    price: 799, // ~₹66.58/month, 33% discount
+    tagline: 'Full Tracker capabilities with annual billing',
+    price: 799,
     priceInPaise: 79900,
     currency: 'INR',
     interval: 'annual',
     features: [
-      'All Pro Features Included',
-      '₹799/year (Save 33% compared to monthly)',
-      'Unlimited Secure Vault Storage & Encrypted Export',
-      'Automated External Calendar Sync & Writebacks',
-      'Rich Journal & Link Exports (PDF, CSV & JSON)',
-      'Unlimited Historical Notes & Analytics',
-      'Priority Cloud Sync & Offline Queue Engine'
+      'All Pro capabilities',
+      'Up to 10,000 active activities',
+      'Up to 10,000 secure Vault files',
+      'External calendar sync & writebacks',
+      'Advanced journal exports & analytics',
+      'Advanced Vault capabilities',
+      'Priority cloud sync'
+    ],
+    capabilities: {
+      features: {
+        advanced_calendar: true,
+        advanced_journal: true,
+        advanced_vault: true,
+        unlimited_notes: true,
+        priority_sync: true
+      },
+      limits: {
+        vault_storage: 10000,
+        active_activities: 10000
+      }
+    },
+    featureDetails: [
+      { id: 'active_activities', name: 'Active activities', description: 'Up to 10,000 active recurring activities.', type: 'limit' },
+      { id: 'vault_storage', name: 'Secure Vault files', description: 'Up to 10,000 encrypted Vault files.', type: 'limit' },
+      { id: 'advanced_calendar', name: 'External calendar sync', description: 'Advanced external calendar sync and writebacks.', type: 'feature' },
+      { id: 'advanced_journal', name: 'Advanced journal', description: 'Rich PDF/Markdown exports and deeper reflection analytics.', type: 'feature' },
+      { id: 'advanced_vault', name: 'Advanced Vault', description: 'Premium secure-vault operations.', type: 'feature' },
+      { id: 'unlimited_notes', name: 'Notes', description: 'Included.', type: 'feature' },
+      { id: 'priority_sync', name: 'Priority sync', description: 'Priority cloud sync and offline queue processing.', type: 'feature' }
     ],
     providerPlanIdEnvKey: 'RAZORPAY_PLAN_PRO_ANNUAL'
   }
