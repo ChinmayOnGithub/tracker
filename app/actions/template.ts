@@ -7,6 +7,7 @@ import { CalendarService } from '@/modules/calendar/services/CalendarService'
 import { eventBus, EVENTS } from '@/lib/events'
 import { requireAuth, requireOwnership, requireModuleAccess } from '@/lib/auth-guards'
 import { createTemplateSchema, updateTemplateSchema } from '@/lib/validations'
+import { EntitlementService } from '@/lib/services/EntitlementService'
 
 export async function createActivityTemplate(data: {
   name: string
@@ -41,6 +42,24 @@ export async function createActivityTemplate(data: {
 
   try {
     const user = await requireModuleAccess('activities')
+
+    // Server-side active_activities limit enforcement (Law A1: Action -> Service -> Prisma)
+    const activityLimit = await EntitlementService.getLimit(user.id, 'active_activities')
+    const activeCount = await db.activityTemplate.count({
+      where: { userId: user.id, isActive: true, deletedAt: null },
+    })
+    if (activeCount >= activityLimit) {
+      const plan = (await EntitlementService.getEntitlements(user.id)).plan
+      const isPro = plan !== 'FREE'
+      return {
+        success: false,
+        code: 'ACTIVITY_LIMIT_REACHED',
+        error: isPro
+          ? `You have reached the activity limit for your ${plan} plan (${activityLimit} active activities).`
+          : `Free plan limit reached (${activityLimit} active activities). Upgrade to Pro for more.`,
+      }
+    }
+
     const { tagNames = [], ...rest } = data
 
     // Get the maximum sortOrder for this user to put this at the end

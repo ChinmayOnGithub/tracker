@@ -14,6 +14,7 @@ import { Card, CardBody, Button, Input, Modal } from '@/design-system'
 import { TemplateModal } from './TemplateModal'
 import { getTodayDateStr } from '@/lib/recurrence'
 import { CalendarCacheService } from '@/modules/calendar/services/CalendarCacheService'
+import { EntitlementProvider } from '@/lib/context/EntitlementContext'
 
 export interface CalendarData {
   connected: boolean
@@ -637,22 +638,23 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }
 
   return (
-    <CalendarDataContext.Provider value={{
-      calendarData,
-      currentUser: user,
-      fetchCalendar,
-      onOpenCreateActivity,
-      onEditTemplate
-    }}>
-      <DashboardShell
-        activeTab={activeTab}
-        onTabChange={changeTab}
-        user={user}
-        onLogout={handleLogout}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        onOpenSearch={handleOpenSearch}
-      >
+    <EntitlementProvider>
+      <CalendarDataContext.Provider value={{
+        calendarData,
+        currentUser: user,
+        fetchCalendar,
+        onOpenCreateActivity,
+        onEditTemplate
+      }}>
+        <DashboardShell
+          activeTab={activeTab}
+          onTabChange={changeTab}
+          user={user}
+          onLogout={handleLogout}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onOpenSearch={handleOpenSearch}
+        >
         {children}
 
         {isTemplateModalOpen && (
@@ -710,7 +712,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             </div>
           </Modal>
         )}
-      </DashboardShell>
-    </CalendarDataContext.Provider>
+        </DashboardShell>
+      </CalendarDataContext.Provider>
+    </EntitlementProvider>
   )
 }

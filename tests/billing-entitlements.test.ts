@@ -13,6 +13,8 @@ describe('Server-Authoritative Entitlements Engine', () => {
     expect(entitlements.features.advancedCalendar).toBe(false)
     expect(entitlements.features.advancedJournal).toBe(false)
     expect(entitlements.limits.maxVaultFiles).toBe(10)
+    expect(entitlements.limits.active_activities).toBe(10)
+    expect(entitlements.limits.maxActiveActivities).toBe(10)
     expect(entitlements.subscription).toBeNull()
   })
 

@@ -31,10 +31,10 @@ const FREE_ENTITLEMENTS: UserEntitlements = {
   },
   limits: {
     vault_storage: 10,
-    active_activities: 100,
+    active_activities: 10,
     // Aliases
     maxVaultFiles: 10,
-    maxActiveActivities: 100
+    maxActiveActivities: 10
   },
   subscription: null
 }

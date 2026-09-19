@@ -16,11 +16,13 @@ import {
   Scale,
   Link2,
   Search,
-  Sparkles
+  Sparkles,
+  Crown,
 } from 'lucide-react'
 import { Button } from '@/design-system'
 import { isAuthorizedUserEmail } from '@/lib/constants'
 import { QuickAppearancePopover } from '@/components/QuickAppearancePopover'
+import { useEntitlements } from '@/lib/context/EntitlementContext'
 
 export interface NavigationItem {
   id: string
@@ -52,6 +54,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
   const router = useRouter()
+  const { isPro, isLoading: entitlementLoading } = useEntitlements()
 
   // Module visibility config (Safe hydration check on mount)
   const [visibleModules, setVisibleModules] = React.useState<Record<string, boolean>>(() => {
@@ -268,16 +271,27 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
         {/* User Info & Footer Settings */}
         <div className="p-4 border-t border-[var(--color-border)] flex flex-col gap-2">
-          <button
-            onClick={() => router.push('/pricing')}
-            className="w-full flex items-center justify-between px-3 py-1.75 text-xs font-semibold rounded-[var(--radius-md)] bg-[var(--color-primary)]/10 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-all duration-150 cursor-pointer border border-[var(--color-primary)]/20"
-          >
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Upgrade to Pro</span>
-            </div>
-            <span className="text-[10px] font-bold bg-[var(--color-primary)] text-white px-1.5 py-0.5 rounded-full">₹29</span>
-          </button>
+          {/* Subscription CTA / Pro Status */}
+          {!entitlementLoading && (
+            isPro ? (
+              <div className="w-full flex items-center gap-2 px-3 py-1.75 text-xs font-semibold rounded-[var(--radius-md)] bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                <Crown className="w-3.5 h-3.5 shrink-0" />
+                <span>Pro Active</span>
+                <span className="ml-auto text-[10px] font-bold text-amber-500/70">✓</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => router.push('/pricing')}
+                className="w-full flex items-center justify-between px-3 py-1.75 text-xs font-semibold rounded-[var(--radius-md)] bg-[var(--color-primary)]/10 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-all duration-150 cursor-pointer border border-[var(--color-primary)]/20"
+              >
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Upgrade to Pro</span>
+                </div>
+                <span className="text-[10px] font-bold bg-[var(--color-primary)] text-white px-1.5 py-0.5 rounded-full">₹29</span>
+              </button>
+            )
+          )}
           {user && (
             <div className="flex items-center justify-between px-2">
               <span className="text-[10px] font-bold text-[var(--color-text-muted)] truncate max-w-[100px]">
