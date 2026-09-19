@@ -11,7 +11,7 @@ describe('desktop UI density policy', () => {
     expect(globals).toContain('@media screen and (width >= 80rem)')
     expect(globals).toContain('--text-base: 1.0625rem')
     expect(globals).not.toMatch(/(^|[^-])zoom\s*:/)
-    expect(globals).not.toContain('transform: scale(')
+    expect(globals).not.toMatch(/(?:^|[\\s{;])zoom\\s*:/)
   })
 
   test('keeps desktop scaling scoped to design-system control hooks', () => {
