@@ -182,7 +182,7 @@ export async function setPasscodeAction(secret: string | null): Promise<{ succes
     if (!passCheck.valid) {
       return { success: false, error: passCheck.error }
     }
-    const passwordHash = CredentialService.hashPassword(secret, loggedUser.username)
+    const passwordHash = await CredentialService.hashPassword(secret, loggedUser.username)
 
     await db.user.update({
       where: { id: loggedUser.id },

@@ -1,5 +1,7 @@
 import crypto from 'crypto'
+import { promisify } from 'util'
 
+const scryptAsync = promisify(crypto.scrypt)
 const SALT = process.env.AUTH_SALT || 'personal-dashboard-ops-salt-108-prayer-beads'
 
 // In-memory rate limiting map: username/IP -> { attempts: number; resetAt: number }
@@ -7,21 +9,21 @@ const loginAttempts = new Map<string, { attempts: number; resetAt: number }>()
 
 export class CredentialService {
   /**
-   * Hashes a password using standard production scrypt parameters (N=16384, r=8, p=1, keylen=64).
+   * Hashes a password asynchronously using standard production scrypt parameters (N=16384, r=8, p=1, keylen=64).
    */
-  public static hashPassword(password: string, username: string): string {
+  public static async hashPassword(password: string, username: string): Promise<string> {
     const userSalt = `${SALT}-${username.toLowerCase()}`
-    const key = crypto.scryptSync(password, userSalt, 64)
+    const key = (await scryptAsync(password, userSalt, 64)) as Buffer
     return `scrypt:${key.toString('hex')}`
   }
 
   /**
-   * Constant-time verification of password against stored scrypt hash.
+   * Constant-time asynchronous verification of password against stored scrypt hash.
    */
-  public static verifyPassword(password: string, username: string, storedHash: string): boolean {
+  public static async verifyPassword(password: string, username: string, storedHash: string): Promise<boolean> {
     if (storedHash.startsWith('scrypt:')) {
       const userSalt = `${SALT}-${username.toLowerCase()}`
-      const key = crypto.scryptSync(password, userSalt, 64)
+      const key = (await scryptAsync(password, userSalt, 64)) as Buffer
       const expected = `scrypt:${key.toString('hex')}`
       if (storedHash.length !== expected.length) {
         return false

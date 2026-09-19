@@ -31,91 +31,81 @@ describe('Password Authentication & Rate Limiting Suite (#49)', () => {
   })
 
   describe('scrypt Hashing & Verification', () => {
-    it('hashes passwords using scrypt prefix', () => {
-      const hash = AuthService.hashPassword('MySecretPassphrase', 'test-user')
+    it('hashes passwords using scrypt prefix', async () => {
+      const hash = await AuthService.hashPassword('MySecretPassphrase', 'test-user')
       expect(hash.startsWith('scrypt:')).toBe(true)
       expect(hash.length).toBeGreaterThan(40)
     })
 
-    it('successfully verifies valid scrypt password', () => {
+    it('successfully verifies valid scrypt password', async () => {
       const password = 'MySecretPassphrase'
       const username = 'test-user'
-      const hash = AuthService.hashPassword(password, username)
+      const hash = await AuthService.hashPassword(password, username)
       
-      const verified = AuthService.verifyPassword(password, username, hash)
+      const verified = await AuthService.verifyPassword(password, username, hash)
       expect(verified).toBe(true)
     })
 
-    it('rejects wrong scrypt password', () => {
+    it('rejects wrong scrypt password', async () => {
       const password = 'MySecretPassphrase'
       const username = 'test-user'
-      const hash = AuthService.hashPassword(password, username)
+      const hash = await AuthService.hashPassword(password, username)
       
-      const verified = AuthService.verifyPassword('WrongPassword', username, hash)
+      const verified = await AuthService.verifyPassword('WrongPassword', username, hash)
       expect(verified).toBe(false)
     })
   })
 
   describe('Rate Limiting & Lockout', () => {
     it('allows up to 5 attempts before locking out', () => {
-      const username = 'bad-actor'
-      
-      // Attempts 1 to 4 should be allowed
-      for (let i = 1; i <= 4; i++) {
-        expect(AuthService.checkRateLimit(username).allowed).toBe(true)
-        AuthService.recordFailedAttempt(username)
+      const key = 'user-test-lockout'
+      // First 5 attempts should be allowed
+      for (let i = 0; i < 5; i++) {
+        expect(AuthService.checkRateLimit(key).allowed).toBe(true)
+        AuthService.recordFailedAttempt(key)
       }
 
-      // 5th attempt is still checked before failing
-      expect(AuthService.checkRateLimit(username).allowed).toBe(true)
-      AuthService.recordFailedAttempt(username)
-
-      // 6th attempt should now be locked out
-      const check = AuthService.checkRateLimit(username)
-      expect(check.allowed).toBe(false)
-      expect(check.error || '').toContain('Too many failed login attempts')
+      // 6th attempt onwards should be rejected
+      const rateCheck = AuthService.checkRateLimit(key)
+      expect(rateCheck.allowed).toBe(false)
+      expect(rateCheck.waitSeconds).toBeGreaterThan(0)
     })
 
-    it('clears rate limit upon successful login', () => {
-      const username = 'bad-actor'
-      AuthService.recordFailedAttempt(username)
-      AuthService.recordFailedAttempt(username)
-      expect(AuthService.checkRateLimit(username).allowed).toBe(true)
-
-      AuthService.clearRateLimit(username)
-      // Should reset failed count to 0
-      for (let i = 1; i <= 4; i++) {
-        AuthService.recordFailedAttempt(username)
+    it('clears rate limits properly upon reset', () => {
+      const key = 'user-reset-test'
+      for (let i = 0; i < 5; i++) {
+        AuthService.recordFailedAttempt(key)
       }
-      expect(AuthService.checkRateLimit(username).allowed).toBe(true)
+      expect(AuthService.checkRateLimit(key).allowed).toBe(false)
+
+      AuthService.clearRateLimit(key)
+      expect(AuthService.checkRateLimit(key).allowed).toBe(true)
     })
   })
 
-  describe('Legacy PIN Backwards Compatibility & Migration Indicator', () => {
+  describe('Credential Verification Flow (Integration)', () => {
     it('verifies legacy PBKDF2 PIN and marks requiresPasswordMigration = true', async () => {
-      const username = 'legacy-user'
-      const legacyPin = '1234'
-      const legacyHash = AuthService.hashPin(legacyPin, username)
-      
-      // Ensure legacy hash does NOT have scrypt: prefix
-      expect(legacyHash.startsWith('scrypt:')).toBe(false)
+      const username = 'legacy-pin-user'
+      const pin = '1234'
+      const legacyHash = AuthService.hashPin(pin, username)
 
       const { db } = await import('@/lib/db')
       const origFindUnique = db.user.findUnique
       ;(db.user as unknown as { findUnique: (args: unknown) => unknown }).findUnique = () =>
         Promise.resolve({
-          id: 'user-legacy-id',
+          id: 'user-pin-id',
           username,
           passwordHash: legacyHash,
-          email: 'legacy@example.com',
+          email: 'test@example.com',
         })
 
       try {
-        const result = await AuthService.verifyCredentials(username, legacyPin)
+        const result = await AuthService.verifyCredentials(username, pin)
 
         expect(result.success).toBe(true)
         if (result.success) {
           expect(result.requiresPasswordMigration).toBe(true)
+          expect(result.token).toBeDefined()
         }
       } finally {
         ;(db.user as unknown as { findUnique: unknown }).findUnique = origFindUnique
@@ -125,7 +115,7 @@ describe('Password Authentication & Rate Limiting Suite (#49)', () => {
     it('verifies modern scrypt password and marks requiresPasswordMigration = false', async () => {
       const username = 'modern-user'
       const password = 'CorrectPassword123'
-      const modernHash = AuthService.hashPassword(password, username)
+      const modernHash = await AuthService.hashPassword(password, username)
 
       const { db } = await import('@/lib/db')
       const origFindUnique = db.user.findUnique

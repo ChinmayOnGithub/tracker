@@ -239,25 +239,30 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     // Apply personal styles on load
     applyPersonalStyles()
 
-    // Hydrate appearance preferences from server user settings
+    // Hydrate appearance preferences from server user settings only if not already set locally
+    // or if the local value is absent. Never blindly overwrite local changes.
     import('@/app/actions/settings').then(({ getUserSettingsAction }) => {
       getUserSettingsAction().then(res => {
         if (res.success && res.settings?.appearance) {
           const app = res.settings.appearance
           let changed = false
-          if (app.accent && app.accent !== localStorage.getItem('personal_accent_color')) {
+          const localAccent = localStorage.getItem('personal_accent_color')
+          if (app.accent && !localAccent) {
             localStorage.setItem('personal_accent_color', app.accent)
             changed = true
           }
-          if (app.fontSize && app.fontSize !== localStorage.getItem('personal_font_size')) {
+          const localFontSize = localStorage.getItem('personal_font_size')
+          if (app.fontSize && !localFontSize) {
             localStorage.setItem('personal_font_size', app.fontSize)
             changed = true
           }
-          if (app.rounded && app.rounded !== localStorage.getItem('personal_rounded_corners')) {
+          const localRounded = localStorage.getItem('personal_rounded_corners')
+          if (app.rounded && !localRounded) {
             localStorage.setItem('personal_rounded_corners', app.rounded)
             changed = true
           }
-          if (app.animations && app.animations !== localStorage.getItem('personal_animations')) {
+          const localAnimations = localStorage.getItem('personal_animations')
+          if (app.animations && !localAnimations) {
             localStorage.setItem('personal_animations', app.animations)
             changed = true
           }

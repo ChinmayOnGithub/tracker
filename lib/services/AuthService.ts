@@ -75,7 +75,7 @@ export class AuthService {
 
     // 1. If stored hash is modern scrypt hash
     if (user.passwordHash.startsWith('scrypt:')) {
-      isMatch = CredentialService.verifyPassword(secret, username, user.passwordHash)
+      isMatch = await CredentialService.verifyPassword(secret, username, user.passwordHash)
     } else {
       // 2. Stored hash is PBKDF2 legacy PIN hash
       const pinHash = CredentialService.hashLegacyPin(secret, username)
@@ -148,7 +148,7 @@ export class AuthService {
       return { success: false, error: 'Username is already taken.' }
     }
 
-    const passwordHash = CredentialService.hashPassword(secret, username)
+    const passwordHash = await CredentialService.hashPassword(secret, username)
     const newUser = await db.$transaction(async (tx) => {
       const u = await tx.user.create({
         data: {
@@ -191,7 +191,7 @@ export class AuthService {
       return { success: false, error: 'User not found' }
     }
 
-    const passwordHash = CredentialService.hashPassword(newPassword, user.username)
+    const passwordHash = await CredentialService.hashPassword(newPassword, user.username)
     await db.user.update({
       where: { id: user.id },
       data: { passwordHash }

@@ -330,13 +330,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
     const handleSettingsChanged = () => {
       if (typeof window === 'undefined') return
       const col = localStorage.getItem('personal_accent_color')
-      if (col && col !== accentColor) setAccentColor(col)
+      if (col) setAccentColor(prev => (col !== prev ? col : prev))
       const fs = localStorage.getItem('personal_font_size')
-      if (fs && fs !== fontSize) setFontSize(fs)
+      if (fs) setFontSize(prev => (fs !== prev ? fs : prev))
       const rc = localStorage.getItem('personal_rounded_corners')
-      if (rc && rc !== roundedCorners) setRoundedCorners(rc)
+      if (rc) setRoundedCorners(prev => (rc !== prev ? rc : prev))
       const anim = localStorage.getItem('personal_animations')
-      if (anim && anim !== animations) setAnimations(anim)
+      if (anim) setAnimations(prev => (anim !== prev ? anim : prev))
     }
 
     window.addEventListener('personal_settings_changed', handleSettingsChanged)
@@ -344,7 +344,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
       clearTimeout(timer)
       window.removeEventListener('personal_settings_changed', handleSettingsChanged)
     }
-  }, [fetchProfile, fetchConnection, fetchGuestPermissions, fetchUserSettings, accentColor, fontSize, roundedCorners, animations])
+  }, [fetchProfile, fetchConnection, fetchGuestPermissions, fetchUserSettings])
 
   const handleToggleGuestPermission = async (moduleKey: string) => {
     const updated = {
