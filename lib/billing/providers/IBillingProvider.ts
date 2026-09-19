@@ -33,6 +33,15 @@ export interface IBillingProvider {
   cancelSubscription(params: CancelSubscriptionInput): Promise<{ providerSubscriptionId: string; status: string }>
 
   /**
+   * Updates an existing subscription's plan on the payment provider.
+   */
+  changeSubscriptionPlan?(params: {
+    providerSubscriptionId: string
+    targetPlanId: string
+    scheduleChangeAt?: 'now' | 'cycle_end'
+  }): Promise<ProviderSubscription>
+
+  /**
    * Retrieves live subscription details from the provider.
    */
   retrieveSubscription(providerSubscriptionId: string): Promise<ProviderSubscription>

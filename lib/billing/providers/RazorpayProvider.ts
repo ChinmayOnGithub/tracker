@@ -9,7 +9,8 @@ import {
   NormalizedWebhookEvent,
   ProviderPayment,
   ProviderSubscription,
-  SubscriptionCheckoutResult
+  SubscriptionCheckoutResult,
+  PlanId
 } from '../types'
 import { getPlan, getProviderPlanId } from '../plans'
 import { ProviderConfigurationError, ProviderError } from '../errors'
@@ -71,6 +72,26 @@ export class RazorpayProvider implements IBillingProvider {
   }
 
   /**
+   * Returns whether provider is using Razorpay Test Mode keys (rzp_test_).
+   */
+  isTestMode(): boolean {
+    return this.keyId.startsWith('rzp_test_')
+  }
+
+  /**
+   * Asserts environment safety: enforces live keys in strict production environments (#52).
+   */
+  assertEnvironmentSafety(): void {
+    if (process.env.NODE_ENV === 'production' && process.env.RAZORPAY_ENFORCE_LIVE === 'true') {
+      if (this.isTestMode()) {
+        throw new ProviderConfigurationError(
+          'CRITICAL: Production billing is configured with a Razorpay Test Mode key (rzp_test_). Live keys (rzp_live_) are strictly required when RAZORPAY_ENFORCE_LIVE=true.'
+        )
+      }
+    }
+  }
+
+  /**
    * Returns whether provider is properly configured with live credentials.
    */
   isConfigured(): boolean {
@@ -81,6 +102,7 @@ export class RazorpayProvider implements IBillingProvider {
    * Creates or resolves a customer in Razorpay.
    */
   async createCustomer(params: CreateCustomerInput): Promise<CustomerResult> {
+    this.assertEnvironmentSafety()
     const { userId, email, name } = params
 
     if (!this.razorpayClient) {
@@ -158,6 +180,7 @@ export class RazorpayProvider implements IBillingProvider {
    * Creates a recurring subscription in Razorpay with safe checkout details.
    */
   async createSubscription(params: CreateSubscriptionInput): Promise<SubscriptionCheckoutResult> {
+    this.assertEnvironmentSafety()
     const { planId, customerId, offerId, isIntroductory, notes } = params
 
     // Validate credentials FIRST — before any plan ID resolution.
@@ -241,6 +264,47 @@ export class RazorpayProvider implements IBillingProvider {
     } catch (err: unknown) {
       const message = extractErrorMessage(err)
       throw new ProviderError(this.name, `Failed to cancel subscription: ${message}`, err)
+    }
+  }
+
+  /**
+   * Safely updates an existing subscription's plan in Razorpay without creating duplicates.
+   */
+  async changeSubscriptionPlan(params: {
+    providerSubscriptionId: string
+    targetPlanId: PlanId
+    scheduleChangeAt?: 'now' | 'cycle_end'
+  }): Promise<ProviderSubscription> {
+    this.assertEnvironmentSafety()
+    const { providerSubscriptionId, targetPlanId, scheduleChangeAt = 'now' } = params
+
+    if (!this.razorpayClient) {
+      throw new ProviderConfigurationError(
+        'Razorpay credentials are not configured. Cannot update subscription on payment gateway.'
+      )
+    }
+
+    const providerPlanId = getProviderPlanId(targetPlanId)
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sub = await (this.razorpayClient as any).subscriptions.update(providerSubscriptionId, {
+        plan_id: providerPlanId,
+        schedule_change_at: scheduleChangeAt,
+        customer_notify: 1
+      })
+
+      return {
+        id: sub.id,
+        status: sub.status,
+        currentStart: sub.current_start ? new Date(sub.current_start * 1000) : null,
+        currentEnd: sub.current_end ? new Date(sub.current_end * 1000) : null,
+        planId: targetPlanId,
+        cancelAtPeriodEnd: Boolean(sub.end_at && sub.status === 'cancelled')
+      }
+    } catch (err: unknown) {
+      const message = extractErrorMessage(err)
+      throw new ProviderError(this.name, `Failed to update subscription plan: ${message}`, err)
     }
   }
 

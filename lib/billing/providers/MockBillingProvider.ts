@@ -77,6 +77,25 @@ export class MockBillingProvider implements IBillingProvider {
     }
   }
 
+  async changeSubscriptionPlan(params: {
+    providerSubscriptionId: string
+    targetPlanId: string
+    scheduleChangeAt?: 'now' | 'cycle_end'
+  }): Promise<ProviderSubscription> {
+    const sub = this.subscriptions.get(params.providerSubscriptionId)
+    if (sub) {
+      sub.planId = params.targetPlanId
+      return sub
+    }
+    return {
+      id: params.providerSubscriptionId,
+      status: 'active',
+      currentStart: new Date(),
+      currentEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      planId: params.targetPlanId
+    }
+  }
+
   async retrieveSubscription(providerSubscriptionId: string): Promise<ProviderSubscription> {
     const sub = this.subscriptions.get(providerSubscriptionId)
     if (sub) {

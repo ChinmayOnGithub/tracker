@@ -287,6 +287,47 @@ export async function cancelSubscriptionAction(): Promise<{
 }
 
 /**
+ * Changes subscription plan (e.g. PRO_MONTHLY <-> PRO_ANNUAL) for active subscriber.
+ */
+export async function changeSubscriptionPlanAction(targetPlan: PlanId): Promise<{
+  success: boolean
+  plan?: PlanId
+  entitlements?: UserEntitlements
+  error?: string
+}> {
+  try {
+    const user = await requireAuth()
+    const result = await BillingService.changeSubscriptionPlan(user.id, targetPlan)
+
+    // Retrieve fresh authoritative entitlements immediately
+    const entitlements = await EntitlementService.getEntitlements(user.id)
+
+    // Revalidate server paths
+    try {
+      revalidatePath('/settings')
+      revalidatePath('/pricing')
+      revalidatePath('/')
+    } catch {
+      // Non-blocking in test / non-route contexts
+    }
+
+    return {
+      success: true,
+      plan: result.subscription.plan as PlanId,
+      entitlements
+    }
+  } catch (err) {
+    const rawError = err instanceof Error ? err.message : String(err)
+    logger.error('BillingAction', 'Failed to change subscription plan', { error: rawError, targetPlan })
+    const isSafeDomainMsg = err instanceof Error && (err.name === 'BillingError' || err.name === 'SubscriptionNotFoundError' || err.message.includes('already subscribed') || err.message.includes('active paid subscription'))
+    return {
+      success: false,
+      error: isSafeDomainMsg ? err.message : 'Unable to change subscription plan right now. Please try again later.'
+    }
+  }
+}
+
+/**
  * Retrieves entitlements for current user.
  */
 export async function getEntitlementsAction(): Promise<{
@@ -303,3 +344,4 @@ export async function getEntitlementsAction(): Promise<{
     return { success: false, error: errorMsg }
   }
 }
+

@@ -124,6 +124,12 @@ export interface CancelSubscriptionInput {
   cancelAtPeriodEnd?: boolean
 }
 
+export interface ChangePlanInput {
+  providerSubscriptionId: string
+  targetPlanId: PlanId
+  scheduleChangeAt?: 'now' | 'cycle_end'
+}
+
 export interface ProviderSubscription {
   id: string
   status: string

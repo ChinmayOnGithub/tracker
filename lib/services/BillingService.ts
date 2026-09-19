@@ -749,6 +749,81 @@ export class BillingService {
   }
 
   /**
+   * Safely transitions an active subscription to a different plan without creating overlapping subscriptions (#45).
+   */
+  static async changeSubscriptionPlan(
+    userId: string,
+    targetPlan: PlanId,
+    options?: { provider?: IBillingProvider; scheduleChangeAt?: 'now' | 'cycle_end' }
+  ): Promise<{ success: boolean; subscription: Subscription; isPro: boolean }> {
+    if (targetPlan !== 'PRO_MONTHLY' && targetPlan !== 'PRO_ANNUAL') {
+      throw new InvalidPlanError(targetPlan)
+    }
+
+    const provider = options?.provider || getBillingProvider()
+    const activeSub = await this.getCanonicalSubscription(userId)
+
+    if (!activeSub) {
+      throw new SubscriptionNotFoundError('No active subscription found to change.')
+    }
+
+    const currentStatus = activeSub.status.toUpperCase()
+    if (currentStatus !== 'ACTIVE' && currentStatus !== 'AUTHENTICATED') {
+      throw new BillingError('Only active subscriptions can be transitioned to another plan.', 'PLAN_CHANGE_NOT_ALLOWED')
+    }
+
+    if (activeSub.plan === targetPlan) {
+      throw new BillingError('You are already subscribed to this plan.', 'SAME_PLAN')
+    }
+
+    if (!provider.changeSubscriptionPlan) {
+      throw new BillingError('The payment provider does not support direct plan transitions.', 'UNSUPPORTED_PROVIDER_OPERATION')
+    }
+
+    // Call provider API to update plan on payment gateway
+    await provider.changeSubscriptionPlan({
+      providerSubscriptionId: activeSub.providerSubscriptionId,
+      targetPlanId: targetPlan,
+      scheduleChangeAt: options?.scheduleChangeAt || 'now'
+    })
+
+    const newInterval = targetPlan === 'PRO_ANNUAL' ? 'annual' : 'monthly'
+
+    // Update local database record only after provider success
+    const updatedSub = await db.subscription.update({
+      where: { id: activeSub.id },
+      data: {
+        plan: targetPlan,
+        billingInterval: newInterval,
+        updatedAt: new Date()
+      }
+    })
+
+    // Log audit event
+    await AuditService.log({
+      userId,
+      entityType: 'Subscription',
+      entityId: activeSub.id,
+      action: 'SUBSCRIPTION_PLAN_CHANGED',
+      performedBy: userId,
+      newData: {
+        oldPlan: activeSub.plan,
+        newPlan: targetPlan,
+        interval: newInterval
+      }
+    })
+
+    const entitlements = await this.getEntitlements(userId)
+    const isPro = entitlements.plan === 'PRO_MONTHLY' || entitlements.plan === 'PRO_ANNUAL'
+
+    return {
+      success: true,
+      subscription: updatedSub,
+      isPro
+    }
+  }
+
+  /**
    * Processes webhook events idempotently and safely.
    */
   static async processWebhook(

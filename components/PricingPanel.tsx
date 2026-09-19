@@ -392,7 +392,7 @@ export const PricingPanel: React.FC = () => {
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span>Rich Journal Exports (Encrypted PDF &amp; JSON)</span>
+                <span>Rich Journal Exports (JSON &amp; Markdown Archive)</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />

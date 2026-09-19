@@ -203,3 +203,68 @@ export function createLocalDateTime(dateStr: string, timeStr: string): Date {
 
   return result
 }
+
+/**
+ * Returns a local calendar date string (YYYY-MM-DD) for a given Date object.
+ */
+export function toLocalDateStr(d: Date = new Date()): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/**
+ * Parses an all-day date string (YYYY-MM-DD) into a Date anchored at UTC noon.
+ * Anchoring to 12:00:00Z ensures the date remains on the exact same calendar day
+ * across all global timezones (UTC-12 to UTC+14) without boundary rollover.
+ */
+export function parseAllDayDate(dateStr: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim())
+  if (!match) {
+    throw new Error(`Invalid all-day date format: "${dateStr}". Expected YYYY-MM-DD.`)
+  }
+  const year = parseInt(match[1], 10)
+  const month = parseInt(match[2], 10)
+  const day = parseInt(match[3], 10)
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0))
+}
+
+/**
+ * Extracts the canonical YYYY-MM-DD representation of an all-day event Date.
+ */
+export function formatAllDayDate(d: Date | string): string {
+  const date = typeof d === 'string' ? new Date(d) : d
+  return toYMD(date)
+}
+
+/**
+ * Checks whether an instant sits at a day boundary (start of day 00:00:00 or end of day 23:59:xx).
+ */
+export function isMidnightBoundary(d: Date): { isStartOfDay: boolean; isEndOfDay: boolean } {
+  const hours = d.getHours()
+  const minutes = d.getMinutes()
+  const seconds = d.getSeconds()
+  return {
+    isStartOfDay: hours === 0 && minutes === 0 && seconds === 0,
+    isEndOfDay: hours === 23 && minutes === 59
+  }
+}
+
+/**
+ * Checks if two date objects/strings refer to the same calendar day in a specific IANA timezone.
+ */
+export function isSameDayInTimezone(d1: Date | string, d2: Date | string, timeZone: string): boolean {
+  const date1 = typeof d1 === 'string' ? new Date(d1) : d1
+  const date2 = typeof d2 === 'string' ? new Date(d2) : d2
+
+  const dtf = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+
+  return dtf.format(date1) === dtf.format(date2)
+}
+

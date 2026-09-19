@@ -18,6 +18,7 @@ import { getTodayDateStr } from '@/lib/recurrence'
 import { CalendarCacheService } from '@/modules/calendar/services/CalendarCacheService'
 import { clearDayDtoCache } from './DayLogsModal'
 import { EntitlementProvider } from '@/lib/context/EntitlementContext'
+import { purgeUserStorage } from '@/lib/storage/userStorage'
 
 export interface CalendarData {
   connected: boolean
@@ -127,6 +128,20 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     window.addEventListener('personal_settings_changed', fetchPerms)
     return () => window.removeEventListener('personal_settings_changed', fetchPerms)
   }, [user, isOwner])
+
+  // Synchronize state with incoming currentUser prop to eliminate cross-session stale identity (#57)
+  useEffect(() => {
+    setUser(currentUser)
+    setIsAuthenticated(!!currentUser)
+    if (!currentUser) {
+      setCalendarData({
+        connected: false,
+        agenda: null,
+        error: null,
+        loading: false
+      })
+    }
+  }, [currentUser])
 
   // Theme state: deterministic server default to ensure initial client render matches SSR (#60)
   const [theme, setTheme] = useState<'light' | 'dark'>('dark')
@@ -424,9 +439,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     if (user?.id) {
       CalendarCacheService.invalidateAll(user.id)
       clearDayDtoCache(user.id)
+      purgeUserStorage(user.id)
     } else {
       clearDayDtoCache()
+      purgeUserStorage()
     }
+    setCalendarData({
+      connected: false,
+      agenda: null,
+      error: null,
+      loading: false
+    })
     setIsAuthenticated(false) // Immediately hide calendar data
     setUser(null)
     // Drain User A's write queue before session is invalidated so pending writes
