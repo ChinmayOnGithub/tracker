@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { requireAuth } from '@/lib/auth-guards'
+import { requireAuth, requireModuleAccess } from '@/lib/auth-guards'
 import {
   encryptTitle,
   decryptTitle,
@@ -136,7 +136,7 @@ export async function listVaultItems(
   error?: string
 }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     const take = Math.min(Math.max(1, limit), MAX_PAGE_SIZE) + 1 // fetch one extra to detect next page
 
     // Validate parentId if provided
@@ -237,7 +237,7 @@ export async function searchVaultItems(
       return { success: true, items: [] }
     }
 
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     const normalized = await normalizeSearchName(query)
     if (!normalized) return { success: true, items: [] }
 

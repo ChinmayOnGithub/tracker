@@ -3,13 +3,13 @@
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
 import { Prisma } from '@prisma/client'
-import { requireAuth, requireOwnership } from '@/lib/auth-guards'
+import { requireAuth, requireOwnership, requireModuleAccess } from '@/lib/auth-guards'
 
 // ─── Collections ─────────────────────────────────────────────────────────────
 
 export async function listLinkCollections() {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('links')
     const collections = await db.linkCollection.findMany({
       where: { userId: user.id, deletedAt: null },
       include: {
@@ -26,7 +26,7 @@ export async function listLinkCollections() {
 
 export async function createLinkCollection(name: string, color?: string, icon?: string | null) {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('links')
     const count = await db.linkCollection.count({ where: { userId: user.id, deletedAt: null } })
     const collection = await db.linkCollection.create({
       data: { userId: user.id, name, color: color ?? '#6366f1', icon: icon || null, sortOrder: count },
@@ -274,6 +274,7 @@ export async function createLink(
   }
 ) {
   try {
+    await requireModuleAccess('links')
     const { user } = await requireOwnership('linkCollection', collectionId)
 
     let finalUrl = data.url.trim()

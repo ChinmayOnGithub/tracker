@@ -3,7 +3,7 @@
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
-import { requireAuth, requireOwnership } from '@/lib/auth-guards'
+import { requireOwnership, requireModuleAccess } from '@/lib/auth-guards'
 import { ActivityService } from '@/lib/services/ActivityService'
 import { upsertJournalSchema } from '@/lib/validations'
 
@@ -41,7 +41,7 @@ export async function upsertJournalEntry(
   })
   
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('journal')
     console.log(`[Journal] User authenticated: ${user.id}`)
     
     // journalDate is stored as a DateTime — use noon UTC to avoid timezone drift
@@ -142,7 +142,7 @@ export async function upsertJournalEntry(
  */
 export async function listJournalEntries(page = 1, limit = 20) {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('journal')
     const skip = (page - 1) * limit
 
     const entries = await db.journalEntry.findMany({
@@ -166,6 +166,7 @@ export async function listJournalEntries(page = 1, limit = 20) {
  */
 export async function deleteJournalEntry(id: string) {
   try {
+    await requireModuleAccess('journal')
     await requireOwnership('journalEntry', id)
 
     await db.journalEntry.update({

@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { requireAuth, requireOwnership } from '@/lib/auth-guards'
+import { requireAuth, requireOwnership, requireModuleAccess } from '@/lib/auth-guards'
 import { LeaveType, LeaveStatus } from '@prisma/client'
 import { ActivityService } from '@/lib/services/ActivityService'
 import { createLeaveSchema, updateLeaveStatusSchema, updateLeaveAllowanceSchema } from '@/lib/validations'
@@ -10,7 +10,7 @@ import { createLeaveSchema, updateLeaveStatusSchema, updateLeaveAllowanceSchema 
 /** Get leave allowances for a given year for the current user. */
 export async function getLeaveAllowances(year: number) {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('leave')
     const allowances = await db.leaveAllowance.findMany({
       where: { userId: user.id, year },
       orderBy: { leaveType: 'asc' },
@@ -25,7 +25,7 @@ export async function getLeaveAllowances(year: number) {
 /** Get all leave records for the current user (optionally filtered by year). */
 export async function getLeaveRecords(year?: number) {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('leave')
 
     const records = await db.leaveRecord.findMany({
       where: {
@@ -63,7 +63,7 @@ export async function createLeaveRequest(data: {
   }
 
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('leave')
 
     // Check for overlapping active leave in the same range
     const startUtc = new Date(`${data.startDate}T00:00:00.000Z`)
@@ -198,6 +198,7 @@ export async function updateLeaveStatus(id: string, status: LeaveStatus) {
 /** Soft-delete a leave record. */
 export async function deleteLeaveRecord(id: string) {
   try {
+    await requireModuleAccess('leave')
     await requireOwnership('leaveRecord', id)
 
     await db.leaveRecord.update({ where: { id }, data: { deletedAt: new Date() } })
@@ -224,7 +225,7 @@ export async function deleteLeaveRecord(id: string) {
 /** Ensure allowance rows exist for a user for the given year (seed defaults if missing). */
 export async function ensureLeaveAllowances(year: number) {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('leave')
     const defaults: { leaveType: LeaveType; allowance: number }[] = [
       { leaveType: LeaveType.CASUAL, allowance: 12 },
       { leaveType: LeaveType.SICK, allowance: 8 },
@@ -258,7 +259,7 @@ export async function updateLeaveAllowance(leaveType: LeaveType, year: number, a
   }
 
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('leave')
     const updated = await db.leaveAllowance.upsert({
       where: {
         userId_year_leaveType: {

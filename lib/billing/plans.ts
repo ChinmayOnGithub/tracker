@@ -1,4 +1,5 @@
 import { PlanConfig, PlanId, ProductTier } from './types'
+import { ProviderConfigurationError } from './errors'
 
 export const PLANS: Record<PlanId, PlanConfig> = {
   FREE: {
@@ -110,10 +111,20 @@ export function getAuthoritativePrice(
 
 export function getProviderPlanId(planId: PlanId): string {
   if (planId === 'PRO_MONTHLY') {
-    return process.env.RAZORPAY_PLAN_PRO_MONTHLY || 'plan_pro_monthly_test'
+    const id = process.env.RAZORPAY_PLAN_PRO_MONTHLY
+    if (!id) {
+      if (process.env.NODE_ENV === 'test') return 'plan_pro_monthly_test'
+      throw new ProviderConfigurationError('Missing required environment variable: RAZORPAY_PLAN_PRO_MONTHLY')
+    }
+    return id
   }
   if (planId === 'PRO_ANNUAL') {
-    return process.env.RAZORPAY_PLAN_PRO_ANNUAL || 'plan_pro_annual_test'
+    const id = process.env.RAZORPAY_PLAN_PRO_ANNUAL
+    if (!id) {
+      if (process.env.NODE_ENV === 'test') return 'plan_pro_annual_test'
+      throw new ProviderConfigurationError('Missing required environment variable: RAZORPAY_PLAN_PRO_ANNUAL')
+    }
+    return id
   }
   return ''
 }

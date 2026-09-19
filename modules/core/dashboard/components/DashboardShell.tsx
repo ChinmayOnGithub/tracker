@@ -32,7 +32,7 @@ interface DashboardShellProps {
   children: React.ReactNode
   activeTab: string
   onTabChange: (id: string) => void
-  user: { username: string } | null
+  user: { username: string; email?: string | null; isOwner?: boolean } | null
   onLogout: () => void
   theme: 'light' | 'dark'
   onToggleTheme: () => void
@@ -94,7 +94,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     return () => window.removeEventListener('personal_settings_changed', handleSettingsUpdate)
   }, [])
 
-  const isOwner = user?.username === 'admin' || (user as { isOwner?: boolean })?.isOwner === true || isAuthorizedUserEmail(user?.username)
+  const isOwner = user?.username === 'admin' || (user as { isOwner?: boolean })?.isOwner === true || isAuthorizedUserEmail(user?.email || user?.username)
 
   // Fetch guest permissions for non-owner accounts
   const [guestPerms, setGuestPerms] = React.useState<Record<string, boolean>>({
@@ -110,15 +110,20 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   })
 
   React.useEffect(() => {
-    if (!isOwner) {
-      import('@/app/actions/settings').then(mod => {
-        mod.getGuestPermissionsAction().then(res => {
-          if (res.success && res.permissions) {
-            setGuestPerms(res.permissions)
-          }
+    const fetchPerms = () => {
+      if (!isOwner) {
+        import('@/app/actions/settings').then(mod => {
+          mod.getGuestPermissionsAction().then(res => {
+            if (res.success && res.permissions) {
+              setGuestPerms(res.permissions)
+            }
+          })
         })
-      })
+      }
     }
+    fetchPerms()
+    window.addEventListener('personal_settings_changed', fetchPerms)
+    return () => window.removeEventListener('personal_settings_changed', fetchPerms)
   }, [isOwner])
 
   // P1 Proactive Page Route Prefetching:

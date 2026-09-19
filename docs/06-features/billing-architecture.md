@@ -61,117 +61,127 @@ graph TD
 
 ---
 
-## 2. Introductory First-Month Pricing (₹29)
+## 2. Introductory First-Month Pricing (₹29 ➔ ₹99/month)
 
-### Promotional Mechanics
-- **First Month**: ₹29 (billed once at checkout).
-- **Subsequent Months**: Automatically steps up to the standard ₹99/month rate.
-- **Server-Side Enforcement**:
-  - The eligibility decision is computed strictly server-side by `BillingService.isEligibleForIntroductoryOffer(userId)`.
-  - Eligibility requires:
-    1. `BillingCustomer.hasUsedIntroductoryOffer === false` (or no customer record yet).
-    2. No existing active/past-due subscriptions for the user.
-    3. No completed payments under `PRO_MONTHLY` where the introductory price was charged.
-  - The client cannot request or force introductory pricing if ineligible; requests will throw `IntroductoryOfferIneligibleError` (code: `INTRO_OFFER_ALREADY_USED`).
-  - Canceling and re-subscribing does NOT reset eligibility.
+### Verified Official Razorpay Mechanism
+- **The Core Constraint**: Razorpay Plans define the baseline recurring price. A plan cannot have arbitrary multiple rates in its own entity.
+- **The Solution (Razorpay Subscription Offers)**:
+  - Plan `PRO_MONTHLY` is created on Razorpay for ₹99.00 (`9900` paise), interval: 1, period: monthly.
+  - A promotional offer is created in the Razorpay Dashboard (**Subscriptions** > **Offers**):
+    - **Discount Type**: Flat discount of **₹70.00** (`7000` paise).
+    - **Redemption Type**: Single Use / Limited number of cycles (`1`).
+    - **Applicable Plan**: Linked to `PRO_MONTHLY`.
+  - When Tracker initiates checkout via `POST /v1/subscriptions`, it passes `"offer_id": process.env.RAZORPAY_OFFER_INTRODUCTORY`.
+  - **First Cycle Charge**: ₹99 - ₹70 = **₹29**.
+  - **Subsequent Renewals**: Because the offer expired after cycle 1, Razorpay automatically charges the baseline recurring plan price: **₹99/month**.
+  - **Paise Conversion**: All amounts from Razorpay webhook/payment entities are reported in paise (e.g. `2900`, `9900`, `79900`) and divided by 100 on the server. The database strictly stores the authoritative amount charged.
+
+### Concurrency & Once-Per-Account Invariant
+- **Atomic Reservation**: To prevent race conditions from concurrent checkout requests (e.g. user opening two tabs simultaneously), `BillingService.startSubscription` uses an atomic conditional update on the `BillingCustomer` record (`hasUsedIntroductoryOffer: false` ➔ `true`). Only the winning request receives `isIntroductory: true`.
+- **Transient Failure Rollback**: If Razorpay API call fails during subscription creation, the reservation is rolled back in the error handler so the user is not penalized for gateway downtime.
+- **Permanent Ineligibility**: Once an introductory subscription is created, cancellation, payment failure, retries, plan switching, or browser reload will never grant the introductory rate again.
 
 ---
 
-## 3. Webhook Handling & Idempotency
+## 3. Webhook Handling, Security & Idempotency
 
 ### Webhook Endpoint: `/api/webhooks/razorpay`
 
-1. **Raw Body Reading**: Next.js route handler reads `req.text()` directly to preserve exact request bytes for cryptographic HMAC validation.
-2. **Signature Verification**: Verified against `process.env.RAZORPAY_WEBHOOK_SECRET` using timing-safe comparisons to prevent timing attacks.
+1. **Raw Body Reading**: The route handler reads `req.text()` directly without JSON re-serialization to preserve byte-exact signatures.
+2. **Signature Verification**: Verified against `process.env.RAZORPAY_WEBHOOK_SECRET` using `crypto.timingSafeEqual` over HMAC SHA-256 digests.
 3. **Idempotency Guard**:
    - Checks `db.billingWebhookEvent.findUnique({ where: { provider_providerEventId } })`.
-   - If an event has already been recorded and processed, it immediately responds `200 OK` with `{ status: 'already_processed' }`.
-   - If the event exists but failed, it can be safely re-attempted.
-4. **Normalized Event Handlers**:
-   - `subscription.activated`: Activates subscription, sets `currentPeriodStart`/`currentPeriodEnd`, marks `hasUsedIntroductoryOffer = true` if applicable.
-   - `subscription.charged` / `payment.captured`: Creates or updates `Payment` record with status `succeeded`, refreshes subscription period dates.
-   - `subscription.cancelled`: Sets `status = 'canceled'`, records `canceledAt`. Respects `cancelAtPeriodEnd` flag if period has not yet expired.
-   - `payment.failed`: Records failed payment attempt in `Payment` model and transitions subscription to `past_due`.
-5. **Audit Logging**: All lifecycle changes generate structured records in `db.auditLog` via `AuditService.log()`.
+   - If an event is already marked `PROCESSED`, returns `200 OK` immediately without repeating ledger or entitlement mutations.
+4. **Authoritative Payment Recording**:
+   - `Payment.amount` is extracted directly from `payload.payment.entity.amount / 100`.
+   - Tracker never assumes or hardcodes payment amounts. If an event lacks payment data, it queries `provider.retrievePayment()` or fails safely.
+
+### Webhook Lifecycle State Table
+| Razorpay Event | Tracker Subscription Status | Entitlement State | Financial Ledger Effect |
+| :--- | :--- | :--- | :--- |
+| `subscription.activated` | `ACTIVE` | `PRO` | Updates period start and end dates. Locks intro offer permanently. |
+| `subscription.charged` | `ACTIVE` | `PRO` | Creates/updates `Payment` record with actual verified amount (₹29, ₹99, or ₹799). |
+| `subscription.pending` | `PENDING` | Grace period if `currentPeriodEnd > now`, else `CHECKOUT_PENDING` / `FREE` | Retries underway on payment gateway. |
+| `subscription.halted` | `HALTED` | `PAST_DUE` ➔ `FREE` | Automatic retries exhausted. Requires customer intervention. |
+| `subscription.cancelled` | `CANCELLED` | `CANCEL_AT_PERIOD_END` until `currentPeriodEnd`, then `FREE` | Preserves paid access through period end. Disables auto-renewal. |
+| `payment.failed` | Unchanged / `PENDING` | Unchanged (does NOT grant Pro) | Records `Payment` with status `FAILED`. |
 
 ---
 
-## 4. Environment Configuration
+## 4. Environment Variables Specification
 
-Add the following variables to `.env.local` or production environment settings:
+All variables must be configured in `.env.local` (or production environment variables):
 
 ```bash
 # ==============================================================================
-# Billing & Payment Gateway (Razorpay)
+# Tracker Billing — Razorpay Production Configuration
 # ==============================================================================
-# Public Key ID (safe to expose to browser client for Razorpay Checkout Modal)
+
+# Public Key ID — Safe to expose to browser for Razorpay Checkout Modal
 NEXT_PUBLIC_RAZORPAY_KEY_ID="rzp_test_..."
 
-# Server-only API Secret (NEVER expose to client)
-RAZORPAY_KEY_SECRET="your_razorpay_secret_here"
+# Server-Only API Secret — NEVER expose to browser or client props
+RAZORPAY_KEY_SECRET="your_razorpay_api_secret"
 
-# Webhook Signing Secret configured in Razorpay Dashboard
-RAZORPAY_WEBHOOK_SECRET="your_webhook_secret_here"
+# Webhook Secret — Configured in Razorpay Dashboard for webhook signature validation
+RAZORPAY_WEBHOOK_SECRET="your_webhook_signing_secret"
 
-# Razorpay Plan IDs (created in Razorpay Dashboard -> Subscriptions -> Plans)
-RAZORPAY_PLAN_PRO_MONTHLY="plan_..."
-RAZORPAY_PLAN_PRO_ANNUAL="plan_..."
+# Plan IDs — Created under Razorpay Dashboard > Subscriptions > Plans
+RAZORPAY_PLAN_PRO_MONTHLY="plan_..."   # ₹99/month (9900 paise)
+RAZORPAY_PLAN_PRO_ANNUAL="plan_..."    # ₹799/year (79900 paise)
+
+# Introductory Offer ID — Created under Razorpay Dashboard > Subscriptions > Offers
+RAZORPAY_OFFER_INTRODUCTORY="offer_..." # Flat ₹70 discount for 1 cycle on PRO_MONTHLY
 ```
 
 ---
 
-## 5. Local Development & Testing
+## 5. Razorpay Dashboard Setup Instructions
 
-### Running the Test Suite
-Tracker includes comprehensive test suites covering all billing requirements:
+Complete these steps in the [Razorpay Dashboard](https://dashboard.razorpay.com/):
 
-```bash
-# Run all billing unit and integration tests
-bun test tests/billing-*.test.ts
+### 1. Create Monthly Plan
+- Navigate to: **Subscriptions** ➔ **Plans** ➔ **+ Create Plan**
+- **Plan Name**: `Tracker Pro Monthly`
+- **Plan Description**: `Tracker Pro Monthly Subscription`
+- **Billing Frequency**: `Monthly`
+- **Billing Interval**: `1`
+- **Amount**: `₹99.00`
+- Copy the generated `plan_...` ID to `RAZORPAY_PLAN_PRO_MONTHLY`.
 
-# Run the complete test suite across all modules
-bun test
-```
+### 2. Create Annual Plan
+- Navigate to: **Subscriptions** ➔ **Plans** ➔ **+ Create Plan**
+- **Plan Name**: `Tracker Pro Annual`
+- **Plan Description**: `Tracker Pro Annual Subscription (Save 33%)`
+- **Billing Frequency**: `Yearly`
+- **Billing Interval**: `1`
+- **Amount**: `₹799.00`
+- Copy the generated `plan_...` ID to `RAZORPAY_PLAN_PRO_ANNUAL`.
 
-### Testing Webhooks Locally
-To test live Razorpay webhooks during local development:
+### 3. Create Introductory Offer (for ₹29 First Month)
+- Navigate to: **Subscriptions** ➔ **Offers** ➔ **+ Create New Offer**
+- **Offer Name**: `Tracker Pro First Month Intro`
+- **Discount Type**: `Flat`
+- **Discount Amount**: `₹70.00`
+- **Redemption Type**: `Limited number of cycles` = `1` (or `Single Use`)
+- **Applicable Plans**: Select `Tracker Pro Monthly`
+- Copy the generated `offer_...` ID to `RAZORPAY_OFFER_INTRODUCTORY`.
 
-1. Start your local Tracker server:
-   ```bash
-   bun run dev
-   ```
-2. In a separate terminal, expose your local port (e.g. 3000) using ngrok or Cloudflare Tunnels:
-   ```bash
-   ngrok http 3000
-   ```
-3. In the [Razorpay Test Dashboard](https://dashboard.razorpay.com/app/webhooks), create a webhook:
-   - **URL**: `https://<your-ngrok-subdomain>.ngrok.io/api/webhooks/razorpay`
-   - **Secret**: Set a development secret matching `RAZORPAY_WEBHOOK_SECRET` in your `.env.local`.
-   - **Events to Subscribe**:
-     - `subscription.authenticated`
-     - `subscription.activated`
-     - `subscription.charged`
-     - `subscription.completed`
-     - `subscription.updated`
-     - `subscription.cancelled`
-     - `payment.captured`
-     - `payment.failed`
+### 4. Configure Webhooks
+- Navigate to: **Settings** ➔ **Webhooks** ➔ **+ Add New Webhook**
+- **Webhook URL**: `https://<your-domain>/api/webhooks/razorpay` (or ngrok URL during local testing)
+- **Secret**: Enter a secure random string and set it as `RAZORPAY_WEBHOOK_SECRET`.
+- **Active Events to Select**:
+  - `subscription.authenticated`
+  - `subscription.activated`
+  - `subscription.charged`
+  - `subscription.pending`
+  - `subscription.halted`
+  - `subscription.cancelled`
+  - `payment.failed`
 
 ---
 
-## 6. Razorpay Production Deployment Checklist
-
-Before enabling live billing in production, complete the following mandatory manual steps:
-
-- [ ] **KYC & Account Activation**: Complete business KYC, bank verification, and account activation on Razorpay.
-- [ ] **Switch to Live Keys**: Replace test keys with live `rzp_live_...` credentials in production environment variables.
-- [ ] **Create Live Subscription Plans**:
-  - Plan 1 (Monthly): Period: Monthly, Interval: 1, Amount: ₹99.00 (`9900` paise).
-  - Plan 2 (Annual): Period: Yearly, Interval: 1, Amount: ₹799.00 (`79900` paise).
-  - Configure `RAZORPAY_PLAN_PRO_MONTHLY` and `RAZORPAY_PLAN_PRO_ANNUAL` with the generated plan IDs.
-- [ ] **Configure Production Webhook**:
-  - Add production endpoint: `https://<your-domain>/api/webhooks/razorpay`.
-  - Copy generated webhook secret to `RAZORPAY_WEBHOOK_SECRET`.
-  - Subscribe to subscription and payment lifecycle events.
-- [ ] **Run End-to-End Test Transaction**:
-  - Execute a live checkout using a live UPI or card instrument, verify webhook delivery in the Razorpay dashboard, and confirm Pro status unlocks immediately.
+## 6. Integration Status
+- **Current Status**: `Razorpay integration in preparation / Test Mode pending`
+- **Next Milestone**: Input Razorpay Test Mode credentials, execute real checkout transaction, and verify end-to-end webhook delivery.

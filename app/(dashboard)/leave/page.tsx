@@ -2,7 +2,7 @@ import { db } from '@/lib/db'
 import { LeavePanel } from '@/components/LeavePanel'
 import { getLoggedUser } from '@/app/actions/auth'
 import { redirect } from 'next/navigation'
-import { canAccess } from '@/lib/auth-guards'
+import { canAccessModule, getEffectiveGuestPermissions } from '@/lib/auth-guards'
 
 import { LeaveType, LeaveStatus } from '@prisma/client'
 
@@ -16,7 +16,8 @@ export default async function Page() {
     return null
   }
 
-  if (!canAccess(loggedUser, 'leave.read')) {
+  const guestPerms = await getEffectiveGuestPermissions()
+  if (!canAccessModule(loggedUser, 'leave', guestPerms)) {
     redirect('/settings')
     return null
   }

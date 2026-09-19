@@ -8,6 +8,8 @@ import { redirect } from 'next/navigation'
 import { fetchRecurrenceLogs } from '@/lib/services/TimelineService'
 import { TaskOccurrenceService } from '@/modules/activities/domain/TaskOccurrenceService'
 
+import { canAccessModule, getEffectiveGuestPermissions } from '@/lib/auth-guards'
+
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
@@ -15,6 +17,13 @@ export default async function Page() {
   const loggedUser = await getLoggedUser()
   if (!loggedUser) {
     redirect('/')
+    return null
+  }
+
+  const guestPerms = await getEffectiveGuestPermissions()
+  if (!canAccessModule(loggedUser, 'activities', guestPerms)) {
+    redirect('/settings')
+    return null
   }
 
   const templatesRaw = await db.activityTemplate.findMany({

@@ -1,9 +1,17 @@
-import { describe, it, expect } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test'
 import { BillingService } from '@/lib/services/BillingService'
 import { AuditService } from '@/lib/services/AuditService'
 import { db } from '@/lib/db'
+import { MockBillingProvider, setBillingProvider } from '@/lib/billing/providers'
 
 describe('Subscription Lifecycle & Billing History Tests', () => {
+  beforeEach(() => {
+    setBillingProvider(new MockBillingProvider())
+  })
+
+  afterEach(() => {
+    setBillingProvider(null)
+  })
   it('should start subscription: create customer and subscription record with safe checkout', async () => {
     const originalFindActive = db.subscription.findFirst
     const originalFindCustomer = db.billingCustomer.findUnique

@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db'
 import { getLoggedUser } from '@/app/actions/auth'
-import { canAccess } from '@/lib/auth-guards'
+import { canAccess, getEffectiveGuestPermissions } from '@/lib/auth-guards'
 import { Prisma } from '@prisma/client'
 import { DashboardConfig, LegacyDashboardConfig } from '@/lib/dashboard/types'
 
@@ -12,49 +12,8 @@ export async function getGuestPermissionsAction(): Promise<{
   error?: string
 }> {
   try {
-    const loggedUser = await getLoggedUser()
-    let ownerId = loggedUser?.id
-
-    if (!ownerId) {
-      const owner = await db.user.findFirst({
-        where: {
-          OR: [
-            { username: 'admin' },
-            { email: { not: null } },
-          ],
-        },
-        orderBy: { createdAt: 'asc' },
-      })
-      ownerId = owner?.id
-    }
-
-    const setting = ownerId ? await db.userSetting.findUnique({
-      where: {
-        userId_module: {
-          userId: ownerId,
-          module: 'GUEST_PERMISSIONS',
-        },
-      },
-    }) : null
-
-    const defaults: Record<string, boolean> = {
-      today: false,
-      calendar: false,
-      activities: false,
-      journal: false,
-      leave: false,
-      weight: false,
-      links: false,
-      documents: false,
-      settings: true,
-    }
-
-    if (!setting) {
-      return { success: true, permissions: defaults }
-    }
-
-    const config = setting.config as Record<string, boolean>
-    return { success: true, permissions: { ...defaults, ...config } }
+    const permissions = await getEffectiveGuestPermissions()
+    return { success: true, permissions }
   } catch (error) {
     console.error('Failed to get guest permissions:', error)
     return { success: false, error: 'Database error fetching permissions' }

@@ -46,3 +46,10 @@ export class ProviderError extends BillingError {
     this.originalError = originalError
   }
 }
+
+export class ProviderConfigurationError extends BillingError {
+  constructor(message = 'Payment provider is not properly configured') {
+    super(message, 'PROVIDER_CONFIG_ERROR')
+    this.name = 'ProviderConfigurationError'
+  }
+}

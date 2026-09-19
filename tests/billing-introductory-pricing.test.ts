@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test'
 import { BillingService } from '@/lib/services/BillingService'
 import { db } from '@/lib/db'
+import { IBillingProvider } from '@/lib/billing/providers'
 
 describe('Introductory Pricing Server-Authoritative Engine', () => {
   it('should mark a fresh user as eligible for introductory ₹29 pricing', async () => {
@@ -113,6 +114,76 @@ describe('Introductory Pricing Server-Authoritative Engine', () => {
       (db.subscription as any).findFirst = originalFindSub
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.payment as any).findFirst = originalFindPayment
+    }
+  })
+
+  it('should rollback intro reservation if checkout creation on provider fails (failed checkout cannot consume intro)', async () => {
+    let hasUsedIntro = false
+    let reservationRollbackCalled = false
+
+    const originalFindActive = db.subscription.findFirst
+    const originalFindCustomer = db.billingCustomer.findUnique
+    const originalFindFirstCustomer = db.billingCustomer.findFirst
+    const originalUpdateManyCustomer = db.billingCustomer.updateMany
+    const originalFindPayment = db.payment.findFirst
+
+    // Provider that throws an error during createSubscription
+    const failingProvider: IBillingProvider = {
+      name: 'RAZORPAY',
+      createCustomer: async () => ({ providerCustomerId: 'cust_fail_1' }),
+      createSubscription: async () => {
+        throw new Error('Razorpay network gateway failure')
+      },
+      cancelSubscription: async () => ({ providerSubscriptionId: '', status: '' }),
+      retrieveSubscription: async () => ({ id: '', status: '', currentStart: null, currentEnd: null, planId: '' }),
+      retrievePayment: async () => ({ id: '', amount: 0, currency: '', status: '' }),
+      verifyWebhookSignature: () => true,
+      normalizeWebhookEvent: () => ({ eventId: 'evt_dummy', eventType: 'dummy', raw: null })
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.subscription as any).findFirst = async () => null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingCustomer as any).findFirst = async () => ({ hasUsedIntroductoryOffer: hasUsedIntro });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingCustomer as any).findUnique = async () => ({
+        id: 'cust_fail_rollback',
+        userId: 'user_fail_rollback',
+        providerCustomerId: 'cust_fail_prov',
+        hasUsedIntroductoryOffer: hasUsedIntro
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingCustomer as any).updateMany = async ({ data }: { data: { hasUsedIntroductoryOffer: boolean } }) => {
+        if (data.hasUsedIntroductoryOffer === false) {
+          reservationRollbackCalled = true
+          hasUsedIntro = false
+        } else {
+          hasUsedIntro = true
+        }
+        return { count: 1 }
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.payment as any).findFirst = async () => null;
+
+      expect(
+        BillingService.startSubscription('user_fail_rollback', 'PRO_MONTHLY', { provider: failingProvider })
+      ).rejects.toThrow('Razorpay network gateway failure')
+
+      // Wait a microtask for catch block cleanup
+      await new Promise(r => setTimeout(r, 10))
+      expect(reservationRollbackCalled).toBe(true)
+    } finally {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.subscription as any).findFirst = originalFindActive;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingCustomer as any).findUnique = originalFindCustomer;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingCustomer as any).findFirst = originalFindFirstCustomer;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingCustomer as any).updateMany = originalUpdateManyCustomer;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.payment as any).findFirst = originalFindPayment;
     }
   })
 })

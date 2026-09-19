@@ -1,9 +1,9 @@
 import { db } from './db'
 import { getLoggedUser } from '@/app/actions/auth'
-import { isAuthorizedUserEmail } from './constants'
+import { isAuthorizedUserEmail, ALLOWED_USER_EMAILS } from './constants'
 
 export type TrackerCapability =
-  // Private Core Modules (Owner-Only)
+  // Private Core Modules (Owner or Guest-Enabled)
   | 'core.owner'
   | 'journal.read'
   | 'journal.write'
@@ -25,20 +25,143 @@ export type TrackerCapability =
   | 'shared-finance.read'
   | 'shared-finance.write'
 
+export type TrackerModuleKey =
+  | 'today'
+  | 'calendar'
+  | 'activities'
+  | 'journal'
+  | 'leave'
+  | 'weight'
+  | 'links'
+  | 'documents'
+  | 'settings'
+
+export const DEFAULT_GUEST_PERMISSIONS: Record<TrackerModuleKey, boolean> = {
+  today: false,
+  calendar: false,
+  activities: false,
+  journal: false,
+  leave: false,
+  weight: false,
+  links: false,
+  documents: false,
+  settings: true,
+}
+
+/**
+ * Checks whether a user entity represents an authorized owner.
+ */
+export function isOwnerUser(
+  user: { id?: string; username?: string; email?: string | null; isOwner?: boolean; accessLevel?: string } | null | undefined
+): boolean {
+  if (!user) return false
+  return (
+    user.username === 'admin' ||
+    user.isOwner === true ||
+    user.accessLevel === 'OWNER' ||
+    user.accessLevel === 'Private Owner' ||
+    isAuthorizedUserEmail(user.email || user.username)
+  )
+}
+
+/**
+ * Resolves the canonical Owner user from the database.
+ * Never relies on fragile "first user in database" ordering.
+ */
+export async function getCanonicalOwner() {
+  const allowedEmails = [
+    ...(process.env.ALLOWED_USER_EMAIL ? process.env.ALLOWED_USER_EMAIL.split(',').map(e => e.trim().toLowerCase()) : []),
+    ...ALLOWED_USER_EMAILS.map(e => e.toLowerCase()),
+  ]
+
+  const owner = await db.user.findFirst({
+    where: {
+      OR: [
+        { email: { in: allowedEmails, mode: 'insensitive' } },
+        { username: 'admin' },
+      ],
+    },
+    orderBy: { createdAt: 'asc' },
+  })
+  return owner
+}
+
+/**
+ * Retrieves the canonical owner's effective guest permissions from userSetting.
+ * If logged-in user is an owner, uses their id directly; otherwise resolves the canonical owner.
+ */
+export async function getEffectiveGuestPermissions(): Promise<Record<TrackerModuleKey, boolean>> {
+  try {
+    const loggedUser = await getLoggedUser()
+    let ownerId: string | undefined = undefined
+
+    if (isOwnerUser(loggedUser) && loggedUser?.id) {
+      ownerId = loggedUser.id
+    } else {
+      const owner = await getCanonicalOwner()
+      ownerId = owner?.id
+    }
+
+    if (!ownerId) {
+      return { ...DEFAULT_GUEST_PERMISSIONS }
+    }
+
+    const setting = await db.userSetting.findUnique({
+      where: {
+        userId_module: {
+          userId: ownerId,
+          module: 'GUEST_PERMISSIONS',
+        },
+      },
+    })
+    if (!setting || !setting.config) {
+      return { ...DEFAULT_GUEST_PERMISSIONS }
+    }
+    const config = setting.config as Record<string, boolean>
+    return {
+      ...DEFAULT_GUEST_PERMISSIONS,
+      ...config,
+      settings: true,
+    }
+  } catch (err) {
+    console.error('Failed to get effective guest permissions:', err)
+    return { ...DEFAULT_GUEST_PERMISSIONS }
+  }
+}
+
+/**
+ * Checks whether a user can access a specific module.
+ * Owners have access to all modules.
+ * Guests have access only if the canonical owner enabled that module.
+ */
+export function canAccessModule(
+  user: { id: string; username: string; email?: string | null } | null | undefined,
+  moduleKey: TrackerModuleKey,
+  guestPermissions?: Record<string, boolean>
+): boolean {
+  if (!user) return false
+  if (isOwnerUser(user)) return true
+  if (moduleKey === 'settings') return true
+  const perms = guestPermissions || DEFAULT_GUEST_PERMISSIONS
+  return perms[moduleKey] === true
+}
+
 /**
  * Checks whether an authenticated user has authorization for a given capability.
- * Keeps authentication ("who is this user") decoupled from authorization ("what can they do").
+ * Keeps authentication decoupled from authorization.
+ * Supports layered authorization where guest module permissions enable capability
+ * for the guest's own scoped data.
  */
 export function canAccess(
   user: { id: string; username: string; email?: string | null } | null | undefined,
-  capability: TrackerCapability
+  capability: TrackerCapability,
+  guestPermissions?: Record<string, boolean>
 ): boolean {
   if (!user) return false
 
-  // 1. Owner privileges: The whitelisted owner account or legacy 'admin' user has full access
-  const isOwner = user.username === 'admin' || isAuthorizedUserEmail(user.email || user.username)
+  const isOwner = isOwnerUser(user)
 
-  // 2. Private core capabilities require owner authorization
+  // 1. Private core capabilities
   const isPrivateCore = capability === 'core.owner' ||
     capability.startsWith('journal.') ||
     capability.startsWith('vault.') ||
@@ -49,10 +172,25 @@ export function canAccess(
     capability.startsWith('settings.')
 
   if (isPrivateCore) {
-    return isOwner
+    if (isOwner) return true
+
+    // Strictly owner-only capabilities
+    if (capability === 'core.owner' || capability === 'settings.manage') {
+      return false
+    }
+
+    // Module-governed capabilities for guest users
+    const perms = guestPermissions || DEFAULT_GUEST_PERMISSIONS
+    if (capability.startsWith('journal.')) return perms.journal === true
+    if (capability.startsWith('vault.')) return perms.documents === true
+    if (capability.startsWith('calendar.personal')) return perms.calendar === true
+    if (capability.startsWith('leave.')) return perms.leave === true
+    if (capability.startsWith('weight.')) return perms.weight === true
+    if (capability.startsWith('work-hours.')) return perms.today === true
+    return false
   }
 
-  // 3. Known Shared Tools Capability Model (Deny-by-default for unknown capabilities)
+  // Known shared tools
   const knownSharedCapabilities: TrackerCapability[] = [
     'room-turn.read',
     'room-turn.write',
@@ -63,11 +201,9 @@ export function canAccess(
   ]
 
   if (knownSharedCapabilities.includes(capability)) {
-    // Authenticated users can access known shared tools, or owner
     return true
   }
 
-  // Deny by default for any unrecognized capability
   return false
 }
 
@@ -83,6 +219,22 @@ export async function requireCapability(capability: TrackerCapability) {
   const user = await requireAuth()
   if (!canAccess(user, capability)) {
     throw new Error(`Unauthorized: missing capability ${capability}`)
+  }
+  return user
+}
+
+/**
+ * Server-side guard to enforce module access for the current authenticated user.
+ * Owners have full access; guests must have the module enabled in the canonical owner's guest permissions.
+ */
+export async function requireModuleAccess(moduleKey: TrackerModuleKey) {
+  const user = await requireAuth()
+  if (isOwnerUser(user)) {
+    return user
+  }
+  const perms = await getEffectiveGuestPermissions()
+  if (!canAccessModule(user, moduleKey, perms)) {
+    throw new Error(`Access denied: Module '${moduleKey}' is disabled for guest accounts`)
   }
   return user
 }

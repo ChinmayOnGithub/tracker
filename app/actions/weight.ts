@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { requireAuth, requireOwnership } from '@/lib/auth-guards'
+import { requireOwnership, requireModuleAccess } from '@/lib/auth-guards'
 import { logWeightSchema } from '@/lib/validations'
 
 import { ActivityService } from '@/lib/services/ActivityService'
@@ -19,7 +19,7 @@ export async function logWeight(date: string, weight: number, notes?: string | n
   }
 
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('weight')
     // Normalize to noon UTC to avoid timezone boundary issues
     const dateObj = new Date(`${date}T12:00:00.000Z`)
 
@@ -81,7 +81,7 @@ export async function logWeight(date: string, weight: number, notes?: string | n
  */
 export async function getWeightHistory(days = 90) {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('weight')
     const since = new Date()
     since.setUTCHours(0, 0, 0, 0)
     since.setUTCDate(since.getUTCDate() - days)
@@ -108,6 +108,7 @@ export async function getWeightHistory(days = 90) {
  */
 export async function deleteWeightRecord(id: string) {
   try {
+    await requireModuleAccess('weight')
     await requireOwnership('weightRecord', id)
 
     await db.weightRecord.update({ where: { id }, data: { deletedAt: new Date() } })

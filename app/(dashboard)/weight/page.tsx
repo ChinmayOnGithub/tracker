@@ -2,7 +2,7 @@ import { db } from '@/lib/db'
 import { WeightPanel } from '@/components/WeightPanel'
 import { getLoggedUser } from '@/app/actions/auth'
 import { redirect } from 'next/navigation'
-import { canAccess } from '@/lib/auth-guards'
+import { canAccessModule, getEffectiveGuestPermissions } from '@/lib/auth-guards'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -14,7 +14,8 @@ export default async function Page() {
     return null
   }
 
-  if (!canAccess(loggedUser, 'weight.read')) {
+  const guestPerms = await getEffectiveGuestPermissions()
+  if (!canAccessModule(loggedUser, 'weight', guestPerms)) {
     redirect('/settings')
     return null
   }

@@ -3,6 +3,7 @@ import { RazorpayProvider } from './RazorpayProvider'
 
 export * from './IBillingProvider'
 export * from './RazorpayProvider'
+export * from './MockBillingProvider'
 
 let defaultProvider: IBillingProvider | null = null
 

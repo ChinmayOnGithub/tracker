@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "razorpay": {
+      "command": "node",
+      "args": [".agents/scripts/razorpay-bridge.mjs"],
+      "env": {
+        "RAZORPAY_KEY_ID": "rzp_test_TdpxbPYeyuQ7uW",
+        "RAZORPAY_KEY_SECRET": "RFhvJI0d0Sq2RUZsnIGlLb3q"
+      }
+    }
+  }
+}

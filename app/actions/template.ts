@@ -5,7 +5,7 @@ import { Prisma, RecurrenceType, ActivityType, Priority, CalendarProvider, Activ
 import { revalidatePath } from 'next/cache'
 import { CalendarService } from '@/modules/calendar/services/CalendarService'
 import { eventBus, EVENTS } from '@/lib/events'
-import { requireAuth, requireOwnership } from '@/lib/auth-guards'
+import { requireAuth, requireOwnership, requireModuleAccess } from '@/lib/auth-guards'
 import { createTemplateSchema, updateTemplateSchema } from '@/lib/validations'
 
 export async function createActivityTemplate(data: {
@@ -40,7 +40,7 @@ export async function createActivityTemplate(data: {
   }
 
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('activities')
     const { tagNames = [], ...rest } = data
 
     // Get the maximum sortOrder for this user to put this at the end
@@ -131,6 +131,7 @@ export async function updateActivityTemplate(
   }
 
   try {
+    await requireModuleAccess('activities')
     const { user } = await requireOwnership('activityTemplate', id)
     const { tagNames, ...rest } = data
 
@@ -178,6 +179,7 @@ export async function updateActivityTemplate(
 
 export async function deleteActivityTemplate(id: string) {
   try {
+    await requireModuleAccess('activities')
     const { user } = await requireOwnership('activityTemplate', id)
 
     const deleted = await db.activityTemplate.update({

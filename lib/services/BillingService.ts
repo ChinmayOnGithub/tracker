@@ -153,18 +153,6 @@ export class BillingService {
       throw new BillingError('You already have an active subscription for this plan.', 'ALREADY_SUBSCRIBED')
     }
 
-    // Determine introductory pricing eligibility
-    let isIntroductory = false
-    let offerId: string | undefined
-
-    if (requestedPlan === 'PRO_MONTHLY') {
-      const eligible = await this.isEligibleForIntroductoryOffer(userId)
-      if (eligible) {
-        isIntroductory = true
-        offerId = getIntroductoryOfferId()
-      }
-    }
-
     // Retrieve or create provider customer
     let customer = await db.billingCustomer.findUnique({
       where: {
@@ -197,71 +185,114 @@ export class BillingService {
       })
     }
 
-    // Create subscription on provider
-    const checkoutResult = await provider.createSubscription({
-      planId: requestedPlan,
-      customerId: customer.providerCustomerId,
-      offerId,
-      isIntroductory,
-      notes: {
-        userId,
+    // Determine introductory pricing eligibility with atomic concurrency reservation
+    let isIntroductory = false
+    let offerId: string | undefined
+
+    if (requestedPlan === 'PRO_MONTHLY') {
+      const eligible = await this.isEligibleForIntroductoryOffer(userId)
+      if (eligible) {
+        // Atomic conditional update on BillingCustomer to reserve the offer and prevent race conditions
+        const reserveResult = await db.billingCustomer.updateMany({
+          where: {
+            id: customer.id,
+            hasUsedIntroductoryOffer: false
+          },
+          data: {
+            hasUsedIntroductoryOffer: true,
+            introductoryOfferClaimedAt: new Date()
+          }
+        })
+
+        if (reserveResult.count === 1) {
+          isIntroductory = true
+          offerId = getIntroductoryOfferId()
+        }
+      }
+    }
+
+    try {
+      // Create subscription on provider
+      const checkoutResult = await provider.createSubscription({
         planId: requestedPlan,
-        isIntroductory: isIntroductory ? 'true' : 'false'
-      }
-    })
+        customerId: customer.providerCustomerId,
+        offerId,
+        isIntroductory,
+        notes: {
+          userId,
+          planId: requestedPlan,
+          isIntroductory: isIntroductory ? 'true' : 'false'
+        }
+      })
 
-    // Upsert local subscription state
-    await db.subscription.upsert({
-      where: {
-        providerSubscriptionId: checkoutResult.providerSubscriptionId
-      },
-      create: {
+      // Upsert local subscription state
+      await db.subscription.upsert({
+        where: {
+          providerSubscriptionId: checkoutResult.providerSubscriptionId
+        },
+        create: {
+          userId,
+          billingCustomerId: customer.id,
+          provider: provider.name,
+          providerSubscriptionId: checkoutResult.providerSubscriptionId,
+          plan: requestedPlan,
+          status: 'CREATED',
+          billingInterval: requestedPlan === 'PRO_ANNUAL' ? 'annual' : 'monthly',
+          isIntroductory,
+          cancelAtPeriodEnd: false
+        },
+        update: {
+          status: 'CREATED',
+          plan: requestedPlan,
+          billingInterval: requestedPlan === 'PRO_ANNUAL' ? 'annual' : 'monthly',
+          isIntroductory,
+          updatedAt: new Date()
+        }
+      })
+
+      // Log audit event
+      await AuditService.log({
         userId,
-        billingCustomerId: customer.id,
-        provider: provider.name,
-        providerSubscriptionId: checkoutResult.providerSubscriptionId,
-        plan: requestedPlan,
-        status: 'CREATED',
-        billingInterval: requestedPlan === 'PRO_ANNUAL' ? 'annual' : 'monthly',
-        isIntroductory,
-        cancelAtPeriodEnd: false
-      },
-      update: {
-        status: 'CREATED',
-        plan: requestedPlan,
-        billingInterval: requestedPlan === 'PRO_ANNUAL' ? 'annual' : 'monthly',
-        isIntroductory,
-        updatedAt: new Date()
-      }
-    })
+        entityType: 'Subscription',
+        entityId: checkoutResult.providerSubscriptionId,
+        action: 'SUBSCRIPTION_STARTED',
+        performedBy: userId,
+        newData: {
+          plan: requestedPlan,
+          isIntroductory,
+          amount: checkoutResult.amount
+        }
+      })
 
-    // Log audit event
-    await AuditService.log({
-      userId,
-      entityType: 'Subscription',
-      entityId: checkoutResult.providerSubscriptionId,
-      action: 'SUBSCRIPTION_STARTED',
-      performedBy: userId,
-      newData: {
-        plan: requestedPlan,
-        isIntroductory,
-        amount: checkoutResult.amount
+      return {
+        checkout: {
+          subscriptionId: checkoutResult.providerSubscriptionId,
+          keyId: checkoutResult.keyId,
+          name: 'Tracker',
+          description: `${planConfig.name} Subscription`,
+          amount: checkoutResult.amount,
+          currency: checkoutResult.currency,
+          planId: requestedPlan,
+          isIntroductory,
+          customerEmail: options?.userEmail,
+          customerName: options?.userName
+        }
       }
-    })
-
-    return {
-      checkout: {
-        subscriptionId: checkoutResult.providerSubscriptionId,
-        keyId: checkoutResult.keyId,
-        name: 'Tracker',
-        description: `${planConfig.name} Subscription`,
-        amount: checkoutResult.amount,
-        currency: checkoutResult.currency,
-        planId: requestedPlan,
-        isIntroductory,
-        customerEmail: options?.userEmail,
-        customerName: options?.userName
+    } catch (err) {
+      // If checkout creation failed on provider, rollback the reservation so user isn't penalized
+      if (isIntroductory && customer?.id) {
+        await db.billingCustomer.updateMany({
+          where: {
+            id: customer.id,
+            subscriptions: { none: { isIntroductory: true } }
+          },
+          data: {
+            hasUsedIntroductoryOffer: false,
+            introductoryOfferClaimedAt: null
+          }
+        }).catch(() => {})
       }
+      throw err
     }
   }
 
@@ -279,7 +310,7 @@ export class BillingService {
     providerOverride?: IBillingProvider
   ): Promise<{ success: boolean; error?: string }> {
     const provider = providerOverride || getBillingProvider()
-    const { subscriptionId, paymentId } = params
+    const { subscriptionId, paymentId, signature } = params
 
     const sub = await db.subscription.findFirst({
       where: {
@@ -291,6 +322,14 @@ export class BillingService {
 
     if (!sub) {
       throw new SubscriptionNotFoundError(`No subscription matching ${subscriptionId} for user`)
+    }
+
+    // Verify signature if provided and supported by provider
+    if (signature && paymentId && provider.verifySubscriptionPaymentSignature) {
+      const isValidSig = provider.verifySubscriptionPaymentSignature(subscriptionId, paymentId, signature)
+      if (!isValidSig) {
+        throw new BillingError('Invalid checkout verification signature.', 'INVALID_SIGNATURE')
+      }
     }
 
     // Retrieve provider authoritative status
@@ -326,6 +365,7 @@ export class BillingService {
         },
         update: {
           status: providerPayment.status === 'captured' ? 'SUCCESS' : 'PENDING',
+          amount: providerPayment.amount,
           paidAt: providerPayment.paidAt || new Date()
         }
       })
@@ -485,6 +525,7 @@ export class BillingService {
           const isCharged = norm.eventType === 'subscription.charged'
           const isCancelled = norm.eventType === 'subscription.cancelled'
           const isHalted = norm.eventType === 'subscription.halted'
+          const isPending = norm.eventType === 'subscription.pending'
 
           let newStatus = sub.status
           if (isActivated || isCharged) {
@@ -493,13 +534,18 @@ export class BillingService {
             newStatus = 'CANCELLED'
           } else if (isHalted) {
             newStatus = 'HALTED'
+          } else if (isPending) {
+            newStatus = 'PENDING'
           }
+
+          const isCancelledGrace = isCancelled && (norm.currentPeriodEnd || sub.currentPeriodEnd) && (norm.currentPeriodEnd || sub.currentPeriodEnd)! > new Date()
 
           // Update subscription state
           await db.subscription.update({
             where: { id: sub.id },
             data: {
               status: newStatus,
+              cancelAtPeriodEnd: isCancelledGrace ? true : sub.cancelAtPeriodEnd,
               currentPeriodStart: norm.currentPeriodStart || sub.currentPeriodStart,
               currentPeriodEnd: norm.currentPeriodEnd || sub.currentPeriodEnd,
               updatedAt: new Date()
@@ -519,6 +565,23 @@ export class BillingService {
 
           // Record Payment on charge
           if (norm.providerPaymentId && (isCharged || norm.amount !== undefined)) {
+            let chargeAmount = norm.amount
+            if (chargeAmount === undefined && norm.providerPaymentId) {
+              try {
+                const fetchedPayment = await provider.retrievePayment(norm.providerPaymentId)
+                chargeAmount = fetchedPayment.amount
+              } catch (fetchErr) {
+                console.warn('Could not fetch payment details from provider:', fetchErr)
+              }
+            }
+
+            if (chargeAmount === undefined) {
+              throw new BillingError(
+                `Cannot record payment ${norm.providerPaymentId} without verified provider amount. Local assumptions are prohibited.`,
+                'UNVERIFIED_PAYMENT_AMOUNT'
+              )
+            }
+
             await db.payment.upsert({
               where: { providerPaymentId: norm.providerPaymentId },
               create: {
@@ -527,7 +590,7 @@ export class BillingService {
                 billingCustomerId: sub.billingCustomerId,
                 provider: provider.name,
                 providerPaymentId: norm.providerPaymentId,
-                amount: norm.amount || (sub.plan === 'PRO_ANNUAL' ? 799 : (sub.isIntroductory ? 29 : 99)),
+                amount: chargeAmount,
                 currency: norm.currency || 'INR',
                 status: 'SUCCESS',
                 method: norm.method,
@@ -535,6 +598,7 @@ export class BillingService {
               },
               update: {
                 status: 'SUCCESS',
+                amount: chargeAmount,
                 paidAt: norm.occurredAt || new Date()
               }
             })
@@ -546,7 +610,7 @@ export class BillingService {
               action: 'PAYMENT_SUCCESS',
               performedBy: 'WEBHOOK',
               newData: {
-                amount: norm.amount,
+                amount: chargeAmount,
                 subscriptionId: sub.id
               }
             })

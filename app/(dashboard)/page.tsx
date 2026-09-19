@@ -3,7 +3,7 @@ import { getLoggedUser } from '@/app/actions/auth'
 import { getUserSettingsAction } from '@/app/actions/settings'
 import { redirect } from 'next/navigation'
 import { getTodayDateStr } from '@/lib/recurrence'
-import { canAccess } from '@/lib/auth-guards'
+import { canAccessModule, getEffectiveGuestPermissions } from '@/lib/auth-guards'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -18,8 +18,9 @@ export default async function Page(props: { searchParams: Promise<{ date?: strin
     return null
   }
 
-  // Check if current user is owner. If non-owner, redirect to personal profile/settings
-  if (!canAccess(loggedUser, 'core.owner')) {
+  // Enforce server-side module access for Today overview
+  const guestPerms = await getEffectiveGuestPermissions()
+  if (!canAccessModule(loggedUser, 'today', guestPerms)) {
     redirect('/settings')
     return null
   }

@@ -43,6 +43,11 @@ export interface IBillingProvider {
   verifyWebhookSignature(rawBody: string, signature: string): boolean
 
   /**
+   * Cryptographically verifies checkout completion signature (e.g. subscription_id|payment_id).
+   */
+  verifySubscriptionPaymentSignature?(subscriptionId: string, paymentId: string, signature: string): boolean
+
+  /**
    * Normalizes provider-specific webhook payloads into canonical application events.
    */
   normalizeWebhookEvent(rawPayload: unknown): NormalizedWebhookEvent

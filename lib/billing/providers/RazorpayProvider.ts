@@ -12,7 +12,27 @@ import {
   SubscriptionCheckoutResult
 } from '../types'
 import { getPlan, getProviderPlanId } from '../plans'
-import { ProviderError } from '../errors'
+import { ProviderConfigurationError, ProviderError } from '../errors'
+
+function extractErrorMessage(err: unknown): string {
+  if (typeof err === 'object' && err !== null) {
+    const rzpErr = err as {
+      error?: { description?: string; message?: string }
+      description?: string
+      message?: string
+    }
+    if (rzpErr.error?.description) return rzpErr.error.description
+    if (rzpErr.error?.message) return rzpErr.error.message
+    if (rzpErr.description) return rzpErr.description
+    if (rzpErr.message) return rzpErr.message
+    try {
+      return JSON.stringify(err)
+    } catch {
+      return String(err)
+    }
+  }
+  return String(err)
+}
 
 export class RazorpayProvider implements IBillingProvider {
   public readonly name = 'RAZORPAY'
@@ -22,20 +42,33 @@ export class RazorpayProvider implements IBillingProvider {
   private webhookSecret: string
 
   constructor(options?: { keyId?: string; keySecret?: string; webhookSecret?: string }) {
-    this.keyId = options?.keyId || process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_placeholder'
-    this.keySecret = options?.keySecret || process.env.RAZORPAY_KEY_SECRET || 'rzp_secret_placeholder'
-    this.webhookSecret = options?.webhookSecret || process.env.RAZORPAY_WEBHOOK_SECRET || 'rzp_webhook_secret_placeholder'
+    this.keyId = options?.keyId || process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
+    this.keySecret = options?.keySecret || process.env.RAZORPAY_KEY_SECRET || ''
+    this.webhookSecret = options?.webhookSecret || process.env.RAZORPAY_WEBHOOK_SECRET || ''
 
-    if (this.keyId && this.keySecret && this.keyId !== 'rzp_test_placeholder') {
+    if (
+      this.keyId &&
+      this.keySecret &&
+      !this.keyId.includes('placeholder') &&
+      !this.keySecret.includes('placeholder')
+    ) {
       try {
         this.razorpayClient = new Razorpay({
           key_id: this.keyId,
           key_secret: this.keySecret
         })
       } catch (e) {
-        console.warn('Razorpay SDK initialization failed, fallback active:', e)
+        console.error('Razorpay SDK initialization failed:', e)
+        this.razorpayClient = null
       }
     }
+  }
+
+  /**
+   * Returns whether provider is properly configured with live credentials.
+   */
+  isConfigured(): boolean {
+    return !!this.razorpayClient
   }
 
   /**
@@ -45,21 +78,35 @@ export class RazorpayProvider implements IBillingProvider {
     const { userId, email, name } = params
 
     if (!this.razorpayClient) {
-      // In test/mock mode or when credentials are not configured, return deterministic mock customer ID
-      return { providerCustomerId: `cust_mock_${userId.slice(0, 12)}` }
+      throw new ProviderConfigurationError(
+        'Razorpay credentials are not configured. Cannot create customer on payment gateway.'
+      )
     }
 
+    const customerEmail = email || `${userId}@example.tracker.local`
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const customer = await (this.razorpayClient as any).customers.create({
         name: name || `User ${userId.slice(0, 8)}`,
-        email: email || `${userId}@example.tracker.local`,
+        email: customerEmail,
         notes: { userId }
       })
       return { providerCustomerId: customer.id }
     } catch (err: unknown) {
-      // If customer creation fails due to network/provider error, handle safely
-      const message = err instanceof Error ? err.message : String(err)
+      const message = extractErrorMessage(err)
+      if (message.toLowerCase().includes('customer already exists')) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const list = await (this.razorpayClient as any).customers.all({ count: 50 })
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const existing = list.items?.find((c: any) => c.email === customerEmail)
+          if (existing?.id) {
+            return { providerCustomerId: existing.id }
+          }
+        } catch {
+          // fall through to throw original error
+        }
+      }
       throw new ProviderError(this.name, `Failed to create customer: ${message}`, err)
     }
   }
@@ -72,20 +119,21 @@ export class RazorpayProvider implements IBillingProvider {
     const planConfig = getPlan(planId)
     const providerPlanId = getProviderPlanId(planId)
 
+    if (!this.razorpayClient) {
+      throw new ProviderConfigurationError(
+        'Razorpay credentials are not configured. Cannot create subscription on payment gateway.'
+      )
+    }
+
+    if (isIntroductory && !offerId) {
+      throw new ProviderConfigurationError(
+        'Introductory pricing requires a configured RAZORPAY_OFFER_INTRODUCTORY offer ID, but none was found.'
+      )
+    }
+
     const effectiveAmount = isIntroductory && planConfig.introductoryPrice !== undefined
       ? planConfig.introductoryPrice
       : planConfig.price
-
-    if (!this.razorpayClient) {
-      // Mock/Test provider fallback
-      const mockSubId = `sub_mock_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
-      return {
-        providerSubscriptionId: mockSubId,
-        keyId: this.keyId,
-        amount: effectiveAmount,
-        currency: 'INR'
-      }
-    }
 
     try {
       const subscriptionPayload: Record<string, unknown> = {
@@ -118,7 +166,7 @@ export class RazorpayProvider implements IBillingProvider {
         currency: 'INR'
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = extractErrorMessage(err)
       throw new ProviderError(this.name, `Failed to create subscription: ${message}`, err)
     }
   }
@@ -130,7 +178,9 @@ export class RazorpayProvider implements IBillingProvider {
     const { providerSubscriptionId, cancelAtPeriodEnd = true } = params
 
     if (!this.razorpayClient) {
-      return { providerSubscriptionId, status: 'cancelled' }
+      throw new ProviderConfigurationError(
+        'Razorpay credentials are not configured. Cannot cancel subscription on payment gateway.'
+      )
     }
 
     try {
@@ -141,7 +191,7 @@ export class RazorpayProvider implements IBillingProvider {
       )
       return { providerSubscriptionId: res.id, status: res.status || 'cancelled' }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = extractErrorMessage(err)
       throw new ProviderError(this.name, `Failed to cancel subscription: ${message}`, err)
     }
   }
@@ -151,13 +201,9 @@ export class RazorpayProvider implements IBillingProvider {
    */
   async retrieveSubscription(providerSubscriptionId: string): Promise<ProviderSubscription> {
     if (!this.razorpayClient) {
-      return {
-        id: providerSubscriptionId,
-        status: 'active',
-        currentStart: new Date(),
-        currentEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        planId: 'plan_pro_monthly_test'
-      }
+      throw new ProviderConfigurationError(
+        'Razorpay credentials are not configured. Cannot retrieve subscription from payment gateway.'
+      )
     }
 
     try {
@@ -172,7 +218,7 @@ export class RazorpayProvider implements IBillingProvider {
         chargeAt: sub.charge_at ? new Date(sub.charge_at * 1000) : null
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = extractErrorMessage(err)
       throw new ProviderError(this.name, `Failed to retrieve subscription: ${message}`, err)
     }
   }
@@ -182,13 +228,9 @@ export class RazorpayProvider implements IBillingProvider {
    */
   async retrievePayment(providerPaymentId: string): Promise<ProviderPayment> {
     if (!this.razorpayClient) {
-      return {
-        id: providerPaymentId,
-        amount: 29,
-        currency: 'INR',
-        status: 'captured',
-        paidAt: new Date()
-      }
+      throw new ProviderConfigurationError(
+        'Razorpay credentials are not configured. Cannot retrieve payment from payment gateway.'
+      )
     }
 
     try {
@@ -203,7 +245,7 @@ export class RazorpayProvider implements IBillingProvider {
         paidAt: pay.created_at ? new Date(pay.created_at * 1000) : new Date()
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = extractErrorMessage(err)
       throw new ProviderError(this.name, `Failed to retrieve payment: ${message}`, err)
     }
   }
@@ -212,7 +254,9 @@ export class RazorpayProvider implements IBillingProvider {
    * Cryptographically verifies webhook signature using timingSafeEqual HMAC sha256.
    */
   verifyWebhookSignature(rawBody: string, signature: string): boolean {
-    if (!signature || !rawBody) return false
+    if (!signature || !rawBody || !this.webhookSecret || this.webhookSecret.includes('placeholder')) {
+      return false
+    }
     try {
       const expectedSignature = crypto
         .createHmac('sha256', this.webhookSecret)
@@ -229,6 +273,34 @@ export class RazorpayProvider implements IBillingProvider {
       return crypto.timingSafeEqual(sigBuffer, expectedBuffer)
     } catch (e) {
       console.error('Webhook signature verification exception:', e)
+      return false
+    }
+  }
+
+  /**
+   * Cryptographically verifies subscription checkout signature (subscription_id|payment_id).
+   */
+  verifySubscriptionPaymentSignature(subscriptionId: string, paymentId: string, signature: string): boolean {
+    if (!subscriptionId || !paymentId || !signature || !this.keySecret || this.keySecret.includes('placeholder')) {
+      return false
+    }
+    try {
+      const payload = `${subscriptionId}|${paymentId}`
+      const expectedSignature = crypto
+        .createHmac('sha256', this.keySecret)
+        .update(payload)
+        .digest('hex')
+
+      const sigBuffer = Buffer.from(signature)
+      const expectedBuffer = Buffer.from(expectedSignature)
+
+      if (sigBuffer.length !== expectedBuffer.length) {
+        return false
+      }
+
+      return crypto.timingSafeEqual(sigBuffer, expectedBuffer)
+    } catch (e) {
+      console.error('Checkout signature verification exception:', e)
       return false
     }
   }
