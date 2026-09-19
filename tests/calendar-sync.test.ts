@@ -1,9 +1,10 @@
-import { describe, it, expect, mock, beforeEach } from 'bun:test'
+import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test'
 import { CalendarService } from '@/modules/calendar/services/CalendarService'
 import { CalendarRepository } from '@/modules/calendar/repositories/CalendarRepository'
 import { GoogleCalendarService } from '@/modules/sync/google-calendar/services/GoogleCalendarService'
 import { calendarProviderRegistry } from '@/modules/calendar/providers/CalendarProvider'
 import { db } from '@/lib/db'
+import { providerRegistry } from '@/lib/providers'
 import { CalendarSyncState } from '@prisma/client'
 
 interface MockCallTracker {
@@ -13,11 +14,23 @@ interface MockCallTracker {
 }
 
 describe('Google Calendar Sync (Phase 2)', () => {
+  const originalGoogleCredentialCount = db.googleCredential.count
+  const originalGetSyncState = CalendarRepository.getSyncState
+  const originalUpdateSyncState = CalendarRepository.updateSyncState
+
   beforeEach(() => {
     const mockList = GoogleCalendarService.listEventsWithSyncToken as unknown as MockCallTracker
     if (mockList && mockList.mock) {
       mockList.mock.calls.length = 0
     }
+  })
+
+  afterEach(() => {
+    db.googleCredential.count = originalGoogleCredentialCount
+    CalendarRepository.getSyncState = originalGetSyncState
+    CalendarRepository.updateSyncState = originalUpdateSyncState
+    calendarProviderRegistry.reset()
+    providerRegistry.reset()
   })
 
   it('should trigger incremental sync when syncToken is present', async () => {
