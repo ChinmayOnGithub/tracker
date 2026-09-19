@@ -49,6 +49,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
     <Comp
       ref={ref}
       disabled={disabled || isLoadingState}
+      data-tracker-control="button"
+      data-tracker-size={size}
       className={`${baseStyle} ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
     >
