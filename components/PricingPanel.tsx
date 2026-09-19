@@ -97,12 +97,25 @@ export const PricingPanel: React.FC = () => {
             razorpay_signature: string
           }) => {
             setActionLoading(true)
+            setErrorMessage(null)
+            setInfoMessage(null)
+
             const confirmRes = await confirmCheckoutAction({
               subscriptionId: response.razorpay_subscription_id,
               paymentId: response.razorpay_payment_id,
               signature: response.razorpay_signature
             })
-            if (confirmRes.success && confirmRes.entitlements) {
+
+            if (!confirmRes.success) {
+              setActionLoading(false)
+              setErrorMessage(
+                confirmRes.error ||
+                `Failed to synchronize checkout. Reference: ${response.razorpay_payment_id}. Please check Settings → Billing or try again.`
+              )
+              return
+            }
+
+            if (confirmRes.entitlements) {
               await refreshEntitlements(confirmRes.entitlements)
             } else {
               await refreshEntitlements()
@@ -110,7 +123,15 @@ export const PricingPanel: React.FC = () => {
             if (typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('tracker_entitlements_refresh'))
             }
-            router.push('/settings?tab=billing')
+
+            if (confirmRes.status === 'PENDING' || confirmRes.paymentStatus === 'PENDING') {
+              setInfoMessage("Payment received. We're confirming your subscription with Razorpay. Redirecting to billing...")
+              setTimeout(() => {
+                router.push('/settings?tab=billing')
+              }, 1800)
+            } else {
+              router.push('/settings?tab=billing')
+            }
           },
           prefill: {
             email: checkout.customerEmail || undefined,
@@ -255,7 +276,11 @@ export const PricingPanel: React.FC = () => {
             <ul className="space-y-3 text-xs text-[var(--color-text-main)]">
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span>Unlimited Habits & Daily Tasks</span>
+                <span>Up to 10 Active Habits & Recurring Activities</span>
+              </li>
+              <li className="flex items-center gap-2.5">
+                <Check className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>Unlimited Daily Tasks &amp; Schedule Events</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />
@@ -355,6 +380,10 @@ export const PricingPanel: React.FC = () => {
             <ul className="space-y-3 text-xs text-[var(--color-text-main)]">
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
+                <span className="font-semibold">Unlimited Habits &amp; Recurring Activities</span>
+              </li>
+              <li className="flex items-center gap-2.5">
+                <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
                 <span className="font-semibold">Unlimited Secure Vault Storage</span>
               </li>
               <li className="flex items-center gap-2.5">
@@ -372,6 +401,10 @@ export const PricingPanel: React.FC = () => {
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
                 <span>Priority Cloud Sync &amp; Automated Backup Engine</span>
+              </li>
+              <li className="flex items-center gap-2.5">
+                <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
+                <span className="font-semibold">Priority Support</span>
               </li>
             </ul>
 

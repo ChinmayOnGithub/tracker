@@ -1,7 +1,10 @@
 import readline from "node:readline";
 
-const KEY_ID = process.env.RAZORPAY_KEY_ID || "rzp_test_TdpxbPYeyuQ7uW";
-const KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || "RFhvJI0d0Sq2RUZsnIGlLb3q";
+const KEY_ID = process.env.RAZORPAY_KEY_ID || "";
+const KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || "";
+if (!KEY_ID || !KEY_SECRET) {
+  process.stderr.write("RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET must be set in environment.\n");
+}
 const token = Buffer.from(`${KEY_ID}:${KEY_SECRET}`).toString("base64");
 const MCP_ENDPOINT = "https://mcp.razorpay.com/mcp";
 

@@ -144,7 +144,7 @@ export function calculateEntitlements(
       advancedCalendar: true,
       advancedJournal: true,
       unlimitedNotes: true,
-      prioritySupport: false
+      prioritySupport: true
     },
     limits: {
       vault_storage: 10000,

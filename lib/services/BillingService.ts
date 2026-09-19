@@ -1,7 +1,11 @@
+import { Subscription, Payment } from '@prisma/client'
 import { db } from '../db'
 import { getBillingProvider, IBillingProvider } from '../billing/providers'
 import {
+  NormalizedWebhookEvent,
   PlanId,
+  ProviderPayment,
+  ProviderSubscription,
   SafeCheckoutPayload,
   UserEntitlements
 } from '../billing/types'
@@ -71,7 +75,7 @@ export class BillingService {
       take: limit,
       include: {
         subscription: {
-          select: { plan: true, billingInterval: true }
+          select: { plan: true, billingInterval: true, providerSubscriptionId: true }
         }
       }
     })
@@ -164,6 +168,39 @@ export class BillingService {
     })
     if (activeSub && (!activeSub.currentPeriodEnd || activeSub.currentPeriodEnd > new Date())) {
       throw new BillingError('You already have an active subscription for this plan.', 'ALREADY_SUBSCRIBED')
+    }
+
+    // Concurrency guard: check for a recent in-flight CREATED checkout session (within 15 minutes)
+    // Reuses existing checkout session instead of creating duplicate subscriptions on provider
+    const inFlightSub = await db.subscription.findFirst({
+      where: {
+        userId,
+        plan: requestedPlan,
+        status: 'CREATED',
+        deletedAt: null,
+        createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+    if (inFlightSub) {
+      const effectiveAmount = inFlightSub.isIntroductory && planConfig.introductoryPrice !== undefined
+        ? planConfig.introductoryPrice
+        : planConfig.price
+
+      return {
+        checkout: {
+          subscriptionId: inFlightSub.providerSubscriptionId,
+          keyId: (provider as { keyId?: string }).keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '',
+          name: 'Tracker',
+          description: `${planConfig.name} Subscription`,
+          amount: effectiveAmount,
+          currency: planConfig.currency,
+          planId: requestedPlan,
+          isIntroductory: inFlightSub.isIntroductory,
+          customerEmail: options?.userEmail,
+          customerName: options?.userName
+        }
+      }
     }
 
     // Check if user has an active subscription for a DIFFERENT plan (#45: plan switching)
@@ -359,82 +396,228 @@ export class BillingService {
   }
 
   /**
-   * Confirms checkout completion following client-side modal success.
-   * Authoritative access is synced from the provider.
+   * Authoritative canonical billing reconciliation operation.
+   * Single source of truth for synchronizing subscription and payment state from provider.
    */
-  static async confirmCheckout(
+  static async reconcileSubscriptionState(
     userId: string,
-    params: {
-      subscriptionId: string
-      paymentId?: string
-      signature?: string
-    },
-    providerOverride?: IBillingProvider
-  ): Promise<{ success: boolean; error?: string }> {
+    providerSubscriptionId: string,
+    optionalProviderPaymentId?: string,
+    providerOverride?: IBillingProvider,
+    options?: {
+      webhookEvent?: NormalizedWebhookEvent
+    }
+  ): Promise<{
+    subscription: Subscription
+    payment?: Payment | null
+    status: string
+    isPro: boolean
+  }> {
     const provider = providerOverride || getBillingProvider()
-    const { subscriptionId, paymentId, signature } = params
 
-    const sub = await db.subscription.findFirst({
+    // STEP 1 — Validate ownership
+    let sub = await db.subscription.findFirst({
       where: {
         userId,
-        providerSubscriptionId: subscriptionId,
+        providerSubscriptionId,
         deletedAt: null
-      }
+      },
+      include: { billingCustomer: true }
     })
 
-    if (!sub) {
-      throw new SubscriptionNotFoundError(`No subscription matching ${subscriptionId} for user`)
-    }
-
-    // Verify signature if provided and supported by provider
-    if (signature && paymentId && provider.verifySubscriptionPaymentSignature) {
-      const isValidSig = provider.verifySubscriptionPaymentSignature(subscriptionId, paymentId, signature)
-      if (!isValidSig) {
-        throw new BillingError('Invalid checkout verification signature.', 'INVALID_SIGNATURE')
+    // Fallback to findUnique for mock compatibility in unit tests
+    if (!sub && db.subscription.findUnique) {
+      const found = await db.subscription.findUnique({
+        where: { providerSubscriptionId },
+        include: { billingCustomer: true }
+      })
+      if (found && found.userId === userId && !found.deletedAt) {
+        sub = found
       }
     }
 
-    // Retrieve provider authoritative status
-    const providerSub = await provider.retrieveSubscription(subscriptionId)
+    if (!sub) {
+      throw new SubscriptionNotFoundError(`No subscription matching ${providerSubscriptionId} for user`)
+    }
 
-    const nextStatus = providerSub.status.toUpperCase()
-    await db.subscription.update({
+    // STEP 3 — Fetch authoritative subscription state
+    let providerSub: ProviderSubscription | null = null
+    try {
+      providerSub = await provider.retrieveSubscription(providerSubscriptionId)
+    } catch (subErr) {
+      if (options?.webhookEvent?.status) {
+        providerSub = {
+          id: providerSubscriptionId,
+          status: options.webhookEvent.status,
+          currentStart: options.webhookEvent.currentPeriodStart || null,
+          currentEnd: options.webhookEvent.currentPeriodEnd || null,
+          planId: ''
+        }
+      } else {
+        throw subErr
+      }
+    }
+
+    let rawStatus = (providerSub.status || '').toUpperCase()
+    if (options?.webhookEvent) {
+      if (options.webhookEvent.eventType === 'subscription.activated' || options.webhookEvent.eventType === 'subscription.charged') {
+        rawStatus = 'ACTIVE'
+      } else if (options.webhookEvent.eventType === 'subscription.cancelled') {
+        rawStatus = 'CANCELLED'
+      } else if (options.webhookEvent.eventType === 'subscription.halted') {
+        rawStatus = 'HALTED'
+      } else if (options.webhookEvent.eventType === 'subscription.pending') {
+        rawStatus = 'PENDING'
+      }
+    }
+    let mappedStatus = rawStatus || sub.status
+
+    // Monotonic guard: ACTIVE / AUTHENTICATED subscriptions must never regress to PENDING / CREATED due to delayed/replayed events
+    if ((sub.status === 'ACTIVE' || sub.status === 'AUTHENTICATED') && (mappedStatus === 'PENDING' || mappedStatus === 'CREATED')) {
+      mappedStatus = sub.status
+    }
+
+    const isCancelled = mappedStatus === 'CANCELLED'
+    const currentEnd = providerSub.currentEnd || sub.currentPeriodEnd || null
+    const isCancelledGrace = isCancelled && currentEnd && currentEnd > new Date()
+    const cancelAtPeriodEnd = isCancelled ? Boolean(isCancelledGrace) : (providerSub.cancelAtPeriodEnd ?? sub.cancelAtPeriodEnd)
+
+    // STEP 4, 5 & 6 — Authoritative payment state, paidAt correction, and monotonic upsert
+    const paymentIdsToReconcile = new Set<string>()
+    if (optionalProviderPaymentId) {
+      paymentIdsToReconcile.add(optionalProviderPaymentId)
+    }
+
+    // Sweep any local PENDING payments for this subscription to guarantee convergence
+    const pendingLocalPayments = await db.payment.findMany({
+      where: {
+        subscriptionId: sub.id,
+        status: 'PENDING',
+        deletedAt: null
+      },
+      select: { providerPaymentId: true }
+    })
+    for (const p of pendingLocalPayments) {
+      if (p.providerPaymentId) {
+        paymentIdsToReconcile.add(p.providerPaymentId)
+      }
+    }
+
+    let primaryPayment: Payment | null = null
+
+    for (const paymentId of paymentIdsToReconcile) {
+      try {
+        let providerPayment: ProviderPayment | null = null
+        try {
+          providerPayment = await provider.retrievePayment(paymentId)
+        } catch (payErr) {
+          if (options?.webhookEvent && options.webhookEvent.providerPaymentId === paymentId) {
+            const isCharged = options.webhookEvent.eventType === 'subscription.charged'
+            const amt = options.webhookEvent.amount
+            if (amt === undefined && isCharged) {
+              throw new BillingError(
+                `Cannot record payment ${paymentId} without verified provider amount. Local assumptions are prohibited.`,
+                'UNVERIFIED_PAYMENT_AMOUNT'
+              )
+            }
+            providerPayment = {
+              id: paymentId,
+              amount: amt ?? 0,
+              currency: options.webhookEvent.currency || 'INR',
+              status: isCharged ? 'captured' : 'authorized',
+              method: options.webhookEvent.method,
+              paidAt: isCharged ? (options.webhookEvent.occurredAt || null) : null
+            }
+          } else {
+            console.warn(`Could not retrieve payment ${paymentId} from provider:`, payErr)
+            continue
+          }
+        }
+
+        let targetStatus: string
+        let paidAt: Date | null = null
+
+        if (providerPayment.status === 'captured') {
+          targetStatus = 'SUCCESS'
+          paidAt = providerPayment.paidAt || null
+        } else if (providerPayment.status === 'failed') {
+          targetStatus = 'FAILED'
+          paidAt = null
+        } else {
+          targetStatus = 'PENDING'
+          paidAt = null
+        }
+
+        const existingPayment = await db.payment.findUnique({
+          where: { providerPaymentId: paymentId }
+        })
+
+        // Monotonic guard: SUCCESS must never be downgraded to PENDING or FAILED by stale/replayed events
+        if (existingPayment?.status === 'SUCCESS' && targetStatus !== 'SUCCESS') {
+          targetStatus = 'SUCCESS'
+          paidAt = existingPayment.paidAt
+        }
+
+        const upsertedPayment = await db.payment.upsert({
+          where: { providerPaymentId: paymentId },
+          create: {
+            userId: sub.userId,
+            subscriptionId: sub.id,
+            billingCustomerId: sub.billingCustomerId,
+            provider: provider.name,
+            providerPaymentId: paymentId,
+            amount: providerPayment.amount,
+            currency: providerPayment.currency || 'INR',
+            status: targetStatus,
+            method: providerPayment.method,
+            paidAt: targetStatus === 'SUCCESS' ? paidAt : null
+          },
+          update: {
+            status: targetStatus,
+            amount: providerPayment.amount,
+            paidAt: targetStatus === 'SUCCESS' ? (paidAt || existingPayment?.paidAt || null) : null,
+            method: providerPayment.method || undefined
+          }
+        })
+
+        if (!primaryPayment || paymentId === optionalProviderPaymentId) {
+          primaryPayment = upsertedPayment
+        }
+
+        if (targetStatus === 'SUCCESS' && (!existingPayment || existingPayment.status !== 'SUCCESS')) {
+          await AuditService.log({
+            userId: sub.userId,
+            entityType: 'Payment',
+            entityId: paymentId,
+            action: 'PAYMENT_SUCCESS',
+            performedBy: options?.webhookEvent ? 'WEBHOOK' : sub.userId,
+            newData: {
+              amount: providerPayment.amount,
+              subscriptionId: sub.id
+            }
+          })
+        }
+      } catch (err) {
+        if (err instanceof BillingError) throw err
+        console.warn(`Failed to reconcile payment ${paymentId}:`, err)
+      }
+    }
+
+    // STEP 7 — Update subscription with authoritative provider data
+    const updatedSub = await db.subscription.update({
       where: { id: sub.id },
       data: {
-        status: nextStatus,
-        currentPeriodStart: providerSub.currentStart || new Date(),
-        currentPeriodEnd: providerSub.currentEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        status: mappedStatus,
+        currentPeriodStart: providerSub.currentStart || sub.currentPeriodStart || null,
+        currentPeriodEnd: providerSub.currentEnd || sub.currentPeriodEnd || null,
+        cancelAtPeriodEnd,
+        canceledAt: isCancelled ? (sub.canceledAt || new Date()) : sub.canceledAt,
         updatedAt: new Date()
       }
     })
 
-    // If payment ID is available, record payment
-    if (paymentId) {
-      const providerPayment = await provider.retrievePayment(paymentId)
-      await db.payment.upsert({
-        where: { providerPaymentId: paymentId },
-        create: {
-          userId,
-          subscriptionId: sub.id,
-          billingCustomerId: sub.billingCustomerId,
-          provider: provider.name,
-          providerPaymentId: paymentId,
-          amount: providerPayment.amount,
-          currency: providerPayment.currency,
-          status: providerPayment.status === 'captured' ? 'SUCCESS' : 'PENDING',
-          method: providerPayment.method,
-          paidAt: providerPayment.paidAt || new Date()
-        },
-        update: {
-          status: providerPayment.status === 'captured' ? 'SUCCESS' : 'PENDING',
-          amount: providerPayment.amount,
-          paidAt: providerPayment.paidAt || new Date()
-        }
-      })
-    }
-
-    // If this was an introductory subscription and now active/authenticated, lock introductory offer
-    if (sub.isIntroductory && sub.billingCustomerId) {
+    // Consume introductory offer if applicable and subscription is active/authenticated
+    if (sub.isIntroductory && sub.billingCustomerId && (mappedStatus === 'ACTIVE' || mappedStatus === 'AUTHENTICATED')) {
       await db.billingCustomer.update({
         where: { id: sub.billingCustomerId },
         data: {
@@ -445,18 +628,73 @@ export class BillingService {
     }
 
     await AuditService.log({
-      userId,
+      userId: sub.userId,
       entityType: 'Subscription',
       entityId: sub.id,
-      action: 'SUBSCRIPTION_CONFIRMED',
-      performedBy: userId,
+      action: options?.webhookEvent ? `SUBSCRIPTION_${mappedStatus}` : 'SUBSCRIPTION_CONFIRMED',
+      performedBy: options?.webhookEvent ? 'WEBHOOK' : sub.userId,
       newData: {
-        status: nextStatus,
-        paymentId
+        status: mappedStatus,
+        paymentId: optionalProviderPaymentId,
+        paymentStatus: primaryPayment?.status
       }
     })
 
-    return { success: true }
+    // STEP 8 — Entitlement derives from canonical subscription state
+    const entitlements = await this.getEntitlements(sub.userId)
+    const isPro = entitlements.plan === 'PRO_MONTHLY' || entitlements.plan === 'PRO_ANNUAL'
+
+    return {
+      subscription: updatedSub,
+      payment: primaryPayment,
+      status: mappedStatus,
+      isPro
+    }
+  }
+
+  /**
+   * Confirms checkout completion following client-side modal success.
+   * Authoritative access is converged through canonical reconciliation.
+   */
+  static async confirmCheckout(
+    userId: string,
+    params: {
+      subscriptionId: string
+      paymentId?: string
+      signature?: string
+    },
+    providerOverride?: IBillingProvider
+  ): Promise<{
+    success: boolean
+    error?: string
+    status?: string
+    isPro?: boolean
+    paymentStatus?: string
+  }> {
+    const provider = providerOverride || getBillingProvider()
+    const { subscriptionId, paymentId, signature } = params
+
+    // Verify signature if provided and supported by provider
+    if (signature && paymentId && provider.verifySubscriptionPaymentSignature) {
+      const isValidSig = provider.verifySubscriptionPaymentSignature(subscriptionId, paymentId, signature)
+      if (!isValidSig) {
+        throw new BillingError('Invalid checkout verification signature.', 'INVALID_SIGNATURE')
+      }
+    }
+
+    const result = await this.reconcileSubscriptionState(
+      userId,
+      subscriptionId,
+      paymentId,
+      provider
+    )
+
+    return {
+      success: true,
+      status: result.status,
+      isPro: result.isPro,
+      paymentStatus: result.payment?.status
+    }
   }
 
   /**
@@ -486,7 +724,7 @@ export class BillingService {
       cancelAtPeriodEnd: true
     })
 
-    const effectiveDate = sub.currentPeriodEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    const effectiveDate = sub.currentPeriodEnd || new Date()
 
     await db.subscription.update({
       where: { id: sub.id },
@@ -574,119 +812,78 @@ export class BillingService {
     })
 
     try {
-      // 4. Handle Subscription Lifecycle Events
-      if (norm.providerSubscriptionId) {
-        const sub = await db.subscription.findUnique({
-          where: { providerSubscriptionId: norm.providerSubscriptionId },
-          include: { billingCustomer: true }
+      // 4. Handle Subscription Lifecycle & Payment Events via canonical reconciliation
+      let targetSubscriptionId = norm.providerSubscriptionId
+      if (!targetSubscriptionId && norm.providerPaymentId) {
+        const existingPayment = await db.payment.findUnique({
+          where: { providerPaymentId: norm.providerPaymentId }
         })
+        if (existingPayment?.subscriptionId) {
+          const linkedSub = await db.subscription.findUnique({
+            where: { id: existingPayment.subscriptionId }
+          })
+          if (linkedSub?.providerSubscriptionId) {
+            targetSubscriptionId = linkedSub.providerSubscriptionId
+          }
+        }
+      }
+
+      if (targetSubscriptionId) {
+        const sub = (await db.subscription.findUnique?.({
+          where: { providerSubscriptionId: targetSubscriptionId },
+          include: { billingCustomer: true }
+        })) || (await db.subscription.findFirst({
+          where: { providerSubscriptionId: targetSubscriptionId, deletedAt: null },
+          include: { billingCustomer: true }
+        }))
 
         if (sub) {
-          const isActivated = norm.eventType === 'subscription.activated'
-          const isCharged = norm.eventType === 'subscription.charged'
-          const isCancelled = norm.eventType === 'subscription.cancelled'
-          const isHalted = norm.eventType === 'subscription.halted'
-          const isPending = norm.eventType === 'subscription.pending'
+          await this.reconcileSubscriptionState(
+            sub.userId,
+            targetSubscriptionId,
+            norm.providerPaymentId,
+            provider,
+            { webhookEvent: norm }
+          )
+        }
+      }
 
-          let newStatus = sub.status
-          if (isActivated || isCharged) {
-            newStatus = 'ACTIVE'
-          } else if (isCancelled) {
-            newStatus = 'CANCELLED'
-          } else if (isHalted) {
-            newStatus = 'HALTED'
-          } else if (isPending) {
-            newStatus = 'PENDING'
-          }
-
-          const isCancelledGrace = isCancelled && (norm.currentPeriodEnd || sub.currentPeriodEnd) && (norm.currentPeriodEnd || sub.currentPeriodEnd)! > new Date()
-
-          // Update subscription state
-          await db.subscription.update({
-            where: { id: sub.id },
-            data: {
-              status: newStatus,
-              cancelAtPeriodEnd: isCancelledGrace ? true : sub.cancelAtPeriodEnd,
-              currentPeriodStart: norm.currentPeriodStart || sub.currentPeriodStart,
-              currentPeriodEnd: norm.currentPeriodEnd || sub.currentPeriodEnd,
-              updatedAt: new Date()
+      // Standalone payment.captured handling: guarantee payment is recorded as SUCCESS
+      if (norm.eventType === 'payment.captured' && norm.providerPaymentId) {
+        const existingPayment = await db.payment.findUnique({
+          where: { providerPaymentId: norm.providerPaymentId }
+        })
+        if (!existingPayment || existingPayment.status !== 'SUCCESS') {
+          const upserted = await db.payment.upsert({
+            where: { providerPaymentId: norm.providerPaymentId },
+            create: {
+              userId: existingPayment?.userId || 'system',
+              subscriptionId: existingPayment?.subscriptionId,
+              provider: provider.name,
+              providerPaymentId: norm.providerPaymentId,
+              amount: norm.amount || 0,
+              currency: norm.currency || 'INR',
+              status: 'SUCCESS',
+              method: norm.method,
+              paidAt: norm.occurredAt || new Date()
+            },
+            update: {
+              status: 'SUCCESS',
+              amount: norm.amount ?? undefined,
+              paidAt: norm.occurredAt || new Date(),
+              method: norm.method || undefined
             }
           })
 
-          // Mark introductory offer consumed if this is an introductory subscription activation
-          if ((isActivated || isCharged) && sub.isIntroductory && sub.billingCustomerId) {
-            await db.billingCustomer.update({
-              where: { id: sub.billingCustomerId },
-              data: {
-                hasUsedIntroductoryOffer: true,
-                introductoryOfferClaimedAt: new Date()
-              }
-            })
-          }
-
-          // Record Payment on charge
-          if (norm.providerPaymentId && (isCharged || norm.amount !== undefined)) {
-            let chargeAmount = norm.amount
-            if (chargeAmount === undefined && norm.providerPaymentId) {
-              try {
-                const fetchedPayment = await provider.retrievePayment(norm.providerPaymentId)
-                chargeAmount = fetchedPayment.amount
-              } catch (fetchErr) {
-                console.warn('Could not fetch payment details from provider:', fetchErr)
-              }
-            }
-
-            if (chargeAmount === undefined) {
-              throw new BillingError(
-                `Cannot record payment ${norm.providerPaymentId} without verified provider amount. Local assumptions are prohibited.`,
-                'UNVERIFIED_PAYMENT_AMOUNT'
-              )
-            }
-
-            await db.payment.upsert({
-              where: { providerPaymentId: norm.providerPaymentId },
-              create: {
-                userId: sub.userId,
-                subscriptionId: sub.id,
-                billingCustomerId: sub.billingCustomerId,
-                provider: provider.name,
-                providerPaymentId: norm.providerPaymentId,
-                amount: chargeAmount,
-                currency: norm.currency || 'INR',
-                status: 'SUCCESS',
-                method: norm.method,
-                paidAt: norm.occurredAt || new Date()
-              },
-              update: {
-                status: 'SUCCESS',
-                amount: chargeAmount,
-                paidAt: norm.occurredAt || new Date()
-              }
-            })
-
-            await AuditService.log({
-              userId: sub.userId,
-              entityType: 'Payment',
-              entityId: norm.providerPaymentId,
-              action: 'PAYMENT_SUCCESS',
-              performedBy: 'WEBHOOK',
-              newData: {
-                amount: chargeAmount,
-                subscriptionId: sub.id
-              }
-            })
-          }
-
-          // Log subscription state audit event
           await AuditService.log({
-            userId: sub.userId,
-            entityType: 'Subscription',
-            entityId: sub.id,
-            action: `SUBSCRIPTION_${newStatus}`,
+            userId: upserted.userId,
+            entityType: 'Payment',
+            entityId: norm.providerPaymentId,
+            action: 'PAYMENT_SUCCESS',
             performedBy: 'WEBHOOK',
             newData: {
-              eventType: norm.eventType,
-              status: newStatus
+              amount: norm.amount,
+              status: 'SUCCESS'
             }
           })
         }

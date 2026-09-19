@@ -290,7 +290,7 @@ export class RazorpayProvider implements IBillingProvider {
         currency: pay.currency || 'INR',
         status: pay.status,
         method: pay.method,
-        paidAt: pay.created_at ? new Date(pay.created_at * 1000) : new Date()
+        paidAt: pay.status === 'captured' ? (pay.created_at ? new Date(pay.created_at * 1000) : null) : null
       }
     } catch (err: unknown) {
       const message = extractErrorMessage(err)
@@ -379,7 +379,12 @@ export class RazorpayProvider implements IBillingProvider {
     // Extract payment entity
     const payEntity = (payload.payment as Record<string, unknown>)?.entity as Record<string, unknown> | undefined
 
-    const providerSubscriptionId = typeof subEntity?.id === 'string' ? subEntity.id : undefined
+    const payNotes = payEntity?.notes as Record<string, unknown> | undefined
+    const providerSubscriptionId =
+      (typeof subEntity?.id === 'string' ? subEntity.id : undefined) ||
+      (typeof payEntity?.subscription_id === 'string' ? payEntity.subscription_id : undefined) ||
+      (typeof payNotes?.subscription_id === 'string' ? (payNotes.subscription_id as string) : undefined) ||
+      (typeof payNotes?.subscriptionId === 'string' ? (payNotes.subscriptionId as string) : undefined)
     const providerPaymentId = typeof payEntity?.id === 'string' ? payEntity.id : undefined
 
     // Generate unique event ID if missing

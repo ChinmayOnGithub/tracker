@@ -4,9 +4,14 @@ import React, { useState, useEffect } from 'react'
 import { Card, CardHeader, CardBody, Button, Badge, ConfirmDialog, Skeleton } from '@/design-system'
 import {
   CreditCard, Sparkles, Check, AlertCircle, ArrowUpRight,
-  Clock, ShieldCheck, History, Calendar
+  Clock, ShieldCheck, History, Calendar, Copy, RefreshCw
 } from 'lucide-react'
-import { getBillingSummaryAction, cancelSubscriptionAction, BillingSummary } from '@/app/actions/billing'
+import {
+  getBillingSummaryAction,
+  cancelSubscriptionAction,
+  reconcileBillingAction,
+  BillingSummary
+} from '@/app/actions/billing'
 import { PLANS } from '@/lib/billing/plans'
 import { useEntitlements } from '@/lib/context/EntitlementContext'
 import Link from 'next/link'
@@ -14,9 +19,11 @@ import Link from 'next/link'
 export const SettingsBillingSection: React.FC = () => {
   const { refreshEntitlements } = useEntitlements()
   const [loading, setLoading] = useState(true)
+  const [reconciling, setReconciling] = useState(false)
   const [summary, setSummary] = useState<BillingSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   // Cancellation modal state
   const [showCancelDialog, setShowCancelDialog] = useState(false)
@@ -39,6 +46,33 @@ export const SettingsBillingSection: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Error fetching billing data.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleReconcile = async () => {
+    setReconciling(true)
+    setError(null)
+    setSuccessMsg(null)
+    try {
+      const res = await reconcileBillingAction(summary?.subscription?.providerSubscriptionId)
+      if (res.success) {
+        if (res.entitlements) {
+          await refreshEntitlements(res.entitlements)
+        } else {
+          await refreshEntitlements()
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('tracker_entitlements_refresh'))
+        }
+        await reloadBillingData()
+        setSuccessMsg(`Subscription status synchronized: ${res.status || 'Updated'}`)
+      } else {
+        setError(res.error || 'Could not synchronize status with Razorpay.')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Synchronization failed.')
+    } finally {
+      setReconciling(false)
     }
   }
 
@@ -117,6 +151,7 @@ export const SettingsBillingSection: React.FC = () => {
   const sub = summary?.subscription
   const isPro = summary?.plan === 'PRO_MONTHLY' || summary?.plan === 'PRO_ANNUAL'
   const isCancelScheduled = sub?.cancelAtPeriodEnd === true
+  const isTransitional = sub?.status === 'PENDING' || sub?.status === 'CREATED'
 
   return (
     <div className="space-y-6">
@@ -169,18 +204,47 @@ export const SettingsBillingSection: React.FC = () => {
                       : 'Tracker Pro (Monthly Billing)'
                     : 'Tracker Free Tier'}
                 </h3>
-                {isPro && (
+                {sub ? (
                   <Badge
-                    variant={isCancelScheduled ? 'warning' : 'success'}
+                    variant={
+                      isCancelScheduled ? 'warning' :
+                      sub.status === 'ACTIVE' || sub.status === 'AUTHENTICATED' ? 'success' :
+                      sub.status === 'PENDING' || sub.status === 'CREATED' ? 'warning' :
+                      'muted'
+                    }
                     dot
                     size="sm"
                   >
-                    {isCancelScheduled ? 'Cancels at Period End' : 'Active'}
+                    {isCancelScheduled ? 'Cancels at Period End' :
+                     sub.status === 'ACTIVE' || sub.status === 'AUTHENTICATED' ? 'Active' :
+                     sub.status === 'PENDING' ? 'Pending Confirmation' :
+                     sub.status === 'CREATED' ? 'Created' :
+                     sub.status === 'HALTED' ? 'Halted' :
+                     sub.status}
                   </Badge>
-                )}
+                ) : null}
               </div>
 
               <div className="text-xs text-[var(--color-text-muted)] space-y-1">
+                {sub?.providerSubscriptionId && (
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <span className="text-[10px] uppercase font-semibold text-[var(--color-text-muted)]">Subscription ID:</span>
+                    <span className="text-[var(--color-text-main)] font-mono text-[11px]">{sub.providerSubscriptionId}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="h-5 w-5 p-0 text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]"
+                      title="Copy Subscription ID"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(sub.providerSubscriptionId)
+                        setCopiedId(sub.providerSubscriptionId)
+                        setTimeout(() => setCopiedId(null), 2000)
+                      }}
+                      icon={copiedId === sub.providerSubscriptionId ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                    />
+                  </div>
+                )}
+
                 {isPro && sub?.currentPeriodEnd && (
                   <div className="flex items-center gap-2">
                     <Calendar className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
@@ -214,6 +278,17 @@ export const SettingsBillingSection: React.FC = () => {
 
             {/* Action buttons */}
             <div className="flex items-center gap-2 shrink-0">
+              {isTransitional && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  isLoading={reconciling}
+                  onClick={handleReconcile}
+                  icon={<RefreshCw className="w-3.5 h-3.5" />}
+                >
+                  Check Status
+                </Button>
+              )}
               {isPro ? (
                 <>
                   {!isCancelScheduled && (
@@ -343,7 +418,7 @@ export const SettingsBillingSection: React.FC = () => {
                     <th className="p-3.5 font-semibold">Amount</th>
                     <th className="p-3.5 font-semibold">Status</th>
                     <th className="p-3.5 font-semibold">Plan</th>
-                    <th className="p-3.5 font-semibold">Reference</th>
+                    <th className="p-3.5 font-semibold">Identifiers</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-border)]">
@@ -360,14 +435,54 @@ export const SettingsBillingSection: React.FC = () => {
                           variant={tx.status === 'SUCCESS' ? 'success' : tx.status === 'FAILED' ? 'danger' : 'muted'}
                           size="sm"
                         >
-                          {tx.status === 'SUCCESS' ? 'Paid' : tx.status}
+                          {tx.status === 'SUCCESS' ? 'Paid' : tx.status === 'PENDING' ? 'Pending' : tx.status}
                         </Badge>
                       </td>
                       <td className="p-3.5 text-[var(--color-text-muted)]">
                         {tx.plan || 'Tracker Pro'}
                       </td>
-                      <td className="p-3.5 font-mono text-[11px] text-[var(--color-text-muted)]">
-                        {tx.providerPaymentId.slice(0, 16)}...
+                      <td className="p-3.5 text-[11px] text-[var(--color-text-muted)] space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] uppercase font-semibold text-[var(--color-text-muted)]">Payment:</span>
+                          <span title={tx.providerPaymentId} className="font-mono text-[var(--color-text-main)]">
+                            {tx.providerPaymentId.length > 14 ? `${tx.providerPaymentId.slice(0, 14)}...` : tx.providerPaymentId}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            className="h-5 w-5 p-0 text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]"
+                            title="Copy Payment ID"
+                            onClick={async () => {
+                              await navigator.clipboard.writeText(tx.providerPaymentId)
+                              setCopiedId(tx.providerPaymentId)
+                              setTimeout(() => setCopiedId(null), 2000)
+                            }}
+                            icon={copiedId === tx.providerPaymentId ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                          />
+                        </div>
+                        {(tx.providerSubscriptionId || sub?.providerSubscriptionId) && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] uppercase font-semibold text-[var(--color-text-muted)]">Subscription:</span>
+                            <span title={tx.providerSubscriptionId || sub?.providerSubscriptionId || ''} className="font-mono text-[var(--color-text-main)]">
+                              {((tx.providerSubscriptionId || sub?.providerSubscriptionId)!).length > 14
+                                ? `${(tx.providerSubscriptionId || sub?.providerSubscriptionId)!.slice(0, 14)}...`
+                                : (tx.providerSubscriptionId || sub?.providerSubscriptionId)}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="h-5 w-5 p-0 text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]"
+                              title="Copy Subscription ID"
+                              onClick={async () => {
+                                const sId = tx.providerSubscriptionId || sub?.providerSubscriptionId || ''
+                                await navigator.clipboard.writeText(sId)
+                                setCopiedId(sId)
+                                setTimeout(() => setCopiedId(null), 2000)
+                              }}
+                              icon={copiedId === (tx.providerSubscriptionId || sub?.providerSubscriptionId) ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                            />
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}

@@ -32,6 +32,7 @@ export interface BillingSummary {
     method: string | null
     paidAt: string | null
     providerPaymentId: string
+    providerSubscriptionId?: string | null
     plan?: string
   }>
 }
@@ -46,6 +47,18 @@ export async function getBillingSummaryAction(): Promise<{
 }> {
   try {
     const user = await requireAuth()
+
+    // Safe server-side auto-reconciliation for transitional state
+    try {
+      const currentSub = await BillingService.getSubscription(user.id)
+      if (currentSub && (currentSub.status === 'PENDING' || currentSub.status === 'CREATED')) {
+        await BillingService.reconcileSubscriptionState(user.id, currentSub.providerSubscriptionId)
+      }
+    } catch (reconcileErr) {
+      logger.warn('BillingAction', 'Safe auto-reconciliation during getBillingSummary encountered error', {
+        error: reconcileErr instanceof Error ? reconcileErr.message : String(reconcileErr)
+      })
+    }
 
     const [entitlements, sub, eligibleForIntro, history] = await Promise.all([
       EntitlementService.getEntitlements(user.id),
@@ -84,6 +97,7 @@ export async function getBillingSummaryAction(): Promise<{
           method: item.method,
           paidAt: item.paidAt ? item.paidAt.toISOString() : null,
           providerPaymentId: item.providerPaymentId,
+          providerSubscriptionId: item.subscription?.providerSubscriptionId || null,
           plan: item.subscription?.plan
         }))
       }
@@ -144,6 +158,9 @@ export async function confirmCheckoutAction(params: {
   signature?: string
 }): Promise<{
   success: boolean
+  status?: string
+  paymentStatus?: string
+  isPro?: boolean
   entitlements?: UserEntitlements
   error?: string
 }> {
@@ -165,6 +182,9 @@ export async function confirmCheckoutAction(params: {
 
     return {
       success: result.success,
+      status: result.status,
+      paymentStatus: result.paymentStatus,
+      isPro: result.isPro,
       entitlements
     }
   } catch (err) {
@@ -174,6 +194,53 @@ export async function confirmCheckoutAction(params: {
     return {
       success: false,
       error: isSafeDomainMsg ? err.message : 'Unable to confirm subscription status. If paid, your status will update shortly via webhook.'
+    }
+  }
+}
+
+/**
+ * Explicitly triggers server-side reconciliation for the authenticated user's subscription.
+ */
+export async function reconcileBillingAction(subscriptionId?: string): Promise<{
+  success: boolean
+  isPro?: boolean
+  status?: string
+  entitlements?: UserEntitlements
+  error?: string
+}> {
+  try {
+    const user = await requireAuth()
+    let targetSubId = subscriptionId
+    if (!targetSubId) {
+      const sub = await BillingService.getSubscription(user.id)
+      if (!sub) {
+        return { success: false, error: 'No subscription found to reconcile.' }
+      }
+      targetSubId = sub.providerSubscriptionId
+    }
+
+    const result = await BillingService.reconcileSubscriptionState(user.id, targetSubId)
+    const entitlements = await EntitlementService.getEntitlements(user.id)
+
+    try {
+      revalidatePath('/settings')
+      revalidatePath('/pricing')
+      revalidatePath('/')
+    } catch {}
+
+    return {
+      success: true,
+      isPro: result.isPro,
+      status: result.status,
+      entitlements
+    }
+  } catch (err) {
+    const rawError = err instanceof Error ? err.message : String(err)
+    logger.error('BillingAction', 'Failed to reconcile billing', { subscriptionId, error: rawError })
+    const isSafeDomainMsg = err instanceof Error && (err.name === 'BillingError' || err.name === 'SubscriptionNotFoundError')
+    return {
+      success: false,
+      error: isSafeDomainMsg ? err.message : 'Unable to reconcile subscription status right now.'
     }
   }
 }

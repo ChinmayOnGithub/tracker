@@ -131,6 +131,7 @@ export interface ProviderSubscription {
   currentEnd: Date | null
   planId: string
   chargeAt?: Date | null
+  cancelAtPeriodEnd?: boolean
 }
 
 export interface ProviderPayment {
