@@ -224,3 +224,66 @@ a, button, input, select, textarea {
 }
 
 
+
+
+/* Desktop density pass (#55)
+ *
+ * Wide desktop screens get a deliberately tuned typography/control scale.
+ * This uses the design-system text tokens and component control hooks rather
+ * than CSS zoom, so layout geometry, sticky positioning, drag coordinates and
+ * browser zoom remain unaffected.
+ */
+@media screen and (width >= 80rem) {
+  :root {
+    --text-xs: 0.8125rem;
+    --text-sm: 0.9375rem;
+    --text-base: 1.0625rem;
+    --text-lg: 1.1875rem;
+    --text-xl: 1.3125rem;
+    --text-2xl: 1.5625rem;
+    --text-3xl: 1.9375rem;
+    --text-4xl: 2.3125rem;
+  }
+
+  [data-tracker-control="button"][data-tracker-size="sm"] {
+    min-height: 2.125rem;
+    padding-inline: 0.875rem;
+  }
+
+  [data-tracker-control="button"][data-tracker-size="md"] {
+    min-height: 2.5rem;
+    padding-inline: 1.125rem;
+  }
+
+  [data-tracker-control="button"][data-tracker-size="lg"] {
+    min-height: 2.875rem;
+    padding-inline: 1.5rem;
+  }
+
+  [data-tracker-control="button"][data-tracker-size="icon-sm"] {
+    min-width: 2.25rem;
+    min-height: 2.25rem;
+  }
+
+  [data-tracker-control="icon-button"][data-tracker-size="sm"] {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  [data-tracker-control="icon-button"][data-tracker-size="md"] {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  [data-tracker-control="icon-button"][data-tracker-size="lg"] {
+    width: 3rem;
+    height: 3rem;
+  }
+}
+
+/* Keep user/browser text enlargement authoritative. */
+@media (prefers-reduced-motion: reduce) {
+  [data-tracker-control] {
+    transition-duration: 0.01ms;
+  }
+}
