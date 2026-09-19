@@ -1,4 +1,4 @@
-import { describe, it, expect, mock } from 'bun:test'
+import { describe, it, expect, mock, afterEach } from 'bun:test'
 import { POST } from '@/app/api/sync/calendar/route'
 import { db } from '@/lib/db'
 import { CalendarService } from '@/modules/calendar/services/CalendarService'
@@ -8,6 +8,13 @@ describe('Issue #4 & #5: Google Calendar Webhook Hardening', () => {
   const validResourceId = 'resource-valid-456'
   const mismatchResourceId = 'resource-tampered-789'
   const userId = 'user-abc-111'
+  const originalCalendarSync = CalendarService.sync
+  const originalCalendarSyncStateFindFirst = db.calendarSyncState.findFirst
+
+  afterEach(() => {
+    CalendarService.sync = originalCalendarSync
+    db.calendarSyncState.findFirst = originalCalendarSyncStateFindFirst
+  })
 
   it('Issue #4: Reject when required webhook headers are missing', async () => {
     const req = new Request('http://localhost:3000/api/sync/calendar', {

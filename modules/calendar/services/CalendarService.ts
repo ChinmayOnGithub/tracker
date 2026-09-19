@@ -10,11 +10,16 @@ import { logger } from '@/lib/logger'
 export class CalendarService {
   private static async getProvider(userId: string) {
     const isGoogleConnected = await db.googleCredential.count({ where: { userId } }) > 0
-    if (isGoogleConnected) {
-      await providerRegistry.get(DbProvider.GOOGLE)
-      return calendarProviderRegistry.get('GOOGLE')
-    }
-    return undefined
+    if (!isGoogleConnected) return undefined
+
+    // Reuse an already-registered provider before resolving the deferred
+    // provider loader. This keeps explicit provider registrations deterministic
+    // (including tests) and avoids replacing them with a second instance.
+    const registeredProvider = calendarProviderRegistry.get('GOOGLE')
+    if (registeredProvider) return registeredProvider
+
+    await providerRegistry.get(DbProvider.GOOGLE)
+    return calendarProviderRegistry.get('GOOGLE')
   }
 
   static async getEvents(

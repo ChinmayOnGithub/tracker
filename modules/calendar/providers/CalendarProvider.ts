@@ -33,6 +33,10 @@ class CalendarProviderRegistry {
   get(name: string): CalendarProvider | undefined {
     return this.providers.get(name.toUpperCase())
   }
+
+  reset() {
+    this.providers.clear()
+  }
 }
 
 export const calendarProviderRegistry = new CalendarProviderRegistry()
