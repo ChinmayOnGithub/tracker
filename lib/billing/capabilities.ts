@@ -28,21 +28,21 @@ export const BILLING_CAPABILITIES: readonly BillingCapabilityDefinition[] = [
     name: 'Advanced Journal',
     description: 'Advanced journal capabilities available to your current plan.',
     moduleLabel: 'Journal',
-    href: '/?module=journal'
+    href: '/journal'
   },
   {
     key: 'advanced_vault',
     name: 'Secure Vault',
     description: 'Encrypted document storage with your plan capacity.',
     moduleLabel: 'Vault',
-    href: '/?module=vault'
+    href: '/documents'
   },
   {
     key: 'unlimited_notes',
     name: 'Notes & History',
     description: 'Access to the notes/history capability defined by your plan.',
     moduleLabel: 'Notes',
-    href: '/?module=notes'
+    href: '/notes'
   },
   {
     key: 'priority_sync',
