@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, mock } from 'bun:test'
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test'
 import { BackupService } from '@/lib/database/local/BackupService'
 import { IndexedDBEngine } from '@/lib/database/local/IndexedDBEngine'
 import { LocalJournalRepository } from '@/modules/journal/repository/LocalJournalRepository'
@@ -10,6 +10,7 @@ mock.module('@/app/actions/journal', () => ({
 
 describe('Journal Backup & Restore Regression Test Suite', () => {
   let localStore: Record<string, Record<string, unknown>[]> = {}
+  const originalIndexedDBGetInstance = IndexedDBEngine.getInstance
 
   beforeEach(() => {
     // Clean and isolate database/mock state for each test
@@ -90,6 +91,10 @@ describe('Journal Backup & Restore Regression Test Suite', () => {
       // Inject mock engine
       IndexedDBEngine.getInstance = () => mockEngine as unknown as IndexedDBEngine
     }
+  })
+
+  afterEach(() => {
+    IndexedDBEngine.getInstance = originalIndexedDBGetInstance
   })
 
   it('TEST 1: LocalJournalRepository -> BackupService.exportBackup() -> verify journal_entries', async () => {
