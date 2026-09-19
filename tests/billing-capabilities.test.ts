@@ -75,6 +75,16 @@ describe('billing capability presentation model', () => {
     expect(getCapabilityValue(pro, 'priority_sync')).toBe(true)
   })
 
+  test('maps every canonical capability to a real product surface or explicit infrastructure surface', () => {
+    const byKey = Object.fromEntries(BILLING_CAPABILITIES.map((item) => [item.key, item]))
+    expect(byKey.advanced_calendar.href).toBe('/calendar')
+    expect(byKey.advanced_journal.href).toBe('/journal')
+    expect(byKey.advanced_vault.href).toBe('/documents')
+    expect(byKey.unlimited_notes.href).toBe('/notes')
+    expect(byKey.priority_sync.href).toBeUndefined()
+    expect(byKey.priority_sync.description).toContain('no separate control')
+  })
+
   test('renders canonical capacity limits', () => {
     expect(getVaultLimit(free)).toBe(10)
     expect(getVaultLimit(pro)).toBe(10000)
