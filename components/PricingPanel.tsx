@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Script from 'next/script'
 import { Card, CardHeader, CardBody, Button, Badge } from '@/design-system'
 import {
-  Check, Sparkles, ArrowRight, AlertCircle
+  Check, Sparkles, ArrowRight, AlertCircle, Info
 } from 'lucide-react'
 import { getBillingSummaryAction, startSubscriptionAction, confirmCheckoutAction } from '@/app/actions/billing'
 import { SafeCheckoutPayload, PlanId } from '@/lib/billing/types'
@@ -23,8 +23,11 @@ export const PricingPanel: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [currentPlan, setCurrentPlan] = useState<PlanId>('FREE')
+  const [currentInterval, setCurrentInterval] = useState<string | null>(null)
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false)
   const [isEligibleForIntro, setIsEligibleForIntro] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [infoMessage, setInfoMessage] = useState<string | null>(null)
   const [scriptLoaded, setScriptLoaded] = useState(false)
 
   // Fetch billing state to identify current plan and promo eligibility
@@ -36,6 +39,12 @@ export const PricingPanel: React.FC = () => {
         if (mounted && res.success && res.data) {
           setCurrentPlan(res.data.plan)
           setIsEligibleForIntro(res.data.isEligibleForIntro)
+          setCurrentInterval(res.data.subscription?.billingInterval ?? null)
+          setCancelAtPeriodEnd(res.data.subscription?.cancelAtPeriodEnd ?? false)
+          // Pre-select interval tab matching user's current billing interval
+          if (res.data.subscription?.billingInterval === 'annual') {
+            setInterval('annual')
+          }
         }
       } catch (err) {
         console.error('Failed to load billing status:', err)
@@ -51,12 +60,20 @@ export const PricingPanel: React.FC = () => {
 
   const handleSubscribe = async (targetPlan: 'PRO_MONTHLY' | 'PRO_ANNUAL') => {
     setErrorMessage(null)
+    setInfoMessage(null)
     setActionLoading(true)
 
     try {
       const res = await startSubscriptionAction(targetPlan)
       if (!res.success || !res.checkout) {
-        setErrorMessage(res.error || 'Failed to start checkout session.')
+        if (res.code === 'PLAN_SWITCH_NOT_ALLOWED') {
+          setInfoMessage(
+            res.error ||
+            'You have an active subscription. Cancel it from Settings → Billing to switch plans.'
+          )
+        } else {
+          setErrorMessage(res.error || 'Failed to start checkout session.')
+        }
         setActionLoading(false)
         return
       }
@@ -112,6 +129,28 @@ export const PricingPanel: React.FC = () => {
   }
 
   const isPro = currentPlan === 'PRO_MONTHLY' || currentPlan === 'PRO_ANNUAL'
+  const isMonthly = currentPlan === 'PRO_MONTHLY'
+  const isAnnual = currentPlan === 'PRO_ANNUAL'
+
+  // True when the currently shown interval tab matches the user's active plan
+  const isCurrentPlanButton = isPro && (
+    (interval === 'monthly' && isMonthly) || (interval === 'annual' && isAnnual)
+  )
+  // Plan switch blocked if user has active (non-cancelled) sub on different interval
+  const isPlanSwitchBlocked = isPro && !isCurrentPlanButton && !cancelAtPeriodEnd
+
+  const getProCtaLabel = () => {
+    if (actionLoading) return 'Starting Checkout...'
+    if (isPro) {
+      if (isCurrentPlanButton) return 'Current Plan'
+      if (interval === 'annual' && isMonthly) return 'Switch to Annual (Save 33%)'
+      if (interval === 'monthly' && isAnnual) return 'Switch to Monthly'
+      return 'Manage Subscription'
+    }
+    if (interval === 'monthly' && isEligibleForIntro) return 'Get Started for ₹29'
+    if (interval === 'annual') return 'Subscribe Annual (₹799)'
+    return 'Subscribe Pro (₹99/mo)'
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 md:py-12 space-y-12">
@@ -166,6 +205,13 @@ export const PricingPanel: React.FC = () => {
         <div className="max-w-md mx-auto p-4 bg-rose-500/10 border border-rose-500/20 rounded-[var(--radius-md)] text-xs text-rose-600 dark:text-rose-400 flex items-center gap-3">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{errorMessage}</span>
+        </div>
+      )}
+
+      {infoMessage && (
+        <div className="max-w-xl mx-auto p-4 bg-blue-500/10 border border-blue-500/20 rounded-[var(--radius-md)] text-xs text-blue-700 dark:text-blue-300 flex items-start gap-3">
+          <Info className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{infoMessage}</span>
         </div>
       )}
 
@@ -247,7 +293,7 @@ export const PricingPanel: React.FC = () => {
               </div>
               {isPro && (
                 <Badge variant="default" className="text-xs font-semibold">
-                  Active Plan
+                  {isCurrentPlanButton ? 'Current Plan' : 'Active'}
                 </Badge>
               )}
             </div>
@@ -302,11 +348,11 @@ export const PricingPanel: React.FC = () => {
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span>Automated External Calendar Sync & Writebacks</span>
+                <span>Automated External Calendar Sync &amp; Writebacks</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span>Rich Journal Exports (Encrypted PDF & JSON)</span>
+                <span>Rich Journal Exports (Encrypted PDF &amp; JSON)</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
@@ -314,9 +360,26 @@ export const PricingPanel: React.FC = () => {
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span>Priority Cloud Sync & Automated Backup Engine</span>
+                <span>Priority Cloud Sync &amp; Automated Backup Engine</span>
               </li>
             </ul>
+
+            {/* Plan switch guidance for existing Pro users viewing a different interval */}
+            {isPlanSwitchBlocked && (
+              <div className="mt-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-[var(--radius-md)] text-[11px] text-blue-700 dark:text-blue-300 leading-relaxed flex items-start gap-2">
+                <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>
+                  You are on {currentInterval === 'monthly' ? 'Monthly' : 'Annual'} billing. To switch intervals, cancel your subscription from{' '}
+                  <button
+                    className="underline underline-offset-2 font-semibold cursor-pointer"
+                    onClick={() => router.push('/settings?tab=billing')}
+                  >
+                    Settings → Billing
+                  </button>{' '}
+                  first. Pro access stays active until the period ends.
+                </span>
+              </div>
+            )}
           </CardBody>
 
           <div className="p-6 pt-0 mt-auto">
@@ -324,9 +387,16 @@ export const PricingPanel: React.FC = () => {
               <Button
                 variant="primary"
                 className="w-full"
-                onClick={() => router.push('/settings?tab=billing')}
+                disabled={isPlanSwitchBlocked}
+                onClick={() => {
+                  if (isCurrentPlanButton) {
+                    router.push('/settings?tab=billing')
+                  } else if (!isPlanSwitchBlocked) {
+                    handleSubscribe(interval === 'annual' ? 'PRO_ANNUAL' : 'PRO_MONTHLY')
+                  }
+                }}
               >
-                Manage Subscription
+                {getProCtaLabel()}
               </Button>
             ) : (
               <Button
@@ -339,11 +409,7 @@ export const PricingPanel: React.FC = () => {
                   'Starting Checkout...'
                 ) : (
                   <span className="flex items-center justify-center gap-2">
-                    {interval === 'monthly' && isEligibleForIntro
-                      ? 'Get Started for ₹29'
-                      : interval === 'annual'
-                      ? 'Subscribe Annual (₹799)'
-                      : 'Subscribe Pro (₹99/mo)'}
+                    {getProCtaLabel()}
                     <ArrowRight className="w-4 h-4" />
                   </span>
                 )}

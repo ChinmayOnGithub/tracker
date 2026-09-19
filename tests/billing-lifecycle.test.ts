@@ -82,7 +82,7 @@ describe('Subscription Lifecycle & Billing History Tests', () => {
   })
 
   it('should cancel subscription: set cancelAtPeriodEnd to true and compute effective access date', async () => {
-    const originalFindActive = db.subscription.findFirst
+    const originalFindMany = db.subscription.findMany
     const originalUpdateSub = db.subscription.update
     const originalAuditLog = AuditService.log
 
@@ -90,15 +90,28 @@ describe('Subscription Lifecycle & Billing History Tests', () => {
     const periodEnd = new Date('2026-10-15T00:00:00Z')
 
     try {
+      // getCanonicalSubscription uses findMany, so mock that
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (db.subscription as any).findFirst = async () => ({
-        id: 'sub_active_cancel',
-        userId: 'usr_cancel_test',
-        providerSubscriptionId: 'sub_prov_cancel_1',
-        status: 'ACTIVE',
-        currentPeriodEnd: periodEnd,
-        cancelAtPeriodEnd: false
-      });
+      (db.subscription as any).findMany = async () => ([
+        {
+          id: 'sub_active_cancel',
+          userId: 'usr_cancel_test',
+          providerSubscriptionId: 'sub_prov_cancel_1',
+          plan: 'PRO_MONTHLY',
+          billingInterval: 'monthly',
+          status: 'ACTIVE',
+          currentPeriodEnd: periodEnd,
+          cancelAtPeriodEnd: false,
+          currentPeriodStart: new Date(),
+          canceledAt: null,
+          isIntroductory: false,
+          provider: 'RAZORPAY',
+          billingCustomerId: null,
+          deletedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ]);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.subscription as any).update = async ({ data }: { data: { cancelAtPeriodEnd: boolean } }) => {
         updatedCancelFlag = data.cancelAtPeriodEnd
@@ -114,7 +127,7 @@ describe('Subscription Lifecycle & Billing History Tests', () => {
       expect(updatedCancelFlag).toBe(true)
     } finally {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (db.subscription as any).findFirst = originalFindActive;
+      (db.subscription as any).findMany = originalFindMany;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.subscription as any).update = originalUpdateSub;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

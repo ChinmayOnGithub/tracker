@@ -128,11 +128,11 @@ describe('Server-Authoritative Entitlements Engine', () => {
   })
 
   it('should correctly validate vault storage capacity limits based on entitlements', async () => {
-    const originalFindFirst = db.subscription.findFirst
+    const originalFindMany = db.subscription.findMany
     try {
-      // Mock db.subscription.findFirst to return null (Free plan)
+      // Mock db.subscription.findMany to return empty (Free plan)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (db.subscription as any).findFirst = async () => null
+      (db.subscription as any).findMany = async () => []
 
       const capacityUnder = await EntitlementService.checkVaultCapacity('user_test', 5)
       expect(capacityUnder.allowed).toBe(true)
@@ -143,29 +143,31 @@ describe('Server-Authoritative Entitlements Engine', () => {
       expect(capacityOver.allowed).toBe(false)
       expect(capacityOver.maxFiles).toBe(10);
 
-      // Mock active pro subscription
+      // Mock active pro subscription — findMany returns array with one ACTIVE record
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (db.subscription as any).findFirst = async () => ({
-        id: 'sub_pro',
-        userId: 'user_test',
-        plan: 'PRO_MONTHLY',
-        status: 'ACTIVE',
-        billingInterval: 'monthly',
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(Date.now() + 86400000),
-        cancelAtPeriodEnd: false,
-        canceledAt: null,
-        isIntroductory: false,
-        provider: 'RAZORPAY',
-        providerSubscriptionId: 'sub_pro_123',
-        billingCustomerId: null,
-        trialStart: null,
-        trialEnd: null,
-        metadata: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        deletedAt: null
-      })
+      (db.subscription as any).findMany = async () => ([
+        {
+          id: 'sub_pro',
+          userId: 'user_test',
+          plan: 'PRO_MONTHLY',
+          status: 'ACTIVE',
+          billingInterval: 'monthly',
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: new Date(Date.now() + 86400000),
+          cancelAtPeriodEnd: false,
+          canceledAt: null,
+          isIntroductory: false,
+          provider: 'RAZORPAY',
+          providerSubscriptionId: 'sub_pro_123',
+          billingCustomerId: null,
+          trialStart: null,
+          trialEnd: null,
+          metadata: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          deletedAt: null
+        }
+      ])
 
       const capacityPro = await EntitlementService.checkVaultCapacity('user_test', 50)
       expect(capacityPro.allowed).toBe(true)
@@ -173,7 +175,7 @@ describe('Server-Authoritative Entitlements Engine', () => {
       expect(capacityPro.maxFiles).toBe(10000)
     } finally {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (db.subscription as any).findFirst = originalFindFirst
+      (db.subscription as any).findMany = originalFindMany
     }
   })
 })

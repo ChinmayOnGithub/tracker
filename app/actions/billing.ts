@@ -105,6 +105,7 @@ export async function startSubscriptionAction(plan: PlanId): Promise<{
   success: boolean
   checkout?: SafeCheckoutPayload
   error?: string
+  code?: string
 }> {
   try {
     const user = await requireAuth()
@@ -117,13 +118,21 @@ export async function startSubscriptionAction(plan: PlanId): Promise<{
   } catch (err) {
     const rawError = err instanceof Error ? err.message : String(err)
     logger.error('BillingAction', 'Failed to start subscription', { plan, error: rawError })
-    const isSafeDomainMsg = err instanceof Error && (err.name === 'BillingError' || err.name === 'InvalidPlanError')
+    const billingErr = err instanceof Error && err.name === 'BillingError'
+      ? (err as Error & { code?: string })
+      : null
+    const isSafeDomainMsg = err instanceof Error && (
+      err.name === 'BillingError' ||
+      err.name === 'InvalidPlanError'
+    )
     return {
       success: false,
-      error: isSafeDomainMsg ? err.message : 'Unable to initiate checkout right now. Please try again later.'
+      error: isSafeDomainMsg ? err.message : 'Unable to initiate checkout right now. Please try again later.',
+      code: billingErr?.code
     }
   }
 }
+
 
 /**
  * Confirms checkout completion following client-side checkout modal.
