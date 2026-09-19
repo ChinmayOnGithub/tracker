@@ -19,35 +19,35 @@ export const BILLING_CAPABILITIES: readonly BillingCapabilityDefinition[] = [
   {
     key: 'advanced_calendar',
     name: 'Advanced Calendar',
-    description: 'Google Calendar provider sync and supported writebacks.',
+    description: 'Two-way Google Calendar synchronization and supported writebacks.',
     moduleLabel: 'Calendar',
     href: '/calendar'
   },
   {
     key: 'advanced_journal',
     name: 'Advanced Journal',
-    description: 'Advanced journal capabilities available to your current plan.',
+    description: 'Journal export and archive capabilities available to your current plan.',
     moduleLabel: 'Journal',
     href: '/journal'
   },
   {
     key: 'advanced_vault',
-    name: 'Secure Vault',
-    description: 'Encrypted document storage with your plan capacity.',
+    name: 'Advanced Vault',
+    description: 'Expanded encrypted document capacity based on your active plan.',
     moduleLabel: 'Vault',
     href: '/documents'
   },
   {
     key: 'unlimited_notes',
     name: 'Notes & History',
-    description: 'Access to the notes/history capability defined by your plan.',
+    description: 'Notes and historical entries available under your current plan.',
     moduleLabel: 'Notes',
     href: '/notes'
   },
   {
     key: 'priority_sync',
     name: 'Priority Sync',
-    description: 'Priority handling for the offline sync queue when enabled.',
+    description: 'Billing entitlement for priority cloud-sync behavior; no separate control is exposed.',
     moduleLabel: 'Sync',
   }
 ]
