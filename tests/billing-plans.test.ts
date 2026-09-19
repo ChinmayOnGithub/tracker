@@ -52,15 +52,33 @@ describe('Billing Plans & Centralized Pricing Configuration', () => {
   })
 
   it('should map provider plan IDs correctly based on environment or test defaults', () => {
-    const monthlyProviderId = getProviderPlanId('PRO_MONTHLY')
-    expect(typeof monthlyProviderId).toBe('string')
-    expect(monthlyProviderId.length).toBeGreaterThan(0)
+    const origMonthly = process.env.RAZORPAY_PLAN_PRO_MONTHLY
+    const origAnnual = process.env.RAZORPAY_PLAN_PRO_ANNUAL
 
-    const annualProviderId = getProviderPlanId('PRO_ANNUAL')
-    expect(typeof annualProviderId).toBe('string')
-    expect(annualProviderId.length).toBeGreaterThan(0)
+    try {
+      // Ensure deterministic test plan IDs are configured if not already provided by environment
+      if (!process.env.RAZORPAY_PLAN_PRO_MONTHLY) {
+        process.env.RAZORPAY_PLAN_PRO_MONTHLY = 'plan_TdpzGACweUZ0Qj'
+      }
+      if (!process.env.RAZORPAY_PLAN_PRO_ANNUAL) {
+        process.env.RAZORPAY_PLAN_PRO_ANNUAL = 'plan_TdpzGJ8IOCnpju'
+      }
 
-    const freeProviderId = getProviderPlanId('FREE' as PlanId)
-    expect(freeProviderId).toBe('')
+      const monthlyProviderId = getProviderPlanId('PRO_MONTHLY')
+      expect(typeof monthlyProviderId).toBe('string')
+      expect(monthlyProviderId.length).toBeGreaterThan(0)
+      expect(monthlyProviderId).toBe(process.env.RAZORPAY_PLAN_PRO_MONTHLY)
+
+      const annualProviderId = getProviderPlanId('PRO_ANNUAL')
+      expect(typeof annualProviderId).toBe('string')
+      expect(annualProviderId.length).toBeGreaterThan(0)
+      expect(annualProviderId).toBe(process.env.RAZORPAY_PLAN_PRO_ANNUAL)
+
+      const freeProviderId = getProviderPlanId('FREE' as PlanId)
+      expect(freeProviderId).toBe('')
+    } finally {
+      process.env.RAZORPAY_PLAN_PRO_MONTHLY = origMonthly
+      process.env.RAZORPAY_PLAN_PRO_ANNUAL = origAnnual
+    }
   })
 })

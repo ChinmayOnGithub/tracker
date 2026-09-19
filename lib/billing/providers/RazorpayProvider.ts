@@ -42,9 +42,15 @@ export class RazorpayProvider implements IBillingProvider {
   private webhookSecret: string
 
   constructor(options?: { keyId?: string; keySecret?: string; webhookSecret?: string }) {
-    this.keyId = options?.keyId || process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
-    this.keySecret = options?.keySecret || process.env.RAZORPAY_KEY_SECRET || ''
-    this.webhookSecret = options?.webhookSecret || process.env.RAZORPAY_WEBHOOK_SECRET || ''
+    if (options !== undefined) {
+      this.keyId = options.keyId !== undefined ? options.keyId : (process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '')
+      this.keySecret = options.keySecret !== undefined ? options.keySecret : (process.env.RAZORPAY_KEY_SECRET || '')
+      this.webhookSecret = options.webhookSecret !== undefined ? options.webhookSecret : (process.env.RAZORPAY_WEBHOOK_SECRET || '')
+    } else {
+      this.keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
+      this.keySecret = process.env.RAZORPAY_KEY_SECRET || ''
+      this.webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || ''
+    }
 
     if (
       this.keyId &&
