@@ -218,7 +218,7 @@ const defaultState: StoreState = {
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined)
 
-export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: string | null }> = ({ children, userId }) => {
   const [state, setState] = useState<StoreState>(defaultState)
   const [isSyncing, setIsSyncing] = useState(false)
 
@@ -297,17 +297,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           return Array.from(map.values())
         }
 
-        const localTemplates = await templateRepo.getAll()
-        const localLogs = await logRepo.getAll()
-        const localJournals = await journalRepo.getAll()
-        const localWeights = await weightRepo.getAll()
-        const localLeaves = await leaveRepo.getAll()
+        // Scope offline reads to the authenticated user (#57: cross-user data isolation).
+        // getAllForUser uses the userId index; falls back to filtered getAll when userId is null.
+        const localTemplates = userId ? await templateRepo.getAllForUser(userId) : await templateRepo.getAll()
+        const localLogs = userId ? await logRepo.getAllForUser(userId) : await logRepo.getAll()
+        const localJournals = userId ? await journalRepo.getAllForUser(userId) : await journalRepo.getAll()
+        const localWeights = userId ? await weightRepo.getAllForUser(userId) : await weightRepo.getAll()
+        const localLeaves = userId ? await leaveRepo.getAllForUser(userId) : await leaveRepo.getAll()
 
         let localNotes: Note[] = []
         try {
           const { NoteRepository } = await import('@/modules/notes/repository/NoteRepository')
           const noteRepo = new NoteRepository()
-          localNotes = await noteRepo.getAll()
+          localNotes = userId ? await noteRepo.getAllForUser(userId) : await noteRepo.getAll()
         } catch (_) {}
 
         // Hydrate Link Library collections & links if empty
@@ -376,7 +378,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     };
     loadLocalData();
-  }, []);
+  }, [userId]);
 
   const initialize = useCallback((initialData: Partial<StoreState>) => {
     setState(prev => {

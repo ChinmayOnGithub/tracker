@@ -31,6 +31,9 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
   const router = useRouter()
   const dateParam = searchParams?.get('date')
   const { state, initialize, setCacheMetadata } = useStore()
+  // Scope dedupe key to the authenticated user so requests from different
+  // user sessions never coalesce into a shared in-flight promise (#57)
+  const currentUserId = context?.currentUser?.id ?? 'guest'
 
   // Loop-safe state ref to prevent useEffect infinite trigger loops
   const stateRef = useRef(state)
@@ -50,7 +53,7 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
       const revalidate = async () => {
         setCacheMetadata('calendar', lastFetched, true)
         try {
-          const res = await requestDeduplicator.dedupe('calendar:data', () =>
+          const res = await requestDeduplicator.dedupe(`calendar:data:${currentUserId}`, () =>
             fetchCalendarDataAction()
           )
           if (active && res.success && res.data) {
@@ -86,7 +89,7 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
     return () => {
       active = false
     }
-  }, [initialize, setCacheMetadata])
+  }, [initialize, setCacheMetadata, currentUserId])
 
   // Derive values from global store
   const notes = useMemo(() => {

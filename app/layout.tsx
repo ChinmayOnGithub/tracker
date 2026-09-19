@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
+import { cookies } from "next/headers";
 import ThemeScript from "@/components/ThemeScript";
 import ClientProviders from "@/components/ClientProviders";
+import { verifySession } from "@/lib/session";
 import "./globals.css";
 
 const inter = Inter({
@@ -33,11 +35,19 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Resolve the authenticated userId without a DB round-trip.
+  // verifySession() uses HMAC — it is safe to call here.
+  // The userId is only used to key the StoreProvider (client-state isolation for #57).
+  const cookieStore = await cookies()
+  const sessionToken = cookieStore.get('session_token')?.value
+  const session = verifySession(sessionToken)
+  const sessionUserId = session?.userId ?? null
+
   return (
     <html
       lang="en"
@@ -48,7 +58,7 @@ export default function RootLayout({
         <ThemeScript />
       </head>
       <body className={`${inter.variable} ${jetbrainsMono.variable} min-h-full flex flex-col bg-slate-50 dark:bg-zinc-950 text-slate-800 dark:text-zinc-100 selection:bg-slate-200 dark:selection:bg-zinc-800 selection:text-slate-900 dark:selection:text-white`}>
-        <ClientProviders>
+        <ClientProviders userId={sessionUserId}>
           {children}
         </ClientProviders>
         <Script id="register-sw" strategy="afterInteractive">

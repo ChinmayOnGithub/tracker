@@ -33,6 +33,9 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
 }) => {
   const context = useContext(CalendarDataContext)
   const { state, initialize, setCacheMetadata } = useStore()
+  // Scope dedupe keys to the authenticated user so requests from different
+  // user sessions never coalesce into a shared in-flight promise (#57)
+  const currentUserId = context?.currentUser?.id ?? 'guest'
 
   // Loop-safe state ref to prevent useEffect infinite trigger loops
   const stateRef = useRef(state)
@@ -56,7 +59,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
         setCacheMetadata(dateCacheKey, lastFetched, true) // set validation in progress
         try {
           // P0: In-flight deduplication prevents duplicate identical requests
-          const res = await requestDeduplicator.dedupe(`dashboard:${todayStr}`, () =>
+          const res = await requestDeduplicator.dedupe(`dashboard:${todayStr}:${currentUserId}`, () =>
             fetchDashboardDataAction(todayStr)
           )
           if (active && res.success && res.data) {
@@ -76,7 +79,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
               // Defer to idle callback or microtask so Today UI remains completely fluid
               const runSecondary = async () => {
                 try {
-                  const secRes = await requestDeduplicator.dedupe('prefetch:secondary', () =>
+                  const secRes = await requestDeduplicator.dedupe(`prefetch:secondary:${currentUserId}`, () =>
                     prefetchSecondaryDataAction()
                   )
                   if (active && secRes.success && secRes.data) {
@@ -114,7 +117,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     return () => {
       active = false
     }
-  }, [todayStr, dateCacheKey, initialize, setCacheMetadata])
+  }, [todayStr, dateCacheKey, initialize, setCacheMetadata, currentUserId])
 
   if (!context) {
     throw new Error('TodayDashboardWrapper must be rendered inside a DashboardLayout')

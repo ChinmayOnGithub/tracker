@@ -109,6 +109,36 @@ class WriteQueue {
       }
     }
   }
+
+  /**
+   * Drains the queue completely, discarding all pending and in-flight items.
+   * Must be called on logout/user-switch BEFORE session is invalidated so that
+   * User A's pending writes never execute under User B's session.
+   */
+  public drain(): void {
+    // Roll back active in-flight item if present
+    if (this.activeItem) {
+      try {
+        this.activeItem.rollback();
+      } catch {
+        // Ignore rollback errors during drain
+      }
+    }
+
+    // Roll back any queued items
+    for (const item of this.queue) {
+      try {
+        item.rollback();
+      } catch {
+        // Ignore rollback errors during drain — we are clearing state unconditionally
+      }
+    }
+    this.queue = [];
+    this.activeItem = null;
+    this.isProcessing = false;
+    this.notify();
+  }
 }
 
 export const writeQueue = new WriteQueue();
+

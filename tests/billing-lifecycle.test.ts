@@ -92,26 +92,31 @@ describe('Subscription Lifecycle & Billing History Tests', () => {
     try {
       // getCanonicalSubscription uses findMany, so mock that
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (db.subscription as any).findMany = async () => ([
-        {
-          id: 'sub_active_cancel',
-          userId: 'usr_cancel_test',
-          providerSubscriptionId: 'sub_prov_cancel_1',
-          plan: 'PRO_MONTHLY',
-          billingInterval: 'monthly',
-          status: 'ACTIVE',
-          currentPeriodEnd: periodEnd,
-          cancelAtPeriodEnd: false,
-          currentPeriodStart: new Date(),
-          canceledAt: null,
-          isIntroductory: false,
-          provider: 'RAZORPAY',
-          billingCustomerId: null,
-          deletedAt: null,
-          createdAt: new Date(),
-          updatedAt: new Date()
+      (db.subscription as any).findMany = async ({ where }: { where?: { userId?: string } } = {}) => {
+        if (where?.userId === 'usr_cancel_test') {
+          return [
+            {
+              id: 'sub_active_cancel',
+              userId: 'usr_cancel_test',
+              providerSubscriptionId: 'sub_prov_cancel_1',
+              plan: 'PRO_MONTHLY',
+              billingInterval: 'monthly',
+              status: 'ACTIVE',
+              currentPeriodEnd: periodEnd,
+              cancelAtPeriodEnd: false,
+              currentPeriodStart: new Date(),
+              canceledAt: null,
+              isIntroductory: false,
+              provider: 'RAZORPAY',
+              billingCustomerId: null,
+              deletedAt: null,
+              createdAt: new Date(),
+              updatedAt: new Date()
+            }
+          ]
         }
-      ]);
+        return []
+      };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.subscription as any).update = async ({ data }: { data: { cancelAtPeriodEnd: boolean } }) => {
         updatedCancelFlag = data.cancelAtPeriodEnd

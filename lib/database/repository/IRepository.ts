@@ -1,6 +1,7 @@
 export interface IRepository<T> {
   getById(id: string): Promise<T | null>;
   getAll(): Promise<T[]>;
+  getAllForUser?(userId: string): Promise<T[]>;
   save(entity: T): Promise<void>;
   delete(id: string): Promise<void>;
 }
@@ -8,6 +9,7 @@ export interface IRepository<T> {
 export interface ILocalRepository<T> {
   getById(id: string): Promise<T | null>;
   getAll(): Promise<T[]>;
+  getAllForUser?(userId: string): Promise<T[]>;
   save(entity: T): Promise<void>;
   saveAtomic(entity: T, queueItem: unknown): Promise<void>;
   delete(id: string): Promise<void>;

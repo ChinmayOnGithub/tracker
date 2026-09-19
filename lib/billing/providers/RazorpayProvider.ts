@@ -159,14 +159,18 @@ export class RazorpayProvider implements IBillingProvider {
    */
   async createSubscription(params: CreateSubscriptionInput): Promise<SubscriptionCheckoutResult> {
     const { planId, customerId, offerId, isIntroductory, notes } = params
-    const planConfig = getPlan(planId)
-    const providerPlanId = getProviderPlanId(planId)
 
+    // Validate credentials FIRST — before any plan ID resolution.
+    // This ensures the canonical error is always "Razorpay credentials are not configured"
+    // regardless of which env vars are also missing (#52).
     if (!this.razorpayClient) {
       throw new ProviderConfigurationError(
         'Razorpay credentials are not configured. Cannot create subscription on payment gateway.'
       )
     }
+
+    const planConfig = getPlan(planId)
+    const providerPlanId = getProviderPlanId(planId)
 
     if (isIntroductory && !offerId) {
       throw new ProviderConfigurationError(

@@ -15,6 +15,23 @@ export class BaseLocalRepository<T extends { id: string; deletedAt?: Date | stri
     return all.filter(item => !item.deletedAt);
   }
 
+  /**
+   * Returns all non-deleted records belonging to a specific user.
+   * Uses the userId index for efficient scoped reads, preventing cross-user
+   * data leakage during offline hydration (#57).
+   */
+  public async getAllForUser(userId: string): Promise<T[]> {
+    try {
+      const items = await this.engine.queryIndex<T>(this.storeName, 'userId', userId);
+      return items.filter(item => !item.deletedAt);
+    } catch {
+      // Store may not have a userId index (e.g. settings store) — fall back to full scan
+      const all = await this.engine.getAll<T>(this.storeName);
+      const typed = all as (T & { userId?: string })[];
+      return typed.filter(item => !item.deletedAt && item.userId === userId) as T[];
+    }
+  }
+
   public async save(entity: T): Promise<void> {
     await this.engine.put(this.storeName, entity);
   }
@@ -40,6 +57,7 @@ export class BaseLocalRepository<T extends { id: string; deletedAt?: Date | stri
   }
 }
 
+
 export abstract class BaseRemoteRepository<T> implements IRemoteRepository<T> {
   public abstract create(entity: T): Promise<unknown>;
   public abstract update(id: string, entity: Partial<T>): Promise<unknown>;
@@ -58,6 +76,15 @@ export class BaseRepository<T extends { id: string }> implements IRepository<T> 
 
   public async getAll(): Promise<T[]> {
     return this.local.getAll();
+  }
+
+  public async getAllForUser(userId: string): Promise<T[]> {
+    if (this.local.getAllForUser) {
+      return this.local.getAllForUser(userId);
+    }
+    const all = await this.local.getAll();
+    const typed = all as (T & { userId?: string; deletedAt?: Date | string | null })[];
+    return typed.filter(item => !item.deletedAt && (item.userId === undefined || item.userId === userId)) as T[];
   }
 
   public async save(entity: T): Promise<void> {

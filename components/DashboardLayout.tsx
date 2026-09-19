@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { ActivityTemplate } from '@/types'
 import { verifyPinAction, registerUserAction, logoutAction } from '@/app/actions/auth'
+import { writeQueue } from '@/lib/store/write-queue'
+import { requestDeduplicator } from '@/lib/store/requestDeduplicator'
 import { Layers, Sun, Moon, ShieldAlert } from 'lucide-react'
 import { DashboardShell } from '@/modules/core/dashboard'
 import { getAgendaAction } from '@/modules/sync/google-calendar/actions'
@@ -417,6 +419,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     }
     setIsAuthenticated(false) // Immediately hide calendar data
     setUser(null)
+    // Drain User A's write queue before session is invalidated so pending writes
+    // never execute under User B's session (part of #57 client-state isolation)
+    writeQueue.drain()
+    // Clear all in-flight deduplicated requests so User A responses cannot
+    // populate User B's store after login
+    requestDeduplicator.clear()
     await logoutAction()
     window.location.replace('/')
   }
