@@ -40,6 +40,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
+    // ─── Enforce Server-Authoritative Vault Storage Capacity ─────────
+    const { EntitlementService } = await import('@/lib/services/EntitlementService')
+    const currentFileCount = await db.secureDocument.count({
+      where: { userId: session.userId, isFolder: false, deletedAt: null }
+    })
+    const capacity = await EntitlementService.checkVaultCapacity(session.userId, currentFileCount)
+    if (!capacity.allowed) {
+      return NextResponse.json(
+        {
+          error: `Vault storage limit reached (${capacity.maxFiles} files on Free plan). Upgrade to Tracker Pro for unlimited storage.`,
+          code: 'VAULT_LIMIT_EXCEEDED'
+        },
+        { status: 403 }
+      )
+    }
+
     const category = (formData.get('category') as string | null) || 'Other'
     const educationLevel = formData.get('educationLevel') as string | null
     const careerSub = formData.get('careerSub') as string | null

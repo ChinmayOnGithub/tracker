@@ -293,3 +293,27 @@ Before every release verify:
 - Date string mismatch resolved
 
 **Current Status**: Functional UI with critical rendering issues resolved. Now needs comprehensive product polish to achieve "polished desktop application" feel.
+
+---
+
+## Monetization & MVP Milestones
+
+### Issue #29: Billing & Subscription System Foundation (Phase 1)
+- **Status**: ✅ **Implemented & Verified** (No longer deferred)
+- **Scope**:
+  - Provider-neutral billing abstraction (`IBillingProvider`) with official Razorpay adapter (`RazorpayProvider`).
+  - Canonical application plan definitions: `FREE` (core habit & timeline access), `PRO_MONTHLY` (₹29 first-month introductory promotional price, then ₹99/month), `PRO_ANNUAL` (₹799/year).
+  - Server-authoritative entitlement engine (`EntitlementService`) decoupling feature flags from raw provider status.
+  - Cancel-at-period-end with full grace period access retention until subscription period expiration.
+  - Idempotent webhook processing pipeline at `/api/webhooks/razorpay` with raw-body HMAC SHA-256 signature verification and deduplication via `BillingWebhookEvent`.
+  - Database schema: `BillingCustomer`, `Subscription`, `Payment`, `BillingWebhookEvent` with soft-delete safety enforcement.
+  - Settings Billing subpanel (`/settings?tab=billing`), dedicated clean pricing page (`/pricing`), and comprehensive automated test suite.
+- **Pending External Operations**: Awaiting live merchant credentials, production Razorpay plan creation, and webhook endpoint activation in Razorpay dashboard.
+
+### Issue #31: Public MVP Release Boundary & Tiering Definition
+- **Status**: 🔄 **Updated for Monetization Model**
+- **MVP Scope & Boundary**:
+  - **Free Tier (Default)**: 100% unrestricted access to core tracker capabilities (habits, daily timeline, calendar, standard notes, leave balance, weight tracking). Vault storage capped at 10 items.
+  - **Pro Tier (Paid)**: Uncapped vault storage (10,000 files), advanced multi-calendar sync, rich PDF/Markdown journal exports, priority sync engine.
+  - **Introductory Conversion Hook**: ₹29 introductory first-month offer for first-time subscribers to drive early adoption. Server-enforced once-per-account to prevent checkout churn abuse.
+  - **Architecture Guardrail**: Client never holds pricing, plan IDs, or payment verification secrets. All entitlement gating is enforced at server action and route handler boundaries.

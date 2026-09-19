@@ -11,8 +11,8 @@ import {
 import {
   GET as logsGetRoute,
   POST as logsPostRoute,
-  arePayloadsEquivalent,
 } from '@/app/api/mobile/v1/activities/logs/route'
+import { arePayloadsEquivalent } from '@/lib/payload-helpers'
 import {
   PATCH as logPatchRoute,
   DELETE as logDeleteRoute,

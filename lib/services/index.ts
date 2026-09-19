@@ -7,4 +7,6 @@ export { AuditService } from './AuditService'
 export { NotificationService } from './NotificationService'
 export { CompletionService } from './CompletionService'
 export { DefaultActivitiesService } from './DefaultActivitiesService'
+export { BillingService } from './BillingService'
+export { EntitlementService } from './EntitlementService'
 

@@ -15,7 +15,8 @@ import {
   Moon,
   Scale,
   Link2,
-  Search
+  Search,
+  Sparkles
 } from 'lucide-react'
 import { Button } from '@/design-system'
 import { isAuthorizedUserEmail } from '@/lib/constants'
@@ -262,6 +263,16 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
         {/* User Info & Footer Settings */}
         <div className="p-4 border-t border-[var(--color-border)] flex flex-col gap-2">
+          <button
+            onClick={() => router.push('/pricing')}
+            className="w-full flex items-center justify-between px-3 py-1.75 text-xs font-semibold rounded-[var(--radius-md)] bg-[var(--color-primary)]/10 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-all duration-150 cursor-pointer border border-[var(--color-primary)]/20"
+          >
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Upgrade to Pro</span>
+            </div>
+            <span className="text-[10px] font-bold bg-[var(--color-primary)] text-white px-1.5 py-0.5 rounded-full">₹29</span>
+          </button>
           {user && (
             <div className="flex items-center justify-between px-2">
               <span className="text-[10px] font-bold text-[var(--color-text-muted)] truncate max-w-[100px]">

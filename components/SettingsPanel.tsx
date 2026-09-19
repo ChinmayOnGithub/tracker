@@ -5,8 +5,9 @@ import { Card, CardHeader, CardBody, Button, Skeleton, Select, Input, ConfirmDia
 import { 
   User, Palette, Calendar, Layout, Bell, RefreshCw, Lock, 
   Settings2, Database, Shield, CheckCircle2, AlertCircle, 
-  Trash2, Key, Check, Sparkles, ShieldCheck
+  Trash2, Key, Check, Sparkles, ShieldCheck, CreditCard
 } from 'lucide-react'
+import { SettingsBillingSection } from './SettingsBillingSection'
 import { checkGoogleConnection, disconnectGoogleAccount } from '@/modules/sync/google-calendar/actions'
 import { getUserProfileAction, setPasscodeAction } from '@/app/actions/auth'
 import {
@@ -23,9 +24,9 @@ import { OfflineDebugPanel } from './OfflineDebugPanel'
 
 export const SettingsPanel: React.FC = () => {
   const searchParams = useSearchParams()
-  const tabParam = searchParams?.get('tab') as 'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave' | 'admin' | null
+  const tabParam = searchParams?.get('tab') as 'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave' | 'admin' | 'billing' | null
 
-  const [activeSection, setActiveSection] = useState<'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave' | 'admin'>(() => {
+  const [activeSection, setActiveSection] = useState<'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave' | 'admin' | 'billing'>(() => {
     return tabParam || 'profile'
   })
   const [prevTabParam, setPrevTabParam] = useState<string | null>(tabParam)
@@ -487,6 +488,7 @@ export const SettingsPanel: React.FC = () => {
             userProfile?.isOwner !== false
               ? [
                   { id: 'profile', label: 'Profile', icon: User },
+                  { id: 'billing', label: 'Billing & Plans', icon: CreditCard },
                   { id: 'appearance', label: 'Appearance', icon: Palette },
                   { id: 'calendar', label: 'Calendar', icon: Calendar },
                   { id: 'dashboard', label: 'Dashboard', icon: Layout },
@@ -500,6 +502,7 @@ export const SettingsPanel: React.FC = () => {
                 ]
               : [
                   { id: 'profile', label: 'Profile & Account', icon: User },
+                  { id: 'billing', label: 'Billing & Plans', icon: CreditCard },
                   { id: 'appearance', label: 'Appearance', icon: Palette },
                   { id: 'notifications', label: 'Notifications', icon: Bell },
                   { id: 'security', label: 'Security', icon: Lock },
@@ -1388,6 +1391,10 @@ export const SettingsPanel: React.FC = () => {
                 </CardBody>
               </Card>
             </div>
+          )}
+
+          {activeSection === 'billing' && (
+            <SettingsBillingSection />
           )}
         </div>
       </div>

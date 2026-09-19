@@ -33,6 +33,10 @@ const SOFT_DELETABLE_MODELS = new Set([
   'LinkCollection',
   'SavedLink',
   'LinkedEventMapping',
+  'BillingCustomer',
+  'Subscription',
+  'Payment',
+  'BillingWebhookEvent',
 ])
 
 const prismaClientSingleton = () => {

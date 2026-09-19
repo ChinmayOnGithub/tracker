@@ -110,6 +110,9 @@ model User {
   calendarEvents    CalendarEvent[]
   calendarSyncStates CalendarSyncState[]
   workSessions      WorkSession[]
+  billingCustomers  BillingCustomer[]
+  subscriptions     Subscription[]
+  payments          Payment[]
 }
 
 model GoogleCredential {
@@ -566,3 +569,104 @@ model WorkSession {
   @@index([userId])
   @@index([date])
 }
+
+// ----------------------------------------------------
+// Billing & Subscriptions Domain
+// ----------------------------------------------------
+
+model BillingCustomer {
+  id                         String         @id @default(uuid())
+  userId                     String
+  user                       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider                   String         @default("RAZORPAY")
+  providerCustomerId         String
+  currency                   String         @default("INR")
+  hasUsedIntroductoryOffer   Boolean        @default(false)
+  introductoryOfferClaimedAt DateTime?
+  metadata                   Json?
+  createdAt                  DateTime       @default(now())
+  updatedAt                  DateTime       @updatedAt
+  deletedAt                  DateTime?
+
+  subscriptions              Subscription[]
+  payments                   Payment[]
+
+  @@unique([userId, provider])
+  @@unique([provider, providerCustomerId])
+  @@index([userId])
+}
+
+model Subscription {
+  id                     String           @id @default(uuid())
+  userId                 String
+  user                   User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  billingCustomerId      String?
+  billingCustomer        BillingCustomer? @relation(fields: [billingCustomerId], references: [id], onDelete: SetNull)
+  provider               String           @default("RAZORPAY")
+  providerSubscriptionId String           @unique
+  plan                   String           // FREE, PRO_MONTHLY, PRO_ANNUAL
+  status                 String           // CREATED, AUTHENTICATED, ACTIVE, PENDING, HALTED, CANCELLED, COMPLETED, EXPIRED
+  billingInterval        String           // monthly, annual
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  cancelAtPeriodEnd      Boolean          @default(false)
+  canceledAt             DateTime?
+  trialStart             DateTime?
+  trialEnd               DateTime?
+  isIntroductory         Boolean          @default(false)
+  metadata               Json?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+  deletedAt              DateTime?
+
+  payments               Payment[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Payment {
+  id                String           @id @default(uuid())
+  userId            String
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptionId    String?
+  subscription      Subscription?    @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  billingCustomerId String?
+  billingCustomer   BillingCustomer? @relation(fields: [billingCustomerId], references: [id], onDelete: SetNull)
+  provider          String           @default("RAZORPAY")
+  providerPaymentId String           @unique
+  amount            Float
+  currency          String           @default("INR")
+  status            String           // PENDING, SUCCESS, FAILED, REFUNDED
+  method            String?
+  paidAt            DateTime?
+  metadata          Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
+
+  @@index([userId])
+  @@index([subscriptionId])
+  @@index([providerPaymentId])
+}
+
+model BillingWebhookEvent {
+  id              String    @id @default(uuid())
+  provider        String    @default("RAZORPAY")
+  providerEventId String
+  eventType       String
+  occurredAt      DateTime?
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  status          String    @default("PENDING") // PENDING, PROCESSED, FAILED, IGNORED
+  error           String?
+  payload         Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([provider, providerEventId])
+  @@index([status])
+  @@index([provider, providerEventId])
+}
+

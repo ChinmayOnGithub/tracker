@@ -123,3 +123,20 @@ export async function requireOwnership(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return { record: record as any, user }
 }
+
+/**
+ * Validates that an authenticated user has the necessary Pro entitlement.
+ */
+export async function requireEntitlement(
+  feature: keyof import('@/lib/billing/types').UserEntitlements['features']
+) {
+  const user = await requireAuth()
+  const { EntitlementService } = await import('@/lib/services/EntitlementService')
+  const allowed = await EntitlementService.canAccessFeature(user.id, feature)
+  if (!allowed) {
+    throw new Error(`Pro subscription required for feature: ${feature}`)
+  }
+  const entitlements = await EntitlementService.getEntitlements(user.id)
+  return { user, entitlements }
+}
+

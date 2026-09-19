@@ -17,6 +17,13 @@ export interface Env {
   NEXT_PUBLIC_SITE_URL: string
   NODE_ENV: 'development' | 'production' | 'test'
   SYNC_SECRET?: string
+  RAZORPAY_KEY_ID?: string
+  RAZORPAY_KEY_SECRET?: string
+  RAZORPAY_WEBHOOK_SECRET?: string
+  NEXT_PUBLIC_RAZORPAY_KEY_ID?: string
+  RAZORPAY_PLAN_PRO_MONTHLY?: string
+  RAZORPAY_PLAN_PRO_ANNUAL?: string
+  RAZORPAY_OFFER_INTRODUCTORY?: string
 }
 
 function validateEnv(): Env {
@@ -57,7 +64,14 @@ function validateEnv(): Env {
     GOOGLE_OAUTH_ENCRYPTION_KEY: process.env.GOOGLE_OAUTH_ENCRYPTION_KEY || 'INSECURE-dev-fallback-encryption-key-32c',
     NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000',
     NODE_ENV: (process.env.NODE_ENV as 'development' | 'production' | 'test') || 'development',
-    SYNC_SECRET: process.env.SYNC_SECRET
+    SYNC_SECRET: process.env.SYNC_SECRET,
+    RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID,
+    RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET,
+    RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET,
+    NEXT_PUBLIC_RAZORPAY_KEY_ID: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+    RAZORPAY_PLAN_PRO_MONTHLY: process.env.RAZORPAY_PLAN_PRO_MONTHLY,
+    RAZORPAY_PLAN_PRO_ANNUAL: process.env.RAZORPAY_PLAN_PRO_ANNUAL,
+    RAZORPAY_OFFER_INTRODUCTORY: process.env.RAZORPAY_OFFER_INTRODUCTORY
   }
 }
 

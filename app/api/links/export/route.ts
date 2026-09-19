@@ -13,6 +13,21 @@ export async function GET(req: NextRequest) {
     const collectionId = searchParams.get('collectionId')
     const format = searchParams.get('format') || 'json'
 
+    // Free users can export JSON; rich format exports (CSV/HTML) require Pro
+    if (format === 'csv' || format === 'html') {
+      const { EntitlementService } = await import('@/lib/services/EntitlementService')
+      const isPro = await EntitlementService.isPro(user.id)
+      if (!isPro) {
+        return NextResponse.json(
+          {
+            error: 'Rich format export (CSV/HTML) requires a Tracker Pro subscription.',
+            code: 'PRO_REQUIRED'
+          },
+          { status: 403 }
+        )
+      }
+    }
+
     // Fetch collections and links
     const collections = await db.linkCollection.findMany({
       where: {
