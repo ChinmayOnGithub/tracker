@@ -18,6 +18,11 @@ export interface IBillingProvider {
   createCustomer(params: CreateCustomerInput): Promise<CustomerResult>
 
   /**
+   * Retrieves a customer from the provider, or returns null if not found.
+   */
+  retrieveCustomer?(providerCustomerId: string): Promise<CustomerResult | null>
+
+  /**
    * Creates a recurring subscription on the provider with safe checkout tokens.
    */
   createSubscription(params: CreateSubscriptionInput): Promise<SubscriptionCheckoutResult>

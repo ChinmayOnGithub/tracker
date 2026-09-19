@@ -153,7 +153,7 @@ export class BillingService {
       throw new BillingError('You already have an active subscription for this plan.', 'ALREADY_SUBSCRIBED')
     }
 
-    // Retrieve or create provider customer
+    // Retrieve, verify or create provider customer
     let customer = await db.billingCustomer.findUnique({
       where: {
         userId_provider: {
@@ -163,7 +163,20 @@ export class BillingService {
       }
     })
 
+    let needsNewCustomer = false
+
     if (!customer) {
+      needsNewCustomer = true
+    } else if (customer.providerCustomerId.startsWith('cust_mock_')) {
+      needsNewCustomer = true
+    } else if (provider.retrieveCustomer) {
+      const verified = await provider.retrieveCustomer(customer.providerCustomerId)
+      if (!verified) {
+        needsNewCustomer = true
+      }
+    }
+
+    if (needsNewCustomer) {
       const user = await db.user.findUnique({
         where: { id: userId },
         select: { email: true, username: true }
@@ -175,14 +188,29 @@ export class BillingService {
         name: options?.userName || user?.username
       })
 
-      customer = await db.billingCustomer.create({
-        data: {
+      customer = await db.billingCustomer.upsert({
+        where: {
+          userId_provider: {
+            userId,
+            provider: provider.name
+          }
+        },
+        create: {
           userId,
           provider: provider.name,
           providerCustomerId: providerCustomer.providerCustomerId,
           currency: planConfig.currency
+        },
+        update: {
+          providerCustomerId: providerCustomer.providerCustomerId,
+          currency: planConfig.currency,
+          updatedAt: new Date()
         }
       })
+    }
+
+    if (!customer) {
+      throw new BillingError('Failed to resolve or create customer record for billing.', 'CUSTOMER_RESOLUTION_FAILED')
     }
 
     // Determine introductory pricing eligibility with atomic concurrency reservation
@@ -190,23 +218,26 @@ export class BillingService {
     let offerId: string | undefined
 
     if (requestedPlan === 'PRO_MONTHLY') {
-      const eligible = await this.isEligibleForIntroductoryOffer(userId)
-      if (eligible) {
-        // Atomic conditional update on BillingCustomer to reserve the offer and prevent race conditions
-        const reserveResult = await db.billingCustomer.updateMany({
-          where: {
-            id: customer.id,
-            hasUsedIntroductoryOffer: false
-          },
-          data: {
-            hasUsedIntroductoryOffer: true,
-            introductoryOfferClaimedAt: new Date()
-          }
-        })
+      const configuredOfferId = getIntroductoryOfferId()
+      if (configuredOfferId) {
+        const eligible = await this.isEligibleForIntroductoryOffer(userId)
+        if (eligible) {
+          // Atomic conditional update on BillingCustomer to reserve the offer and prevent race conditions
+          const reserveResult = await db.billingCustomer.updateMany({
+            where: {
+              id: customer.id,
+              hasUsedIntroductoryOffer: false
+            },
+            data: {
+              hasUsedIntroductoryOffer: true,
+              introductoryOfferClaimedAt: new Date()
+            }
+          })
 
-        if (reserveResult.count === 1) {
-          isIntroductory = true
-          offerId = getIntroductoryOfferId()
+          if (reserveResult.count === 1) {
+            isIntroductory = true
+            offerId = configuredOfferId
+          }
         }
       }
     }

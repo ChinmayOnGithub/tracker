@@ -92,7 +92,8 @@ export function getAuthoritativePrice(
   currency: string
 } {
   const plan = getPlan(planId)
-  if (plan.id === 'PRO_MONTHLY' && isIntroEligible && plan.introductoryPrice !== undefined) {
+  const hasValidOffer = !!getIntroductoryOfferId()
+  if (plan.id === 'PRO_MONTHLY' && isIntroEligible && hasValidOffer && plan.introductoryPrice !== undefined) {
     return {
       amount: plan.introductoryPrice,
       amountInPaise: plan.introductoryPriceInPaise ?? plan.introductoryPrice * 100,
@@ -130,5 +131,18 @@ export function getProviderPlanId(planId: PlanId): string {
 }
 
 export function getIntroductoryOfferId(): string | undefined {
-  return process.env.RAZORPAY_OFFER_INTRODUCTORY
+  const value = process.env.RAZORPAY_OFFER_INTRODUCTORY?.trim()
+
+  if (!value) return undefined
+
+  if (
+    value === 'offer_placeholder' ||
+    value === 'placeholder' ||
+    value === 'undefined' ||
+    value === 'null'
+  ) {
+    return undefined
+  }
+
+  return value
 }

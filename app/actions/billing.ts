@@ -4,6 +4,7 @@ import { requireAuth } from '@/lib/auth-guards'
 import { BillingService } from '@/lib/services/BillingService'
 import { EntitlementService } from '@/lib/services/EntitlementService'
 import { PlanId, SafeCheckoutPayload, UserEntitlements } from '@/lib/billing/types'
+import { getIntroductoryOfferId } from '@/lib/billing/plans'
 import { logger } from '@/lib/logger'
 
 export interface BillingSummary {
@@ -52,11 +53,13 @@ export async function getBillingSummaryAction(): Promise<{
       BillingService.getBillingHistory(user.id, 20)
     ])
 
+    const hasConfiguredOffer = !!getIntroductoryOfferId()
+
     return {
       success: true,
       data: {
         plan: entitlements.plan,
-        isEligibleForIntro: eligibleForIntro,
+        isEligibleForIntro: eligibleForIntro && hasConfiguredOffer,
         entitlements,
         subscription: sub
           ? {

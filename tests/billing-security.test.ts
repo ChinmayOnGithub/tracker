@@ -145,6 +145,9 @@ describe('Billing Security, User Isolation, and Anti-Tampering Tests', () => {
     const originalUpsertSub = db.subscription.upsert
     const originalAuditLog = AuditService.log
 
+    const prevOffer = process.env.RAZORPAY_OFFER_INTRODUCTORY
+    process.env.RAZORPAY_OFFER_INTRODUCTORY = 'offer_test_concurrency'
+
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (AuditService as any).log = async () => ({ id: 'audit_race' });
@@ -185,6 +188,7 @@ describe('Billing Security, User Isolation, and Anti-Tampering Tests', () => {
       expect(introCount).toBe(1)
       expect(amounts).toEqual([29, 99])
     } finally {
+      process.env.RAZORPAY_OFFER_INTRODUCTORY = prevOffer;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.subscription as any).findFirst = originalFindActive;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

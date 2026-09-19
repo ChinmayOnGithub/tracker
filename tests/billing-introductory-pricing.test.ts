@@ -141,6 +141,8 @@ describe('Introductory Pricing Server-Authoritative Engine', () => {
       normalizeWebhookEvent: () => ({ eventId: 'evt_dummy', eventType: 'dummy', raw: null })
     }
 
+    const prevOffer = process.env.RAZORPAY_OFFER_INTRODUCTORY
+    process.env.RAZORPAY_OFFER_INTRODUCTORY = 'offer_test_rollback_123'
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.subscription as any).findFirst = async () => null;
@@ -174,6 +176,7 @@ describe('Introductory Pricing Server-Authoritative Engine', () => {
       await new Promise(r => setTimeout(r, 10))
       expect(reservationRollbackCalled).toBe(true)
     } finally {
+      process.env.RAZORPAY_OFFER_INTRODUCTORY = prevOffer;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.subscription as any).findFirst = originalFindActive;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

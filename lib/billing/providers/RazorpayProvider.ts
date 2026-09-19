@@ -112,6 +112,43 @@ export class RazorpayProvider implements IBillingProvider {
   }
 
   /**
+   * Retrieves an existing customer from Razorpay, returning null if not found.
+   */
+  async retrieveCustomer(providerCustomerId: string): Promise<CustomerResult | null> {
+    if (!this.razorpayClient) {
+      throw new ProviderConfigurationError(
+        'Razorpay credentials are not configured. Cannot retrieve customer on payment gateway.'
+      )
+    }
+
+    if (!providerCustomerId || providerCustomerId.startsWith('cust_mock_')) {
+      return null
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cust = await (this.razorpayClient as any).customers.fetch(providerCustomerId)
+      if (cust && cust.id) {
+        return { providerCustomerId: cust.id }
+      }
+      return null
+    } catch (err: unknown) {
+      const message = extractErrorMessage(err)
+      const statusCode = (err as { statusCode?: number })?.statusCode
+      // If customer does not exist in Razorpay, return null so caller can heal/recreate it
+      if (
+        message.toLowerCase().includes('does not exist') ||
+        message.toLowerCase().includes('could not be found') ||
+        statusCode === 400 ||
+        statusCode === 404
+      ) {
+        return null
+      }
+      throw new ProviderError(this.name, `Failed to retrieve customer: ${message}`, err)
+    }
+  }
+
+  /**
    * Creates a recurring subscription in Razorpay with safe checkout details.
    */
   async createSubscription(params: CreateSubscriptionInput): Promise<SubscriptionCheckoutResult> {
@@ -148,7 +185,8 @@ export class RazorpayProvider implements IBillingProvider {
         }
       }
 
-      if (customerId) {
+      // Only pass customer_id if it is a real verified provider customer ID
+      if (customerId && !customerId.startsWith('cust_mock_')) {
         subscriptionPayload.customer_id = customerId
       }
 
@@ -285,20 +323,33 @@ export class RazorpayProvider implements IBillingProvider {
       return false
     }
     try {
-      const payload = `${subscriptionId}|${paymentId}`
-      const expectedSignature = crypto
+      // Official Razorpay standard: payment_id + '|' + subscription_id
+      const payloadPrimary = `${paymentId}|${subscriptionId}`
+      const expectedPrimary = crypto
         .createHmac('sha256', this.keySecret)
-        .update(payload)
+        .update(payloadPrimary)
         .digest('hex')
 
       const sigBuffer = Buffer.from(signature)
-      const expectedBuffer = Buffer.from(expectedSignature)
+      const expectedBufferPrimary = Buffer.from(expectedPrimary)
 
-      if (sigBuffer.length !== expectedBuffer.length) {
-        return false
+      if (sigBuffer.length === expectedBufferPrimary.length && crypto.timingSafeEqual(sigBuffer, expectedBufferPrimary)) {
+        return true
       }
 
-      return crypto.timingSafeEqual(sigBuffer, expectedBuffer)
+      // Fallback for legacy order subscriptionId|paymentId
+      const payloadAlt = `${subscriptionId}|${paymentId}`
+      const expectedAlt = crypto
+        .createHmac('sha256', this.keySecret)
+        .update(payloadAlt)
+        .digest('hex')
+      const expectedBufferAlt = Buffer.from(expectedAlt)
+
+      if (sigBuffer.length === expectedBufferAlt.length && crypto.timingSafeEqual(sigBuffer, expectedBufferAlt)) {
+        return true
+      }
+
+      return false
     } catch (e) {
       console.error('Checkout signature verification exception:', e)
       return false

@@ -17,6 +17,7 @@ describe('Subscription Lifecycle & Billing History Tests', () => {
     const originalFindCustomer = db.billingCustomer.findUnique
     const originalFindUser = db.user.findUnique
     const originalCreateCustomer = db.billingCustomer.create
+    const originalUpsertCustomer = db.billingCustomer.upsert
     const originalUpsertSub = db.subscription.upsert
     const originalAuditLog = AuditService.log
 
@@ -36,6 +37,12 @@ describe('Subscription Lifecycle & Billing History Tests', () => {
         id: 'cust_db_101',
         userId: 'usr_101',
         providerCustomerId: 'cust_prov_101'
+      });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingCustomer as any).upsert = async ({ create }: any) => ({
+        id: 'cust_db_101',
+        userId: 'usr_101',
+        providerCustomerId: create.providerCustomerId
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.subscription as any).upsert = async ({ create }: { create: { plan: string; billingInterval: string } }) => {
@@ -65,6 +72,8 @@ describe('Subscription Lifecycle & Billing History Tests', () => {
       (db.user as any).findUnique = originalFindUser;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.billingCustomer as any).create = originalCreateCustomer;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingCustomer as any).upsert = originalUpsertCustomer;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.subscription as any).upsert = originalUpsertSub;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

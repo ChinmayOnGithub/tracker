@@ -39,10 +39,16 @@ describe('Billing Database & Centralized Entitlements Deep Suite', () => {
 
   describe('Centralized Pricing & Money Units', () => {
     it('should return ₹29 (2900 paise) for introductory monthly subscription', () => {
-      const price = getAuthoritativePrice('PRO_MONTHLY', true)
-      expect(price.amount).toBe(29)
-      expect(price.amountInPaise).toBe(2900)
-      expect(price.isIntroductory).toBe(true)
+      const prev = process.env.RAZORPAY_OFFER_INTRODUCTORY
+      try {
+        process.env.RAZORPAY_OFFER_INTRODUCTORY = 'offer_test_intro_deep'
+        const price = getAuthoritativePrice('PRO_MONTHLY', true)
+        expect(price.amount).toBe(29)
+        expect(price.amountInPaise).toBe(2900)
+        expect(price.isIntroductory).toBe(true)
+      } finally {
+        process.env.RAZORPAY_OFFER_INTRODUCTORY = prev
+      }
     })
 
     it('should return ₹99 (9900 paise) for standard monthly renewal', () => {

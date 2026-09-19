@@ -31,6 +31,17 @@ export class MockBillingProvider implements IBillingProvider {
     return { providerCustomerId: customerId }
   }
 
+  async retrieveCustomer(providerCustomerId: string): Promise<CustomerResult | null> {
+    if (!providerCustomerId || providerCustomerId.startsWith('cust_mock_stale') || providerCustomerId === 'cust_deleted_on_razorpay' || providerCustomerId === 'cust_not_found') {
+      return null
+    }
+    const cust = this.customers.get(providerCustomerId)
+    if (cust) {
+      return { providerCustomerId: cust.id }
+    }
+    return { providerCustomerId }
+  }
+
   async createSubscription(params: CreateSubscriptionInput): Promise<SubscriptionCheckoutResult> {
     const planConfig = getPlan(params.planId)
     const effectiveAmount = params.isIntroductory && planConfig.introductoryPrice !== undefined
