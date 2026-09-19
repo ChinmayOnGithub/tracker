@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, mock } from 'bun:test'
+import { describe, it, expect, mock, afterEach } from 'bun:test'
 import { OccurrenceService } from '@/modules/calendar/services/OccurrenceService'
 import { CalendarService } from '@/modules/calendar/services/CalendarService'
 import { CalendarRepository } from '@/modules/calendar/repositories/CalendarRepository'
@@ -7,7 +7,16 @@ import { CalendarEvent, CalendarEventType } from '@prisma/client'
 import { db } from '@/lib/db'
 
 // Prevent DB network query during unit tests
+const originalGoogleCredentialCount = db.googleCredential.count
+const originalFindEventByArtifact = CalendarRepository.findEventByArtifact
+const originalCreateEvent = CalendarRepository.createEvent
 db.googleCredential.count = mock(() => Promise.resolve(0)) as any
+
+afterEach(() => {
+  db.googleCredential.count = originalGoogleCredentialCount
+  CalendarRepository.findEventByArtifact = originalFindEventByArtifact
+  CalendarRepository.createEvent = originalCreateEvent
+}
 
 describe('Calendar Module Redesign (Phase 1)', () => {
   describe('OccurrenceService', () => {
