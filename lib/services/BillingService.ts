@@ -12,6 +12,7 @@ import {
   InvalidPlanError,
   SubscriptionNotFoundError
 } from '../billing/errors'
+import { selectCanonicalSubscription } from '../billing/subscriptionSelector'
 import { AuditService } from './AuditService'
 
 export class BillingService {
@@ -24,25 +25,10 @@ export class BillingService {
   }
 
   /**
-   * Resolves the single canonical subscription that should determine a user's
-   * current entitlements and billing state.
-   *
-   * Priority (highest → lowest):
-   * 1. ACTIVE or AUTHENTICATED with unexpired period
-   * 2. CANCELLED with cancelAtPeriodEnd=true and currentPeriodEnd in the future (grace period)
-   * 3. HALTED / PAST_DUE (still technically a paid subscription, just delinquent)
-   * 4. CREATED or PENDING (checkout in flight, only if no paid subscription exists)
-   *
-   * When multiple subscriptions share a priority tier, the one with the
-   * highest-value plan (PRO_ANNUAL > PRO_MONTHLY) or latest period end wins.
-   *
-   * This prevents a new pending checkout from overriding an existing active
-   * subscription when a user initiates a plan switch.
+   * Retrieves the canonical effective subscription for a user.
+   * Single public entry point for subscription queries.
    */
-  static async getCanonicalSubscription(userId: string) {
-    const now = new Date()
-
-    // Fetch all non-deleted subscriptions ordered by plan tier and period end
+  static async getSubscription(userId: string) {
     const allSubs = await db.subscription.findMany({
       where: { userId, deletedAt: null },
       orderBy: [
@@ -51,67 +37,14 @@ export class BillingService {
       ]
     })
 
-    if (allSubs.length === 0) return null
-    if (allSubs.length === 1) return allSubs[0]
-
-    // Priority 1: ACTIVE or AUTHENTICATED with unexpired (or null) period
-    const activeSubs = allSubs.filter(s => {
-      const status = s.status.toUpperCase()
-      const isPeriodActive = s.currentPeriodEnd ? s.currentPeriodEnd > now : true
-      return (status === 'ACTIVE' || status === 'AUTHENTICATED') && isPeriodActive
-    })
-    if (activeSubs.length > 0) {
-      // Among actives, prefer PRO_ANNUAL over PRO_MONTHLY, then latest period end
-      return activeSubs.sort((a, b) => {
-        if (a.plan === 'PRO_ANNUAL' && b.plan !== 'PRO_ANNUAL') return -1
-        if (b.plan === 'PRO_ANNUAL' && a.plan !== 'PRO_ANNUAL') return 1
-        const aEnd = a.currentPeriodEnd?.getTime() ?? 0
-        const bEnd = b.currentPeriodEnd?.getTime() ?? 0
-        return bEnd - aEnd
-      })[0]
-    }
-
-    // Priority 2: CANCELLED but still in grace period (cancelAtPeriodEnd + future periodEnd)
-    const graceSubs = allSubs.filter(s => {
-      const status = s.status.toUpperCase()
-      return (
-        (status === 'CANCELLED' && s.cancelAtPeriodEnd && s.currentPeriodEnd && s.currentPeriodEnd > now)
-      )
-    })
-    if (graceSubs.length > 0) {
-      return graceSubs.sort((a, b) => {
-        const aEnd = a.currentPeriodEnd?.getTime() ?? 0
-        const bEnd = b.currentPeriodEnd?.getTime() ?? 0
-        return bEnd - aEnd
-      })[0]
-    }
-
-    // Priority 3: HALTED or PAST_DUE
-    const delinquentSubs = allSubs.filter(s => {
-      const status = s.status.toUpperCase()
-      return status === 'HALTED' || status === 'PAST_DUE'
-    })
-    if (delinquentSubs.length > 0) return delinquentSubs[0]
-
-    // Priority 4: CREATED or PENDING (pending checkout)
-    const pendingSubs = allSubs.filter(s => {
-      const status = s.status.toUpperCase()
-      return status === 'CREATED' || status === 'PENDING'
-    })
-    if (pendingSubs.length > 0) return pendingSubs[0]
-
-    // Fallback: most recently updated subscription of any other state
-    return allSubs[0]
+    return selectCanonicalSubscription(allSubs, new Date())
   }
 
   /**
-   * Retrieves the canonical effective subscription for a user.
-   * Use getCanonicalSubscription() for entitlement decisions.
-   * This method is an alias for backward compatibility with existing callers
-   * that need the database row for display/history purposes.
+   * Alias for backward compatibility with existing callers.
    */
-  static async getSubscription(userId: string) {
-    return await this.getCanonicalSubscription(userId)
+  static async getCanonicalSubscription(userId: string) {
+    return await this.getSubscription(userId)
   }
 
   /**

@@ -28,7 +28,7 @@ export interface CalendarData {
 
 export interface CalendarDataContextType {
   calendarData: CalendarData
-  currentUser?: { id: string; username: string } | null
+  currentUser?: { id: string; username: string; email?: string | null; isOwner?: boolean } | null
   fetchCalendar: (force?: boolean) => Promise<void>
   onOpenCreateActivity: () => void
   onEditTemplate: (template: ActivityTemplate) => void
@@ -38,7 +38,7 @@ export const CalendarDataContext = React.createContext<CalendarDataContextType |
 
 interface DashboardLayoutProps {
   children: React.ReactNode
-  currentUser?: { id: string; username: string } | null
+  currentUser?: { id: string; username: string; email?: string | null; isOwner?: boolean } | null
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
@@ -82,14 +82,45 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!currentUser)
-  const [user, setUser] = useState<{ id: string; username: string } | null>(currentUser)
+  const [user, setUser] = useState<{ id: string; username: string; email?: string | null; isOwner?: boolean } | null>(currentUser)
+  const [guestPerms, setGuestPerms] = useState<Record<string, boolean>>({
+    today: false,
+    calendar: false,
+    activities: false,
+    journal: false,
+    leave: false,
+    weight: false,
+    links: false,
+    documents: false,
+    settings: true,
+  })
   const [usernameInput, setUsernameInput] = useState('')
   const [isRegisterMode, setIsRegisterMode] = useState(false)
   const [enteredPin, setEnteredPin] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [authError, setAuthError] = useState('')
   const [shake, setShake] = useState(false)
   const [isAuthLoading, setIsAuthLoading] = useState(false)
   const pinInputRef = useRef<HTMLInputElement>(null)
+
+  // Fetch guest permissions for non-owner accounts
+  const isOwner = user?.username === 'admin' || user?.isOwner === true
+  useEffect(() => {
+    const fetchPerms = () => {
+      if (user && !isOwner) {
+        import('@/app/actions/settings').then(mod => {
+          mod.getGuestPermissionsAction().then(res => {
+            if (res.success && res.permissions) {
+              setGuestPerms(res.permissions)
+            }
+          })
+        })
+      }
+    }
+    fetchPerms()
+    window.addEventListener('personal_settings_changed', fetchPerms)
+    return () => window.removeEventListener('personal_settings_changed', fetchPerms)
+  }, [user, isOwner])
 
   // Theme state
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -333,8 +364,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       setEnteredPin('')
       return
     }
-    if (pin.length !== 4) {
-      setAuthError('PIN must be 4 digits')
+    if (isRegisterMode && pin.length < 8) {
+      setAuthError('Password must be at least 8 characters')
+      return
+    }
+    if (!isRegisterMode && pin.length < 4) {
+      setAuthError('Enter a valid password or 4-digit PIN')
       return
     }
 
@@ -344,6 +379,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     if (isRegisterMode) {
       const res = await registerUserAction(username, pin)
       if (res.success) {
+        setIsAuthenticated(true)
+        if (res.user) setUser(res.user)
         window.location.replace('/')
       } else {
         setIsAuthLoading(false)
@@ -355,42 +392,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     } else {
       const res = await verifyPinAction(username, pin)
       if (res.success) {
+        setIsAuthenticated(true)
+        if (res.user) setUser(res.user)
         window.location.replace('/')
       } else {
         setIsAuthLoading(false)
         setShake(true)
-        setAuthError(res.error || 'Incorrect username or PIN')
+        setAuthError(res.error || 'Incorrect username or password/PIN')
         setEnteredPin('')
         setTimeout(() => setShake(false), 600)
       }
     }
   }, [isRegisterMode, isAuthLoading])
-
-  const handleKeyPress = useCallback((num: string) => {
-    if (isAuthLoading) return
-    setAuthError('')
-    pinInputRef.current?.focus()
-    if (enteredPin.length < 4) {
-      const nextPin = enteredPin + num
-      setEnteredPin(nextPin)
-
-      // Auto submit during login mode
-      if (nextPin.length === 4 && !isRegisterMode) {
-        handleAuthSubmit(usernameInput, nextPin)
-      }
-    }
-  }, [enteredPin, isRegisterMode, usernameInput, handleAuthSubmit, isAuthLoading])
-
-  const handleBackspace = useCallback(() => {
-    if (isAuthLoading) return
-    setEnteredPin(prev => prev.slice(0, -1))
-  }, [isAuthLoading])
-
-  const handleClear = useCallback(() => {
-    if (isAuthLoading) return
-    setEnteredPin('')
-    setAuthError('')
-  }, [isAuthLoading])
 
   const handleLogout = async () => {
     if (user?.id) {
@@ -401,35 +414,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     await logoutAction()
     window.location.replace('/')
   }
-
-  // Keyboard entry hook
-  useEffect(() => {
-    if (isAuthenticated) return
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // If typing in the username input, don't capture dialpad keys
-      if (document.activeElement?.tagName === 'INPUT') {
-        if (e.key === 'Enter' && enteredPin.length === 4) {
-          handleAuthSubmit(usernameInput, enteredPin)
-        }
-        return
-      }
-
-      const key = e.key
-      if (key >= '0' && key <= '9') {
-        handleKeyPress(key)
-      } else if (key === 'Backspace') {
-        handleBackspace()
-      } else if (key === 'Escape' || key === 'Delete') {
-        handleClear()
-      } else if (key === 'Enter' && enteredPin.length === 4) {
-        handleAuthSubmit(usernameInput, enteredPin)
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isAuthenticated, enteredPin, usernameInput, handleKeyPress, handleBackspace, handleClear, handleAuthSubmit])
 
   const onOpenCreateActivity = () => {
     setTemplateToEdit(null)
@@ -576,42 +560,52 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 autoCorrect="off"
               />
 
-              {/* PIN Input Section - Native Keyboard Support & Auto Login */}
-              <div className="w-full space-y-2 flex flex-col items-center">
-                <label className="block text-xs font-medium text-[var(--color-text-muted)] text-center">
-                  Passcode PIN (4 Digits)
-                </label>
+              {/* Password / Passcode Input */}
+              <div className="w-full space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-medium text-[var(--color-text-muted)]">
+                    {isRegisterMode ? 'Password (Min 8 Characters)' : 'Password or 4-Digit PIN'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(prev => !prev)}
+                    className="text-[10px] text-[var(--color-primary)] hover:underline font-semibold cursor-pointer"
+                  >
+                    {showPassword ? 'Hide' : 'Show'}
+                  </button>
+                </div>
 
-                {/* Visible PIN Input / Interactive Dots wrapper */}
-                <div className="relative w-full flex justify-center items-center">
+                <div className="relative w-full">
                   <input
                     ref={pinInputRef}
-                    type="password"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    maxLength={4}
+                    type={showPassword ? 'text' : 'password'}
                     value={enteredPin}
                     disabled={isAuthLoading}
                     onChange={(e) => {
                       if (isAuthLoading) return
-                      const val = e.target.value.replace(/\D/g, '')
+                      const val = e.target.value
                       setEnteredPin(val)
                       setAuthError('')
-                      if (val.length === 4) {
+                      // For convenience: if exactly 4 numeric digits entered in login mode, auto-submit legacy PIN
+                      if (!isRegisterMode && /^\d{4}$/.test(val) && usernameInput.trim().length > 0) {
                         handleAuthSubmit(usernameInput, val)
                       }
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && enteredPin.length === 4) {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
                         handleAuthSubmit(usernameInput, enteredPin)
                       }
                     }}
-                    className="w-full text-center tracking-[1em] text-lg font-bold py-2.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] focus:border-[var(--color-primary)] rounded-[var(--radius-md)] text-[var(--color-text-main)] focus:outline-none transition-colors shadow-xs"
-                    placeholder="••••"
+                    className="w-full px-3 py-2.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] focus:border-[var(--color-primary)] rounded-[var(--radius-md)] text-[var(--color-text-main)] text-sm focus:outline-none transition-colors shadow-xs"
+                    placeholder={isRegisterMode ? 'At least 8 characters' : 'Enter password or PIN'}
+                    autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
                   />
                 </div>
-                <p className="text-[10px] text-[var(--color-text-muted)] text-center">
-                  Type 4 digits to sign in automatically
+                <p className="text-[10px] text-[var(--color-text-muted)]">
+                  {isRegisterMode 
+                    ? 'New accounts require a password with at least 8 characters.'
+                    : 'Existing accounts can sign in with their password or legacy 4-digit PIN.'}
                 </p>
               </div>
 
@@ -621,10 +615,14 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 variant="primary"
                 size="md"
                 isLoading={isAuthLoading}
-                disabled={isAuthLoading || usernameInput.trim().length === 0 || enteredPin.length !== 4}
+                disabled={
+                  isAuthLoading || 
+                  usernameInput.trim().length === 0 || 
+                  (isRegisterMode ? enteredPin.length < 8 : enteredPin.length === 0)
+                }
                 className="w-full font-semibold shadow-xs"
               >
-                {isRegisterMode ? 'Register & Sign In' : 'Sign In'}
+                {isRegisterMode ? 'Register Account' : 'Sign In'}
               </Button>
             </form>
           </CardBody>
@@ -668,11 +666,17 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           onShowPlaceholder={(title, message) => {
             setPlaceholderDialog({ isOpen: true, title, message })
           }}
+          currentUser={user}
+          isOwner={isOwner}
+          guestPermissions={guestPerms}
         />
 
         <MobileSearchModal
           isOpen={isMobileSearchOpen}
           onClose={() => setIsMobileSearchOpen(false)}
+          currentUser={user}
+          isOwner={isOwner}
+          guestPermissions={guestPerms}
         />
 
         {placeholderDialog && (

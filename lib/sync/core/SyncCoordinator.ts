@@ -1,5 +1,11 @@
-import { IndexedDBEngine } from '../local/IndexedDBEngine';
-import { ConnectivityMonitor } from './ConnectivityMonitor';
+/**
+ * Canonical Sync Coordinator
+ * Single authoritative facade coordinating offline queues, network monitoring,
+ * and dispatching sync operations to remote repositories.
+ */
+
+import { IndexedDBEngine } from '@/lib/database/local/IndexedDBEngine';
+import { NetworkManager } from '../network/NetworkManager';
 import { WorkSession } from '@/modules/work/types';
 
 export interface SyncQueueItem {
@@ -19,34 +25,43 @@ export type SyncHandler = (
   payload: unknown
 ) => Promise<{ success: boolean; error?: string; data?: unknown }>;
 
-export class SyncEngine {
-  private static instance: SyncEngine | null = null;
+export class SyncCoordinator {
+  private static instance: SyncCoordinator | null = null;
   private dbEngine: IndexedDBEngine;
-  private connMonitor: ConnectivityMonitor;
+  private networkManager: NetworkManager;
   private handlers: Map<string, SyncHandler> = new Map();
   private isProcessing = false;
   private backoffTimer: ReturnType<typeof setTimeout> | null = null;
 
   private constructor() {
     this.dbEngine = IndexedDBEngine.getInstance();
-    this.connMonitor = ConnectivityMonitor.getInstance();
-    
-    // Subscribe to connectivity changes.
-    // Delay the initial sync to the next tick so the DB has time to open
-    // before processQueue() is invoked (avoids unhandled rejection on cold start).
-    this.connMonitor.subscribe((isOnline) => {
-      if (isOnline) {
+    this.networkManager = new NetworkManager();
+
+    // Listen to network transitions
+    this.networkManager.on('network:statusChanged', ({ status }) => {
+      if (status === 'online') {
         setTimeout(() => this.triggerSync(), 0);
       } else {
         this.stopBackoffTimer();
       }
     });
 
-    // Register sync handler for activity templates
+    // Register default domain module sync handlers
+    this.registerDefaultHandlers();
+  }
+
+  public static getInstance(): SyncCoordinator {
+    if (!SyncCoordinator.instance) {
+      SyncCoordinator.instance = new SyncCoordinator();
+    }
+    return SyncCoordinator.instance;
+  }
+
+  private registerDefaultHandlers() {
+    // Activity Templates
     this.registerHandler('activity_templates', async (op, payload) => {
       const { RemoteActivityTemplateRepository } = await import('@/modules/activities/repository/RemoteActivityRepository');
       const remote = new RemoteActivityTemplateRepository();
-      
       const p = payload as Record<string, unknown>;
       try {
         if (op === 'CREATE') {
@@ -68,11 +83,10 @@ export class SyncEngine {
       }
     });
 
-    // Register sync handler for activity logs
+    // Activity Logs
     this.registerHandler('activity_logs', async (op, payload) => {
       const { RemoteActivityLogRepository } = await import('@/modules/activities/repository/RemoteActivityRepository');
       const remote = new RemoteActivityLogRepository();
-      
       const p = payload as Record<string, unknown>;
       try {
         if (op === 'CREATE') {
@@ -90,11 +104,10 @@ export class SyncEngine {
       }
     });
 
-    // Register sync handler for journal entries
+    // Journal Entries
     this.registerHandler('journal_entries', async (op, payload) => {
       const { RemoteJournalRepository } = await import('@/modules/journal/repository/RemoteJournalRepository');
       const remote = new RemoteJournalRepository();
-      
       const p = payload as Record<string, unknown>;
       try {
         if (op === 'CREATE') {
@@ -112,7 +125,7 @@ export class SyncEngine {
       }
     });
 
-    // Register sync handler for notes
+    // Notes
     this.registerHandler('notes', async (op, payload) => {
       const { RemoteNoteRepository } = await import('@/modules/notes/repository/RemoteNoteRepository');
       const remote = new RemoteNoteRepository();
@@ -133,12 +146,11 @@ export class SyncEngine {
       }
     });
 
-    // Register sync handler for weight records
+    // Weight Records
     this.registerHandler('weight_records', async (op, payload) => {
       const { RemoteWeightRepository } = await import('@/modules/weight/repository/RemoteWeightRepository');
       const remote = new RemoteWeightRepository();
       const record = payload as { id: string; weight: number; notes?: string | null; date: string };
-      
       try {
         if (op === 'CREATE') {
           const res = await remote.create(record as unknown as Parameters<typeof remote.create>[0]);
@@ -155,12 +167,11 @@ export class SyncEngine {
       }
     });
 
-    // Register sync handler for leave records
+    // Leave Records
     this.registerHandler('leave_records', async (op, payload) => {
       const { RemoteLeaveRepository } = await import('@/modules/leave/repository/RemoteLeaveRepository');
       const remote = new RemoteLeaveRepository();
       const record = payload as { id: string; leaveType: string; startDate: string; endDate: string; totalDays: number; status: string; notes?: string | null };
-      
       try {
         if (op === 'CREATE') {
           const res = await remote.create(record as unknown as Parameters<typeof remote.create>[0]);
@@ -177,12 +188,11 @@ export class SyncEngine {
       }
     });
 
-    // Register sync handler for work sessions
+    // Work Sessions
     this.registerHandler('work_sessions', async (op, payload) => {
       const { RemoteWorkSessionRepository } = await import('@/modules/work/repository/RemoteWorkSessionRepository');
       const remote = new RemoteWorkSessionRepository();
       const session = payload as WorkSession;
-      
       try {
         if (op === 'CREATE') {
           const res = await remote.create(session);
@@ -200,24 +210,10 @@ export class SyncEngine {
     });
   }
 
-  public static getInstance(): SyncEngine {
-    if (!SyncEngine.instance) {
-      SyncEngine.instance = new SyncEngine();
-    }
-    return SyncEngine.instance;
-  }
-
-  /**
-   * Registers a server-sync dispatcher callback for a domain module.
-   */
   public registerHandler(moduleName: string, handler: SyncHandler) {
     this.handlers.set(moduleName, handler);
-    console.log(`[SyncEngine] Registered handler for module: ${moduleName}`);
   }
 
-  /**
-   * Enqueues an operation to the sync queue in IndexedDB.
-   */
   public async enqueue(moduleName: string, operationType: 'CREATE' | 'UPDATE' | 'DELETE', payload: unknown): Promise<void> {
     const entityId = (payload as { id?: string })?.id || '';
     const item: SyncQueueItem = {
@@ -236,12 +232,32 @@ export class SyncEngine {
     this.triggerSync();
   }
 
-  /**
-   * Wakes up the queue processor if offline transitions to online.
-   */
+  public isOnline(): boolean {
+    if (typeof window !== 'undefined' && typeof window.navigator !== 'undefined' && typeof window.navigator.onLine === 'boolean') {
+      return window.navigator.onLine;
+    }
+    return this.networkManager.isOnline();
+  }
+
+  public subscribeConnectivity(callback: (isOnline: boolean) => void): () => void {
+    const unsub = this.networkManager.on('network:statusChanged', ({ status }) => {
+      callback(status === 'online');
+    });
+    // Initial call
+    callback(this.isOnline());
+    return () => {
+      unsub();
+    };
+  }
+
   public triggerSync() {
-    if (this.isProcessing || !this.connMonitor.isOnline()) return;
-    this.processQueue().catch((err) => console.error('[SyncEngine] Queue processing failed:', err));
+    if (this.isProcessing || !this.isOnline()) return;
+    this.processQueue().catch((err) => console.error('[SyncCoordinator] Queue processing failed:', err));
+  }
+
+  public async flush(): Promise<void> {
+    if (!this.isOnline()) return;
+    await this.processQueue();
   }
 
   private stopBackoffTimer() {
@@ -251,19 +267,15 @@ export class SyncEngine {
     }
   }
 
-  /**
-   * Process all pending items sequentially.
-   */
   private async processQueue() {
     if (this.isProcessing) return;
     this.isProcessing = true;
     this.stopBackoffTimer();
 
     try {
-      while (this.connMonitor.isOnline()) {
+      while (this.isOnline()) {
         const queue: SyncQueueItem[] = await this.dbEngine.getAll<SyncQueueItem>('sync_queue');
         
-        // Find next eligible item (PENDING or FAILED with elapsed backoff)
         const pendingItems = queue
           .filter(item => item.syncStatus === 'PENDING' || item.syncStatus === 'FAILED')
           .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -272,12 +284,10 @@ export class SyncEngine {
 
         const nextItem = pendingItems[0];
         
-        // Apply backoff check if previously failed
         if (nextItem.syncStatus === 'FAILED' && nextItem.lastAttempt) {
           const elapsedMs = Date.now() - new Date(nextItem.lastAttempt).getTime();
           const backoffDelay = this.calculateBackoff(nextItem.retryCount);
           if (elapsedMs < backoffDelay) {
-            // Schedule wake up once backoff expires
             const remaining = backoffDelay - elapsedMs;
             this.scheduleBackoffTimer(remaining);
             break;
@@ -286,7 +296,6 @@ export class SyncEngine {
 
         const success = await this.syncItem(nextItem);
         if (!success) {
-          // If a blocking item fails, we pause processing the rest to maintain order
           const backoffDelay = this.calculateBackoff(nextItem.retryCount + 1);
           this.scheduleBackoffTimer(backoffDelay);
           break;
@@ -305,22 +314,18 @@ export class SyncEngine {
   }
 
   private calculateBackoff(retryCount: number): number {
-    // Exponential backoff: 2^retryCount * 1000ms + random jitter, cap at 5 minutes
     const base = Math.pow(2, Math.min(retryCount, 8)) * 1000;
     const jitter = Math.random() * 1000;
     return Math.min(base + jitter, 5 * 60 * 1000);
   }
 
-  /**
-   * Sends a single queue item to the registered server handler.
-   */
   private async syncItem(item: SyncQueueItem): Promise<boolean> {
     const handler = this.handlers.get(item.module);
     if (!handler) {
-      console.warn(`[SyncEngine] No handler registered for module "${item.module}". Marking as blocked.`);
+      console.warn(`[SyncCoordinator] No handler registered for module "${item.module}". Marking as blocked.`);
       item.syncStatus = 'BLOCKED';
       await this.dbEngine.put('sync_queue', item);
-      return true; // proceed past this block
+      return true;
     }
 
     item.syncStatus = 'PROCESSING';
@@ -329,18 +334,16 @@ export class SyncEngine {
 
     try {
       const res = await handler(item.operationType, item.payload);
-      // Safely check success — handlers may return void, unknown, or { success }
       const result = res as { success?: boolean; error?: string } | null | undefined;
       if (result?.success !== false) {
-        // resolved: delete from local queue
         await this.dbEngine.delete('sync_queue', item.id);
         return true;
       } else {
-        console.error(`[SyncEngine] Server rejected queue item ${item.id}:`, result.error);
+        console.error(`[SyncCoordinator] Server rejected queue item ${item.id}:`, result?.error);
         return await this.handleItemFailure(item);
       }
     } catch (err) {
-      console.error(`[SyncEngine] Exception during sync of item ${item.id}:`, err);
+      console.error(`[SyncCoordinator] Exception during sync of item ${item.id}:`, err);
       return await this.handleItemFailure(item);
     }
   }
@@ -349,7 +352,7 @@ export class SyncEngine {
     item.retryCount += 1;
     if (item.retryCount >= 10) {
       item.syncStatus = 'BLOCKED';
-      console.error(`[SyncEngine] Item ${item.id} exceeded maximum retries. Blocked.`);
+      console.error(`[SyncCoordinator] Item ${item.id} exceeded maximum retries. Blocked.`);
     } else {
       item.syncStatus = 'FAILED';
     }

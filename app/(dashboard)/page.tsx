@@ -1,9 +1,8 @@
 import { TodayDashboardWrapper } from '@/components/TodayDashboardWrapper'
-import { getLoggedUser } from '@/app/actions/auth'
 import { getUserSettingsAction } from '@/app/actions/settings'
 import { redirect } from 'next/navigation'
 import { getTodayDateStr } from '@/lib/recurrence'
-import { canAccessModule, getEffectiveGuestPermissions } from '@/lib/auth-guards'
+import { AuthorizationService } from '@/lib/services/AuthorizationService'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -12,15 +11,14 @@ export default async function Page(props: { searchParams: Promise<{ date?: strin
   const searchParams = await props.searchParams
   const dateParam = searchParams.date
   
-  const loggedUser = await getLoggedUser()
-  if (!loggedUser) {
-    redirect('/api/auth/google')
+  const auth = await AuthorizationService.getAuthorizedPageContext({ module: 'today' })
+  if (!auth.user) {
+    // Return null so DashboardLayout renders the login form (Google / Passcode) on '/'
     return null
   }
 
   // Enforce server-side module access for Today overview
-  const guestPerms = await getEffectiveGuestPermissions()
-  if (!canAccessModule(loggedUser, 'today', guestPerms)) {
+  if (!auth.canAccess) {
     redirect('/settings')
     return null
   }

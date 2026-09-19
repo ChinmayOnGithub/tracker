@@ -17,8 +17,8 @@ export class ActivityTemplateRepository
 
   public async reorder(ids: string[]): Promise<void> {
     await this.localTemplateRepo.reorder(ids);
-    const { SyncEngine } = await import('@/lib/database/sync/SyncEngine');
-    await SyncEngine.getInstance().enqueue('activity_templates', 'UPDATE', { reorderIds: ids });
+    const { SyncCoordinator } = await import('@/lib/sync/core/SyncCoordinator');
+    await SyncCoordinator.getInstance().enqueue('activity_templates', 'UPDATE', { reorderIds: ids });
   }
 }
 

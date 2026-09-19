@@ -1,6 +1,6 @@
 import { IRepository, ILocalRepository, IRemoteRepository } from './IRepository';
 import { IndexedDBEngine } from '../local/IndexedDBEngine';
-import { SyncEngine } from '../sync/SyncEngine';
+import { SyncCoordinator } from '@/lib/sync/core/SyncCoordinator';
 
 export class BaseLocalRepository<T extends { id: string; deletedAt?: Date | string | null }> implements ILocalRepository<T> {
   protected engine = IndexedDBEngine.getInstance();
@@ -104,7 +104,7 @@ export class BaseRepository<T extends { id: string }> implements IRepository<T> 
       existingQueueItem.payload = entity;
       existingQueueItem.operationType = op;
       await this.local.saveAtomic(entity, existingQueueItem);
-      SyncEngine.getInstance().triggerSync();
+      SyncCoordinator.getInstance().triggerSync();
       return;
     }
 
@@ -122,7 +122,7 @@ export class BaseRepository<T extends { id: string }> implements IRepository<T> 
     };
 
     await this.local.saveAtomic(entity, queueItem);
-    SyncEngine.getInstance().triggerSync();
+    SyncCoordinator.getInstance().triggerSync();
   }
 
   public async delete(id: string): Promise<void> {
@@ -140,6 +140,6 @@ export class BaseRepository<T extends { id: string }> implements IRepository<T> 
     };
 
     await this.local.deleteAtomic(id, queueItem);
-    SyncEngine.getInstance().triggerSync();
+    SyncCoordinator.getInstance().triggerSync();
   }
 }

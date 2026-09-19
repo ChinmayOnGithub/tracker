@@ -124,6 +124,7 @@ export async function getAgendaAction(todayStr: string, forceRefresh = false) {
 
 /**
  * Server Action to create a Google Calendar event.
+ * Requires Tracker Pro entitlement for external calendar writeback.
  */
 export async function createGoogleEventAction(event: CalendarEventInput) {
   try {
@@ -132,8 +133,22 @@ export async function createGoogleEventAction(event: CalendarEventInput) {
       throw new UnauthorizedError()
     }
 
+    const { EntitlementService } = await import('@/lib/services/EntitlementService')
+    const isPro = await EntitlementService.isPro(user.id)
+    if (!isPro) {
+      return {
+        success: false as const,
+        error: 'Two-way Google Calendar synchronization requires a Tracker Pro subscription.',
+        code: 'PRO_REQUIRED'
+      }
+    }
+
     const created = await ProviderService.createEvent(user.id, 'GOOGLE', event)
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {
+      // Safe no-op in non-Next runtime/test environments
+    }
     return { success: true as const, event: created }
   } catch (error) {
     logger.error('GoogleCalendarActions', 'Failed to create Google event', error)
@@ -143,6 +158,7 @@ export async function createGoogleEventAction(event: CalendarEventInput) {
 
 /**
  * Server Action to update a Google Calendar event.
+ * Requires Tracker Pro entitlement for external calendar writeback.
  */
 export async function updateGoogleEventAction(eventId: string, event: Partial<CalendarEventInput>) {
   try {
@@ -151,8 +167,22 @@ export async function updateGoogleEventAction(eventId: string, event: Partial<Ca
       throw new UnauthorizedError()
     }
 
+    const { EntitlementService } = await import('@/lib/services/EntitlementService')
+    const isPro = await EntitlementService.isPro(user.id)
+    if (!isPro) {
+      return {
+        success: false as const,
+        error: 'Two-way Google Calendar synchronization requires a Tracker Pro subscription.',
+        code: 'PRO_REQUIRED'
+      }
+    }
+
     const updated = await ProviderService.updateEvent(user.id, 'GOOGLE', eventId, event)
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {
+      // Safe no-op in non-Next runtime/test environments
+    }
     return { success: true as const, event: updated }
   } catch (error) {
     logger.error('GoogleCalendarActions', 'Failed to update Google event', error)
@@ -162,6 +192,7 @@ export async function updateGoogleEventAction(eventId: string, event: Partial<Ca
 
 /**
  * Server Action to delete a Google Calendar event.
+ * Requires Tracker Pro entitlement for external calendar writeback.
  */
 export async function deleteGoogleEventAction(eventId: string) {
   try {
@@ -170,8 +201,22 @@ export async function deleteGoogleEventAction(eventId: string) {
       throw new UnauthorizedError()
     }
 
+    const { EntitlementService } = await import('@/lib/services/EntitlementService')
+    const isPro = await EntitlementService.isPro(user.id)
+    if (!isPro) {
+      return {
+        success: false as const,
+        error: 'Two-way Google Calendar synchronization requires a Tracker Pro subscription.',
+        code: 'PRO_REQUIRED'
+      }
+    }
+
     const deleted = await ProviderService.deleteEvent(user.id, 'GOOGLE', eventId)
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {
+      // Safe no-op in non-Next runtime/test environments
+    }
     return { success: true as const, deleted }
   } catch (error) {
     logger.error('GoogleCalendarActions', 'Failed to delete Google event', error)
@@ -181,6 +226,7 @@ export async function deleteGoogleEventAction(eventId: string) {
 
 /**
   * Server Action to manually trigger a two-way sync with Google Calendar.
+  * Requires Tracker Pro entitlement.
   */
 export async function syncCalendarAction() {
   try {
@@ -189,8 +235,22 @@ export async function syncCalendarAction() {
       throw new UnauthorizedError()
     }
 
+    const { EntitlementService } = await import('@/lib/services/EntitlementService')
+    const isPro = await EntitlementService.isPro(user.id)
+    if (!isPro) {
+      return {
+        success: false as const,
+        error: 'Two-way Google Calendar synchronization requires a Tracker Pro subscription.',
+        code: 'PRO_REQUIRED'
+      }
+    }
+
     const result = await CalendarService.sync(user.id)
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {
+      // Safe no-op in non-Next runtime/test environments
+    }
     return { success: true as const, result }
   } catch (error) {
     logger.error('GoogleCalendarActions', 'Failed to sync calendar', error)

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { getBillingSummaryAction, startSubscriptionAction, confirmCheckoutAction } from '@/app/actions/billing'
 import { SafeCheckoutPayload, PlanId } from '@/lib/billing/types'
+import { PLANS } from '@/lib/billing/plans'
 
 declare global {
   interface Window {
@@ -147,9 +148,9 @@ export const PricingPanel: React.FC = () => {
       if (interval === 'monthly' && isAnnual) return 'Switch to Monthly'
       return 'Manage Subscription'
     }
-    if (interval === 'monthly' && isEligibleForIntro) return 'Get Started for ₹29'
-    if (interval === 'annual') return 'Subscribe Annual (₹799)'
-    return 'Subscribe Pro (₹99/mo)'
+    if (interval === 'monthly' && isEligibleForIntro) return `Get Started for ₹${PLANS.PRO_MONTHLY.introductoryPrice}`
+    if (interval === 'annual') return `Subscribe Annual (₹${PLANS.PRO_ANNUAL.price})`
+    return `Subscribe Pro (₹${PLANS.PRO_MONTHLY.price}/mo)`
   }
 
   return (
@@ -232,7 +233,7 @@ export const PricingPanel: React.FC = () => {
               Core time-centric operating system for individuals wanting local clarity.
             </p>
             <div className="pt-2">
-              <span className="text-3xl font-black text-[var(--color-text-main)]">₹0</span>
+              <span className="text-3xl font-black text-[var(--color-text-main)]">₹{PLANS.FREE.price}</span>
               <span className="text-xs text-[var(--color-text-muted)] font-medium"> / forever</span>
             </div>
           </CardHeader>
@@ -307,18 +308,18 @@ export const PricingPanel: React.FC = () => {
                   {isEligibleForIntro && currentPlan === 'FREE' ? (
                     <div className="space-y-1">
                       <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-black text-[var(--color-text-main)]">₹29</span>
+                        <span className="text-3xl font-black text-[var(--color-text-main)]">₹{PLANS.PRO_MONTHLY.introductoryPrice}</span>
                         <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 font-semibold">
                           First Month Intro Promo
                         </span>
                       </div>
                       <p className="text-[11px] text-[var(--color-text-muted)]">
-                        Renews at standard ₹99/month thereafter. Cancel anytime.
+                        Renews at standard ₹{PLANS.PRO_MONTHLY.price}/month thereafter. Cancel anytime.
                       </p>
                     </div>
                   ) : (
                     <div>
-                      <span className="text-3xl font-black text-[var(--color-text-main)]">₹99</span>
+                      <span className="text-3xl font-black text-[var(--color-text-main)]">₹{PLANS.PRO_MONTHLY.price}</span>
                       <span className="text-xs text-[var(--color-text-muted)] font-medium"> / month</span>
                     </div>
                   )}
@@ -326,11 +327,11 @@ export const PricingPanel: React.FC = () => {
               ) : (
                 <div className="space-y-1">
                   <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-black text-[var(--color-text-main)]">₹799</span>
+                    <span className="text-3xl font-black text-[var(--color-text-main)]">₹{PLANS.PRO_ANNUAL.price}</span>
                     <span className="text-xs text-[var(--color-text-muted)] font-medium"> / year</span>
                   </div>
                   <p className="text-[11px] text-[var(--color-text-muted)]">
-                    Equivalent to ~₹66.58/month (Billed annually)
+                    Equivalent to ~₹{(PLANS.PRO_ANNUAL.price / 12).toFixed(2)}/month (Billed annually)
                   </p>
                 </div>
               )}

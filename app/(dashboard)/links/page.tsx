@@ -1,25 +1,24 @@
 import { db } from '@/lib/db'
 import { LinkLibraryPanel } from '@/components/LinkLibraryPanel'
-import { getLoggedUser } from '@/app/actions/auth'
 import { redirect } from 'next/navigation'
-
-import { canAccessModule, getEffectiveGuestPermissions } from '@/lib/auth-guards'
+import { AuthorizationService } from '@/lib/services/AuthorizationService'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default async function Page() {
-  const loggedUser = await getLoggedUser()
-  if (!loggedUser) {
+  const auth = await AuthorizationService.getAuthorizedPageContext({ module: 'links' })
+  if (!auth.user) {
     redirect('/')
     return null
   }
 
-  const guestPerms = await getEffectiveGuestPermissions()
-  if (!canAccessModule(loggedUser, 'links', guestPerms)) {
+  if (!auth.canAccess) {
     redirect('/settings')
     return null
   }
+
+  const loggedUser = auth.user
 
   const linkCollectionsRaw = await db.linkCollection.findMany({
     where: { userId: loggedUser.id, deletedAt: null },
@@ -59,9 +58,9 @@ export default async function Page() {
         name: t.name,
         color: t.color,
       })),
-      sortOrder: l.sortOrder,
-      createdAt: l.createdAt.toISOString(),
-      updatedAt: l.updatedAt.toISOString(),
+      sortOrder: l.sortOrder ?? 0,
+      createdAt: l.createdAt ? l.createdAt.toISOString() : new Date().toISOString(),
+      updatedAt: l.updatedAt ? l.updatedAt.toISOString() : new Date().toISOString(),
     })),
   }))
 

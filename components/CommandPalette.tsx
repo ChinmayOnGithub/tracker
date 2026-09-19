@@ -20,6 +20,9 @@ export interface CommandPaletteProps {
   onNewActivity: () => void
   onNavigate: (tabId: string) => void
   onShowPlaceholder: (title: string, message: string) => void
+  currentUser?: { id: string; username: string; email?: string | null; isOwner?: boolean } | null
+  isOwner?: boolean
+  guestPermissions?: Record<string, boolean>
 }
 
 // ─── Command definitions ──────────────────────────────────────────────────────
@@ -279,15 +282,20 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
   }
 
   const search = isOpen ? rawSearch : ''
-  const setSearch = setRawSearch
+  const effectiveIsOwner = props.isOwner ?? (props.currentUser?.isOwner ?? (props.currentUser?.username === 'admin'))
+  const userId = props.currentUser?.id
 
   // Live filtered data results using MasterSearchEngine
   const dataResults = useMemo(() => {
     if (!search.trim()) {
-      return { notes: [], journal: [], tasks: [], links: [], vault: [], weight: [], leave: [] }
+      return { notes: [], journal: [], tasks: [], links: [], vault: [], weight: [], leave: [], settings: [] }
     }
 
-    const allResults = MasterSearchEngine.search(search, state, 'all')
+    const allResults = MasterSearchEngine.search(search, state, 'all', {
+      userId,
+      isOwner: effectiveIsOwner,
+      allowedModules: props.guestPermissions,
+    })
     const map: {
       notes: SearchResult[]
       journal: SearchResult[]
@@ -296,6 +304,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
       vault: SearchResult[]
       weight: SearchResult[]
       leave: SearchResult[]
+      settings: SearchResult[]
     } = {
       notes: [],
       journal: [],
@@ -304,6 +313,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
       vault: [],
       weight: [],
       leave: [],
+      settings: [],
     }
 
     for (const item of allResults) {
@@ -314,15 +324,55 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
       else if (item.type === 'document') map.vault.push(item)
       else if (item.type === 'weight') map.weight.push(item)
       else if (item.type === 'leave') map.leave.push(item)
+      else if (item.type === 'settings') map.settings.push(item)
     }
 
     return map
-  }, [search, state])
+  }, [search, state, userId, effectiveIsOwner, props.guestPermissions])
+
+  // Filter commands by permissions
+  const filteredCommands = useMemo(() => {
+    return COMMANDS.filter(cmd => {
+      // 1. Filter owner-only settings commands for guests
+      if (!effectiveIsOwner) {
+        if (
+          cmd.id === 'settings-admin' ||
+          cmd.id === 'settings-backup' ||
+          cmd.id === 'settings-advanced' ||
+          cmd.id === 'settings-integrations' ||
+          cmd.id === 'settings-dashboard' ||
+          cmd.id === 'settings-calendar'
+        ) {
+          return false
+        }
+      }
+
+      // 2. Filter navigation/action commands if guest module is disabled
+      if (!effectiveIsOwner && props.guestPermissions) {
+        if (cmd.id === 'go-calendar' && props.guestPermissions.calendar === false) return false
+        if (cmd.id === 'go-activities' && props.guestPermissions.activities === false) return false
+        if (cmd.id === 'go-journal' && props.guestPermissions.journal === false) return false
+        if (cmd.id === 'go-notes' && props.guestPermissions.notes === false) return false
+        if (cmd.id === 'go-leave' && props.guestPermissions.leave === false) return false
+        if (cmd.id === 'go-weight' && props.guestPermissions.weight === false) return false
+        if (cmd.id === 'go-links' && props.guestPermissions.links === false) return false
+        if (cmd.id === 'go-vault' && props.guestPermissions.documents === false) return false
+
+        if (cmd.id === 'new-activity' && props.guestPermissions.activities === false) return false
+        if (cmd.id === 'new-journal' && props.guestPermissions.journal === false) return false
+        if (cmd.id === 'new-note' && props.guestPermissions.notes === false) return false
+        if (cmd.id === 'log-weight' && props.guestPermissions.weight === false) return false
+        if (cmd.id === 'request-leave' && props.guestPermissions.leave === false) return false
+      }
+
+      return true
+    })
+  }, [effectiveIsOwner, props.guestPermissions])
 
   if (!isOpen || !mounted) return null
 
   // Command groups
-  const groups = Array.from(new Set(COMMANDS.map(c => c.group)))
+  const groups = Array.from(new Set(filteredCommands.map(c => c.group)))
 
   return (
     <div
@@ -353,7 +403,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
           <Command.Input
             autoFocus
             value={search}
-            onValueChange={setSearch}
+            onValueChange={setRawSearch}
             placeholder="Search notes, journal, tasks, files, links, weight, or commands…"
             className={[
               'flex-1 bg-transparent text-xs sm:text-sm font-semibold',
@@ -365,7 +415,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
           {search && (
             <button
               type="button"
-              onClick={() => setSearch('')}
+              onClick={() => setRawSearch('')}
               className="text-[10px] font-bold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] px-1.5 py-0.5 rounded bg-[var(--color-bg-base)] border border-[var(--color-border)] cursor-pointer"
             >
               Clear

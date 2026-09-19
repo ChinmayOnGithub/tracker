@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { verifySession } from '@/lib/session'
+import { SessionService } from '@/lib/services/SessionService'
 import { randomUUID } from 'crypto'
 import path from 'path'
 import fs from 'fs/promises'
@@ -34,15 +33,9 @@ function getExtension(mimeType: string, originalName: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get('session_token')?.value
-    if (!token) {
+    const user = await SessionService.resolveAuthFromRequest(request)
+    if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-    }
-
-    const session = verifySession(token)
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 })
     }
 
     const formData = await request.formData()
@@ -65,7 +58,7 @@ export async function POST(request: NextRequest) {
 
     const ext = getExtension(mimeType, file.name)
     const fileId = `${randomUUID()}.${ext}`
-    const userDir = getJournalDir(session.userId)
+    const userDir = getJournalDir(user.id)
     await fs.mkdir(userDir, { recursive: true })
 
     const buffer = Buffer.from(await file.arrayBuffer())

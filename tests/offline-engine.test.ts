@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { IndexedDBEngine } from '@/lib/database/local/IndexedDBEngine';
-import { ConnectivityMonitor } from '@/lib/database/sync/ConnectivityMonitor';
-import { LastWriteWinsResolver } from '@/lib/database/sync/ConflictResolver';
-import { SyncEngine } from '@/lib/database/sync/SyncEngine';
+import { LastWriteWinsResolver } from '@/lib/sync/core/ConflictResolver';
+import { SyncCoordinator } from '@/lib/sync/core/SyncCoordinator';
 
 // Mock IndexedDB Factory for Node/Bun server testing environment
 const mockIndexedDB = {
@@ -57,18 +56,18 @@ describe('Offline Infrastructure & Core Engine Tests', () => {
     delete (global as unknown as { window?: unknown }).window;
   });
 
-  describe('ConnectivityMonitor', () => {
+  describe('SyncCoordinator Connectivity', () => {
     it('should correctly report current online status', () => {
-      const monitor = ConnectivityMonitor.getInstance();
-      expect(monitor.isOnline()).toBe(true);
+      const coordinator = SyncCoordinator.getInstance();
+      expect(coordinator.isOnline()).toBe(true);
     });
 
     it('should subscribe and invoke callbacks', () => {
-      const monitor = ConnectivityMonitor.getInstance();
+      const coordinator = SyncCoordinator.getInstance();
       let callCount = 0;
       let state = false;
       
-      const unsubscribe = monitor.subscribe((isOnline) => {
+      const unsubscribe = coordinator.subscribeConnectivity((isOnline) => {
         callCount++;
         state = isOnline;
       });
@@ -106,9 +105,9 @@ describe('Offline Infrastructure & Core Engine Tests', () => {
     });
   });
 
-  describe('SyncEngine', () => {
+  describe('SyncCoordinator Queue', () => {
     it('should register handlers and dispatch enqueue calls', async () => {
-      const engine = SyncEngine.getInstance();
+      const engine = SyncCoordinator.getInstance();
       let handlerCalled = false;
 
       engine.registerHandler('test_module', async (op, payload) => {
@@ -118,7 +117,7 @@ describe('Offline Infrastructure & Core Engine Tests', () => {
         return { success: true };
       });
 
-      // Mock DB interactions for SyncEngine internal enqueue
+      // Mock DB interactions for SyncCoordinator internal enqueue
       const db = IndexedDBEngine.getInstance();
       const mockQueue: unknown[] = [];
       db.put = mock(async (storeName: string, item: unknown) => {
@@ -134,13 +133,11 @@ describe('Offline Infrastructure & Core Engine Tests', () => {
       }) as unknown as <T>(storeName: string) => Promise<T[]>;
       db.delete = mock(async () => {});
 
-      console.log('Online status in test:', ConnectivityMonitor.getInstance().isOnline());
       (engine as unknown as { isProcessing: boolean }).isProcessing = false;
       await engine.enqueue('test_module', 'CREATE', { data: 'sample' });
       
       // Allow async queue processing to run
       await new Promise(resolve => setTimeout(resolve, 150));
-      console.log('Test Queue Length:', mockQueue.length, 'handlerCalled:', handlerCalled);
       expect(handlerCalled).toBe(true);
     });
   });

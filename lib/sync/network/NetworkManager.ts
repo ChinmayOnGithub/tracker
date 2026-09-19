@@ -331,7 +331,13 @@ export class NetworkManager extends EventEmitter<SyncEventMap> {
   }
 
   isOnline(): boolean {
-    return this.currentStatus === 'online' || this.currentStatus === 'limited'
+    if (this.currentStatus === 'online' || this.currentStatus === 'limited') {
+      return true
+    }
+    if (typeof window !== 'undefined' && typeof window.navigator !== 'undefined' && window.navigator.onLine) {
+      return true
+    }
+    return false
   }
 
   getConnectionQuality(): ConnectionQuality {

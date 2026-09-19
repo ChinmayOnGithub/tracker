@@ -4,7 +4,7 @@
  */
 
 import { SyncEngine } from '../core/SyncEngine'
-import { ConflictResolution, ConflictContext } from '../types'
+import { ConflictResolution, ConflictContext, SyncMetadata } from '../types'
 import { ActivityLog } from '@/types'
 import { ActivitySyncAdapter, ActivityLogSync, ActivityTemplateSync } from '../adapters/ActivitySyncAdapter'
 import { ActivityService } from '@/lib/services/ActivityService'
@@ -196,12 +196,12 @@ export class ActivitySyncService {
     const entities = await this.syncEngine.listEntities<ActivityLogSync>('activityLog')
     
     return entities
-      .filter(({ data }) => !activityId || data.activityId === activityId)
-      .map(({ data, metadata }) => ({
+      .filter(({ data }: { data: ActivityLogSync }) => !activityId || data.activityId === activityId)
+      .map(({ data, metadata }: { data: ActivityLogSync; metadata: SyncMetadata | null }) => ({
         log: ActivitySyncAdapter.syncToActivityLog(data),
         syncStatus: metadata?.syncStatus || 'unknown'
       }))
-      .sort((a, b) => new Date(b.log.date).getTime() - new Date(a.log.date).getTime())
+      .sort((a: { log: ActivityLog }, b: { log: ActivityLog }) => new Date(b.log.date).getTime() - new Date(a.log.date).getTime())
   }
 
   /**
@@ -217,11 +217,11 @@ export class ActivitySyncService {
   getSyncStats() {
     const stats = this.syncEngine.getStats()
     return {
-      network: stats.network,
+      network: stats.network.status,
       queueSize: stats.queue.total,
       activityLogOperations: stats.queue.byEntityType['activityLog'] || 0,
       activityTemplateOperations: stats.queue.byEntityType['activityTemplate'] || 0,
-      isOnline: stats.network === 'online'
+      isOnline: stats.network.status === 'online'
     }
   }
 

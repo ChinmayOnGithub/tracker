@@ -21,21 +21,11 @@ export class EntitlementService {
    * Checks whether a user is entitled to a specific feature.
    * Subscription -> Plan -> Product Tier -> Entitlements -> Feature Access
    */
-  static async hasFeature(userId: string, feature: FeatureKey): Promise<boolean> {
+  static async hasFeature(userId: string, feature: FeatureKey | keyof UserEntitlements['features']): Promise<boolean> {
     const entitlements = await this.getEntitlements(userId)
-    return !!entitlements.features[feature]
+    return !!entitlements.features[feature as keyof typeof entitlements.features]
   }
 
-  /**
-   * Alias for backward compatibility with existing callers.
-   */
-  static async canAccessFeature(
-    userId: string,
-    feature: keyof UserEntitlements['features']
-  ): Promise<boolean> {
-    const entitlements = await this.getEntitlements(userId)
-    return !!entitlements.features[feature]
-  }
 
   /**
    * Retrieves quantitative limit for a specific resource under the user's plan.

@@ -94,7 +94,7 @@ export class WeightRepository extends BaseRepository<WeightRecord> {
 ```
 
 ### 6. Register Background Sync Handlers
-Add the sync consumer callback to the `SyncEngine` constructor in [SyncEngine.ts](file:///d:/github_projeccts/tracker/lib/database/sync/SyncEngine.ts):
+Add the sync consumer callback to `SyncCoordinator` in [SyncCoordinator.ts](file:///d:/github_projeccts/tracker/lib/sync/core/SyncCoordinator.ts):
 ```typescript
 this.registerHandler('weight_records', async (op, payload) => {
   const { RemoteWeightRepository } = await import('@/modules/weight/repository/RemoteWeightRepository');

@@ -12,7 +12,8 @@ export async function getGuestPermissionsAction(): Promise<{
   error?: string
 }> {
   try {
-    const permissions = await getEffectiveGuestPermissions()
+    const loggedUser = await getLoggedUser().catch(() => null)
+    const permissions = await getEffectiveGuestPermissions(loggedUser)
     return { success: true, permissions }
   } catch (error) {
     console.error('Failed to get guest permissions:', error)

@@ -13,6 +13,9 @@ import { MasterSearchEngine, SearchResult, SearchCategory } from '@/lib/search/M
 export interface MobileSearchModalProps {
   isOpen: boolean
   onClose: () => void
+  currentUser?: { id: string; username: string; email?: string | null; isOwner?: boolean } | null
+  isOwner?: boolean
+  guestPermissions?: Record<string, boolean>
 }
 
 const CATEGORY_TABS: { id: SearchCategory; label: string }[] = [
@@ -27,13 +30,22 @@ const CATEGORY_TABS: { id: SearchCategory; label: string }[] = [
   { id: 'settings', label: 'Settings' },
 ]
 
-export const MobileSearchModal: React.FC<MobileSearchModalProps> = ({ isOpen, onClose }) => {
+export const MobileSearchModal: React.FC<MobileSearchModalProps> = ({
+  isOpen,
+  onClose,
+  currentUser = null,
+  isOwner,
+  guestPermissions,
+}) => {
   const router = useRouter()
   const { state, setActiveJournalDateAction } = useStore()
   const [mounted, setMounted] = useState(false)
   const [query, setQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState<SearchCategory>('all')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const effectiveIsOwner = isOwner ?? (currentUser?.isOwner ?? (currentUser?.username === 'admin'))
+  const userId = currentUser?.id
 
   // Prevent React #418 hydration mismatch — modal renders dynamic client-only state.
   useEffect(() => {
@@ -70,8 +82,12 @@ export const MobileSearchModal: React.FC<MobileSearchModalProps> = ({ isOpen, on
 
   const results = useMemo(() => {
     if (!query.trim()) return []
-    return MasterSearchEngine.search(query, state, activeCategory)
-  }, [query, state, activeCategory])
+    return MasterSearchEngine.search(query, state, activeCategory, {
+      userId,
+      isOwner: effectiveIsOwner,
+      allowedModules: guestPermissions,
+    })
+  }, [query, state, activeCategory, userId, effectiveIsOwner, guestPermissions])
 
   if (!isOpen || !mounted) return null
 

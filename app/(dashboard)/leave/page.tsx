@@ -1,27 +1,25 @@
 import { db } from '@/lib/db'
 import { LeavePanel } from '@/components/LeavePanel'
-import { getLoggedUser } from '@/app/actions/auth'
 import { redirect } from 'next/navigation'
-import { canAccessModule, getEffectiveGuestPermissions } from '@/lib/auth-guards'
-
+import { AuthorizationService } from '@/lib/services/AuthorizationService'
 import { LeaveType, LeaveStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default async function Page() {
-  const loggedUser = await getLoggedUser()
-  if (!loggedUser) {
+  const auth = await AuthorizationService.getAuthorizedPageContext({ module: 'leave' })
+  if (!auth.user) {
     redirect('/')
     return null
   }
 
-  const guestPerms = await getEffectiveGuestPermissions()
-  if (!canAccessModule(loggedUser, 'leave', guestPerms)) {
+  if (!auth.canAccess) {
     redirect('/settings')
     return null
   }
 
+  const loggedUser = auth.user
   const currentYear = new Date().getFullYear()
 
   const leaveRecordsRaw = await db.leaveRecord.findMany({

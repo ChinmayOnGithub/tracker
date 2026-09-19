@@ -1,24 +1,24 @@
 import { db } from '@/lib/db'
 import { WeightPanel } from '@/components/WeightPanel'
-import { getLoggedUser } from '@/app/actions/auth'
 import { redirect } from 'next/navigation'
-import { canAccessModule, getEffectiveGuestPermissions } from '@/lib/auth-guards'
+import { AuthorizationService } from '@/lib/services/AuthorizationService'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default async function Page() {
-  const loggedUser = await getLoggedUser()
-  if (!loggedUser) {
+  const auth = await AuthorizationService.getAuthorizedPageContext({ module: 'weight' })
+  if (!auth.user) {
     redirect('/')
     return null
   }
 
-  const guestPerms = await getEffectiveGuestPermissions()
-  if (!canAccessModule(loggedUser, 'weight', guestPerms)) {
+  if (!auth.canAccess) {
     redirect('/settings')
     return null
   }
+
+  const loggedUser = auth.user
 
   // Weight records from last 90 days
   const weightRecordsRaw = await db.weightRecord.findMany({

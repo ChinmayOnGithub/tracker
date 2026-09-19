@@ -681,4 +681,17 @@ export class ProductionSyncEngine extends EventEmitter<SyncEventMap> {
 
     return { data, metadata }
   }
+
+  async listEntities<T>(entityType: string): Promise<Array<{ data: T; metadata: SyncMetadata | null }>> {
+    const items = await this.config.storageProvider.list<T>(`${entityType}:`)
+    const results = await Promise.all(
+      items.map(async ({ key, value }) => {
+        const metadata = await this.config.storageProvider.getMetadata(key)
+        return { data: value, metadata }
+      })
+    )
+    return results
+  }
 }
+
+export { ProductionSyncEngine as SyncEngine }

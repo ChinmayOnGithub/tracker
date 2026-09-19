@@ -7,6 +7,7 @@ import {
   Clock, ShieldCheck, History, Calendar
 } from 'lucide-react'
 import { getBillingSummaryAction, cancelSubscriptionAction, BillingSummary } from '@/app/actions/billing'
+import { PLANS } from '@/lib/billing/plans'
 import Link from 'next/link'
 
 export const SettingsBillingSection: React.FC = () => {
@@ -186,7 +187,7 @@ export const SettingsBillingSection: React.FC = () => {
                 {summary?.isEligibleForIntro && !isPro && (
                   <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold pt-1">
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>Your account is eligible for the introductory ₹29 first-month promotion!</span>
+                    <span>Your account is eligible for the introductory ₹{PLANS.PRO_MONTHLY.introductoryPrice} first-month promotion!</span>
                   </div>
                 )}
 

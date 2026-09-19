@@ -132,8 +132,31 @@ export const SETTINGS_COMMANDS: SettingsCommand[] = [
     tab: 'leave',
     keywords: 'leave allowance vacation sick casual time off pto quota days balance config',
     description: 'Configure annual leave quotas and balances'
+  },
+  {
+    id: 'settings-billing',
+    label: 'Billing & Plans',
+    tab: 'billing',
+    keywords: 'billing plans pro subscription payment razorpay invoice renewal price upgrade cancel membership',
+    description: 'Manage subscription plan, invoices, and membership status'
   }
 ]
+
+export const OWNER_ONLY_SETTINGS_TABS = new Set([
+  'admin',
+  'backup',
+  'advanced',
+  'integrations',
+  'dashboard',
+  'calendar',
+  'leave'
+])
+
+export interface SearchOptions {
+  userId?: string
+  isOwner?: boolean
+  allowedModules?: Partial<Record<string, boolean>>
+}
 
 export function stripHtml(html: string): string {
   if (!html) return ''
@@ -242,7 +265,8 @@ export class MasterSearchEngine {
   public static search(
     query: string,
     dataset: SearchableDataset,
-    categoryFilter: SearchCategory = 'all'
+    categoryFilter: SearchCategory = 'all',
+    options?: SearchOptions
   ): SearchResult[] {
     const rawQuery = query.trim()
     if (!rawQuery) {
@@ -252,9 +276,24 @@ export class MasterSearchEngine {
     const tokens = tokenize(rawQuery)
     const results: SearchResult[] = []
 
+    const isOwner = options?.isOwner ?? true
+    const allowedModules = options?.allowedModules
+    const userId = options?.userId
+
+    const isModuleEnabled = (mod: string) => {
+      if (!allowedModules) return true
+      return allowedModules[mod] !== false
+    }
+
+    const matchesUser = (itemUserId?: string | null) => {
+      if (!userId || !itemUserId) return true
+      return itemUserId === userId
+    }
+
     // 1. NOTES
-    if ((categoryFilter === 'all' || categoryFilter === 'note') && dataset.notes) {
+    if ((categoryFilter === 'all' || categoryFilter === 'note') && dataset.notes && isModuleEnabled('notes')) {
       for (const note of dataset.notes) {
+        if (note.userId && !matchesUser(note.userId)) continue
         const plainContent = stripHtml(note.content || '')
         const title = note.title?.trim() || 'Untitled Note'
         const match = computeMatchScore(tokens, rawQuery, {
@@ -283,8 +322,9 @@ export class MasterSearchEngine {
     }
 
     // 2. JOURNAL ENTRIES
-    if ((categoryFilter === 'all' || categoryFilter === 'journal') && dataset.journalEntries) {
+    if ((categoryFilter === 'all' || categoryFilter === 'journal') && dataset.journalEntries && isModuleEnabled('journal')) {
       for (const entry of dataset.journalEntries) {
+        if (entry.userId && !matchesUser(entry.userId)) continue
         const dateStr = typeof entry.journalDate === 'string'
           ? entry.journalDate.split('T')[0]
           : toYMD(entry.journalDate)
@@ -321,8 +361,9 @@ export class MasterSearchEngine {
     }
 
     // 3. ACTIVITIES & TEMPLATES
-    if ((categoryFilter === 'all' || categoryFilter === 'activity') && dataset.templates) {
+    if ((categoryFilter === 'all' || categoryFilter === 'activity') && dataset.templates && isModuleEnabled('activities')) {
       for (const template of dataset.templates) {
+        if (template.userId && !matchesUser(template.userId)) continue
         // Search name, category, description/notes, type, tags, recurrence
         const tagsStr = (template as unknown as { tags?: Array<{ name: string }> }).tags
           ?.map(t => t.name)
@@ -355,13 +396,15 @@ export class MasterSearchEngine {
     }
 
     // 4. LINKS & BOOKMARKS
-    if ((categoryFilter === 'all' || categoryFilter === 'link') && dataset.links) {
+    if ((categoryFilter === 'all' || categoryFilter === 'link') && dataset.links && isModuleEnabled('links')) {
       const collectionMap = new Map<string, string>()
       if (dataset.collections) {
         dataset.collections.forEach(c => collectionMap.set(c.id, c.name))
       }
 
       for (const link of dataset.links) {
+        const linkUserId = (link as unknown as { userId?: string }).userId
+        if (linkUserId && !matchesUser(linkUserId)) continue
         const colName = link.collectionId ? collectionMap.get(link.collectionId) : null
         let hostname = ''
         try {
@@ -399,8 +442,10 @@ export class MasterSearchEngine {
     }
 
     // 5. VAULT / DOCUMENTS (Safe metadata only; zero binary or decrypted secrets)
-    if ((categoryFilter === 'all' || categoryFilter === 'document') && dataset.vaultItems) {
+    if ((categoryFilter === 'all' || categoryFilter === 'document') && dataset.vaultItems && isModuleEnabled('documents')) {
       for (const item of dataset.vaultItems) {
+        const itemUserId = (item as unknown as { userId?: string }).userId
+        if (itemUserId && !matchesUser(itemUserId)) continue
         const itemCategory = (item as unknown as { metadata?: { category?: string } }).metadata?.category || ''
         const mime = item.mimeGroup || (item.isFolder ? 'Folder' : 'File')
 
@@ -431,8 +476,9 @@ export class MasterSearchEngine {
     }
 
     // 6. WEIGHT RECORDS
-    if ((categoryFilter === 'all' || categoryFilter === 'weight') && dataset.weightRecords) {
+    if ((categoryFilter === 'all' || categoryFilter === 'weight') && dataset.weightRecords && isModuleEnabled('weight')) {
       for (const record of dataset.weightRecords) {
+        if (record.userId && !matchesUser(record.userId)) continue
         const dateStr = typeof record.date === 'string' ? record.date.split('T')[0] : toYMD(record.date)
         const dateFormatted = fmtDateMed(record.date)
 
@@ -462,8 +508,9 @@ export class MasterSearchEngine {
     }
 
     // 7. LEAVE RECORDS
-    if ((categoryFilter === 'all' || categoryFilter === 'leave') && dataset.leaveRecords) {
+    if ((categoryFilter === 'all' || categoryFilter === 'leave') && dataset.leaveRecords && isModuleEnabled('leave')) {
       for (const record of dataset.leaveRecords) {
+        if (record.userId && !matchesUser(record.userId)) continue
         const start = typeof record.startDate === 'string' ? record.startDate.split('T')[0] : toYMD(record.startDate)
         const end = typeof record.endDate === 'string' ? record.endDate.split('T')[0] : toYMD(record.endDate)
 
@@ -493,8 +540,13 @@ export class MasterSearchEngine {
     }
 
     // 8. SETTINGS COMMANDS
-    if (categoryFilter === 'all' || categoryFilter === 'settings') {
+    if ((categoryFilter === 'all' || categoryFilter === 'settings') && isModuleEnabled('settings')) {
       for (const cmd of SETTINGS_COMMANDS) {
+        // Enforce owner-only tabs: guests cannot see admin, backup, advanced, etc. in search
+        if (!isOwner && OWNER_ONLY_SETTINGS_TABS.has(cmd.tab)) {
+          continue
+        }
+
         const match = computeMatchScore(tokens, rawQuery, {
           title: cmd.label,
           keywords: `${cmd.keywords} ${cmd.tab}`,

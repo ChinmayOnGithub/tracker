@@ -2,6 +2,7 @@
 
 import { db } from '@/lib/db'
 import { getLoggedUser } from '@/app/actions/auth'
+import { AuthorizationService } from '@/lib/services/AuthorizationService'
 import { fetchRecurrenceLogs } from '@/lib/services/TimelineService'
 import { RecurrenceType } from '@/types'
 import { getTodayDateStr } from '@/lib/recurrence'
@@ -16,6 +17,8 @@ export async function fetchDashboardDataAction(dateParam?: string) {
     const currentYear = new Date().getFullYear()
     const todayStr = dateParam || getTodayDateStr()
 
+    const isOwner = AuthorizationService.isOwner(loggedUser)
+
     // Parallelize independent root queries (eliminating request waterfall)
     const [
       templatesRaw,
@@ -25,7 +28,7 @@ export async function fetchDashboardDataAction(dateParam?: string) {
       weightRecordsRaw,
     ] = await Promise.all([
       db.activityTemplate.findMany({
-        where: loggedUser.username === 'admin'
+        where: isOwner
           ? { OR: [{ userId: loggedUser.id }, { userId: null }], deletedAt: null }
           : { userId: loggedUser.id, deletedAt: null },
         include: { tags: true },
@@ -61,7 +64,7 @@ export async function fetchDashboardDataAction(dateParam?: string) {
       }),
     ])
 
-    const logsRaw = await fetchRecurrenceLogs(loggedUser.id, templatesRaw, loggedUser.username === 'admin')
+    const logsRaw = await fetchRecurrenceLogs(loggedUser.id, templatesRaw, isOwner)
 
     // Serialize Dates to strings or ISO format
     const templates = templatesRaw.map(t => ({
@@ -127,15 +130,17 @@ export async function fetchCalendarDataAction() {
       return { success: false, error: 'Unauthorized' }
     }
 
+    const isOwner = AuthorizationService.isOwner(loggedUser)
+
     const templatesRaw = await db.activityTemplate.findMany({
-      where: loggedUser.username === 'admin'
+      where: isOwner
         ? { OR: [{ userId: loggedUser.id }, { userId: null }], deletedAt: null }
         : { userId: loggedUser.id, deletedAt: null },
       include: { tags: true },
       orderBy: { sortOrder: 'asc' },
     })
 
-    const logsRaw = await fetchRecurrenceLogs(loggedUser.id, templatesRaw, loggedUser.username === 'admin')
+    const logsRaw = await fetchRecurrenceLogs(loggedUser.id, templatesRaw, isOwner)
     
     const journalRaw = await db.journalEntry.findMany({
       where: { userId: loggedUser.id, deletedAt: null },

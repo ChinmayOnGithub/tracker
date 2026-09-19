@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { IndexedDBEngine } from '@/lib/database/local/IndexedDBEngine';
-import { SyncEngine } from '@/lib/database/sync/SyncEngine';
+import { SyncCoordinator } from '@/lib/sync/core/SyncCoordinator';
 import { ActivityTemplateRepository } from '@/modules/activities/repository/ActivityRepository';
 import { JournalRepository } from '@/modules/journal/repository/JournalRepository';
 import { WeightRepository } from '@/modules/weight/repository/WeightRepository';
@@ -85,7 +85,7 @@ describe('Cross-Module Integration & Hardening Tests', () => {
   });
 
   it('should sequentially process mixed-domain items in the sync queue', async () => {
-    const engine = SyncEngine.getInstance();
+    const engine = SyncCoordinator.getInstance();
     const db = IndexedDBEngine.getInstance();
     const mockQueue: unknown[] = [];
     let handlersTriggered = 0;

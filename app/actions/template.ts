@@ -262,7 +262,7 @@ export async function reorderActivityTemplates(orderedIds: string[]) {
         id: { in: orderedIds },
         OR: [
           { userId: user.id },
-          ...(user.username === 'admin' ? [{ userId: null }] : [])
+          ...(user.isOwner ? [{ userId: null }] : [])
         ]
       }
     })

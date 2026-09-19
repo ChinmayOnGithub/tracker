@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { SettingsBillingSection } from './SettingsBillingSection'
 import { checkGoogleConnection, disconnectGoogleAccount } from '@/modules/sync/google-calendar/actions'
-import { getUserProfileAction, setPasscodeAction } from '@/app/actions/auth'
+import { getUserProfileAction, setPasscodeAction, runMigrationAuditAction } from '@/app/actions/auth'
 import {
   getGuestPermissionsAction,
   saveGuestPermissionsAction,
@@ -21,19 +21,55 @@ import {
 import { BackupService } from '@/lib/database/local/BackupService'
 import { useSearchParams } from 'next/navigation'
 import { OfflineDebugPanel } from './OfflineDebugPanel'
+import { writeQueue } from '@/lib/store/write-queue'
 
-export const SettingsPanel: React.FC = () => {
+export interface UserProfileData {
+  id: string
+  username: string
+  email: string | null
+  authProvider: 'Google' | 'Passcode'
+  isOwner: boolean
+  accessLevel: 'Private Owner' | 'Shared Tools'
+  hasPasscode: boolean
+  avatarUrl?: string | null
+  createdAt: string
+}
+
+export interface SettingsPanelProps {
+  initialUserProfile?: UserProfileData | null
+}
+
+const OWNER_ONLY_TABS = new Set([
+  'admin',
+  'backup',
+  'advanced',
+  'integrations',
+  'dashboard',
+  'calendar',
+  'leave'
+])
+
+export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile = null }) => {
   const searchParams = useSearchParams()
   const tabParam = searchParams?.get('tab') as 'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave' | 'admin' | 'billing' | null
 
+  // If initial profile is provided and user is NOT an owner, do not allow owner-only tabs
+  const resolveInitialTab = (tab: typeof tabParam): 'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave' | 'admin' | 'billing' => {
+    if (!tab) return 'profile'
+    if (initialUserProfile && initialUserProfile.isOwner === false && OWNER_ONLY_TABS.has(tab)) {
+      return 'profile'
+    }
+    return tab
+  }
+
   const [activeSection, setActiveSection] = useState<'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave' | 'admin' | 'billing'>(() => {
-    return tabParam || 'profile'
+    return resolveInitialTab(tabParam)
   })
   const [prevTabParam, setPrevTabParam] = useState<string | null>(tabParam)
 
   if (tabParam && tabParam !== prevTabParam) {
     setPrevTabParam(tabParam)
-    setActiveSection(tabParam)
+    setActiveSection(resolveInitialTab(tabParam))
   }
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
@@ -41,19 +77,9 @@ export const SettingsPanel: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [disconnecting, setDisconnecting] = useState(false)
 
-  // Profile Action Loading
-  const [profileLoading, setProfileLoading] = useState(true)
-  const [userProfile, setUserProfile] = useState<{
-    id: string
-    username: string
-    email: string | null
-    authProvider: 'Google' | 'Passcode'
-    isOwner: boolean
-    accessLevel: 'Private Owner' | 'Shared Tools'
-    hasPasscode: boolean
-    avatarUrl?: string | null
-    createdAt: string
-  } | null>(null)
+  // Profile Action Loading: if initial profile is supplied, we are immediately ready without flash
+  const [profileLoading, setProfileLoading] = useState(!initialUserProfile)
+  const [userProfile, setUserProfile] = useState<UserProfileData | null>(initialUserProfile)
   const [pinInput, setPinInput] = useState('')
   const [passcodeError, setPasscodeError] = useState<string | null>(null)
   const [passcodeSuccess, setPasscodeSuccess] = useState<string | null>(null)
@@ -187,6 +213,20 @@ export const SettingsPanel: React.FC = () => {
   })
   const [savingPermissions, setSavingPermissions] = useState(false)
   const [permissionsSuccess, setPermissionsSuccess] = useState<string | null>(null)
+  const [auditSummary, setAuditSummary] = useState<import('@/lib/services/MigrationAuditService').MigrationAuditSummary | null>(null)
+  const [auditLoading, setAuditLoading] = useState(false)
+
+  const handleRunMigrationAudit = useCallback(async () => {
+    setAuditLoading(true)
+    try {
+      const res = await runMigrationAuditAction()
+      if (res.success && res.audit) {
+        setAuditSummary(res.audit)
+      }
+    } finally {
+      setAuditLoading(false)
+    }
+  }, [])
 
   // Load profile & integrations data
   const fetchProfile = useCallback(async () => {
@@ -218,34 +258,47 @@ export const SettingsPanel: React.FC = () => {
     setLoading(false)
   }, [])
 
+  // Local settings revision tracking to prevent stale network fetches from clobbering recent local edits
+  const settingsRevisions = React.useRef<Record<string, number>>({})
+
+  const recordLocalRevision = useCallback((settingKey: string) => {
+    settingsRevisions.current[settingKey] = Date.now()
+  }, [])
+
+  const isLocalRevisionNewer = useCallback((settingKey: string, thresholdMs = 5000): boolean => {
+    const lastEdit = settingsRevisions.current[settingKey]
+    if (!lastEdit) return false
+    return Date.now() - lastEdit < thresholdMs
+  }, [])
+
   const fetchUserSettings = useCallback(async () => {
     try {
       const res = await getUserSettingsAction()
       if (res.success && res.settings) {
         if (res.settings.appearance) {
           const app = res.settings.appearance
-          if (app.accent) {
+          if (app.accent && !isLocalRevisionNewer('personal_accent_color')) {
             setAccentColor(app.accent)
             localStorage.setItem('personal_accent_color', app.accent)
           }
-          if (app.fontSize) {
+          if (app.fontSize && !isLocalRevisionNewer('personal_font_size')) {
             setFontSize(app.fontSize)
             localStorage.setItem('personal_font_size', app.fontSize)
           }
-          if (app.rounded) {
+          if (app.rounded && !isLocalRevisionNewer('personal_rounded_corners')) {
             setRoundedCorners(app.rounded)
             localStorage.setItem('personal_rounded_corners', app.rounded)
           }
-          if (app.animations) {
+          if (app.animations && !isLocalRevisionNewer('personal_animations')) {
             setAnimations(app.animations)
             localStorage.setItem('personal_animations', app.animations)
           }
         }
-        if (res.settings.weeklyGoal !== undefined && res.settings.weeklyGoal !== null) {
+        if (res.settings.weeklyGoal !== undefined && res.settings.weeklyGoal !== null && !isLocalRevisionNewer('personal_weekly_goal')) {
           setWeeklyGoal(String(res.settings.weeklyGoal))
           localStorage.setItem('personal_weekly_goal', String(res.settings.weeklyGoal))
         }
-        if (res.settings.dashboard) {
+        if (res.settings.dashboard && !isLocalRevisionNewer('personal_dashboard_widgets')) {
           const cfg = res.settings.dashboard
           if (Array.isArray(cfg.hidden)) {
             setWidgetsVisibility(prev => {
@@ -263,7 +316,7 @@ export const SettingsPanel: React.FC = () => {
     } catch (err) {
       console.error('[SettingsPanel] Failed to fetch user settings:', err)
     }
-  }, [])
+  }, [isLocalRevisionNewer])
 
   // Load backend status and listen to real-time style changes on client mount
   useEffect(() => {
@@ -310,37 +363,72 @@ export const SettingsPanel: React.FC = () => {
     setSavingPermissions(false)
   }
 
-  // Save Settings Helper (updates localStorage, dispatches change event, and syncs canonical UserSetting to server)
-  const saveToLocal = (key: string, value: string) => {
+  // Save Settings Helper (updates localStorage, dispatches change event, and queues canonical UserSetting sync to server)
+  const saveToLocal = useCallback((key: string, value: string) => {
+    recordLocalRevision(key)
     localStorage.setItem(key, value)
     window.dispatchEvent(new Event('personal_settings_changed'))
 
-    // Canonical server sync for account-scoped settings
+    const now = Date.now()
+    // Route canonical server sync through writeQueue to prevent race conditions
     if (key === 'personal_accent_color') {
-      saveUserAppearanceAction({ accent: value }).catch(console.error)
+      writeQueue.add({
+        id: `settings-accent-${now}`,
+        dedupKey: 'settings-appearance-accent',
+        run: async () => saveUserAppearanceAction({ accent: value }),
+        rollback: () => {}
+      })
     } else if (key === 'personal_font_size') {
-      saveUserAppearanceAction({ fontSize: value }).catch(console.error)
+      writeQueue.add({
+        id: `settings-fontsize-${now}`,
+        dedupKey: 'settings-appearance-fontsize',
+        run: async () => saveUserAppearanceAction({ fontSize: value }),
+        rollback: () => {}
+      })
     } else if (key === 'personal_rounded_corners') {
-      saveUserAppearanceAction({ rounded: value }).catch(console.error)
+      writeQueue.add({
+        id: `settings-rounded-${now}`,
+        dedupKey: 'settings-appearance-rounded',
+        run: async () => saveUserAppearanceAction({ rounded: value }),
+        rollback: () => {}
+      })
     } else if (key === 'personal_animations') {
-      saveUserAppearanceAction({ animations: value }).catch(console.error)
+      writeQueue.add({
+        id: `settings-animations-${now}`,
+        dedupKey: 'settings-appearance-animations',
+        run: async () => saveUserAppearanceAction({ animations: value }),
+        rollback: () => {}
+      })
     } else if (key === 'personal_weekly_goal') {
       const goalNum = Number(value)
       if (!isNaN(goalNum) && goalNum > 0) {
-        saveWeeklyGoalAction(goalNum).catch(console.error)
+        writeQueue.add({
+          id: `settings-weeklygoal-${now}`,
+          dedupKey: 'settings-weekly-goal',
+          run: async () => saveWeeklyGoalAction(goalNum),
+          rollback: () => {}
+        })
       }
     }
-  }
+  }, [recordLocalRevision])
 
-  const saveWidgetVisibility = (widgetKey: string, visible: boolean) => {
+  const saveWidgetVisibility = useCallback((widgetKey: string, visible: boolean) => {
+    recordLocalRevision('personal_dashboard_widgets')
     const updated = { ...widgetsVisibility, [widgetKey]: visible }
     setWidgetsVisibility(updated)
-    // Synchronize to server authority (DASHBOARD module setting)
-    const hidden = Object.keys(updated).filter(k => !updated[k])
-    saveDashboardConfigAction({ hidden }).catch(console.error)
     localStorage.setItem('personal_dashboard_widgets', JSON.stringify(updated))
     window.dispatchEvent(new Event('personal_settings_changed'))
-  }
+
+    // Synchronize to server authority (DASHBOARD module setting) via writeQueue
+    const hidden = Object.keys(updated).filter(k => !updated[k])
+    const now = Date.now()
+    writeQueue.add({
+      id: `settings-dashboard-hidden-${now}`,
+      dedupKey: 'settings-dashboard-hidden',
+      run: async () => saveDashboardConfigAction({ hidden }),
+      rollback: () => {}
+    })
+  }, [recordLocalRevision, widgetsVisibility])
 
   const saveModuleVisibility = (moduleKey: string, visible: boolean) => {
     const updated = { ...modulesVisibility, [moduleKey]: visible }
@@ -372,18 +460,22 @@ export const SettingsPanel: React.FC = () => {
     e.preventDefault()
     setPasscodeError(null)
     setPasscodeSuccess(null)
-    if (pinInput.length !== 4 || !/^\d+$/.test(pinInput)) {
-      setPasscodeError('PIN must be exactly 4 digits.')
+    const secret = pinInput.trim()
+    const isPin = secret.length === 4 && /^\d+$/.test(secret)
+    const isPassword = secret.length >= 8 && secret.length <= 128
+
+    if (!isPin && !isPassword) {
+      setPasscodeError('Must be either a strong password (minimum 8 characters) or a 4-digit PIN.')
       return
     }
     setPasscodeActionLoading(true)
-    const res = await setPasscodeAction(pinInput)
+    const res = await setPasscodeAction(secret)
     if (res.success) {
-      setPasscodeSuccess('Passcode PIN updated successfully!')
+      setPasscodeSuccess(isPassword ? 'Password updated successfully!' : 'Passcode PIN updated successfully!')
       setPinInput('')
       await fetchProfile()
     } else {
-      setPasscodeError(res.error || 'Failed to update passcode.')
+      setPasscodeError(res.error || 'Failed to update passcode/password.')
     }
     setPasscodeActionLoading(false)
   }
@@ -737,7 +829,7 @@ export const SettingsPanel: React.FC = () => {
             </Card>
           )}
 
-          {activeSection === 'calendar' && (
+          {activeSection === 'calendar' && userProfile?.isOwner !== false && (
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
@@ -802,7 +894,7 @@ export const SettingsPanel: React.FC = () => {
             </Card>
           )}
 
-          {activeSection === 'leave' && (
+          {activeSection === 'leave' && userProfile?.isOwner !== false && (
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
@@ -849,7 +941,7 @@ export const SettingsPanel: React.FC = () => {
             </Card>
           )}
 
-          {activeSection === 'dashboard' && (
+          {activeSection === 'dashboard' && userProfile?.isOwner !== false && (
             <div className="space-y-6">
               {/* Widget Toggles */}
               <Card>
@@ -1016,7 +1108,7 @@ export const SettingsPanel: React.FC = () => {
             </Card>
           )}
 
-          {activeSection === 'integrations' && (
+          {activeSection === 'integrations' && userProfile?.isOwner !== false && (
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
@@ -1124,23 +1216,19 @@ export const SettingsPanel: React.FC = () => {
                     <div className="space-y-4 p-4 bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-850 rounded-xl">
                       <h4 className="text-xs font-bold text-[var(--color-text-main)] uppercase tracking-wider flex items-center gap-1.5">
                         <Key className="w-4 h-4 text-[var(--color-primary)]" />
-                        {userProfile.hasPasscode ? 'Update or Disable PIN' : 'Configure PIN'}
+                        {userProfile.hasPasscode ? 'Update or Disable Password/PIN' : 'Configure Password / PIN'}
                       </h4>
 
                       <form onSubmit={handleSetPasscode} className="space-y-3">
                         <Input
                           type="password"
-                          inputMode="numeric"
-                          pattern="[0-9]*"
-                          maxLength={4}
-                          placeholder="Enter 4-digit PIN"
+                          placeholder="Enter new password (min 8 chars) or 4-digit PIN"
                           value={pinInput}
                           onChange={e => {
                             setPasscodeError(null)
                             setPasscodeSuccess(null)
-                            setPinInput(e.target.value.replace(/\D/g, ''))
+                            setPinInput(e.target.value)
                           }}
-                          className="font-mono text-center tracking-[1em]"
                         />
 
                         {passcodeError && <div className="text-[11px] text-rose-500 font-semibold">{passcodeError}</div>}
@@ -1151,10 +1239,14 @@ export const SettingsPanel: React.FC = () => {
                             type="submit"
                             variant="primary"
                             size="sm"
-                            disabled={pinInput.length !== 4 || passcodeActionLoading}
+                            disabled={
+                              pinInput.trim().length === 0 || 
+                              (pinInput.trim().length < 8 && !/^\d{4}$/.test(pinInput.trim())) || 
+                              passcodeActionLoading
+                            }
                             isLoading={passcodeActionLoading}
                           >
-                            {userProfile.hasPasscode ? 'Change PIN' : 'Enable Passcode'}
+                            {userProfile.hasPasscode ? 'Update Credentials' : 'Save Credentials'}
                           </Button>
                           
                           {userProfile.hasPasscode && (
@@ -1165,7 +1257,7 @@ export const SettingsPanel: React.FC = () => {
                               disabled={passcodeActionLoading}
                               onClick={handleDisablePasscode}
                             >
-                              Disable PIN
+                              Disable Password / PIN
                             </Button>
                           )}
                         </div>
@@ -1193,7 +1285,7 @@ export const SettingsPanel: React.FC = () => {
             </Card>
           )}
 
-          {activeSection === 'backup' && (
+          {activeSection === 'backup' && userProfile?.isOwner !== false && (
             <div className="space-y-6 animate-fade-in">
               <Card>
                 <CardHeader>
@@ -1303,10 +1395,96 @@ export const SettingsPanel: React.FC = () => {
                   </div>
                 </CardBody>
               </Card>
+
+              {/* User Migration Audit Section */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-4.5 h-4.5 text-[var(--color-primary)]" />
+                      <span className="text-xs font-black text-[var(--color-text-main)] uppercase tracking-wider">
+                        Account Credential & Migration Audit
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRunMigrationAudit}
+                      isLoading={auditLoading}
+                    >
+                      Run Credential Audit
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardBody className="space-y-4">
+                  <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
+                    Inspect user credential health across the workspace. Pinpoints legacy 4-digit PIN accounts that need upgrading to scrypt passwords without exposing secrets.
+                  </p>
+
+                  {auditSummary && (
+                    <div className="space-y-4 animate-fade-in">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="p-3 bg-slate-50 dark:bg-zinc-900/40 border border-slate-100 dark:border-zinc-850 rounded-lg">
+                          <span className="text-[9px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider">Total Users</span>
+                          <div className="font-extrabold text-[var(--color-text-main)] text-base mt-0.5">{auditSummary.totalUsers}</div>
+                        </div>
+                        <div className="p-3 bg-slate-50 dark:bg-zinc-900/40 border border-slate-100 dark:border-zinc-850 rounded-lg">
+                          <span className="text-[9px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider">Google OAuth</span>
+                          <div className="font-extrabold text-blue-500 text-base mt-0.5">{auditSummary.googleUsers}</div>
+                        </div>
+                        <div className="p-3 bg-slate-50 dark:bg-zinc-900/40 border border-slate-100 dark:border-zinc-850 rounded-lg">
+                          <span className="text-[9px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider">scrypt Passwords</span>
+                          <div className="font-extrabold text-emerald-500 text-base mt-0.5">{auditSummary.passwordUsers}</div>
+                        </div>
+                        <div className="p-3 bg-slate-50 dark:bg-zinc-900/40 border border-slate-100 dark:border-zinc-850 rounded-lg">
+                          <span className="text-[9px] text-[var(--color-text-muted)] font-bold uppercase tracking-wider">Legacy PINs</span>
+                          <div className="font-extrabold text-amber-500 text-base mt-0.5">{auditSummary.legacyPinUsers}</div>
+                        </div>
+                      </div>
+
+                      <div className="divide-y divide-[var(--color-border)] border border-[var(--color-border)] rounded-xl overflow-hidden text-xs">
+                        {auditSummary.users.map(u => (
+                          <div key={u.userId} className="p-3 flex items-center justify-between bg-slate-50/50 dark:bg-zinc-900/20">
+                            <div>
+                              <div className="font-bold text-[var(--color-text-main)] flex items-center gap-2">
+                                <span>{u.username}</span>
+                                {u.isOwner && (
+                                  <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/10 text-amber-500 rounded font-extrabold">OWNER</span>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-[var(--color-text-muted)] mt-0.5 font-mono">
+                                {u.maskedEmail || 'No email associated'}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                u.credentialType === 'SCRYPT_PASSWORD'
+                                  ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                  : u.credentialType === 'GOOGLE_OAUTH'
+                                  ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20'
+                                  : u.credentialType === 'LEGACY_PIN'
+                                  ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                  : 'bg-zinc-500/10 text-zinc-500 border border-zinc-500/20'
+                              }`}>
+                                {u.credentialType}
+                              </span>
+                              {u.requiresMigration && (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-500 border border-rose-500/20">
+                                  Action Required
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardBody>
+              </Card>
             </div>
           )}
 
-          {activeSection === 'advanced' && (
+          {activeSection === 'advanced' && userProfile?.isOwner !== false && (
             <div className="space-y-6">
               {/* Diagnostic Card moved to advanced settings */}
               <Card>

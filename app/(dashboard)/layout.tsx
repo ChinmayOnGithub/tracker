@@ -1,4 +1,4 @@
-import { getLoggedUser } from '@/app/actions/auth'
+import { SessionService } from '@/lib/services/SessionService'
 import { DashboardLayout } from '@/components/DashboardLayout'
 
 export default async function DashboardRootLayout({
@@ -6,7 +6,7 @@ export default async function DashboardRootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const loggedUser = await getLoggedUser()
+  const loggedUser = await SessionService.getSessionUser()
 
   return (
     <DashboardLayout currentUser={loggedUser}>

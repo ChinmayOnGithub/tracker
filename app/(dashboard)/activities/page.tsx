@@ -2,33 +2,32 @@ import { db } from '@/lib/db'
 import { analyzeRecurrence, getTodayDateStr, diffUTCDays } from '@/lib/recurrence'
 import { ActivitiesWrapper } from '@/components/ActivitiesWrapper'
 import { ActivityTemplate, RecurrenceType } from '@/types'
-import { getLoggedUser } from '@/app/actions/auth'
 import { redirect } from 'next/navigation'
-
 import { fetchRecurrenceLogs } from '@/lib/services/TimelineService'
 import { TaskOccurrenceService } from '@/modules/activities/domain/TaskOccurrenceService'
-
-import { canAccessModule, getEffectiveGuestPermissions } from '@/lib/auth-guards'
+import { AuthorizationService } from '@/lib/services/AuthorizationService'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default async function Page() {
-  const loggedUser = await getLoggedUser()
-  if (!loggedUser) {
+  const auth = await AuthorizationService.getAuthorizedPageContext({ module: 'activities' })
+  if (!auth.user) {
     redirect('/')
     return null
   }
 
-  const guestPerms = await getEffectiveGuestPermissions()
-  if (!canAccessModule(loggedUser, 'activities', guestPerms)) {
+  if (!auth.canAccess) {
     redirect('/settings')
     return null
   }
 
+  const loggedUser = auth.user
+  const isOwner = auth.isOwner
+
   const templatesRaw = await db.activityTemplate.findMany({
     where: {
-      ...(loggedUser.username === 'admin'
+      ...(isOwner
         ? { OR: [{ userId: loggedUser.id }, { userId: null }] }
         : { userId: loggedUser.id }),
       deletedAt: null,
@@ -47,7 +46,7 @@ export default async function Page() {
   // Additional defense-in-depth domain boundary check for metadata or temporary IDs
   const persistentTemplatesRaw = templatesRaw.filter(t => !TaskOccurrenceService.isTemporaryTask(t))
 
-  const logsRaw = await fetchRecurrenceLogs(loggedUser.id, persistentTemplatesRaw, loggedUser.username === 'admin')
+  const logsRaw = await fetchRecurrenceLogs(loggedUser.id, persistentTemplatesRaw, isOwner)
   const journalRaw = await db.journalEntry.findMany({
     where: { userId: loggedUser.id, deletedAt: null },
     orderBy: { journalDate: 'desc' },

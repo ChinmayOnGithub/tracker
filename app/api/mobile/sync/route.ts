@@ -1,21 +1,15 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { verifySession } from '@/lib/session'
+import { SessionService } from '@/lib/services/SessionService'
 
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get('Authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Unauthorized: Missing or invalid Authorization header' }, { status: 401 })
+    const user = await SessionService.resolveAuthFromRequest(request)
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized: Missing or invalid authentication' }, { status: 401 })
     }
 
-    const token = authHeader.split(' ')[1]
-    const session = verifySession(token)
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized: Session is invalid or expired' }, { status: 401 })
-    }
-
-    const userId = session.userId
+    const userId = user.id
 
     // Parse payload
     const body = await request.json()

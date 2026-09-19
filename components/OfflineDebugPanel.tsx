@@ -4,8 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardHeader, CardBody } from '@/design-system/components/Card';
 import { Button } from '@/design-system/components/Button';
 import { IndexedDBEngine } from '@/lib/database/local/IndexedDBEngine';
-import { ConnectivityMonitor } from '@/lib/database/sync/ConnectivityMonitor';
-import { SyncEngine, SyncQueueItem } from '@/lib/database/sync/SyncEngine';
+import { SyncCoordinator, SyncQueueItem } from '@/lib/sync/core/SyncCoordinator';
 import { STORES } from '@/lib/database/local/schema';
 import { DB_VERSION } from '@/lib/database/local/migrations';
 import { SeedService } from '@/lib/database/local/SeedService';
@@ -76,8 +75,8 @@ export const OfflineDebugPanel: React.FC = () => {
   };
 
   useEffect(() => {
-    const monitor = ConnectivityMonitor.getInstance();
-    const unsubscribe = monitor.subscribe((online) => {
+    const coordinator = SyncCoordinator.getInstance();
+    const unsubscribe = coordinator.subscribeConnectivity((online) => {
       setIsOnline(online);
       refreshStats();
     });
@@ -91,7 +90,7 @@ export const OfflineDebugPanel: React.FC = () => {
   }, []);
 
   const triggerForceSync = () => {
-    SyncEngine.getInstance().triggerSync();
+    SyncCoordinator.getInstance().triggerSync();
     refreshStats();
   };
 

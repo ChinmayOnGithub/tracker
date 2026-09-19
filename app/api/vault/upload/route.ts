@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { verifySession } from '@/lib/session'
+import { SessionService } from '@/lib/services/SessionService'
 import { db } from '@/lib/db'
 import {
   encryptTitle,
@@ -20,16 +19,9 @@ function getVaultDir(userId: string): string {
 export async function POST(request: NextRequest) {
   try {
     // ─── Authenticate ─────────────────────────────────────────────────
-    const cookieStore = await cookies()
-    const token = cookieStore.get('session_token')?.value
-    
-    if (!token) {
+    const user = await SessionService.resolveAuthFromRequest(request)
+    if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-    }
-    
-    const session = verifySession(token)
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 })
     }
 
     // ─── Parse multipart form data ────────────────────────────────────
@@ -43,9 +35,9 @@ export async function POST(request: NextRequest) {
     // ─── Enforce Server-Authoritative Vault Storage Capacity ─────────
     const { EntitlementService } = await import('@/lib/services/EntitlementService')
     const currentFileCount = await db.secureDocument.count({
-      where: { userId: session.userId, isFolder: false, deletedAt: null }
+      where: { userId: user.id, isFolder: false, deletedAt: null }
     })
-    const capacity = await EntitlementService.checkVaultCapacity(session.userId, currentFileCount)
+    const capacity = await EntitlementService.checkVaultCapacity(user.id, currentFileCount)
     if (!capacity.allowed) {
       return NextResponse.json(
         {
@@ -89,7 +81,7 @@ export async function POST(request: NextRequest) {
     // ─── Validate parent folder ownership ─────────────────────────────
     if (parentId) {
       const parent = await db.secureDocument.findFirst({
-        where: { id: parentId, userId: session.userId, isFolder: true, deletedAt: null },
+        where: { id: parentId, userId: user.id, isFolder: true, deletedAt: null },
         select: { id: true },
       })
       if (!parent) {
@@ -134,7 +126,7 @@ export async function POST(request: NextRequest) {
 
     // ─── Write encrypted file to disk ─────────────────────────────────
     const storageKey = randomUUID()
-    const vaultDir = getVaultDir(session.userId)
+    const vaultDir = getVaultDir(user.id)
     
     try {
       await fs.mkdir(vaultDir, { recursive: true })
@@ -149,7 +141,7 @@ export async function POST(request: NextRequest) {
     try {
       doc = await db.secureDocument.create({
         data: {
-          userId: session.userId,
+          userId: user.id,
           encryptedTitle: encryptedName,
           searchName,
           encryptedType,

@@ -43,6 +43,7 @@ export type CalendarProvider =
 
 export interface ActivityTemplate {
   id: string
+  userId?: string | null
   name: string
   category: string
   type: ActivityType

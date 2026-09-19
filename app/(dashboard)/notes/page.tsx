@@ -1,15 +1,20 @@
 import { NotesPanel } from '@/components/NotesPanel'
-import { getLoggedUser } from '@/app/actions/auth'
 import { listNotes } from '@/app/actions/note'
 import { redirect } from 'next/navigation'
+import { AuthorizationService } from '@/lib/services/AuthorizationService'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default async function Page() {
-  const loggedUser = await getLoggedUser()
-  if (!loggedUser) {
+  const auth = await AuthorizationService.getAuthorizedPageContext({ module: 'notes' })
+  if (!auth.user) {
     redirect('/')
+    return null
+  }
+
+  if (!auth.canAccess) {
+    redirect('/settings')
     return null
   }
 

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { verifySession } from '@/lib/session'
+import { SessionService } from '@/lib/services/SessionService'
 import { db } from '@/lib/db'
 import { decryptBuffer, decryptMimeType } from '@/lib/vault-crypto'
 import path from 'path'
@@ -11,20 +10,13 @@ function getVaultDir(userId: string): string {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const cookieStore = await cookies()
-    const token = cookieStore.get('session_token')?.value
-
-    if (!token) {
+    const user = await SessionService.resolveAuthFromRequest(request)
+    if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-    }
-
-    const session = verifySession(token)
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid or expired session' }, { status: 401 })
     }
 
     const { id } = await params
@@ -35,7 +27,7 @@ export async function GET(
     const doc = await db.secureDocument.findFirst({
       where: {
         id,
-        userId: session.userId,
+        userId: user.id,
         isFolder: false,
         deletedAt: null,
       },
@@ -45,7 +37,7 @@ export async function GET(
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-    const vaultDir = getVaultDir(session.userId)
+    const vaultDir = getVaultDir(user.id)
     const filePath = path.join(vaultDir, `${doc.storageKey}.enc`)
 
     let encryptedBuffer: Buffer
