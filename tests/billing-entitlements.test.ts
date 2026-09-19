@@ -129,6 +129,34 @@ describe('Server-Authoritative Entitlements Engine', () => {
     expect(entitlements.isPro).toBe(false)
   })
 
+  it('keeps displayed plan capabilities aligned with server entitlements', async () => {
+    const { PLANS } = await import('@/lib/billing/plans')
+
+    const free = calculateEntitlements(null)
+    expect(free.limits.vault_storage).toBe(PLANS.FREE.capabilities.limits.vault_storage)
+    expect(free.limits.active_activities).toBe(PLANS.FREE.capabilities.limits.active_activities)
+    expect(free.features.advanced_calendar).toBe(PLANS.FREE.capabilities.features.advanced_calendar)
+
+    const activePro: SubscriptionSnapshot = {
+      id: 'sub_alignment',
+      plan: 'PRO_MONTHLY',
+      status: 'ACTIVE',
+      billingInterval: 'monthly',
+      currentPeriodStart: new Date('2026-09-01T00:00:00Z'),
+      currentPeriodEnd: new Date('2026-10-01T00:00:00Z'),
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+      isIntroductory: false
+    }
+
+    const pro = calculateEntitlements(activePro, new Date('2026-09-19T12:00:00Z'))
+    expect(pro.limits.vault_storage).toBe(PLANS.PRO_MONTHLY.capabilities.limits.vault_storage)
+    expect(pro.limits.active_activities).toBe(PLANS.PRO_MONTHLY.capabilities.limits.active_activities)
+    expect(pro.features.advanced_calendar).toBe(PLANS.PRO_MONTHLY.capabilities.features.advanced_calendar)
+    expect(pro.features.advanced_journal).toBe(PLANS.PRO_MONTHLY.capabilities.features.advanced_journal)
+    expect(pro.features.priority_sync).toBe(PLANS.PRO_MONTHLY.capabilities.features.priority_sync)
+  })
+
   it('should correctly validate vault storage capacity limits based on entitlements', async () => {
     const originalFindMany = db.subscription.findMany
     try {
