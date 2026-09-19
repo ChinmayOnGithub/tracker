@@ -66,6 +66,8 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>((
       aria-label={label}
       title={label}
       disabled={disabled || isLoading}
+      data-tracker-control="icon-button"
+      data-tracker-size={size}
       className={[
         'inline-flex items-center justify-center shrink-0',
         'transition-all duration-[var(--motion-duration-fast)]',
