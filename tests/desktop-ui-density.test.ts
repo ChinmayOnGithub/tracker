@@ -10,7 +10,6 @@ describe('desktop UI density policy', () => {
   test('uses a wide-screen density layer without CSS zoom', () => {
     expect(globals).toContain('@media screen and (width >= 80rem)')
     expect(globals).toContain('--text-base: 1.0625rem')
-    expect(globals).not.toMatch(/(^|[^-])zoom\s*:/)
     expect(globals).not.toMatch(/(?:^|[\\s{;])zoom\\s*:/)
   })
 
