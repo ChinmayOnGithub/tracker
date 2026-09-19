@@ -10,6 +10,7 @@ import {
 import { getBillingSummaryAction, startSubscriptionAction, confirmCheckoutAction } from '@/app/actions/billing'
 import { SafeCheckoutPayload, PlanId } from '@/lib/billing/types'
 import { PLANS } from '@/lib/billing/plans'
+import { useEntitlements } from '@/lib/context/EntitlementContext'
 
 declare global {
   interface Window {
@@ -20,6 +21,7 @@ declare global {
 
 export const PricingPanel: React.FC = () => {
   const router = useRouter()
+  const { refreshEntitlements } = useEntitlements()
   const [interval, setInterval] = useState<'monthly' | 'annual'>('monthly')
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
@@ -95,11 +97,19 @@ export const PricingPanel: React.FC = () => {
             razorpay_signature: string
           }) => {
             setActionLoading(true)
-            await confirmCheckoutAction({
+            const confirmRes = await confirmCheckoutAction({
               subscriptionId: response.razorpay_subscription_id,
               paymentId: response.razorpay_payment_id,
               signature: response.razorpay_signature
             })
+            if (confirmRes.success && confirmRes.entitlements) {
+              await refreshEntitlements(confirmRes.entitlements)
+            } else {
+              await refreshEntitlements()
+            }
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('tracker_entitlements_refresh'))
+            }
             router.push('/settings?tab=billing')
           },
           prefill: {

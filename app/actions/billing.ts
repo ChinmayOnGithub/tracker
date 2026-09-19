@@ -1,5 +1,6 @@
 "use server"
 
+import { revalidatePath } from 'next/cache'
 import { requireAuth } from '@/lib/auth-guards'
 import { BillingService } from '@/lib/services/BillingService'
 import { EntitlementService } from '@/lib/services/EntitlementService'
@@ -143,12 +144,29 @@ export async function confirmCheckoutAction(params: {
   signature?: string
 }): Promise<{
   success: boolean
+  entitlements?: UserEntitlements
   error?: string
 }> {
   try {
     const user = await requireAuth()
     const result = await BillingService.confirmCheckout(user.id, params)
-    return result
+
+    // Retrieve fresh authoritative entitlements immediately
+    const entitlements = await EntitlementService.getEntitlements(user.id)
+
+    // Revalidate server paths
+    try {
+      revalidatePath('/pricing')
+      revalidatePath('/settings')
+      revalidatePath('/')
+    } catch {
+      // Non-blocking in test / non-route contexts
+    }
+
+    return {
+      success: result.success,
+      entitlements
+    }
   } catch (err) {
     const rawError = err instanceof Error ? err.message : String(err)
     logger.error('BillingAction', 'Failed to confirm checkout', { params, error: rawError })
@@ -166,14 +184,29 @@ export async function confirmCheckoutAction(params: {
 export async function cancelSubscriptionAction(): Promise<{
   success: boolean
   effectiveDate?: string
+  entitlements?: UserEntitlements
   error?: string
 }> {
   try {
     const user = await requireAuth()
     const result = await BillingService.cancelSubscription(user.id)
+
+    // Retrieve fresh authoritative entitlements immediately
+    const entitlements = await EntitlementService.getEntitlements(user.id)
+
+    // Revalidate server paths
+    try {
+      revalidatePath('/settings')
+      revalidatePath('/pricing')
+      revalidatePath('/')
+    } catch {
+      // Non-blocking in test / non-route contexts
+    }
+
     return {
       success: true,
-      effectiveDate: result.effectiveDate.toISOString()
+      effectiveDate: result.effectiveDate.toISOString(),
+      entitlements
     }
   } catch (err) {
     const rawError = err instanceof Error ? err.message : String(err)

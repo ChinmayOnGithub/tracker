@@ -8,9 +8,11 @@ import {
 } from 'lucide-react'
 import { getBillingSummaryAction, cancelSubscriptionAction, BillingSummary } from '@/app/actions/billing'
 import { PLANS } from '@/lib/billing/plans'
+import { useEntitlements } from '@/lib/context/EntitlementContext'
 import Link from 'next/link'
 
 export const SettingsBillingSection: React.FC = () => {
+  const { refreshEntitlements } = useEntitlements()
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState<BillingSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -24,7 +26,10 @@ export const SettingsBillingSection: React.FC = () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await getBillingSummaryAction()
+      const [res] = await Promise.all([
+        getBillingSummaryAction(),
+        refreshEntitlements().catch(() => null)
+      ])
       if (res.success && res.data) {
         setSummary(res.data)
       } else {
@@ -73,6 +78,14 @@ export const SettingsBillingSection: React.FC = () => {
             ? `Subscription cancellation scheduled. You retain full Pro access until ${new Date(res.effectiveDate).toLocaleDateString()}.`
             : 'Subscription canceled successfully.'
         )
+        if (res.entitlements) {
+          await refreshEntitlements(res.entitlements)
+        } else {
+          await refreshEntitlements()
+        }
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('tracker_entitlements_refresh'))
+        }
         await reloadBillingData()
       } else {
         setError(res.error || 'Failed to cancel subscription.')
