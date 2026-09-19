@@ -287,6 +287,12 @@ export const SettingsBillingSection: React.FC = () => {
                       {plan.interval !== 'none' ? ` / ${plan.interval === 'annual' ? 'year' : 'month'}` : ''}
                     </span>
                   )}
+                  {summary?.isEligibleForIntro && !isPro && (
+                    <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600 dark:text-emerald-400">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      First month ₹{PLANS.PRO_MONTHLY.introductoryPrice}
+                    </span>
+                  )}
                   {sub?.currentPeriodEnd && (
                     <span className="inline-flex items-center gap-1.5">
                       <Calendar className="h-3.5 w-3.5" />
@@ -498,7 +504,15 @@ export const SettingsBillingSection: React.FC = () => {
                           variant={tx.status === 'SUCCESS' ? 'success' : tx.status === 'FAILED' ? 'danger' : 'muted'}
                           size="sm"
                         >
-                          {tx.status === 'SUCCESS' ? 'Paid' : tx.status === 'PENDING' ? 'Pending' : tx.status}
+                          {tx.status === 'SUCCESS'
+                            ? 'Paid'
+                            : tx.status === 'FAILED'
+                              ? 'Failed'
+                              : tx.status === 'REFUNDED'
+                                ? 'Refunded'
+                                : tx.status === 'PENDING'
+                                  ? 'Pending'
+                                  : tx.status}
                         </Badge>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-[var(--color-text-muted)]">
