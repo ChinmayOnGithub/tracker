@@ -17,7 +17,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       'Standard Journal & Daily Notes',
       'Weight & Health Tracking',
       'Up to 10 Secure Vault Files',
-      'Standard Local Storage Sync'
+      'Link Library & Bookmarking'
     ]
   },
   PRO_MONTHLY: {
@@ -36,10 +36,10 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       'All Free Plan Capabilities',
       'Introductory First Month for ₹29',
       'Unlimited Secure Vault Storage & Encrypted Export',
-      'Automated External Calendar Sync & Writebacks',
+      'Google Calendar Sync & Direct Integration',
       'Rich Journal & Link Exports (PDF, CSV & JSON)',
       'Unlimited Historical Notes & Analytics',
-      'Priority Cloud Sync & Offline Queue Engine'
+      'Priority Customer Support'
     ],
     providerPlanIdEnvKey: 'RAZORPAY_PLAN_PRO_MONTHLY'
   },
@@ -56,10 +56,10 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       'All Pro Features Included',
       '₹799/year (Save 33% compared to monthly)',
       'Unlimited Secure Vault Storage & Encrypted Export',
-      'Automated External Calendar Sync & Writebacks',
+      'Google Calendar Sync & Direct Integration',
       'Rich Journal & Link Exports (PDF, CSV & JSON)',
       'Unlimited Historical Notes & Analytics',
-      'Priority Cloud Sync & Offline Queue Engine'
+      'Priority Customer Support'
     ],
     providerPlanIdEnvKey: 'RAZORPAY_PLAN_PRO_ANNUAL'
   }

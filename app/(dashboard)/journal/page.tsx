@@ -1,6 +1,7 @@
-import { JournalPanel } from '@/components/JournalPanel'
+import { JournalPanel, JournalEntry } from '@/components/JournalPanel'
 import { redirect } from 'next/navigation'
 import { AuthorizationService } from '@/lib/services/AuthorizationService'
+import { listJournalEntries } from '@/app/actions/journal'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -17,5 +18,8 @@ export default async function Page() {
     return null
   }
 
-  return <JournalPanel initialEntries={[]} />
+  const res = await listJournalEntries(1, 100)
+  const initialEntries: JournalEntry[] = res.success && res.entries ? (res.entries as unknown as JournalEntry[]) : []
+
+  return <JournalPanel initialEntries={initialEntries} />
 }

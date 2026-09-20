@@ -1,53 +1,17 @@
 import { db } from '@/lib/db'
-import { isAuthorizedUserEmail, ALLOWED_USER_EMAILS } from '@/lib/constants'
+import { ALLOWED_USER_EMAILS } from '@/lib/constants'
+import {
+  TrackerCapability,
+  TrackerModuleKey,
+  DEFAULT_GUEST_PERMISSIONS,
+  isUserOwner,
+  canAccessModulePolicy,
+  canAccessCapabilityPolicy,
+} from '@/lib/auth-policy'
+import type { UserEntitlements } from '@/lib/billing/types'
 
-export type TrackerCapability =
-  // Private Core Modules (Owner or Guest-Enabled)
-  | 'core.owner'
-  | 'journal.read'
-  | 'journal.write'
-  | 'vault.read'
-  | 'vault.write'
-  | 'calendar.personal'
-  | 'leave.read'
-  | 'leave.write'
-  | 'weight.read'
-  | 'weight.write'
-  | 'work-hours.read'
-  | 'work-hours.write'
-  | 'settings.manage'
-  // Future Shared Tools (Configurable / Multi-User)
-  | 'room-turn.read'
-  | 'room-turn.write'
-  | 'grocery.read'
-  | 'grocery.write'
-  | 'shared-finance.read'
-  | 'shared-finance.write'
-
-export type TrackerModuleKey =
-  | 'today'
-  | 'calendar'
-  | 'activities'
-  | 'journal'
-  | 'notes'
-  | 'leave'
-  | 'weight'
-  | 'links'
-  | 'documents'
-  | 'settings'
-
-export const DEFAULT_GUEST_PERMISSIONS: Record<TrackerModuleKey, boolean> = {
-  today: false,
-  calendar: false,
-  activities: false,
-  journal: false,
-  notes: false,
-  leave: false,
-  weight: false,
-  links: false,
-  documents: false,
-  settings: true,
-}
+export type { TrackerCapability, TrackerModuleKey }
+export { DEFAULT_GUEST_PERMISSIONS }
 
 export interface AuthenticatedUser {
   id: string
@@ -55,6 +19,7 @@ export interface AuthenticatedUser {
   email?: string | null
   isOwner: boolean
   accessLevel?: string
+  isPro?: boolean
 }
 
 export interface AuthorizedPageContext {
@@ -62,6 +27,8 @@ export interface AuthorizedPageContext {
   permissions: Record<TrackerModuleKey, boolean>
   isOwner: boolean
   canAccess: boolean
+  isPro?: boolean
+  entitlements?: UserEntitlements | null
 }
 
 export class AuthorizationService {
@@ -72,14 +39,7 @@ export class AuthorizationService {
   public static isOwner(
     user: { id?: string; username?: string; email?: string | null; isOwner?: boolean; accessLevel?: string } | null | undefined
   ): boolean {
-    if (!user) return false
-    return (
-      user.username === 'admin' ||
-      user.isOwner === true ||
-      user.accessLevel === 'OWNER' ||
-      user.accessLevel === 'Private Owner' ||
-      isAuthorizedUserEmail(user.email || user.username)
-    )
+    return isUserOwner(user)
   }
 
   /**
@@ -166,64 +126,24 @@ export class AuthorizationService {
    * Checks whether a user can access a specific module.
    */
   public static canAccessModule(
-    user: { id: string; username: string; email?: string | null; isOwner?: boolean; accessLevel?: string } | null | undefined,
+    user: { id?: string; username?: string; email?: string | null; isOwner?: boolean; accessLevel?: string; isPro?: boolean } | null | undefined,
     moduleKey: TrackerModuleKey,
-    guestPermissions?: Record<string, boolean>
+    guestPermissions?: Record<string, boolean>,
+    entitlementsOrIsPro?: UserEntitlements | boolean | null
   ): boolean {
-    if (!user) return false
-    if (this.isOwner(user)) return true
-    if (moduleKey === 'settings') return true
-    const perms = guestPermissions || DEFAULT_GUEST_PERMISSIONS
-    return perms[moduleKey] === true
+    return canAccessModulePolicy(user, moduleKey, guestPermissions, entitlementsOrIsPro)
   }
 
   /**
    * Checks whether an authenticated user has authorization for a given capability.
    */
   public static canAccess(
-    user: { id: string; username: string; email?: string | null; isOwner?: boolean; accessLevel?: string } | null | undefined,
+    user: { id?: string; username?: string; email?: string | null; isOwner?: boolean; accessLevel?: string; isPro?: boolean } | null | undefined,
     capability: TrackerCapability,
-    guestPermissions?: Record<string, boolean>
+    guestPermissions?: Record<string, boolean>,
+    entitlementsOrIsPro?: UserEntitlements | boolean | null
   ): boolean {
-    if (!user) return false
-    const isOwner = this.isOwner(user)
-
-    const isPrivateCore =
-      capability === 'core.owner' ||
-      capability.startsWith('journal.') ||
-      capability.startsWith('vault.') ||
-      capability.startsWith('calendar.personal') ||
-      capability.startsWith('leave.') ||
-      capability.startsWith('weight.') ||
-      capability.startsWith('work-hours.') ||
-      capability.startsWith('settings.')
-
-    if (isPrivateCore) {
-      if (isOwner) return true
-      if (capability === 'core.owner' || capability === 'settings.manage') {
-        return false
-      }
-
-      const perms = guestPermissions || DEFAULT_GUEST_PERMISSIONS
-      if (capability.startsWith('journal.')) return perms.journal === true
-      if (capability.startsWith('vault.')) return perms.documents === true
-      if (capability.startsWith('calendar.personal')) return perms.calendar === true
-      if (capability.startsWith('leave.')) return perms.leave === true
-      if (capability.startsWith('weight.')) return perms.weight === true
-      if (capability.startsWith('work-hours.')) return perms.today === true
-      return false
-    }
-
-    const knownSharedCapabilities: TrackerCapability[] = [
-      'room-turn.read',
-      'room-turn.write',
-      'grocery.read',
-      'grocery.write',
-      'shared-finance.read',
-      'shared-finance.write',
-    ]
-
-    return knownSharedCapabilities.includes(capability)
+    return canAccessCapabilityPolicy(user, capability, guestPermissions, entitlementsOrIsPro)
   }
 
   /**
@@ -241,18 +161,33 @@ export class AuthorizationService {
         permissions: { ...DEFAULT_GUEST_PERMISSIONS },
         isOwner: false,
         canAccess: false,
+        isPro: false,
+        entitlements: null,
       }
     }
 
     const isOwner = this.isOwner(user)
-    const permissions = await this.getEffectiveGuestPermissions()
-    const canAccess = this.canAccessModule(user, options.module, permissions)
+    const permissions = await this.getEffectiveGuestPermissions(user)
+
+    let entitlements: UserEntitlements | null = null
+    if (user.id) {
+      try {
+        const { EntitlementService } = await import('./EntitlementService')
+        entitlements = await EntitlementService.getEntitlements(user.id)
+      } catch {
+        entitlements = null
+      }
+    }
+    const isPro = entitlements?.isPro ?? Boolean(user.isPro)
+    const canAccess = this.canAccessModule(user, options.module, permissions, entitlements ?? isPro)
 
     return {
       user,
       permissions,
       isOwner,
       canAccess,
+      isPro,
+      entitlements,
     }
   }
 
@@ -287,8 +222,17 @@ export class AuthorizationService {
     if (this.isOwner(user)) {
       return user
     }
-    const perms = await this.getEffectiveGuestPermissions()
-    if (!this.canAccessModule(user, moduleKey, perms)) {
+    const perms = await this.getEffectiveGuestPermissions(user)
+    let entitlements: UserEntitlements | null = null
+    if (user.id) {
+      try {
+        const { EntitlementService } = await import('./EntitlementService')
+        entitlements = await EntitlementService.getEntitlements(user.id)
+      } catch {
+        entitlements = null
+      }
+    }
+    if (!this.canAccessModule(user, moduleKey, perms, entitlements ?? user.isPro)) {
       throw new Error(`Access denied: Module '${moduleKey}' is disabled for guest accounts`)
     }
     return user
@@ -299,7 +243,20 @@ export class AuthorizationService {
    */
   public static async requireCapability(capability: TrackerCapability): Promise<AuthenticatedUser> {
     const user = await this.requireAuth()
-    if (!this.canAccess(user, capability)) {
+    if (this.isOwner(user)) {
+      return user
+    }
+    const perms = await this.getEffectiveGuestPermissions(user)
+    let entitlements: UserEntitlements | null = null
+    if (user.id) {
+      try {
+        const { EntitlementService } = await import('./EntitlementService')
+        entitlements = await EntitlementService.getEntitlements(user.id)
+      } catch {
+        entitlements = null
+      }
+    }
+    if (!this.canAccess(user, capability, perms, entitlements ?? user.isPro)) {
       throw new Error(`Unauthorized: missing capability ${capability}`)
     }
     return user

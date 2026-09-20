@@ -10,6 +10,16 @@ export class LocalJournalRepository
     super('journal_entries');
   }
 
+  public async getAllForUser(userId: string): Promise<JournalEntry[]> {
+    try {
+      const results = await this.engine.queryIndex<JournalEntry>(this.storeName, 'userId', userId);
+      return results.filter(e => e.userId === userId && !e.deletedAt);
+    } catch {
+      const all = await this.getAll();
+      return all.filter(e => e.userId === userId && !e.deletedAt);
+    }
+  }
+
   public async getJournalByDate(userId: string, dateStr: string): Promise<JournalEntry | null> {
     const range = typeof IDBKeyRange !== 'undefined' 
       ? IDBKeyRange.bound(dateStr, dateStr + '\uffff')

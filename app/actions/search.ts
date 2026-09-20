@@ -30,13 +30,15 @@ export async function searchGlobalAction(
     }
 
     const isOwner = isOwnerUser(user)
-    const guestPerms = await getEffectiveGuestPermissions()
+    const guestPerms = await getEffectiveGuestPermissions(user)
+    const { EntitlementService } = await import('@/lib/services/EntitlementService')
+    const entitlements = await EntitlementService.getEntitlements(user.id).catch(() => null)
 
     const dataset: SearchableDataset = {}
 
     const shouldQuery = (mod: TrackerModuleKey, cat: SearchCategory) => {
       const isCatMatch = category === 'all' || category === cat
-      const isModAllowed = canAccessModule(user, mod, guestPerms)
+      const isModAllowed = canAccessModule(user, mod, guestPerms, entitlements)
       return isCatMatch && isModAllowed
     }
 

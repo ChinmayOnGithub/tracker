@@ -43,22 +43,24 @@ export async function getEffectiveGuestPermissions(customUser?: Parameters<typeo
  * Checks whether a user can access a specific module.
  */
 export function canAccessModule(
-  user: { id: string; username: string; email?: string | null } | null | undefined,
+  user: { id?: string; username?: string; email?: string | null; isOwner?: boolean; accessLevel?: string; isPro?: boolean } | null | undefined,
   moduleKey: TrackerModuleKey,
-  guestPermissions?: Record<string, boolean>
+  guestPermissions?: Record<string, boolean>,
+  entitlementsOrIsPro?: import('@/lib/billing/types').UserEntitlements | boolean | null
 ): boolean {
-  return AuthorizationService.canAccessModule(user, moduleKey, guestPermissions)
+  return AuthorizationService.canAccessModule(user, moduleKey, guestPermissions, entitlementsOrIsPro)
 }
 
 /**
  * Checks whether an authenticated user has authorization for a given capability.
  */
 export function canAccess(
-  user: { id: string; username: string; email?: string | null } | null | undefined,
+  user: { id?: string; username?: string; email?: string | null; isOwner?: boolean; accessLevel?: string; isPro?: boolean } | null | undefined,
   capability: TrackerCapability,
-  guestPermissions?: Record<string, boolean>
+  guestPermissions?: Record<string, boolean>,
+  entitlementsOrIsPro?: import('@/lib/billing/types').UserEntitlements | boolean | null
 ): boolean {
-  return AuthorizationService.canAccess(user, capability, guestPermissions)
+  return AuthorizationService.canAccess(user, capability, guestPermissions, entitlementsOrIsPro)
 }
 
 /**

@@ -302,7 +302,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
         // getAllForUser uses the userId index; falls back to filtered getAll when userId is null.
         const localTemplates = userId ? await templateRepo.getAllForUser(userId) : await templateRepo.getAll()
         const localLogs = userId ? await logRepo.getAllForUser(userId) : await logRepo.getAll()
-        const localJournals = userId ? await journalRepo.getAllForUser(userId) : await journalRepo.getAll()
+        const localJournals = userId ? await journalRepo.getAllForUser(userId) : []
         const localWeights = userId ? await weightRepo.getAllForUser(userId) : await weightRepo.getAll()
         const localLeaves = userId ? await leaveRepo.getAllForUser(userId) : await leaveRepo.getAll()
 
@@ -429,6 +429,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
 
     if (initialData.journalEntries) {
       const serverEntries = initialData.journalEntries
+      const userScopedEntries = userId ? serverEntries.filter(e => !e.userId || e.userId === userId) : serverEntries
+      setState(prev => ({ ...prev, journalEntries: userScopedEntries }))
       const reconcile = async () => {
         try {
           const { JournalRepository } = await import('@/modules/journal/repository/JournalRepository')
@@ -494,7 +496,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
             }
           }
 
-          const allJournals = await journalRepo.getAll()
+          const allJournals = userId ? await journalRepo.getAllForUser(userId) : []
           setState(prev => ({ ...prev, journalEntries: allJournals }))
         } catch (err) {
           console.error('[Store] Journal reconciliation failed:', err)
@@ -502,7 +504,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
       }
       reconcile()
     }
-  }, [])
+  }, [userId])
 
   // --- CALENDAR ACTIONS ---
   const cycleTaskStatusAction = async (occurrence: TimelineItem, todayStr: string, payload?: any) => {
@@ -1137,6 +1139,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
 
       const payload: JournalEntry = {
         id: finalId,
+        userId: userId || existing?.userId,
         journalDate: new Date(`${date}T12:00:00.000Z`).toISOString(),
         content: fields.content !== undefined ? fields.content : (existing ? existing.content : ''),
         mood: fields.mood !== undefined ? fields.mood : (existing ? existing.mood : null),
@@ -1150,7 +1153,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
       }
 
       await journalRepo.save(payload)
-      const allJournals = await journalRepo.getAll()
+      const allJournals = userId ? await journalRepo.getAllForUser(userId) : await journalRepo.getAll()
       setState(prev => ({ ...prev, journalEntries: allJournals }))
     } catch (err) {
       console.error('Upsert journal entry transaction failed, rolling back:', err)
@@ -1166,7 +1169,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
       const { JournalRepository } = await import('@/modules/journal/repository/JournalRepository')
       const journalRepo = new JournalRepository()
       await journalRepo.delete(id)
-      const allJournals = await journalRepo.getAll()
+      const allJournals = userId ? await journalRepo.getAllForUser(userId) : await journalRepo.getAll()
       setState(prev => ({ ...prev, journalEntries: allJournals }))
     } catch (err) {
       console.error('Delete journal entry transaction failed, rolling back:', err)

@@ -23,6 +23,7 @@ import { Button } from '@/design-system'
 import { isAuthorizedUserEmail } from '@/lib/constants'
 import { QuickAppearancePopover } from '@/components/QuickAppearancePopover'
 import { useEntitlements } from '@/lib/context/EntitlementContext'
+import { canAccessModulePolicy, TrackerModuleKey } from '@/lib/auth-policy'
 
 export interface NavigationItem {
   id: string
@@ -54,7 +55,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
   const router = useRouter()
-  const { isPro, isLoading: entitlementLoading } = useEntitlements()
+  const { isPro, entitlements, isLoading: entitlementLoading } = useEntitlements()
 
   // Module visibility config (Safe hydration check on mount)
   const [visibleModules, setVisibleModules] = React.useState<Record<string, boolean>>(() => {
@@ -168,11 +169,15 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     { id: 'settings', label: 'Settings', icon: Settings },
   ]
 
+  const canAccess = React.useCallback(
+    (moduleId: string) => {
+      return canAccessModulePolicy(user, moduleId as TrackerModuleKey, guestPerms, entitlements)
+    },
+    [user, guestPerms, entitlements]
+  )
+
   const navItems = allNavItems.filter(item => {
-    if (!isOwner) {
-      if (item.id === 'settings') return true
-      return guestPerms[item.id] === true
-    }
+    if (!canAccess(item.id)) return false
     return visibleModules[item.id] !== false
   })
 
@@ -183,10 +188,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     { id: 'notes', label: 'Notes', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
   ].filter(item => {
-    if (!isOwner) {
-      if (item.id === 'settings') return true
-      return guestPerms[item.id] === true
-    }
+    if (!canAccess(item.id)) return false
     return visibleModules[item.id] !== false
   })
 
@@ -198,10 +200,7 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     { id: 'documents', label: 'Secure Vault', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
   ].filter(item => {
-    if (!isOwner) {
-      if (item.id === 'settings') return true
-      return guestPerms[item.id] === true
-    }
+    if (!canAccess(item.id)) return false
     return visibleModules[item.id] !== false
   })
 

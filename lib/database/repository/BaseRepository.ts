@@ -84,7 +84,7 @@ export class BaseRepository<T extends { id: string }> implements IRepository<T> 
     }
     const all = await this.local.getAll();
     const typed = all as (T & { userId?: string; deletedAt?: Date | string | null })[];
-    return typed.filter(item => !item.deletedAt && (item.userId === undefined || item.userId === userId)) as T[];
+    return typed.filter(item => !item.deletedAt && item.userId === userId) as T[];
   }
 
   public async save(entity: T): Promise<void> {

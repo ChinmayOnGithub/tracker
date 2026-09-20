@@ -16,8 +16,9 @@ import { JournalContentAdapter } from '@/modules/journal/editor/JournalContentAd
 import { JournalExportService, ExportSummary } from '@/modules/journal/JournalExportService'
 import { toYMD, todayYMD, fmtDateFull, fmtDateMed } from '@/lib/dateUtils'
 
-interface JournalEntry {
+export interface JournalEntry {
   id: string
+  userId?: string
   journalDate: Date | string
   content: string
   mood: string | null
@@ -30,7 +31,7 @@ interface JournalEntry {
   updatedAt: Date | string
 }
 
-interface JournalPanelProps {
+export interface JournalPanelProps {
   initialEntries: JournalEntry[]
 }
 
@@ -52,6 +53,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
 
   const today = todayYMD()
   const {
+    userId,
     state,
     initialize,
     upsertJournalAction,
@@ -66,7 +68,12 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     initialize({ journalEntries: initialEntries })
   }, [initialEntries, initialize])
 
-  const entries = state.journalEntries.length > 0 ? state.journalEntries : initialEntries
+  const currentUserId = userId
+  const rawEntries = state.journalEntries.length > 0 ? state.journalEntries : initialEntries
+  const entries = rawEntries.filter(e => {
+    if (!currentUserId) return true
+    return !e.userId || e.userId === currentUserId
+  })
 
   const [activeDate, setActiveDateState] = useState<string>(() => state.activeJournalDate || dateParam || today)
   const setActiveDate = (date: string) => {
@@ -256,7 +263,6 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   const pendingSaveRef = useRef<{ date: string; content: string; revision: number } | null>(null)
   const autosaveTimerRef = useRef<Timer | null>(null)
 
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const saveContent = useCallback(async (targetDate: string, v: string, saveRevision: number) => {
     if (isSavingRef.current) { 
       pendingSaveRef.current = { date: targetDate, content: v, revision: saveRevision }
