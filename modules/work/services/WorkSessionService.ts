@@ -112,7 +112,7 @@ export class WorkSessionService {
     });
 
     const log = await db.activityLog.findFirst({
-      where: { workSessionId: id }
+      where: { workSessionId: id, userId, deletedAt: null }
     });
     if (log) {
       const prevPayload = (log.payload || {}) as Record<string, unknown>;
@@ -163,7 +163,7 @@ export class WorkSessionService {
     });
 
     const log = await db.activityLog.findFirst({
-      where: { workSessionId: id }
+      where: { workSessionId: id, userId, deletedAt: null }
     });
     if (log) {
       const prevPayload = (log.payload || {}) as Record<string, unknown>;
@@ -219,7 +219,7 @@ export class WorkSessionService {
     });
 
     const log = await db.activityLog.findFirst({
-      where: { workSessionId: id }
+      where: { workSessionId: id, userId, deletedAt: null }
     });
     if (log) {
       const prevPayload = (log.payload || {}) as Record<string, unknown>;
@@ -320,7 +320,7 @@ export class WorkSessionService {
     });
 
     await db.activityLog.updateMany({
-      where: { workSessionId: id },
+      where: { workSessionId: id, userId, deletedAt: null },
       data: { deletedAt: new Date() }
     });
   }

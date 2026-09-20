@@ -35,6 +35,12 @@ export class AccessDeniedError extends AppError {
   }
 }
 
+export class NotFoundError extends AppError {
+  constructor(message = 'Resource not found') {
+    super(message, 404, 'NOT_FOUND')
+  }
+}
+
 export class QuotaExceededError extends AppError {
   constructor(message = 'Quota exceeded') {
     super(message, 429, 'QUOTA_EXCEEDED')

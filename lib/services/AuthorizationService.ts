@@ -264,8 +264,9 @@ export class AuthorizationService {
 
   /**
    * Server-side guard requiring ownership of a database entity.
+   * Scopes the lookup to the authenticated user and eliminates ID-existence disclosure oracles.
    */
-  public static async requireOwnership(
+  public static async requireOwnership<T = Record<string, unknown>>(
     model:
       | 'activityTemplate'
       | 'activityLog'
@@ -278,42 +279,76 @@ export class AuthorizationService {
       | 'secureDocument'
       | 'linkTag',
     id: string
-  ): Promise<AuthenticatedUser> {
+  ): Promise<{ user: AuthenticatedUser; record: T }> {
     const user = await this.requireAuth()
 
     let record: Record<string, unknown> | null = null
     if (model === 'savedLink') {
-      record = await db.savedLink.findUnique({ where: { id } }) as Record<string, unknown> | null
+      record = (await db.savedLink.findFirst({
+        where: {
+          id,
+          deletedAt: null,
+          collection: { userId: user.id }
+        },
+        include: { collection: true }
+      })) as Record<string, unknown> | null
     } else if (model === 'linkCollection') {
-      record = await db.linkCollection.findUnique({ where: { id } }) as Record<string, unknown> | null
+      record = (await db.linkCollection.findFirst({
+        where: { id, userId: user.id, deletedAt: null }
+      })) as Record<string, unknown> | null
     } else if (model === 'linkTag') {
-      record = await db.linkTag.findUnique({ where: { id } }) as Record<string, unknown> | null
+      record = (await db.linkTag.findFirst({
+        where: { id, userId: user.id }
+      })) as Record<string, unknown> | null
     } else if (model === 'activityTemplate') {
-      record = await db.activityTemplate.findUnique({ where: { id } }) as Record<string, unknown> | null
+      record = (await db.activityTemplate.findFirst({
+        where: {
+          id,
+          deletedAt: null,
+          OR: [
+            { userId: user.id },
+            ...(this.isOwner(user) ? [{ userId: null }] : [])
+          ]
+        }
+      })) as Record<string, unknown> | null
     } else if (model === 'activityLog') {
-      record = await db.activityLog.findUnique({ where: { id } }) as Record<string, unknown> | null
+      record = (await db.activityLog.findFirst({
+        where: {
+          id,
+          deletedAt: null,
+          OR: [
+            { userId: user.id },
+            { activity: { userId: user.id } }
+          ]
+        }
+      })) as Record<string, unknown> | null
     } else if (model === 'note') {
-      record = await db.note.findUnique({ where: { id } }) as Record<string, unknown> | null
+      record = (await db.note.findFirst({
+        where: { id, userId: user.id, deletedAt: null }
+      })) as Record<string, unknown> | null
     } else if (model === 'journalEntry') {
-      record = await db.journalEntry.findUnique({ where: { id } }) as Record<string, unknown> | null
+      record = (await db.journalEntry.findFirst({
+        where: { id, userId: user.id, deletedAt: null }
+      })) as Record<string, unknown> | null
     } else if (model === 'leaveRecord') {
-      record = await db.leaveRecord.findUnique({ where: { id } }) as Record<string, unknown> | null
+      record = (await db.leaveRecord.findFirst({
+        where: { id, userId: user.id, deletedAt: null }
+      })) as Record<string, unknown> | null
     } else if (model === 'weightRecord') {
-      record = await db.weightRecord.findUnique({ where: { id } }) as Record<string, unknown> | null
+      record = (await db.weightRecord.findFirst({
+        where: { id, userId: user.id, deletedAt: null }
+      })) as Record<string, unknown> | null
     } else if (model === 'secureDocument') {
-      record = await db.secureDocument.findUnique({ where: { id } }) as Record<string, unknown> | null
+      record = (await db.secureDocument.findFirst({
+        where: { id, userId: user.id, deletedAt: null }
+      })) as Record<string, unknown> | null
     }
 
     if (!record) {
-      throw new Error(`Record not found: ${model} with id ${id}`)
+      const { NotFoundError } = await import('../errors')
+      throw new NotFoundError(`Resource not found`)
     }
 
-    const ownerId = record.userId as string | undefined
-    const isOwner = ownerId ? ownerId === user.id : this.isOwner(user)
-    if (!isOwner) {
-      throw new Error(`Forbidden: you do not have permission to access this ${model}`)
-    }
-
-    return user
+    return { user, record: record as T }
   }
 }

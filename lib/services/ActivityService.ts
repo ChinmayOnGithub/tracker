@@ -126,8 +126,8 @@ export class ActivityService {
       throw new Error('Log record not found or unauthorized')
     }
 
-    const log = await db.activityLog.update({
-      where: { id },
+    const { count } = await db.activityLog.updateMany({
+      where: { id, userId, deletedAt: null },
       data: {
         status: data.status,
         note: data.note !== undefined ? data.note : undefined,
@@ -135,6 +135,14 @@ export class ActivityService {
         payload: data.payload !== undefined ? (data.payload as Prisma.InputJsonValue) : undefined,
       }
     })
+    if (count === 0) {
+      throw new Error('Log record not found or unauthorized')
+    }
+
+    const log = await db.activityLog.findUnique({ where: { id } })
+    if (!log) {
+      throw new Error('Log record not found or unauthorized')
+    }
 
     // Publish event
     if (data.status && data.status !== existing.status) {
@@ -169,23 +177,23 @@ export class ActivityService {
       return existing
     }
 
-    // Cascade soft deletions to linked sub-records
+    // Cascade soft deletions to linked sub-records scoped strictly to userId
     // NOTE: We do NOT delete the journal entry because it should persist independently
     if (existing.weightRecordId) {
-      await db.weightRecord.update({
-        where: { id: existing.weightRecordId },
+      await db.weightRecord.updateMany({
+        where: { id: existing.weightRecordId, userId, deletedAt: null },
         data: { deletedAt: new Date() }
       })
     }
     if (existing.leaveRecordId) {
-      await db.leaveRecord.update({
-        where: { id: existing.leaveRecordId },
+      await db.leaveRecord.updateMany({
+        where: { id: existing.leaveRecordId, userId, deletedAt: null },
         data: { deletedAt: new Date() }
       })
     }
     if (existing.workSessionId) {
-      await db.workSession.update({
-        where: { id: existing.workSessionId },
+      await db.workSession.updateMany({
+        where: { id: existing.workSessionId, userId, deletedAt: null },
         data: { deletedAt: new Date() }
       })
     }

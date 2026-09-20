@@ -53,13 +53,11 @@ export async function disconnectGoogleAccount() {
       throw new UnauthorizedError()
     }
 
+    // 1. Transactionally remove credentials and linked event mappings in database
     const deleted = await GoogleCredentialService.disconnect(user.id)
-    GoogleCalendarService.clearCache(user.id, true)
     
-    // Also delete any local linked calendar event mappings to avoid orphan links
-    await db.linkedEventMapping.deleteMany({
-      where: { userId: user.id }
-    })
+    // 2. Clear in-memory token and calendar caches ONLY after database transaction succeeds
+    GoogleCalendarService.clearCache(user.id, true)
 
     revalidatePath('/')
     return { success: true as const, disconnected: deleted }

@@ -187,13 +187,10 @@ export async function updateActivityTemplate(
 
   try {
     await requireModuleAccess('activities')
-    const { user } = await requireOwnership('activityTemplate', id)
+    const { user, record: existing } = await requireOwnership<ActivityTemplate>('activityTemplate', id)
 
     // If activating an activity, verify capacity under activities_active limit
     if (data.isActive === true) {
-      const existing = await db.activityTemplate.findUnique({
-        where: { id },
-      })
       if (existing && !existing.isActive && existing.recurrenceType !== 'one_time') {
         const activityLimit = await EntitlementService.getLimit(user.id, 'activities_active')
         const activeCount = await db.activityTemplate.count({
@@ -236,17 +233,37 @@ export async function updateActivityTemplate(
 
     const { recurrenceType, ...templateRest } = rest
 
-    const updated = await db.activityTemplate.update({
-      where: { id },
+    const { count } = await db.activityTemplate.updateMany({
+      where: {
+        id,
+        deletedAt: null,
+        OR: [
+          { userId: user.id },
+          ...(user.isOwner ? [{ userId: null }] : [])
+        ]
+      },
       data: {
         ...templateRest,
         recurrenceType: recurrenceType ? (recurrenceType as RecurrenceType) : undefined,
         targetDate: recurrenceType === 'one_time' && rest.targetDate ? new Date(rest.targetDate) : undefined,
         metadata: templateRest.metadata as Prisma.InputJsonValue,
         notificationRules: templateRest.notificationRules as Prisma.InputJsonValue,
-        tags: tagsUpdate,
       },
     })
+
+    if (count === 0) {
+      return { success: false, error: 'Template not found' }
+    }
+
+    if (tagsUpdate) {
+      await db.activityTemplate.update({
+        where: { id },
+        data: { tags: tagsUpdate }
+      })
+    }
+
+    const updated = await db.activityTemplate.findUnique({ where: { id } })
+    if (!updated) throw new Error('Failed to retrieve updated template')
 
     // Auto-schedule/unschedule task in calendar on update
     await syncTemplateToCalendarEvent(updated)
@@ -265,17 +282,28 @@ export async function updateActivityTemplate(
 export async function deleteActivityTemplate(id: string) {
   try {
     await requireModuleAccess('activities')
-    const { user } = await requireOwnership('activityTemplate', id)
+    const { user, record: existing } = await requireOwnership<ActivityTemplate>('activityTemplate', id)
 
-    const deleted = await db.activityTemplate.update({
-      where: { id },
+    const { count } = await db.activityTemplate.updateMany({
+      where: {
+        id,
+        deletedAt: null,
+        OR: [
+          { userId: user.id },
+          ...(user.isOwner ? [{ userId: null }] : [])
+        ]
+      },
       data: {
         deletedAt: new Date(),
         isActive: false
       }
     })
 
-    eventBus.publish(EVENTS.ACTIVITY_DELETED, { calendarEventId: deleted.calendarEventId, userId: user.id })
+    if (count === 0) {
+      return { success: false, error: 'Template not found' }
+    }
+
+    eventBus.publish(EVENTS.ACTIVITY_DELETED, { calendarEventId: existing.calendarEventId, userId: user.id })
 
     revalidatePath('/')
     return { success: true }
@@ -288,7 +316,7 @@ export async function deleteActivityTemplate(id: string) {
 
 export async function duplicateActivityTemplate(id: string) {
   try {
-    const { record: original, user } = await requireOwnership('activityTemplate', id)
+    const { record: original, user } = await requireOwnership<ActivityTemplate>('activityTemplate', id)
 
     const maxSortOrder = await db.activityTemplate.aggregate({
       where: { userId: user.id },
@@ -319,7 +347,7 @@ export async function duplicateActivityTemplate(id: string) {
         recurrenceMonth: original.recurrenceMonth,
         targetDate: original.targetDate,
         remindBeforeDays: original.remindBeforeDays,
-        metadata: original.metadata ?? undefined,
+        metadata: (original.metadata ?? undefined) as Prisma.InputJsonValue | undefined,
         sortOrder: nextSortOrder,
         userId: user.id,
         tags: {
@@ -368,11 +396,18 @@ export async function reorderActivityTemplates(orderedIds: string[]) {
       if (match && match.sortOrder === index) {
         return null
       }
-      return db.activityTemplate.update({
-        where: { id },
+      return db.activityTemplate.updateMany({
+        where: {
+          id,
+          deletedAt: null,
+          OR: [
+            { userId: user.id },
+            ...(user.isOwner ? [{ userId: null }] : [])
+          ]
+        },
         data: { sortOrder: index },
       })
-    }).filter((u): u is ReturnType<typeof db.activityTemplate.update> => u !== null)
+    }).filter((u): u is ReturnType<typeof db.activityTemplate.updateMany> => u !== null)
 
     // Perform updates in a transaction only if there are actual changes
     if (updates.length > 0) {

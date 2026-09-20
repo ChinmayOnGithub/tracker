@@ -421,13 +421,14 @@ export async function renameVaultItem(
       throw new Error('An item with this name already exists in this location')
     }
 
-    await db.secureDocument.update({
-      where: { id },
+    const { count } = await db.secureDocument.updateMany({
+      where: { id, userId: user.id, deletedAt: null },
       data: {
         encryptedTitle: encryptTitle(newName),
         searchName,
       },
     })
+    if (count === 0) throw new Error('Document not found')
 
     revalidatePath('/')
     return { success: true }
@@ -460,10 +461,11 @@ export async function toggleVaultFavorite(
     })
     if (!doc) throw new Error('Document not found')
     
-    await db.secureDocument.update({ 
-      where: { id }, 
+    const { count } = await db.secureDocument.updateMany({ 
+      where: { id, userId: user.id, deletedAt: null }, 
       data: { isFavorite } 
     })
+    if (count === 0) throw new Error('Document not found')
     
     revalidatePath('/')
     return { success: true }
@@ -1247,6 +1249,14 @@ export async function toggleVaultPin(
   try {
     const user = await requireAuth()
     
+    if (pin && documentId) {
+      const doc = await db.secureDocument.findFirst({
+        where: { id: documentId, userId: user.id, deletedAt: null },
+        select: { id: true }
+      })
+      if (!doc) throw new Error('Document not found')
+    }
+    
     const setting = await db.userSetting.findUnique({
       where: { userId_module: { userId: user.id, module: VAULT_SETTINGS_MODULE } }
     })
@@ -1295,6 +1305,14 @@ export async function setVaultSpecialAsset(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await requireAuth()
+    
+    if (docId) {
+      const doc = await db.secureDocument.findFirst({
+        where: { id: docId, userId: user.id, deletedAt: null },
+        select: { id: true }
+      })
+      if (!doc) throw new Error('Document not found')
+    }
     
     const setting = await db.userSetting.findUnique({
       where: { userId_module: { userId: user.id, module: VAULT_SETTINGS_MODULE } }

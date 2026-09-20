@@ -156,17 +156,25 @@ export async function updateLeaveStatus(id: string, status: LeaveStatus) {
   }
 
   try {
-    await requireOwnership('leaveRecord', id)
+    const { user } = await requireOwnership('leaveRecord', id)
 
-    const updated = await db.leaveRecord.update({
-      where: { id },
+    const { count } = await db.leaveRecord.updateMany({
+      where: { id, userId: user.id, deletedAt: null },
       data: { status },
     })
 
+    if (count === 0) {
+      return { success: false, error: 'Leave record not found' }
+    }
+
+    const updated = await db.leaveRecord.findUnique({ where: { id } })
+
     if (status === LeaveStatus.REJECTED) {
-      // Soft-delete corresponding logs across both 1:1 foreign key and multi-day payloads
+      // Soft-delete corresponding logs across both 1:1 foreign key and multi-day payloads scoped to user
       await db.activityLog.updateMany({
         where: {
+          userId: user.id,
+          deletedAt: null,
           OR: [
             { leaveRecordId: id },
             { payload: { path: ['leaveRecordId'], equals: id } },
@@ -175,9 +183,10 @@ export async function updateLeaveStatus(id: string, status: LeaveStatus) {
         data: { deletedAt: new Date() }
       })
     } else if (status === LeaveStatus.APPROVED) {
-      // Restore corresponding logs if they were soft-deleted
+      // Restore corresponding logs if they were soft-deleted scoped to user
       await db.activityLog.updateMany({
         where: {
+          userId: user.id,
           OR: [
             { leaveRecordId: id },
             { payload: { path: ['leaveRecordId'], equals: id } },
@@ -199,13 +208,22 @@ export async function updateLeaveStatus(id: string, status: LeaveStatus) {
 export async function deleteLeaveRecord(id: string) {
   try {
     await requireModuleAccess('leave')
-    await requireOwnership('leaveRecord', id)
+    const { user } = await requireOwnership('leaveRecord', id)
 
-    await db.leaveRecord.update({ where: { id }, data: { deletedAt: new Date() } })
+    const { count } = await db.leaveRecord.updateMany({
+      where: { id, userId: user.id, deletedAt: null },
+      data: { deletedAt: new Date() }
+    })
+
+    if (count === 0) {
+      return { success: false, error: 'Leave record not found' }
+    }
     
-    // Soft-delete corresponding activity logs for single-day and multi-day ranges
+    // Soft-delete corresponding activity logs for single-day and multi-day ranges scoped to user
     await db.activityLog.updateMany({
       where: {
+        userId: user.id,
+        deletedAt: null,
         OR: [
           { leaveRecordId: id },
           { payload: { path: ['leaveRecordId'], equals: id } },

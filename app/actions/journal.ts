@@ -37,12 +37,21 @@ export async function upsertJournalEntry(
   console.log(`[Journal] upsertJournalEntry called for date ${date}, fields:`, {
     hasContent: !!fields.content,
     contentLength: fields.content?.length || 0,
-    contentPreview: fields.content?.substring(0, 50)
   })
   
   try {
     const user = await requireModuleAccess('journal')
     console.log(`[Journal] User authenticated: ${user.id}`)
+
+    const { EntitlementService } = await import('@/lib/services/EntitlementService')
+    const hasAccess = await EntitlementService.hasFeature(user.id, 'advanced_journal')
+    if (!hasAccess) {
+      return {
+        success: false,
+        error: 'Journal writing requires an active Tracker Pro subscription. Your historical journal entries remain accessible.',
+        code: 'ACCESS_DENIED'
+      }
+    }
     
     // journalDate is stored as a DateTime — use noon UTC to avoid timezone drift
     const journalDate = new Date(`${date}T12:00:00.000Z`)
@@ -55,8 +64,8 @@ export async function upsertJournalEntry(
     let entry
     if (existing) {
       console.log(`[Journal] Updating existing entry ${existing.id} for date ${date}`)
-      entry = await db.journalEntry.update({
-        where: { id: existing.id },
+      await db.journalEntry.updateMany({
+        where: { id: existing.id, userId: user.id },
         data: {
           content: fields.content ?? existing.content,
           mood: fields.mood !== undefined ? fields.mood : existing.mood,
@@ -67,8 +76,11 @@ export async function upsertJournalEntry(
           metadata: toJsonField(
             fields.metadata !== undefined ? fields.metadata : existing.metadata
           ),
+          deletedAt: null,
         },
       })
+      entry = await db.journalEntry.findUnique({ where: { id: existing.id } })
+      if (!entry) throw new Error('Failed to retrieve updated journal entry')
       console.log(`[Journal] Entry updated successfully: ${entry.id}, content length: ${entry.content.length}`)
     } else {
       console.log(`[Journal] Creating new entry for date ${date}`)
@@ -96,7 +108,6 @@ export async function upsertJournalEntry(
     console.log(`[Journal] Verification read from DB:`, {
       id: verification?.id,
       contentLength: verification?.content.length,
-      contentPreview: verification?.content.substring(0, 100),
       updatedAt: verification?.updatedAt
     })
 
@@ -167,11 +178,21 @@ export async function listJournalEntries(page = 1, limit = 20) {
 export async function deleteJournalEntry(id: string) {
   try {
     await requireModuleAccess('journal')
-    await requireOwnership('journalEntry', id)
+    const { user } = await requireOwnership('journalEntry', id)
 
-    await db.journalEntry.update({
-      where: { id },
+    const { count } = await db.journalEntry.updateMany({
+      where: { id, userId: user.id, deletedAt: null },
       data: { deletedAt: new Date() },
+    })
+
+    if (count === 0) {
+      return { success: false, error: 'Journal entry not found', code: 'NOT_FOUND' }
+    }
+
+    // Cascade soft-delete to linked activity log scoped to user
+    await db.activityLog.updateMany({
+      where: { journalEntryId: id, userId: user.id, deletedAt: null },
+      data: { deletedAt: new Date() }
     })
 
     revalidatePath('/')

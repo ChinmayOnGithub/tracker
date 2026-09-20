@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { Prisma } from '@prisma/client'
+import { Prisma, SavedLink } from '@prisma/client'
 import { requireAuth, requireOwnership, requireModuleAccess } from '@/lib/auth-guards'
 
 // ─── Collections ─────────────────────────────────────────────────────────────
@@ -41,8 +41,13 @@ export async function createLinkCollection(name: string, color?: string, icon?: 
 
 export async function updateLinkCollection(id: string, data: { name?: string; color?: string; icon?: string | null }) {
   try {
-    await requireOwnership('linkCollection', id)
-    const updated = await db.linkCollection.update({ where: { id }, data })
+    const { user } = await requireOwnership('linkCollection', id)
+    const { count } = await db.linkCollection.updateMany({
+      where: { id, userId: user.id, deletedAt: null },
+      data
+    })
+    if (count === 0) return { success: false, error: 'Collection not found' }
+    const updated = await db.linkCollection.findUnique({ where: { id } })
     revalidatePath('/')
     return { success: true, collection: updated }
   } catch (error) {
@@ -53,8 +58,12 @@ export async function updateLinkCollection(id: string, data: { name?: string; co
 
 export async function deleteLinkCollection(id: string) {
   try {
-    await requireOwnership('linkCollection', id)
-    await db.linkCollection.update({ where: { id }, data: { deletedAt: new Date() } })
+    const { user } = await requireOwnership('linkCollection', id)
+    const { count } = await db.linkCollection.updateMany({
+      where: { id, userId: user.id, deletedAt: null },
+      data: { deletedAt: new Date() }
+    })
+    if (count === 0) return { success: false, error: 'Collection not found' }
     revalidatePath('/')
     return { success: true }
   } catch (error) {
@@ -468,7 +477,7 @@ export async function checkDuplicateLink(url: string) {
 
 export async function registerLinkVisit(id: string) {
   try {
-    const { record: link } = await requireOwnership('savedLink', id)
+    const { record: link } = await requireOwnership<SavedLink>('savedLink', id)
     const updated = await db.savedLink.update({
       where: { id },
       data: {
@@ -512,8 +521,11 @@ export async function createLinkTag(name: string, color?: string) {
 
 export async function deleteLinkTag(id: string) {
   try {
-    await requireOwnership('linkTag', id)
-    await db.linkTag.delete({ where: { id } })
+    const { user } = await requireOwnership('linkTag', id)
+    const { count } = await db.linkTag.deleteMany({
+      where: { id, userId: user.id }
+    })
+    if (count === 0) return { success: false, error: 'Tag not found' }
     revalidatePath('/')
     return { success: true }
   } catch (error) {
@@ -538,7 +550,11 @@ export async function getLinkTags() {
 export async function deleteLink(id: string) {
   try {
     await requireOwnership('savedLink', id)
-    await db.savedLink.update({ where: { id }, data: { deletedAt: new Date() } })
+    const { count } = await db.savedLink.updateMany({
+      where: { id, deletedAt: null },
+      data: { deletedAt: new Date() }
+    })
+    if (count === 0) return { success: false, error: 'Link not found' }
     revalidatePath('/')
     return { success: true }
   } catch (error) {

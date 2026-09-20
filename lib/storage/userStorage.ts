@@ -17,6 +17,56 @@ export function getScopedKey(userId: string | null | undefined, key: string): st
   return `${USER_KEY_PREFIX}${scope}:${key}`
 }
 
+export const LEGACY_UNSCOPED_KEYS = [
+  'personal_display_name',
+  'personal_birthday',
+  'tracker-user-height',
+  'personal_weekly_goal',
+  'personal_dashboard_widgets',
+  'personal_modules_visibility',
+  'personal_enabled_leave_types',
+  'personal_working_hours_start',
+  'personal_working_hours_end',
+  'personal_default_task_duration',
+  'personal_accent_color',
+  'personal_font_size',
+  'personal_rounded_corners',
+  'personal_animations',
+  'calendar_default_view',
+  'calendar_start_of_week'
+] as const
+
+/**
+ * Migrates un-scoped legacy localStorage keys into the authenticated user's scoped namespace.
+ * - Only runs when an authenticated userId is provided.
+ * - Only migrates if the scoped key doesn't already have a value.
+ * - Verifies the scoped value before deleting the legacy un-scoped key.
+ * - Leaves other users' scoped namespaces untouched.
+ */
+export function migrateLegacyUserStorage(userId: string): void {
+  if (typeof window === 'undefined' || !userId) return
+  try {
+    for (const key of LEGACY_UNSCOPED_KEYS) {
+      const legacyVal = localStorage.getItem(key)
+      if (legacyVal !== null) {
+        const scopedKey = getScopedKey(userId, key)
+        const existing = localStorage.getItem(scopedKey)
+        if (existing === null) {
+          localStorage.setItem(scopedKey, legacyVal)
+          if (localStorage.getItem(scopedKey) === legacyVal) {
+            localStorage.removeItem(key)
+          }
+        } else {
+          // User already has a scoped value; safely purge the stale un-scoped legacy key
+          localStorage.removeItem(key)
+        }
+      }
+    }
+  } catch {
+    // QuotaExceeded or disabled localStorage safe handling
+  }
+}
+
 export function getUserStorageItem(userId: string | null | undefined, key: string): string | null {
   if (typeof window === 'undefined') return null
   try {
@@ -24,8 +74,20 @@ export function getUserStorageItem(userId: string | null | undefined, key: strin
     const val = localStorage.getItem(scopedKey)
     if (val !== null) return val
 
-    // Backward compatibility check for legacy un-namespaced keys (only if user matches or guest)
-    return localStorage.getItem(key)
+    // Safe migration on first access if key exists in legacy store and user is authenticated
+    if (userId && (LEGACY_UNSCOPED_KEYS as readonly string[]).includes(key)) {
+      const legacyVal = localStorage.getItem(key)
+      if (legacyVal !== null) {
+        localStorage.setItem(scopedKey, legacyVal)
+        if (localStorage.getItem(scopedKey) === legacyVal) {
+          localStorage.removeItem(key)
+          return legacyVal
+        }
+      }
+    }
+
+    // UNSAFE FALLBACK REMOVED: Never return raw un-scoped localStorage.getItem(key)
+    return null
   } catch {
     return null
   }

@@ -162,14 +162,20 @@ export class GoogleCredentialService {
         }
       }
 
-      await db.googleCredential.delete({
-        where: { userId }
-      })
+      await db.$transaction([
+        db.googleCredential.deleteMany({
+          where: { userId }
+        }),
+        db.linkedEventMapping.updateMany({
+          where: { userId, deletedAt: null },
+          data: { deletedAt: new Date() }
+        })
+      ])
       
-      logger.info('GoogleCredentialService', 'Google credential deleted from database', { userId })
+      logger.info('GoogleCredentialService', 'Google credential and linked event mappings cleaned up from database', { userId })
       return true
-    } catch {
-      logger.warn('GoogleCredentialService', 'Disconnect failed — credential may not exist', { userId })
+    } catch (err) {
+      logger.warn('GoogleCredentialService', 'Disconnect failed', { userId, error: err instanceof Error ? err.message : String(err) })
       return false
     }
   }

@@ -93,8 +93,9 @@ export async function requireModuleAccess(moduleKey: TrackerModuleKey): Promise<
 
 /**
  * Server-side guard requiring ownership of a database entity.
+ * Eliminates redundant database lookups by delegating to AuthorizationService.requireOwnership.
  */
-export async function requireOwnership(
+export async function requireOwnership<T = Record<string, unknown>>(
   model:
     | 'activityTemplate'
     | 'activityLog'
@@ -107,23 +108,8 @@ export async function requireOwnership(
     | 'secureDocument'
     | 'linkTag',
   id: string
-) {
-  const user = await AuthorizationService.requireOwnership(model, id)
-  const { db } = await import('./db')
-  let record: Record<string, unknown> | null = null
-  if (model === 'savedLink') record = await db.savedLink.findUnique({ where: { id } }) as Record<string, unknown> | null
-  else if (model === 'linkCollection') record = await db.linkCollection.findUnique({ where: { id } }) as Record<string, unknown> | null
-  else if (model === 'linkTag') record = await db.linkTag.findUnique({ where: { id } }) as Record<string, unknown> | null
-  else if (model === 'activityTemplate') record = await db.activityTemplate.findUnique({ where: { id } }) as Record<string, unknown> | null
-  else if (model === 'activityLog') record = await db.activityLog.findUnique({ where: { id } }) as Record<string, unknown> | null
-  else if (model === 'note') record = await db.note.findUnique({ where: { id } }) as Record<string, unknown> | null
-  else if (model === 'journalEntry') record = await db.journalEntry.findUnique({ where: { id } }) as Record<string, unknown> | null
-  else if (model === 'leaveRecord') record = await db.leaveRecord.findUnique({ where: { id } }) as Record<string, unknown> | null
-  else if (model === 'weightRecord') record = await db.weightRecord.findUnique({ where: { id } }) as Record<string, unknown> | null
-  else if (model === 'secureDocument') record = await db.secureDocument.findUnique({ where: { id } }) as Record<string, unknown> | null
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { record: record as any, user }
+): Promise<{ user: AuthenticatedUser; record: T }> {
+  return AuthorizationService.requireOwnership<T>(model, id)
 }
 
 /**

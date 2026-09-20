@@ -238,6 +238,21 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     }
   }, [isAuthenticated, fetchCalendar, dateParam])
 
+  // Reset calendar data and migrate storage when authenticated user identity changes
+  useEffect(() => {
+    setCalendarData({
+      connected: false,
+      agenda: null,
+      error: null,
+      loading: false
+    })
+    if (user?.id) {
+      import('@/lib/storage/userStorage').then(({ migrateLegacyUserStorage }) => {
+        migrateLegacyUserStorage(user.id)
+      }).catch(() => {})
+    }
+  }, [user?.id])
+
   // Listen to calendar data changes from Calendar / Today mutations to auto-refresh
   useEffect(() => {
     const handleCalendarChanged = () => {
@@ -682,7 +697,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }
 
   return (
-    <EntitlementProvider initialSnapshot={initialEntitlements}>
+    <EntitlementProvider key={currentUser?.id ?? user?.id ?? 'guest'} initialSnapshot={initialEntitlements}>
       <CalendarDataContext.Provider value={{
         calendarData,
         currentUser: user,

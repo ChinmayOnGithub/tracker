@@ -20,6 +20,17 @@ export async function logWeight(date: string, weight: number, notes?: string | n
 
   try {
     const user = await requireModuleAccess('weight')
+
+    const { EntitlementService } = await import('@/lib/services/EntitlementService')
+    const isPro = await EntitlementService.isPro(user.id)
+    if (!isPro) {
+      return {
+        success: false,
+        error: 'Weight tracking requires an active Tracker Pro subscription. Your historical weight records remain accessible.',
+        code: 'ACCESS_DENIED'
+      }
+    }
+
     // Normalize to noon UTC to avoid timezone boundary issues
     const dateObj = new Date(`${date}T12:00:00.000Z`)
 
@@ -36,10 +47,12 @@ export async function logWeight(date: string, weight: number, notes?: string | n
 
     let record
     if (existing) {
-      record = await db.weightRecord.update({
-        where: { id: existing.id },
+      await db.weightRecord.updateMany({
+        where: { id: existing.id, userId: user.id, deletedAt: null },
         data: { weight, notes: notes ?? existing.notes },
       })
+      record = await db.weightRecord.findUnique({ where: { id: existing.id } })
+      if (!record) throw new Error('Failed to retrieve updated weight record')
     } else {
       record = await db.weightRecord.create({
         data: { userId: user.id, date: dateObj, weight, notes: notes ?? null },
@@ -109,13 +122,20 @@ export async function getWeightHistory(days = 90) {
 export async function deleteWeightRecord(id: string) {
   try {
     await requireModuleAccess('weight')
-    await requireOwnership('weightRecord', id)
+    const { user } = await requireOwnership('weightRecord', id)
 
-    await db.weightRecord.update({ where: { id }, data: { deletedAt: new Date() } })
+    const { count } = await db.weightRecord.updateMany({
+      where: { id, userId: user.id, deletedAt: null },
+      data: { deletedAt: new Date() }
+    })
+
+    if (count === 0) {
+      return { success: false, error: 'Weight record not found', code: 'NOT_FOUND' }
+    }
     
-    // Soft-delete corresponding activity logs
+    // Soft-delete corresponding activity logs scoped to userId
     await db.activityLog.updateMany({
-      where: { weightRecordId: id },
+      where: { weightRecordId: id, userId: user.id, deletedAt: null },
       data: { deletedAt: new Date() }
     })
 

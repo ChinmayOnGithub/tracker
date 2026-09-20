@@ -1,11 +1,13 @@
 "use client"
 
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect, useContext } from 'react'
 import { Plus, Minus, Trash2, TrendingDown, TrendingUp } from 'lucide-react'
 import { useStore, WeightRecord } from '@/lib/store/store'
 import { Input, Button, Card } from '@/design-system'
 import { notify } from '@/lib/notifications'
 import { todayYMD, toYMD, fmtDateShort, fmtDateMed } from '@/lib/dateUtils'
+import { CalendarDataContext } from '@/components/DashboardLayout'
+import { getUserStorageItem, setUserStorageItem } from '@/lib/storage/userStorage'
 
 interface WeightPanelProps {
   initialRecords: WeightRecord[]
@@ -460,11 +462,13 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
     initialize({ weightRecords: initialRecords })
   }, [initialRecords, initialize])
 
+  const calendarContext = useContext(CalendarDataContext)
+  const currentUser = calendarContext?.currentUser
   const records = state.weightRecords.length > 0 ? state.weightRecords : initialRecords
   const [period, setPeriod] = useState<'30D' | '60D' | '90D' | 'All'>('30D')
   const [heightCm, setHeightCm] = useState(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('tracker-user-height')
+      const saved = getUserStorageItem(currentUser?.id, 'tracker-user-height')
       return saved ? Number(saved) : 175
     }
     return 175
@@ -473,9 +477,7 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
 
   const handleHeightChange = (val: number) => {
     setHeightCm(val)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('tracker-user-height', String(val))
-    }
+    setUserStorageItem(currentUser?.id, 'tracker-user-height', String(val))
   }
 
   const todayRecord = records.find(r => toYMD(r.date) === today) ?? null

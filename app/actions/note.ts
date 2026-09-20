@@ -23,6 +23,17 @@ export async function createNote(
 ) {
   try {
     const user = await requireAuth()
+
+    const { EntitlementService } = await import('@/lib/services/EntitlementService')
+    const hasAccess = await EntitlementService.hasFeature(user.id, 'unlimited_notes')
+    if (!hasAccess) {
+      return {
+        success: false,
+        error: 'Notes writing requires an active Tracker Pro subscription. Your historical notes remain accessible.',
+        code: 'ACCESS_DENIED'
+      }
+    }
+
     const finalDate = dateStr || `${todayYMD()}_${Date.now()}`
 
     const note = await db.note.upsert({
@@ -61,15 +72,31 @@ export async function updateNote(
   title?: string | null
 ) {
   try {
-    await requireOwnership('note', id)
+    const { user } = await requireOwnership('note', id)
 
-    const note = await db.note.update({
-      where: { id },
+    const { EntitlementService } = await import('@/lib/services/EntitlementService')
+    const hasAccess = await EntitlementService.hasFeature(user.id, 'unlimited_notes')
+    if (!hasAccess) {
+      return {
+        success: false,
+        error: 'Notes writing requires an active Tracker Pro subscription. Your historical notes remain accessible.',
+        code: 'ACCESS_DENIED'
+      }
+    }
+
+    const { count } = await db.note.updateMany({
+      where: { id, userId: user.id, deletedAt: null },
       data: {
         content: content ?? '',
         title: title !== undefined ? (title ? title.trim() : null) : undefined,
       },
     })
+
+    if (count === 0) {
+      return { success: false, error: 'Note not found', code: 'NOT_FOUND' }
+    }
+
+    const note = await db.note.findUnique({ where: { id } })
 
     revalidatePath('/notes')
     revalidatePath('/')
@@ -100,12 +127,16 @@ export async function listNotes() {
 
 export async function deleteNote(id: string) {
   try {
-    await requireOwnership('note', id)
+    const { user } = await requireOwnership('note', id)
 
-    await db.note.update({
-      where: { id },
+    const { count } = await db.note.updateMany({
+      where: { id, userId: user.id, deletedAt: null },
       data: { deletedAt: new Date() }
     })
+
+    if (count === 0) {
+      return { success: false, error: 'Note not found', code: 'NOT_FOUND' }
+    }
 
     revalidatePath('/notes')
     revalidatePath('/')
