@@ -56,14 +56,21 @@ export interface UserEntitlements {
   plan: PlanId
   isPro: boolean
   features: Record<FeatureKey, boolean> & {
+    /** @deprecated Use features.advanced_calendar instead */
     premiumVault: boolean
+    /** @deprecated Use features.advanced_calendar instead */
     advancedCalendar: boolean
+    /** @deprecated Use features.advanced_journal instead */
     advancedJournal: boolean
+    /** @deprecated Use features.unlimited_notes instead */
     unlimitedNotes: boolean
+    /** @deprecated No active priority-support capability is currently enforced */
     prioritySupport: boolean
   }
   limits: Record<LimitKey, number> & {
+    /** @deprecated Use limits.vault_storage instead */
     maxVaultFiles: number
+    /** @deprecated Use limits.active_activities instead */
     maxActiveActivities: number
   }
   subscription?: {

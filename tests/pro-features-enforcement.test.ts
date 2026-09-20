@@ -15,9 +15,9 @@ import { createGoogleEventAction, updateGoogleEventAction, deleteGoogleEventActi
 
 describe('Pro Entitlement Enforcement Suite (#51 & #42)', () => {
   it('rejects Google Calendar writeback when user is on Free plan', async () => {
-    // Mock EntitlementService.isPro to return false
-    const origIsPro = EntitlementService.isPro
-    EntitlementService.isPro = async () => false
+    // Mock EntitlementService.hasFeature to return false (no advanced_calendar capability)
+    const origHasFeature = EntitlementService.hasFeature
+    EntitlementService.hasFeature = async () => false
 
     try {
       const res = await createGoogleEventAction({
@@ -29,35 +29,35 @@ describe('Pro Entitlement Enforcement Suite (#51 & #42)', () => {
 
       expect(res.success).toBe(false)
       if (!res.success) {
-        expect(res.code).toBe('PRO_REQUIRED')
+        expect(res.code).toBe('CAPABILITY_REQUIRED')
         expect(res.error).toContain('requires a Tracker Pro subscription')
       }
 
       const updateRes = await updateGoogleEventAction('event-1', { summary: 'Updated' })
       expect(updateRes.success).toBe(false)
       if (!updateRes.success) {
-        expect(updateRes.code).toBe('PRO_REQUIRED')
+        expect(updateRes.code).toBe('CAPABILITY_REQUIRED')
       }
 
       const deleteRes = await deleteGoogleEventAction('event-1')
       expect(deleteRes.success).toBe(false)
       if (!deleteRes.success) {
-        expect(deleteRes.code).toBe('PRO_REQUIRED')
+        expect(deleteRes.code).toBe('CAPABILITY_REQUIRED')
       }
 
       const syncRes = await syncCalendarAction()
       expect(syncRes.success).toBe(false)
       if (!syncRes.success) {
-        expect(syncRes.code).toBe('PRO_REQUIRED')
+        expect(syncRes.code).toBe('CAPABILITY_REQUIRED')
       }
     } finally {
-      EntitlementService.isPro = origIsPro
+      EntitlementService.hasFeature = origHasFeature
     }
   })
 
   it('allows Google Calendar writeback when user is on Pro plan', async () => {
-    const origIsPro = EntitlementService.isPro
-    EntitlementService.isPro = async () => true
+    const origHasFeature = EntitlementService.hasFeature
+    EntitlementService.hasFeature = async () => true
 
     const { ProviderService } = await import('@/lib/services/ProviderService')
     const origCreate = ProviderService.createEvent
@@ -83,7 +83,7 @@ describe('Pro Entitlement Enforcement Suite (#51 & #42)', () => {
 
       expect(res.success).toBe(true)
     } finally {
-      EntitlementService.isPro = origIsPro
+      EntitlementService.hasFeature = origHasFeature
       ProviderService.createEvent = origCreate
     }
   })

@@ -134,12 +134,12 @@ export async function createGoogleEventAction(event: CalendarEventInput) {
     }
 
     const { EntitlementService } = await import('@/lib/services/EntitlementService')
-    const isPro = await EntitlementService.isPro(user.id)
-    if (!isPro) {
+    const hasCalendarAccess = await EntitlementService.hasFeature(user.id, 'advanced_calendar')
+    if (!hasCalendarAccess) {
       return {
         success: false as const,
         error: 'Two-way Google Calendar synchronization requires a Tracker Pro subscription.',
-        code: 'PRO_REQUIRED'
+        code: 'CAPABILITY_REQUIRED'
       }
     }
 
@@ -168,12 +168,12 @@ export async function updateGoogleEventAction(eventId: string, event: Partial<Ca
     }
 
     const { EntitlementService } = await import('@/lib/services/EntitlementService')
-    const isPro = await EntitlementService.isPro(user.id)
-    if (!isPro) {
+    const hasCalendarAccess = await EntitlementService.hasFeature(user.id, 'advanced_calendar')
+    if (!hasCalendarAccess) {
       return {
         success: false as const,
         error: 'Two-way Google Calendar synchronization requires a Tracker Pro subscription.',
-        code: 'PRO_REQUIRED'
+        code: 'CAPABILITY_REQUIRED'
       }
     }
 
@@ -202,12 +202,12 @@ export async function deleteGoogleEventAction(eventId: string) {
     }
 
     const { EntitlementService } = await import('@/lib/services/EntitlementService')
-    const isPro = await EntitlementService.isPro(user.id)
-    if (!isPro) {
+    const hasCalendarAccess = await EntitlementService.hasFeature(user.id, 'advanced_calendar')
+    if (!hasCalendarAccess) {
       return {
         success: false as const,
         error: 'Two-way Google Calendar synchronization requires a Tracker Pro subscription.',
-        code: 'PRO_REQUIRED'
+        code: 'CAPABILITY_REQUIRED'
       }
     }
 
@@ -236,12 +236,12 @@ export async function syncCalendarAction() {
     }
 
     const { EntitlementService } = await import('@/lib/services/EntitlementService')
-    const isPro = await EntitlementService.isPro(user.id)
-    if (!isPro) {
+    const hasCalendarAccess = await EntitlementService.hasFeature(user.id, 'advanced_calendar')
+    if (!hasCalendarAccess) {
       return {
         success: false as const,
         error: 'Two-way Google Calendar synchronization requires a Tracker Pro subscription.',
-        code: 'PRO_REQUIRED'
+        code: 'CAPABILITY_REQUIRED'
       }
     }
 

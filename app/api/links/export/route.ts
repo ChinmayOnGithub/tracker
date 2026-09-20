@@ -13,15 +13,15 @@ export async function GET(req: NextRequest) {
     const collectionId = searchParams.get('collectionId')
     const format = searchParams.get('format') || 'json'
 
-    // Free users can export JSON; rich format exports (CSV/HTML) require Pro
+    // Free users can export JSON; rich format exports (CSV/HTML) require the advanced_journal capability
     if (format === 'csv' || format === 'html') {
       const { EntitlementService } = await import('@/lib/services/EntitlementService')
-      const isPro = await EntitlementService.isPro(user.id)
-      if (!isPro) {
+      const hasExportAccess = await EntitlementService.hasFeature(user.id, 'advanced_journal')
+      if (!hasExportAccess) {
         return NextResponse.json(
           {
             error: 'Rich format export (CSV/HTML) requires a Tracker Pro subscription.',
-            code: 'PRO_REQUIRED'
+            code: 'CAPABILITY_REQUIRED'
           },
           { status: 403 }
         )
