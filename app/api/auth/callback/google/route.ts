@@ -360,10 +360,20 @@ export async function GET(request: Request) {
       }
     }
 
-    // Step 7: Save refresh token securely
+    // Step 7: Save refresh token securely if calendar scope was granted
     if (tokens.refresh_token) {
-      await GoogleCredentialService.saveCredentials(user.id, tokens.refresh_token)
-      logger.info('OAuthCallback', 'Refresh token saved for user', { userId: user.id })
+      const grantedScopes = typeof tokens.scope === 'string' ? tokens.scope : ''
+      const hasCalendarScope = grantedScopes.includes('calendar')
+
+      if (tokens.scope && !hasCalendarScope) {
+        logger.warn('OAuthCallback', 'User authenticated with Google but did not grant Calendar scope', {
+          userId: user.id,
+          grantedScopes
+        })
+      } else {
+        await GoogleCredentialService.saveCredentials(user.id, tokens.refresh_token)
+        logger.info('OAuthCallback', 'Refresh token saved for user', { userId: user.id })
+      }
     } else {
       logger.warn('OAuthCallback', 'No refresh token returned by Google — user may need to re-consent', {
         userId: user.id

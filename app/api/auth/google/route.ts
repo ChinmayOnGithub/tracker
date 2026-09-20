@@ -37,6 +37,7 @@ export async function GET(request: Request) {
   googleAuthUrl.searchParams.set('state', state)
   googleAuthUrl.searchParams.set('access_type', 'offline')
   googleAuthUrl.searchParams.set('prompt', 'select_account consent')
+  googleAuthUrl.searchParams.set('include_granted_scopes', 'true')
   googleAuthUrl.searchParams.set('code_challenge', codeChallenge)
   googleAuthUrl.searchParams.set('code_challenge_method', 'S256')
 

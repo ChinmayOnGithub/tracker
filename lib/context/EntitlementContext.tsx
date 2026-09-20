@@ -102,6 +102,8 @@ export function EntitlementProvider({ children, initialSnapshot }: { children: R
     const loadInitial = async () => {
       // Skip redundant initial fetch if the server already provided an access snapshot
       if (initialSnapshot) {
+        setEntitlements(initialSnapshot)
+        setIsPro(initialSnapshot.isPro)
         setIsLoading(false)
         return
       }
@@ -148,7 +150,7 @@ export function EntitlementProvider({ children, initialSnapshot }: { children: R
         document.removeEventListener('visibilitychange', handleVisibilityChange)
       }
     }
-  }, [refreshEntitlements])
+  }, [refreshEntitlements, initialSnapshot])
 
   return (
     <EntitlementContext.Provider value={{ entitlements, isPro, isLoading, refreshEntitlements }}>

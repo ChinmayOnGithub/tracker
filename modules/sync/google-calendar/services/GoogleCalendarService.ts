@@ -286,6 +286,31 @@ export class GoogleCalendarService {
   }
 
   /**
+   * Checks if an error response from Google API is due to insufficient authentication scopes.
+   * If so, clears memory tokens, disconnects the invalid credential, and throws a user-friendly GoogleApiError.
+   */
+  private static async handleScopeErrorIfNeeded(userId: string, response: Response, context: string): Promise<void> {
+    if (response.status === 403) {
+      const errText = await response.clone().text().catch(() => '')
+      const isInsufficientScope =
+        errText.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT') ||
+        errText.includes('insufficientPermissions') ||
+        errText.includes('insufficient authentication scopes')
+
+      if (isInsufficientScope) {
+        logger.warn('GoogleCalendarService', `Google Calendar permission was not granted during ${context} (insufficient scopes). Clearing token and disconnecting invalid credential.`, { userId })
+        this.clearCache(userId, true)
+        await GoogleCredentialService.disconnect(userId).catch(() => {})
+        throw new GoogleApiError(
+          'Google Calendar permission was not granted. Please reconnect your account in Settings and allow Calendar access.',
+          403,
+          'INSUFFICIENT_CALENDAR_PERMISSIONS'
+        )
+      }
+    }
+  }
+
+  /**
    * Performs an authenticated Google Calendar API HTTP request.
    * If Google returns 401 Unauthorized, automatically invalidates the cached access token,
    * refreshes it, and retries the original request exactly once.
@@ -320,6 +345,9 @@ export class GoogleCalendarService {
       if (response.status === 401) {
         logger.error('GoogleCalendarService', 'Retry after token refresh also returned 401. Failing request.', { userId })
       }
+    } else if (response.status === 403) {
+      logger.warn('GoogleCalendarService', 'Received 403 from Google API. Invalidating cached access token.', { userId })
+      accessTokenCache.delete(userId)
     }
 
     return response
@@ -397,6 +425,8 @@ export class GoogleCalendarService {
         const response = await this.requestWithAuth(userId, url.toString())
 
         if (!response.ok) {
+          await this.handleScopeErrorIfNeeded(userId, response, 'getEvents')
+
           const errText = await response.text()
           logger.error('GoogleCalendarService', 'Calendar events fetch failed', {
             userId,
@@ -565,6 +595,7 @@ export class GoogleCalendarService {
     })
     
     if (!res.ok) {
+      await this.handleScopeErrorIfNeeded(userId, res, 'createEvent')
       const errText = await res.text()
       logger.error('GoogleCalendarService', 'Failed to create Google Calendar event', { errText })
       throw new GoogleApiError(`Failed to create Google Calendar event: ${errText}`, res.status)
@@ -625,6 +656,7 @@ export class GoogleCalendarService {
     })
     
     if (!res.ok) {
+      await this.handleScopeErrorIfNeeded(userId, res, 'updateEvent')
       const errText = await res.text()
       logger.error('GoogleCalendarService', 'Failed to update Google Calendar event', { eventId, errText })
       
@@ -670,6 +702,7 @@ export class GoogleCalendarService {
     this.clearCache(userId)
     
     if (!res.ok) {
+      await this.handleScopeErrorIfNeeded(userId, res, 'deleteEvent')
       // Gracefully recover if already deleted externally (idempotency)
       if (res.status === 404 || res.status === 410) {
         logger.info('GoogleCalendarService', 'Event already deleted externally', { eventId })
@@ -739,6 +772,7 @@ export class GoogleCalendarService {
       const response = await this.requestWithAuth(userId, url.toString())
 
       if (!response.ok) {
+        await this.handleScopeErrorIfNeeded(userId, response, 'listEventsWithSyncToken')
         const errText = await response.text()
         logger.error('GoogleCalendarService', 'Failed to list events with sync token', {
           userId,

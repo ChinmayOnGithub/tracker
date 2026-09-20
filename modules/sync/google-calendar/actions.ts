@@ -3,11 +3,11 @@
 import { db } from '@/lib/db'
 import { getLoggedUser } from '@/app/actions/auth'
 import { GoogleCredentialService } from './services/GoogleCredentialService'
-import { CalendarEventInput } from './services/GoogleCalendarService'
+import { GoogleCalendarService, CalendarEventInput } from './services/GoogleCalendarService'
 import { ProviderService } from '@/lib/services/ProviderService'
 import { revalidatePath } from 'next/cache'
 import { logger } from '@/lib/logger'
-import { handleActionError, UnauthorizedError } from '@/lib/errors'
+import { handleActionError, UnauthorizedError, GoogleApiError } from '@/lib/errors'
 import { parseUTCDate } from '@/lib/recurrence'
 import { CalendarService } from '@/modules/calendar/services/CalendarService'
 
@@ -54,6 +54,7 @@ export async function disconnectGoogleAccount() {
     }
 
     const deleted = await GoogleCredentialService.disconnect(user.id)
+    GoogleCalendarService.clearCache(user.id, true)
     
     // Also delete any local linked calendar event mappings to avoid orphan links
     await db.linkedEventMapping.deleteMany({
@@ -117,6 +118,21 @@ export async function getAgendaAction(todayStr: string, forceRefresh = false) {
       }
     }
   } catch (error) {
+    if (
+      error instanceof GoogleApiError &&
+      (error.statusCode === 403 || error.code === 'INSUFFICIENT_CALENDAR_PERMISSIONS')
+    ) {
+      logger.warn('GoogleCalendarActions', 'Google Calendar permission insufficient', {
+        error: error.message
+      })
+      return {
+        success: false as const,
+        connected: false,
+        error: error.message,
+        code: 'INSUFFICIENT_CALENDAR_PERMISSIONS'
+      }
+    }
+
     logger.error('GoogleCalendarActions', 'Failed to get calendar agenda', error)
     return handleActionError(error)
   }

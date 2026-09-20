@@ -48,8 +48,8 @@ export class BillingUnavailableError extends AppError {
 }
 
 export class GoogleApiError extends AppError {
-  constructor(message: string, statusCode = 502) {
-    super(message, statusCode, 'GOOGLE_API_ERROR')
+  constructor(message: string, statusCode = 502, code = 'GOOGLE_API_ERROR') {
+    super(message, statusCode, code)
   }
 }
 
