@@ -19,6 +19,7 @@ import { CalendarCacheService } from '@/modules/calendar/services/CalendarCacheS
 import { clearDayDtoCache } from './DayLogsModal'
 import { EntitlementProvider } from '@/lib/context/EntitlementContext'
 import { purgeUserStorage } from '@/lib/storage/userStorage'
+import type { UserEntitlements } from '@/lib/billing/types'
 
 export interface CalendarData {
   connected: boolean
@@ -46,11 +47,13 @@ export const CalendarDataContext = React.createContext<CalendarDataContextType |
 interface DashboardLayoutProps {
   children: React.ReactNode
   currentUser?: { id: string; username: string; email?: string | null; isOwner?: boolean } | null
+  initialEntitlements?: UserEntitlements | null
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   children,
   currentUser = null,
+  initialEntitlements = null,
 }) => {
   const router = useRouter()
   const pathname = usePathname()
@@ -679,7 +682,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }
 
   return (
-    <EntitlementProvider>
+    <EntitlementProvider initialSnapshot={initialEntitlements}>
       <CalendarDataContext.Provider value={{
         calendarData,
         currentUser: user,

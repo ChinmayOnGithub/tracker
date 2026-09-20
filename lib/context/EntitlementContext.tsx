@@ -53,10 +53,10 @@ const EntitlementContext = createContext<EntitlementContextValue>({
  * - Listens for window 'tracker_entitlements_refresh' events to synchronize across components.
  * - Silently revalidates on tab focus / visibilitychange when returning from external checkout.
  */
-export function EntitlementProvider({ children }: { children: React.ReactNode }) {
-  const [entitlements, setEntitlements] = useState<UserEntitlements>(FREE_SNAPSHOT)
-  const [isPro, setIsPro] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+export function EntitlementProvider({ children, initialSnapshot }: { children: React.ReactNode; initialSnapshot?: UserEntitlements | null }) {
+  const [entitlements, setEntitlements] = useState<UserEntitlements>(initialSnapshot ?? FREE_SNAPSHOT)
+  const [isPro, setIsPro] = useState(initialSnapshot?.isPro ?? false)
+  const [isLoading, setIsLoading] = useState(!initialSnapshot)
 
   const inFlightPromiseRef = useRef<Promise<UserEntitlements> | null>(null)
 
@@ -97,6 +97,11 @@ export function EntitlementProvider({ children }: { children: React.ReactNode })
     let cancelled = false
 
     const loadInitial = async () => {
+      // Skip redundant initial fetch if the server already provided an access snapshot
+      if (initialSnapshot) {
+        setIsLoading(false)
+        return
+      }
       try {
         const { getEntitlementsAction } = await import('@/app/actions/billing')
         const result = await getEntitlementsAction()
