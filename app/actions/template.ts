@@ -8,6 +8,8 @@ import { eventBus, EVENTS } from '@/lib/events'
 import { requireAuth, requireOwnership, requireModuleAccess } from '@/lib/auth-guards'
 import { createTemplateSchema, updateTemplateSchema } from '@/lib/validations'
 import { EntitlementService } from '@/lib/services/EntitlementService'
+import { QuotaService } from '@/lib/services/QuotaService'
+import { QuotaExceededError } from '@/lib/errors'
 
 export async function createActivityTemplate(data: {
   name: string
@@ -43,22 +45,7 @@ export async function createActivityTemplate(data: {
   try {
     const user = await requireModuleAccess('activities')
 
-    // Server-side active_activities limit enforcement (Law A1: Action -> Service -> Prisma)
-    const activityLimit = await EntitlementService.getLimit(user.id, 'active_activities')
-    const activeCount = await db.activityTemplate.count({
-      where: { userId: user.id, isActive: true, deletedAt: null },
-    })
-    if (activeCount >= activityLimit) {
-      const plan = (await EntitlementService.getEntitlements(user.id)).plan
-      const isPro = plan !== 'FREE'
-      return {
-        success: false,
-        code: 'ACTIVITY_LIMIT_REACHED',
-        error: isPro
-          ? `You have reached the activity limit for your ${plan} plan (${activityLimit} active activities).`
-          : `Free plan limit reached (${activityLimit} active activities). Upgrade to Pro for more.`,
-      }
-    }
+    const isTask = data.recurrenceType === 'one_time'
 
     const { tagNames = [], ...rest } = data
 
@@ -78,27 +65,75 @@ export async function createActivityTemplate(data: {
       ? new Date(targetDate)
       : (recurrenceType === 'one_time' ? new Date() : null)
 
-    const created = await db.activityTemplate.create({
-      data: {
-        ...templateRest,
-        recurrenceType: recurrenceType as RecurrenceType,
-        targetDate: parsedTargetDate,
-        effectiveFrom: parsedTargetDate || new Date(),
-        metadata: templateRest.metadata as Prisma.InputJsonValue,
-        notificationRules: templateRest.notificationRules as Prisma.InputJsonValue,
-        sortOrder: nextSortOrder,
-        userId: user.id,
-        tags: {
-          connectOrCreate: tagNames.map(name => {
-            const normalized = name.trim().toLowerCase()
-            return {
-              where: { name: normalized },
-              create: { name: normalized, color: 'zinc' },
-            }
-          }),
-        },
+    const templateCreateData = {
+      ...templateRest,
+      recurrenceType: recurrenceType as RecurrenceType,
+      targetDate: parsedTargetDate,
+      effectiveFrom: parsedTargetDate || new Date(),
+      metadata: templateRest.metadata as Prisma.InputJsonValue,
+      notificationRules: templateRest.notificationRules as Prisma.InputJsonValue,
+      sortOrder: nextSortOrder,
+      userId: user.id,
+      tags: {
+        connectOrCreate: tagNames.map(name => {
+          const normalized = name.trim().toLowerCase()
+          return {
+            where: { name: normalized },
+            create: { name: normalized, color: 'zinc' },
+          }
+        }),
       },
-    })
+    }
+
+    let created: ActivityTemplate
+
+    if (isTask) {
+      // 1. Task creation: enforce tasks_created_daily creation quota race-safely inside a transaction
+      const taskLimit = await EntitlementService.getLimit(user.id, 'tasks_created_daily')
+      try {
+        created = await db.$transaction(async (tx) => {
+          await QuotaService.consumeDailyQuota(tx, user.id, 'tasks_created_daily', taskLimit)
+          return tx.activityTemplate.create({
+            data: templateCreateData,
+          })
+        })
+      } catch (err) {
+        if (err instanceof QuotaExceededError) {
+          return {
+            success: false,
+            code: 'QUOTA_EXCEEDED',
+            error: err.message,
+          }
+        }
+        throw err
+      }
+    } else {
+      // 2. Activity creation: enforce activities_active active-resource limit
+      const activityLimit = await EntitlementService.getLimit(user.id, 'activities_active')
+      const activeCount = await db.activityTemplate.count({
+        where: {
+          userId: user.id,
+          isActive: true,
+          deletedAt: null,
+          recurrenceType: { not: 'one_time' },
+        },
+      })
+      if (activeCount >= activityLimit) {
+        const plan = (await EntitlementService.getEntitlements(user.id)).plan
+        const isPro = plan !== 'FREE'
+        return {
+          success: false,
+          code: 'QUOTA_EXCEEDED',
+          error: isPro
+            ? `You have reached the activity limit for your ${plan} plan (${activityLimit} active activities).`
+            : `Free plan limit reached (${activityLimit} active activities). Upgrade to Pro for more.`,
+        }
+      }
+
+      created = await db.activityTemplate.create({
+        data: templateCreateData,
+      })
+    }
 
     // Auto-schedule task in calendar if it has a scheduledTime
     await syncTemplateToCalendarEvent(created)
@@ -110,7 +145,8 @@ export async function createActivityTemplate(data: {
   } catch (error) {
     console.error('Failed to create template:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
-    return { success: false, error: message }
+    const code = (error as { code?: string })?.code || 'UNEXPECTED_ERROR'
+    return { success: false, code, error: message }
   }
 }
 
@@ -152,6 +188,36 @@ export async function updateActivityTemplate(
   try {
     await requireModuleAccess('activities')
     const { user } = await requireOwnership('activityTemplate', id)
+
+    // If activating an activity, verify capacity under activities_active limit
+    if (data.isActive === true) {
+      const existing = await db.activityTemplate.findUnique({
+        where: { id },
+      })
+      if (existing && !existing.isActive && existing.recurrenceType !== 'one_time') {
+        const activityLimit = await EntitlementService.getLimit(user.id, 'activities_active')
+        const activeCount = await db.activityTemplate.count({
+          where: {
+            userId: user.id,
+            isActive: true,
+            deletedAt: null,
+            recurrenceType: { not: 'one_time' },
+          },
+        })
+        if (activeCount >= activityLimit) {
+          const plan = (await EntitlementService.getEntitlements(user.id)).plan
+          const isPro = plan !== 'FREE'
+          return {
+            success: false,
+            code: 'QUOTA_EXCEEDED',
+            error: isPro
+              ? `You have reached the activity limit for your ${plan} plan (${activityLimit} active activities).`
+              : `Free plan limit reached (${activityLimit} active activities). Upgrade to Pro for more.`,
+          }
+        }
+      }
+    }
+
     const { tagNames, ...rest } = data
 
     // If tagNames are provided, reset tags connection

@@ -22,6 +22,9 @@ export type FeatureKey =
 export type LimitKey =
   | 'vault_storage'
   | 'active_activities'
+  | 'activities_active'
+  | 'tasks_created_daily'
+  | 'calendar_events_created_daily'
 
 export type SubscriptionStatus =
   | 'CREATED'
@@ -67,11 +70,11 @@ export interface UserEntitlements {
     /** @deprecated No active priority-support capability is currently enforced */
     prioritySupport: boolean
   }
-  limits: Record<LimitKey, number> & {
+  limits: Record<'vault_storage' | 'active_activities', number> & Partial<Record<LimitKey, number>> & {
     /** @deprecated Use limits.vault_storage instead */
-    maxVaultFiles: number
+    maxVaultFiles?: number
     /** @deprecated Use limits.active_activities instead */
-    maxActiveActivities: number
+    maxActiveActivities?: number
   }
   subscription?: {
     id: string

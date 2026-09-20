@@ -32,6 +32,9 @@ const FREE_ENTITLEMENTS: UserEntitlements = {
   limits: {
     vault_storage: 10,
     active_activities: 10,
+    activities_active: 10,
+    tasks_created_daily: 50,
+    calendar_events_created_daily: 5,
     // Aliases
     maxVaultFiles: 10,
     maxActiveActivities: 10
@@ -149,6 +152,9 @@ export function calculateEntitlements(
     limits: {
       vault_storage: 10000,
       active_activities: 10000,
+      activities_active: 10000,
+      tasks_created_daily: 10000,
+      calendar_events_created_daily: 10000,
       // Aliases
       maxVaultFiles: 10000,
       maxActiveActivities: 10000

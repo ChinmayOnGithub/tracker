@@ -5,6 +5,8 @@ import { CalendarService } from '@/modules/calendar/services/CalendarService'
 import { getLoggedUser } from './auth'
 import { CalendarEventType } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
+import { EntitlementService } from '@/lib/services/EntitlementService'
+import { QuotaService } from '@/lib/services/QuotaService'
 
 export async function createCalendarEventAction(data: {
   title: string
@@ -22,21 +24,26 @@ export async function createCalendarEventAction(data: {
       return { success: false, error: 'Unauthorized' }
     }
 
-    const event = await CalendarService.createEvent(user.id, {
-      title: data.title,
-      start: new Date(data.start),
-      end: new Date(data.end),
-      allDay: data.allDay,
-      type: data.type || CalendarEventType.TASK,
-      color: data.color || null,
-      status: 'confirmed',
-      description: null,
-      trackerArtifactId: data.trackerArtifactId || null,
-      trackerArtifactType: data.trackerArtifactType || null,
-      externalId: null,
-      externalProvider: null,
-      etag: null,
-      externalMetadata: null
+    const calendarLimit = await EntitlementService.getLimit(user.id, 'calendar_events_created_daily')
+
+    const event = await db.$transaction(async (tx) => {
+      await QuotaService.consumeDailyQuota(tx, user.id, 'calendar_events_created_daily', calendarLimit)
+      return CalendarService.createEvent(user.id, {
+        title: data.title,
+        start: new Date(data.start),
+        end: new Date(data.end),
+        allDay: data.allDay,
+        type: data.type || CalendarEventType.TASK,
+        color: data.color || null,
+        status: 'confirmed',
+        description: null,
+        trackerArtifactId: data.trackerArtifactId || null,
+        trackerArtifactType: data.trackerArtifactType || null,
+        externalId: null,
+        externalProvider: null,
+        etag: null,
+        externalMetadata: null
+      })
     })
 
     revalidatePath('/')
@@ -44,7 +51,12 @@ export async function createCalendarEventAction(data: {
     return { success: true, event }
   } catch (error) {
     console.error('Failed to create calendar event:', error)
-    return { success: false, error: error instanceof Error ? error.message : 'Failed to create event' }
+    const code = (error as { code?: string })?.code || 'UNEXPECTED_ERROR'
+    return {
+      success: false,
+      code,
+      error: error instanceof Error ? error.message : 'Failed to create event'
+    }
   }
 }
 

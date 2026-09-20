@@ -22,6 +22,9 @@ export const FREE_SNAPSHOT: UserEntitlements = {
   limits: {
     vault_storage: 10,
     active_activities: 10,
+    activities_active: 10,
+    tasks_created_daily: 50,
+    calendar_events_created_daily: 5,
     maxVaultFiles: 10,
     maxActiveActivities: 10,
   },

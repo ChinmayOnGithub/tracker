@@ -23,6 +23,30 @@ export class UnauthorizedError extends AppError {
   }
 }
 
+export class UnauthenticatedError extends AppError {
+  constructor(message = 'Authentication required') {
+    super(message, 401, 'UNAUTHENTICATED')
+  }
+}
+
+export class AccessDeniedError extends AppError {
+  constructor(message = 'Access denied') {
+    super(message, 403, 'ACCESS_DENIED')
+  }
+}
+
+export class QuotaExceededError extends AppError {
+  constructor(message = 'Quota exceeded') {
+    super(message, 429, 'QUOTA_EXCEEDED')
+  }
+}
+
+export class BillingUnavailableError extends AppError {
+  constructor(message = 'Billing service is temporarily unavailable') {
+    super(message, 503, 'BILLING_UNAVAILABLE')
+  }
+}
+
 export class GoogleApiError extends AppError {
   constructor(message: string, statusCode = 502) {
     super(message, statusCode, 'GOOGLE_API_ERROR')

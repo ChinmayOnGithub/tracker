@@ -47,9 +47,10 @@ export class CalendarRepository {
 
   static async createEvent(
     userId: string,
-    data: Omit<CalendarEvent, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'deletedAt'>
+    data: Omit<CalendarEvent, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'deletedAt'>,
+    client: Prisma.TransactionClient | typeof db = db
   ): Promise<CalendarEvent> {
-    return db.calendarEvent.create({
+    return (client as typeof db).calendarEvent.create({
       data: {
         ...data,
         userId,

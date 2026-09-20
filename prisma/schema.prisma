@@ -113,6 +113,7 @@ model User {
   billingCustomers  BillingCustomer[]
   subscriptions     Subscription[]
   payments          Payment[]
+  usageCounters     UsageCounter[]
 }
 
 model GoogleCredential {
@@ -668,5 +669,23 @@ model BillingWebhookEvent {
   @@unique([provider, providerEventId])
   @@index([status])
   @@index([provider, providerEventId])
+}
+
+// ----------------------------------------------------
+// Quota & Rate Limiting Module
+// ----------------------------------------------------
+
+model UsageCounter {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String   // e.g. "tasks_created_daily", "calendar_events_created_daily"
+  period    String   // e.g. "2026-09-21"
+  count     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key, period])
+  @@index([userId])
 }
 

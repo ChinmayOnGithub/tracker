@@ -32,6 +32,15 @@ export class EntitlementService {
    */
   static async getLimit(userId: string, limit: LimitKey): Promise<number> {
     const entitlements = await this.getEntitlements(userId)
+    if (limit === 'active_activities' || limit === 'activities_active') {
+      return entitlements.limits.activities_active ?? entitlements.limits.active_activities ?? 10
+    }
+    if (limit === 'tasks_created_daily') {
+      return entitlements.limits.tasks_created_daily ?? 50
+    }
+    if (limit === 'calendar_events_created_daily') {
+      return entitlements.limits.calendar_events_created_daily ?? 5
+    }
     return entitlements.limits[limit] ?? 0
   }
 
