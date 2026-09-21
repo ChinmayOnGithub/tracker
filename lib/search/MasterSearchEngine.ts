@@ -333,12 +333,14 @@ export class MasterSearchEngine {
         const moodText = entry.mood ? `Mood: ${entry.mood}` : ''
         const gratitudeText = entry.gratitude ? `Gratitude: ${entry.gratitude}` : ''
         const reflectionText = entry.reflections ? `Reflections: ${entry.reflections}` : ''
-        const combinedContent = `${plainContent} ${moodText} ${gratitudeText} ${reflectionText}`.trim()
+        const lessonsText = entry.lessonsLearned ? `Lessons: ${entry.lessonsLearned}` : ''
+        const planText = entry.tomorrowPlan ? `Plan: ${entry.tomorrowPlan}` : ''
+        const combinedContent = `${plainContent} ${moodText} ${gratitudeText} ${reflectionText} ${lessonsText} ${planText}`.trim()
 
         const match = computeMatchScore(tokens, rawQuery, {
           title: dateFormatted,
           keywords: `${dateStr} ${entry.mood || ''}`,
-          metadata: `journal ${entry.mood || ''} gratitude reflection`,
+          metadata: `journal ${entry.mood || ''} gratitude reflection lessons plan`,
           content: combinedContent
         })
 

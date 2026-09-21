@@ -2,7 +2,8 @@
 
 import React, { useState, useMemo } from 'react'
 import { ActivityTemplate, RecurrenceAnalysis } from '@/types'
-import { deleteActivityTemplate, duplicateActivityTemplate, updateActivityTemplate, reorderActivityTemplates } from '@/app/actions/template'
+import { duplicateActivityTemplate, updateActivityTemplate, reorderActivityTemplates } from '@/app/actions/template'
+import { useStore } from '@/lib/store/store'
 import { Icon } from './Icon'
 import { Plus, Edit2, Copy, Check, Trash2, EyeOff, MoreVertical } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
@@ -271,11 +272,18 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
     setIsProcessing(null)
   }
 
+  const { deleteActivityTemplateAction, deleteActivityTemplatesAction } = useStore()
+
   const handleDelete = async (id: string, name: string) => {
     if (confirm(`Are you sure you want to delete "${name}"? This deletes its logs.`)) {
       setIsProcessing(id)
-      await deleteActivityTemplate(id)
-      setIsProcessing(null)
+      try {
+        await deleteActivityTemplateAction(id)
+      } catch (err) {
+        console.error('Failed to delete activity template:', err)
+      } finally {
+        setIsProcessing(null)
+      }
     }
   }
 
@@ -307,11 +315,14 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
   const handleBulkDelete = async () => {
     if (confirm(`Are you sure you want to delete these ${selectedIds.length} activities?`)) {
       setIsProcessing('bulk')
-      for (const id of selectedIds) {
-        await deleteActivityTemplate(id)
+      try {
+        await deleteActivityTemplatesAction(selectedIds)
+        setSelectedIds([])
+      } catch (err) {
+        console.error('Failed to bulk delete activity templates:', err)
+      } finally {
+        setIsProcessing(null)
       }
-      setSelectedIds([])
-      setIsProcessing(null)
     }
   }
 

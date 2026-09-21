@@ -68,12 +68,9 @@ export async function searchGlobalAction(
 
     // 2. JOURNAL
     if (shouldQuery('journal', 'journal')) {
+      const { JournalService } = await import('@/modules/journal/server')
       queries.push(
-        db.journalEntry.findMany({
-          where: { userId: user.id, deletedAt: null },
-          orderBy: { journalDate: 'desc' },
-          take: 100,
-        }).then(entries => {
+        JournalService.search(user.id, trimmedQuery).then(entries => {
           dataset.journalEntries = entries.map(e => ({
             id: e.id,
             journalDate: e.journalDate.toISOString(),

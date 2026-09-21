@@ -1,5 +1,6 @@
 import crypto from 'crypto'
 import { db } from '@/lib/db'
+import { Prisma } from '@prisma/client'
 import { env } from '@/lib/env'
 import { logger } from '@/lib/logger'
 import { GOOGLE_OAUTH } from '@/lib/constants'
@@ -162,17 +163,50 @@ export class GoogleCredentialService {
         }
       }
 
+      // Soft-delete purely external Google calendar events (trackerArtifactId is null)
+      await db.calendarEvent.updateMany({
+        where: {
+          userId,
+          externalProvider: 'GOOGLE',
+          trackerArtifactId: null,
+          deletedAt: null,
+        },
+        data: { deletedAt: new Date() },
+      })
+
+      // Detach Google sync references from Tracker-owned calendar events (preserve Tracker event)
+      await db.calendarEvent.updateMany({
+        where: {
+          userId,
+          externalProvider: 'GOOGLE',
+          trackerArtifactId: { not: null },
+          deletedAt: null,
+        },
+        data: {
+          externalId: null,
+          externalProvider: null,
+          etag: null,
+          externalMetadata: Prisma.DbNull,
+        },
+      })
+
+      // Clean Google calendar sync state tokens
+      await db.calendarSyncState.deleteMany({
+        where: { userId, provider: 'google' },
+      })
+
+      // Transactionally remove credentials and linked event mappings
       await db.$transaction([
         db.googleCredential.deleteMany({
-          where: { userId }
+          where: { userId },
         }),
         db.linkedEventMapping.updateMany({
           where: { userId, deletedAt: null },
-          data: { deletedAt: new Date() }
-        })
+          data: { deletedAt: new Date() },
+        }),
       ])
       
-      logger.info('GoogleCredentialService', 'Google credential and linked event mappings cleaned up from database', { userId })
+      logger.info('GoogleCredentialService', 'Google credentials, mappings, and external events cleaned up safely from database', { userId })
       return true
     } catch (err) {
       logger.warn('GoogleCredentialService', 'Disconnect failed', { userId, error: err instanceof Error ? err.message : String(err) })

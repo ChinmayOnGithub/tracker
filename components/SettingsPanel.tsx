@@ -454,6 +454,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
       if (res.success) {
         setConnected(false)
         setLastSync(null)
+        window.dispatchEvent(new Event('calendar_data_changed'))
       } else {
         alert(res.error || 'Failed to disconnect account')
       }

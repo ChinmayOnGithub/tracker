@@ -282,7 +282,9 @@ export function generateTimeline(
       completed: !!log && log.status !== 'cleared' && log.status !== 'pending',
       logId: log?.id,
       status: log?.status,
-      icon: template.icon
+      icon: template.icon,
+      amount: log?.amount ?? template.amount ?? null,
+      payload: log?.payload ?? null
     })
   }
 

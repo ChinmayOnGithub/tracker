@@ -74,6 +74,7 @@ export interface ActivityTemplate {
   logs?: ActivityLog[]
   createdAt: Date
   updatedAt: Date
+  deletedAt?: Date | string | null
   effectiveFrom?: Date | string
 }
 
@@ -162,7 +163,40 @@ export interface TimelineItem {
   notes?: string | null
   icon?: string | null
   amount?: number | null
+  payload?: unknown
   metadata?: Record<string, unknown>
+}
+
+export type CompletionFieldType =
+  | 'number'
+  | 'decimal'
+  | 'text'
+  | 'boolean'
+  | 'select'
+  | 'duration'
+  | 'currency'
+  | 'percentage'
+
+export interface CompletionField {
+  id: string
+  label: string
+  type: CompletionFieldType
+  unit?: string
+  required?: boolean
+  min?: number
+  max?: number
+  options?: string[]
+}
+
+export interface CompletionSchema {
+  fields: CompletionField[]
+}
+
+export interface ActivityCompletionPayload {
+  value?: string | number | boolean | Record<string, unknown> | null
+  values?: Record<string, unknown>
+  unit?: string | null
+  [key: string]: unknown
 }
 
 export interface AnalyzedTemplate {

@@ -13,6 +13,7 @@ import { TimelineItem, ActivityLog, AnalyzedTemplate, ActivityTemplate, Activity
 import { Button, Input, Skeleton, EmptyState, IconButton, Section, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, ConfirmDialog } from '@/design-system'
 import { getTemplateColorClasses } from '@/lib/colors'
 import { formatMoney, formatMoneyRich } from '@/lib/formatMoney'
+import { CompletionService } from '@/lib/services/CompletionService'
 import { SortableTaskList, DragHandle } from './SortableTaskList'
 import { TaskActivityRow } from '@/components/shared/TaskActivityRow'
 import { TaskCreateDialog, TaskFormData } from '@/components/shared/TaskCreateDialog'
@@ -164,8 +165,13 @@ export const TaskRow: React.FC<TaskRowProps> = ({
   const isPostponed = occurrence.status === 'postponed'
   const isDone = occurrence.completed && !isCanceled && !isPostponed
 
-  // Money formatting
-  const effectiveAmount = occurrence.amount ?? template?.amount ?? null
+  // Completion display or money formatting
+  const completionDisplay = CompletionService.formatCompletionDisplay(
+    template,
+    occurrence.payload,
+    occurrence.amount
+  )
+  const effectiveAmount = !completionDisplay ? (occurrence.amount ?? template?.amount ?? null) : null
   const formattedAmount = formatMoneyRich(effectiveAmount)
 
   // Accent strip — semantic color by status, then template color
@@ -196,14 +202,22 @@ export const TaskRow: React.FC<TaskRowProps> = ({
       {startTimeLabel}{estimatedDuration ? ` · ${estimatedDuration}m` : ''}
     </span>
   )
-  if (formattedAmount) metaParts.push(
-    <span key="amount" className="font-mono text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded-sm border border-emerald-500/20 inline-flex items-center gap-1">
-      <span>{formattedAmount.formatted}</span>
-      {formattedAmount.derived && (
-        <span className="text-[8.5px] opacity-75 font-normal">({formattedAmount.derived})</span>
-      )}
-    </span>
-  )
+  if (completionDisplay) {
+    metaParts.push(
+      <span key="completion-val" className="font-mono text-[9px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1 py-0.5 rounded-sm border border-sky-500/20 inline-flex items-center gap-1">
+        <span>{completionDisplay.formatted}</span>
+      </span>
+    )
+  } else if (formattedAmount) {
+    metaParts.push(
+      <span key="amount" className="font-mono text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded-sm border border-emerald-500/20 inline-flex items-center gap-1">
+        <span>{formattedAmount.formatted}</span>
+        {formattedAmount.derived && (
+          <span className="text-[8.5px] opacity-75 font-normal">({formattedAmount.derived})</span>
+        )}
+      </span>
+    )
+  }
   if (streak > 1 && !isDone && !isCanceled) metaParts.push(
     <span key="streak" className="text-[9px] font-extrabold text-orange-500">🔥 {streak}</span>
   )

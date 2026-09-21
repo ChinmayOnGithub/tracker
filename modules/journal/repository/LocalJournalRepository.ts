@@ -38,14 +38,18 @@ export class LocalJournalRepository
   }
 
   public async searchJournal(userId: string, query: string): Promise<JournalEntry[]> {
-    const results = await this.getAll();
-    const q = query.toLowerCase();
+    const results = await this.getAllForUser(userId);
+    const q = query.toLowerCase().trim();
+    if (!q) return [];
     return results.filter(e => 
       e.userId === userId && 
       !e.deletedAt &&
       ((e.content || '').toLowerCase().includes(q) ||
        (e.gratitude || '').toLowerCase().includes(q) ||
-       (e.lessonsLearned || '').toLowerCase().includes(q))
+       (e.reflections || '').toLowerCase().includes(q) ||
+       (e.lessonsLearned || '').toLowerCase().includes(q) ||
+       (e.tomorrowPlan || '').toLowerCase().includes(q) ||
+       (e.mood || '').toLowerCase().includes(q))
     );
   }
 }

@@ -31,7 +31,13 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
   const searchParams = useSearchParams()
   const targetId = searchParams?.get('id') || searchParams?.get('activityId')
   const context = useContext(CalendarDataContext)
-  const { state, reorderActivityTemplatesAction } = useStore()
+  const { state, initialize, reorderActivityTemplatesAction } = useStore()
+
+  useEffect(() => {
+    if (initialTemplates && initialTemplates.length > 0) {
+      initialize({ templates: initialTemplates, logs: initialLogs })
+    }
+  }, [initialTemplates, initialLogs, initialize])
 
   if (!context) {
     throw new Error('ActivitiesWrapper must be rendered inside a DashboardLayout')
@@ -58,12 +64,14 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
   const [dayLogsModalTab] = useState<'activities' | 'notes'>('activities')
 
   // Filter out any ephemeral/temporary quick tasks from the store before rendering
-  const rawTemplates = state.templates.length > 0 ? state.templates : initialTemplates
   const persistentTemplates = useMemo(() => {
-    return rawTemplates.filter(t => !TaskOccurrenceService.isTemporaryTask(t))
-  }, [rawTemplates])
+    const raw = state.templates.length > 0 ? state.templates : (state.isHydrated ? [] : initialTemplates)
+    return raw.filter(t => !TaskOccurrenceService.isTemporaryTask(t))
+  }, [state.templates, state.isHydrated, initialTemplates])
 
-  const effectiveLogs = state.logs.length > 0 ? state.logs : initialLogs
+  const effectiveLogs = useMemo(() => {
+    return state.logs.length > 0 ? state.logs : (state.isHydrated ? [] : initialLogs)
+  }, [state.logs, state.isHydrated, initialLogs])
   const effectiveNotes = state.journalEntries.length > 0 
     ? state.journalEntries.map(j => ({
         id: j.id,

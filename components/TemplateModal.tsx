@@ -3,10 +3,10 @@
 import React, { useState, useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { ActivityTemplate, Tag, RecurrenceType, ActivityType, Priority, CalendarProvider } from '@/types'
+import { ActivityTemplate, Tag, RecurrenceType, ActivityType, Priority, CalendarProvider, CompletionField, CompletionFieldType } from '@/types'
 import { createActivityTemplate, updateActivityTemplate } from '@/app/actions/template'
 import { ICON_OPTIONS, Icon } from './Icon'
-import { ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle, Plus, Trash2 } from 'lucide-react'
 import { Modal, Input, Select, Button } from '@/design-system'
 import { templateFormSchema, type TemplateFormValues } from '@/lib/validations'
 
@@ -117,6 +117,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [iconSearch, setIconSearch] = useState('')
   const [serverError, setServerError] = useState('')
+  const [formFields, setFormFields] = useState<CompletionField[]>([])
 
   const {
     register,
@@ -138,6 +139,8 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       setShowAdvanced(false)
       setIconSearch('')
       setServerError('')
+      const meta = parseMeta(templateToEdit)
+      setFormFields(meta?.completion?.schema?.fields ?? [])
     }
   }, [isOpen, templateToEdit, reset])
 
@@ -214,6 +217,9 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           minimum: number | null
           maximum: number | null
         }
+        schema?: {
+          fields: CompletionField[]
+        }
       }
     } = {
       startTime:  values.startTime,
@@ -231,6 +237,16 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
         minimum:   values.valueMinimum.trim() !== '' ? parseFloat(values.valueMinimum) : null,
         maximum:   values.valueMaximum.trim() !== '' ? parseFloat(values.valueMaximum) : null,
       }
+    } else if (values.completionMethod === 'FORM') {
+      const validFields = formFields
+        .filter((f) => f.label.trim().length > 0)
+        .map((f, i) => ({
+          ...f,
+          id: f.id || `f_${i}_${Date.now()}`,
+          label: f.label.trim(),
+          unit: f.unit?.trim() || undefined,
+        }))
+      meta.completion.schema = { fields: validFields }
     }
 
     const payload = {
@@ -545,8 +561,8 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                       label="Method"
                       options={[
                         { value: 'CHECKBOX', label: 'Checkbox Only' },
-                        { value: 'VALUE',    label: 'Value Prompt' },
-                        { value: 'FORM',     label: 'Custom Form (Disabled)' },
+                        { value: 'VALUE',    label: 'Single Value Prompt' },
+                        { value: 'FORM',     label: 'Custom Multi-field Form' },
                       ]}
                       {...field}
                     />
@@ -670,6 +686,181 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
                         {...register('valueMaximum')}
                       />
                     </div>
+                  </div>
+                )}
+
+                {completionMethod === 'FORM' && (
+                  <div className="space-y-3 pt-2 border-t border-dashed border-[var(--color-border)]">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-xs font-semibold text-[var(--color-text-main)]">Custom Form Fields</span>
+                      <div className="flex gap-1.5 flex-wrap">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setFormFields([
+                              { id: 'liters', label: 'Liters', type: 'decimal', unit: 'L', required: true },
+                              { id: 'cost', label: 'Cost', type: 'decimal', unit: '₹', required: false },
+                            ])
+                          }}
+                        >
+                          Preset: Fuel
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setFormFields([
+                              { id: 'amount', label: 'Amount', type: 'number', unit: 'ml', required: true },
+                            ])
+                          }}
+                        >
+                          Preset: Water
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setFormFields([
+                              { id: 'pages', label: 'Pages', type: 'number', unit: 'pages', required: true },
+                              { id: 'minutes', label: 'Minutes', type: 'duration', unit: 'mins', required: false },
+                            ])
+                          }}
+                        >
+                          Preset: Reading
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setFormFields([
+                              { id: 'sets', label: 'Sets', type: 'number', required: true },
+                              { id: 'reps', label: 'Reps', type: 'number', required: true },
+                              { id: 'weight', label: 'Weight', type: 'decimal', unit: 'kg', required: false },
+                            ])
+                          }}
+                        >
+                          Preset: Workout
+                        </Button>
+                      </div>
+                    </div>
+
+                    {formFields.length === 0 ? (
+                      <div className="text-xs text-[var(--color-text-muted)] italic py-3 text-center border border-dashed border-[var(--color-border)] rounded-[var(--radius-md)]">
+                        No form fields defined yet. Add fields below or select a preset.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {formFields.map((field, idx) => (
+                          <div key={field.id || idx} className="p-3 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-muted)] space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold text-[var(--color-primary)]">Field #{idx + 1}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setFormFields((prev) => prev.filter((_, i) => i !== idx))}
+                                className="text-red-500 hover:text-red-600 h-6 px-1.5"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Input
+                                label="Label"
+                                placeholder="e.g. Reps, Liters"
+                                value={field.label}
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                  setFormFields((prev) => prev.map((f, i) => (i === idx ? { ...f, label: val } : f)))
+                                }}
+                              />
+                              <Select
+                                label="Type"
+                                value={field.type}
+                                options={[
+                                  { value: 'number', label: 'Number' },
+                                  { value: 'decimal', label: 'Decimal' },
+                                  { value: 'text', label: 'Text' },
+                                  { value: 'boolean', label: 'Yes/No Checkbox' },
+                                  { value: 'select', label: 'Dropdown Select' },
+                                  { value: 'duration', label: 'Duration' },
+                                ]}
+                                onChange={(e) => {
+                                  const nextType = e.target.value as CompletionFieldType
+                                  setFormFields((prev) => prev.map((f, i) => (i === idx ? { ...f, type: nextType } : f)))
+                                }}
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 items-center">
+                              <Input
+                                label="Unit (Optional)"
+                                placeholder="e.g. kg, L, ml"
+                                value={field.unit || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                  setFormFields((prev) => prev.map((f, i) => (i === idx ? { ...f, unit: val } : f)))
+                                }}
+                              />
+                              <div className="flex items-center gap-2 pt-4">
+                                <input
+                                  type="checkbox"
+                                  id={`req_${idx}`}
+                                  className="w-4 h-4 cursor-pointer"
+                                  checked={field.required ?? false}
+                                  onChange={(e) => {
+                                    const chk = e.target.checked
+                                    setFormFields((prev) => prev.map((f, i) => (i === idx ? { ...f, required: chk } : f)))
+                                  }}
+                                />
+                                <label htmlFor={`req_${idx}`} className="text-xs cursor-pointer text-[var(--color-text-main)]">
+                                  Required
+                                </label>
+                              </div>
+                            </div>
+                            {field.type === 'select' && (
+                              <Input
+                                label="Options (Comma-separated)"
+                                placeholder="e.g. Low, Medium, High"
+                                value={(field.options || []).join(', ')}
+                                onChange={(e) => {
+                                  const opts = e.target.value
+                                    .split(',')
+                                    .map((s) => s.trim())
+                                    .filter(Boolean)
+                                  setFormFields((prev) => prev.map((f, i) => (i === idx ? { ...f, options: opts } : f)))
+                                }}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setFormFields((prev) => [
+                          ...prev,
+                          {
+                            id: `field_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
+                            label: '',
+                            type: 'number',
+                            required: false,
+                          },
+                        ])
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Field
+                    </Button>
                   </div>
                 )}
               </div>

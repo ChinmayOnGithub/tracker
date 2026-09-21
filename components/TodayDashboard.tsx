@@ -23,6 +23,7 @@ import { generateTimeline } from '@/modules/sync/google-calendar/utils/dashboard
 import { getWeekDates } from '@/lib/recurrence'
 
 import { LeaveRecord, LeaveAllowance, WeightRecord, JournalEntry, CalendarData } from '@/lib/store/store'
+import { selectJournalForToday } from '@/modules/journal'
 import { Button } from '@/design-system'
 
 import { TodayGrid } from './today/grid/TodayGrid'
@@ -344,12 +345,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     router.push(`/?date=${nextDateStr}`)
   }
 
-  const todayJournal = journalEntries.find(e => {
-    const entryDateStr = typeof e.journalDate === 'string'
-      ? e.journalDate.split('T')[0]
-      : new Date(e.journalDate).toISOString().split('T')[0]
-    return entryDateStr === todayStr
-  }) || null
+  const todayJournal = selectJournalForToday(journalEntries, todayStr)
 
   const cycleTaskStatus = async (occurrence: TimelineItem) => {
     const lockKey = occurrence.templateId || occurrence.id

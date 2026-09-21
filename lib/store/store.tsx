@@ -6,6 +6,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { ActivityTemplate, ActivityLog, Note, TimelineItem, AnalyzedTemplate } from '@/types'
 import { writeQueue } from './write-queue'
 import { TaskStateMachine, TaskOccurrenceState } from '@/modules/activities/domain/TaskStateMachine'
+import { perfTracker } from '@/lib/performance/perfTracker'
 
 export interface JournalEntry {
   id: string
@@ -106,6 +107,7 @@ export interface CalendarData {
 }
 
 interface StoreState {
+  isHydrated: boolean
   templates: ActivityTemplate[]
   logs: ActivityLog[]
   notes: Note[]
@@ -138,6 +140,7 @@ interface StoreContextType {
   userId?: string | null
   state: StoreState
   isSyncing: boolean
+  isHydrated: boolean
   initialize: (initialData: Partial<StoreState>) => void
   setCacheMetadata: (domain: string, timestamp: number, isValidating?: boolean) => void
   saveJournalDraftAction: (date: string, fields: any) => void
@@ -152,6 +155,8 @@ interface StoreContextType {
   unpostponeOneTimeTaskAction: (templateId: string, logId: string, originalDate: string) => Promise<void>
   createActivityTemplateAction: (templateData: any) => Promise<void>
   updateActivityTemplateAction: (id: string, updates: Partial<ActivityTemplate>) => Promise<void>
+  deleteActivityTemplateAction: (id: string) => Promise<void>
+  deleteActivityTemplatesAction: (ids: string[]) => Promise<void>
   reorderActivityTemplatesAction: (orderedIds: string[]) => Promise<void>
   logWorkPresenceAction: (fields: any) => Promise<void>
   
@@ -192,6 +197,7 @@ interface StoreContextType {
 }
 
 const defaultState: StoreState = {
+  isHydrated: false,
   templates: [],
   logs: [],
   notes: [],
@@ -265,9 +271,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
     }
   }, [])
 
-  // Load offline data into store on startup
+  // Load offline data into store on startup (instant local-first path)
   useEffect(() => {
     const loadLocalData = async () => {
+      perfTracker.mark('local_hydration_start')
       try {
         const { ActivityTemplateRepository, ActivityLogRepository } = await import('@/modules/activities/repository/ActivityRepository');
         const { JournalRepository } = await import('@/modules/journal/repository/JournalRepository');
@@ -313,71 +320,87 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
           localNotes = userId ? await noteRepo.getAllForUser(userId) : await noteRepo.getAll()
         } catch (_) {}
 
-        // Hydrate Link Library collections & links if empty
-        let initialLinks: LinkItem[] = []
-        let initialCollections: LinkCollection[] = []
-        try {
-          const { listLinkCollections } = await import('@/app/actions/links')
-          const linkRes = await listLinkCollections()
-          if (linkRes.success && linkRes.collections) {
-            initialCollections = linkRes.collections.map(c => ({
-              id: c.id,
-              name: c.name,
-              description: null,
-              icon: c.icon || null,
-              color: c.color || null,
-              createdAt: c.createdAt,
-              updatedAt: c.updatedAt
-            }))
-            initialLinks = linkRes.collections.flatMap(c => (c.links || []).map(l => ({
-              id: l.id,
-              title: l.title,
-              url: l.url,
-              description: l.notes || null,
-              collectionId: l.collectionId,
-              clicks: l.openCount ?? 0,
-              isStarred: l.isPinned ?? false,
-              createdAt: l.createdAt,
-              updatedAt: l.updatedAt
-            })))
-          }
-        } catch (_) {}
+        perfTracker.mark('local_hydration_end')
 
-        // Hydrate Vault items metadata if empty (only for authenticated users, #61)
-        let initialVault: VaultItem[] = []
-        if (userId) {
-          try {
-            const { listVaultItems } = await import('@/app/actions/vault')
-            const vaultRes = await listVaultItems(null, undefined, 200, true)
-            if (vaultRes.success && vaultRes.items) {
-              initialVault = vaultRes.items.map(v => ({
-                id: v.id,
-                name: v.name,
-                isFolder: v.isFolder,
-                parentId: v.parentId,
-                size: v.fileSize,
-                mimeGroup: v.mimeGroup,
-                updatedAt: v.updatedAt,
-                createdAt: v.createdAt
-              }))
-            }
-          } catch (_) {}
-        }
-
+        // IMMEDIATELY update state with local IndexedDB records so the UI is usable in milliseconds
         setState(prev => ({
           ...prev,
+          isHydrated: true,
           templates: mergeById(prev.templates, localTemplates),
           logs: mergeById(prev.logs, localLogs),
           journalEntries: mergeById(prev.journalEntries, localJournals),
           notes: prev.notes.length > 0 ? prev.notes : (localNotes.length > 0 ? localNotes : prev.notes),
           weightRecords: mergeById(prev.weightRecords, localWeights),
           leaveRecords: mergeById(prev.leaveRecords, localLeaves),
-          links: prev.links.length > 0 ? prev.links : initialLinks,
-          collections: prev.collections.length > 0 ? prev.collections : initialCollections,
-          vaultItems: prev.vaultItems.length > 0 ? prev.vaultItems : initialVault,
         }));
+
+        // Hydrate Link Library collections & Vault items asynchronously without blocking primary UI
+        const loadSecondaryData = async () => {
+          let initialLinks: LinkItem[] = []
+          let initialCollections: LinkCollection[] = []
+          try {
+            const { listLinkCollections } = await import('@/app/actions/links')
+            const linkRes = await listLinkCollections()
+            if (linkRes.success && linkRes.collections) {
+              initialCollections = linkRes.collections.map(c => ({
+                id: c.id,
+                name: c.name,
+                description: null,
+                icon: c.icon || null,
+                color: c.color || null,
+                createdAt: c.createdAt,
+                updatedAt: c.updatedAt
+              }))
+              initialLinks = linkRes.collections.flatMap(c => (c.links || []).map(l => ({
+                id: l.id,
+                title: l.title,
+                url: l.url,
+                description: l.notes || null,
+                collectionId: l.collectionId,
+                clicks: l.openCount ?? 0,
+                isStarred: l.isPinned ?? false,
+                createdAt: l.createdAt,
+                updatedAt: l.updatedAt
+              })))
+            }
+          } catch (_) {}
+
+          let initialVault: VaultItem[] = []
+          if (userId) {
+            try {
+              const { listVaultItems } = await import('@/app/actions/vault')
+              const vaultRes = await listVaultItems(null, undefined, 200, true)
+              if (vaultRes.success && vaultRes.items) {
+                initialVault = vaultRes.items.map(v => ({
+                  id: v.id,
+                  name: v.name,
+                  isFolder: v.isFolder,
+                  parentId: v.parentId,
+                  size: v.fileSize,
+                  mimeGroup: v.mimeGroup,
+                  updatedAt: v.updatedAt,
+                  createdAt: v.createdAt
+                }))
+              }
+            } catch (_) {}
+          }
+
+          setState(prev => ({
+            ...prev,
+            links: prev.links.length > 0 ? prev.links : initialLinks,
+            collections: prev.collections.length > 0 ? prev.collections : initialCollections,
+            vaultItems: prev.vaultItems.length > 0 ? prev.vaultItems : initialVault,
+          }))
+        }
+
+        if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+          window.requestIdleCallback(() => { loadSecondaryData() })
+        } else {
+          setTimeout(loadSecondaryData, 50)
+        }
       } catch (err) {
         console.error('Failed to load offline data into store:', err);
+        setState(prev => ({ ...prev, isHydrated: true }))
       }
     };
     loadLocalData();
@@ -883,6 +906,65 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
     } catch (err) {
       console.error('Update template transaction failed, rolling back:', err)
       setState(prev => ({ ...prev, templates: previousTemplates }))
+    }
+  }
+
+  const deleteActivityTemplateAction = async (id: string) => {
+    const previousTemplates = [...state.templates]
+    const previousLogs = [...state.logs]
+
+    // Optimistically remove the template and associated logs immediately
+    setState(prev => ({
+      ...prev,
+      templates: prev.templates.filter(t => t.id !== id),
+      logs: prev.logs.filter(l => l.activityId !== id)
+    }))
+
+    try {
+      const { ActivityTemplateRepository } = await import('@/modules/activities/repository/ActivityRepository')
+      const templateRepo = new ActivityTemplateRepository()
+      await templateRepo.delete(id)
+
+      const { deleteActivityTemplate } = await import('@/app/actions/template')
+      const res = await deleteActivityTemplate(id)
+      if (!res.success) {
+        throw new Error(res.error || 'Failed to delete template record')
+      }
+    } catch (err) {
+      console.error('Delete template transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, templates: previousTemplates, logs: previousLogs }))
+      throw err
+    }
+  }
+
+  const deleteActivityTemplatesAction = async (ids: string[]) => {
+    const idsSet = new Set(ids)
+    const previousTemplates = [...state.templates]
+    const previousLogs = [...state.logs]
+
+    // Optimistically remove all selected templates and associated logs immediately
+    setState(prev => ({
+      ...prev,
+      templates: prev.templates.filter(t => !idsSet.has(t.id)),
+      logs: prev.logs.filter(l => !idsSet.has(l.activityId))
+    }))
+
+    try {
+      const { ActivityTemplateRepository } = await import('@/modules/activities/repository/ActivityRepository')
+      const templateRepo = new ActivityTemplateRepository()
+      const { deleteActivityTemplate } = await import('@/app/actions/template')
+
+      for (const id of ids) {
+        await templateRepo.delete(id)
+        const res = await deleteActivityTemplate(id)
+        if (!res.success) {
+          throw new Error(res.error || `Failed to delete template record: ${id}`)
+        }
+      }
+    } catch (err) {
+      console.error('Bulk delete templates transaction failed, rolling back:', err)
+      setState(prev => ({ ...prev, templates: previousTemplates, logs: previousLogs }))
+      throw err
     }
   }
 
@@ -1568,6 +1650,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
       userId: userId ?? null,
       state,
       isSyncing,
+      isHydrated: state.isHydrated,
       initialize,
       setCacheMetadata,
       saveJournalDraftAction,
@@ -1580,6 +1663,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
       unpostponeOneTimeTaskAction,
       createActivityTemplateAction,
       updateActivityTemplateAction,
+      deleteActivityTemplateAction,
+      deleteActivityTemplatesAction,
       reorderActivityTemplatesAction,
       logWorkPresenceAction,
       upsertNoteAction,

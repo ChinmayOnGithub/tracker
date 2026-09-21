@@ -13,7 +13,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 
 import { RichTextEditor } from '@/components/shared/RichTextEditor'
 import { JournalContentAdapter } from '@/modules/journal/editor/JournalContentAdapter'
-import { JournalExportService, ExportSummary } from '@/modules/journal/JournalExportService'
+import { JournalExportService, ExportSummary, selectJournalByDate, selectSearchJournal } from '@/modules/journal'
 import { toYMD, todayYMD, fmtDateFull, fmtDateMed } from '@/lib/dateUtils'
 
 export interface JournalEntry {
@@ -81,7 +81,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     setActiveJournalDateAction(date)
   }
 
-  const activeEntry = entries.find(e => toYMD(e.journalDate) === activeDate) || null
+  const activeEntry = selectJournalByDate(entries, activeDate)
   const dbValue = JournalContentAdapter.toEditor(activeEntry?.content)
   const draftContent = state.journalDrafts[activeDate]?.content
   const editorValue = draftContent !== undefined ? draftContent : dbValue
@@ -431,19 +431,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
     shortest: 'Shortest',
   }
 
-  const filtered = entries
-    .filter(e => {
-      if (!search.trim()) return true
-      const q = search.toLowerCase()
-      return (
-        (e.content || '').toLowerCase().includes(q) ||
-        (e.mood || '').toLowerCase().includes(q) ||
-        (e.reflections || '').toLowerCase().includes(q) ||
-        (e.gratitude || '').toLowerCase().includes(q) ||
-        (e.lessonsLearned || '').toLowerCase().includes(q) ||
-        (e.tomorrowPlan || '').toLowerCase().includes(q)
-      )
-    })
+  const filtered = selectSearchJournal(entries, search)
     .sort((a, b) => {
       if (sort === 'oldest') return new Date(a.journalDate).getTime() - new Date(b.journalDate).getTime()
       if (sort === 'longest') return wordCount(b.content || '') - wordCount(a.content || '')

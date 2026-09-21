@@ -546,7 +546,12 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
       </a>
     ) : occurrence.templateName
 
-    const effectiveAmount = occurrence.amount ?? template?.amount ?? null
+    const completionDisplay = CompletionService.formatCompletionDisplay(
+      template,
+      occurrence.payload,
+      occurrence.amount
+    )
+    const effectiveAmount = !completionDisplay ? (occurrence.amount ?? template?.amount ?? null) : null
     const formattedAmount = formatMoney(effectiveAmount)
 
     const metaParts = (
@@ -555,6 +560,11 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
           <span className={`shrink-0 text-[9px] font-mono font-bold px-1 py-0.5 rounded-sm border ${colorClasses.text} ${colorClasses.border} ${colorClasses.bg}`}>
             {startTimeLabel}
             {estimatedDuration ? ` • ${estimatedDuration}m` : ''}
+          </span>
+        )}
+        {completionDisplay && (
+          <span className="shrink-0 font-mono text-[9px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1 py-0.5 rounded-sm border border-sky-500/20">
+            {completionDisplay.formatted}
           </span>
         )}
         {formattedAmount && (

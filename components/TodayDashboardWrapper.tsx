@@ -138,8 +138,8 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     })
   }, [state.templates, state.logs, todayStr])
 
-  // Show a loading skeleton only on absolute cold first mount when IndexedDB is still loading
-  if (state.templates.length === 0) {
+  // Show a loading skeleton only on absolute cold first mount when IndexedDB is still hydrating
+  if (!state.isHydrated && state.templates.length === 0) {
     return (
       <div className="p-8 space-y-6 max-w-5xl mx-auto">
         <div className="space-y-2">

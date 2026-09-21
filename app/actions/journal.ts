@@ -1,16 +1,10 @@
 "use server"
 
 import { db } from '@/lib/db'
-import { Prisma } from '@prisma/client'
 import { revalidatePath } from 'next/cache'
 import { requireOwnership, requireModuleAccess } from '@/lib/auth-guards'
 import { ActivityService } from '@/lib/services/ActivityService'
 import { upsertJournalSchema } from '@/lib/validations'
-
-/** Converts any JSON-like value or null to the type Prisma requires for nullable JSON columns. */
-function toJsonField(v: unknown): Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue {
-  return v == null ? Prisma.JsonNull : (v as Prisma.InputJsonValue)
-}
 
 /**
  * Upsert a journal entry for a given date (one entry per user per day).
@@ -53,52 +47,9 @@ export async function upsertJournalEntry(
       }
     }
     
-    // journalDate is stored as a DateTime — use noon UTC to avoid timezone drift
-    const journalDate = new Date(`${date}T12:00:00.000Z`)
-
-    const existing = await db.journalEntry.findUnique({
-      where: { userId_journalDate: { userId: user.id, journalDate } },
-    })
-    console.log(`[Journal] Existing entry:`, existing ? `Found ${existing.id}` : 'Not found')
-
-    let entry
-    if (existing) {
-      console.log(`[Journal] Updating existing entry ${existing.id} for date ${date}`)
-      await db.journalEntry.updateMany({
-        where: { id: existing.id, userId: user.id },
-        data: {
-          content: fields.content ?? existing.content,
-          mood: fields.mood !== undefined ? fields.mood : existing.mood,
-          gratitude: fields.gratitude !== undefined ? fields.gratitude : existing.gratitude,
-          reflections: fields.reflections !== undefined ? fields.reflections : existing.reflections,
-          lessonsLearned: fields.lessonsLearned !== undefined ? fields.lessonsLearned : existing.lessonsLearned,
-          tomorrowPlan: fields.tomorrowPlan !== undefined ? fields.tomorrowPlan : existing.tomorrowPlan,
-          metadata: toJsonField(
-            fields.metadata !== undefined ? fields.metadata : existing.metadata
-          ),
-          deletedAt: null,
-        },
-      })
-      entry = await db.journalEntry.findUnique({ where: { id: existing.id } })
-      if (!entry) throw new Error('Failed to retrieve updated journal entry')
-      console.log(`[Journal] Entry updated successfully: ${entry.id}, content length: ${entry.content.length}`)
-    } else {
-      console.log(`[Journal] Creating new entry for date ${date}`)
-      entry = await db.journalEntry.create({
-        data: {
-          userId: user.id,
-          journalDate,
-          content: fields.content ?? '',
-          mood: fields.mood ?? null,
-          gratitude: fields.gratitude ?? null,
-          reflections: fields.reflections ?? null,
-          lessonsLearned: fields.lessonsLearned ?? null,
-          tomorrowPlan: fields.tomorrowPlan ?? null,
-          metadata: toJsonField(fields.metadata ?? null),
-        },
-      })
-      console.log(`[Journal] Entry created successfully: ${entry.id}, content length: ${entry.content.length}`)
-    }
+    const { JournalService } = await import('@/modules/journal/server')
+    const entry = await JournalService.upsert(user.id, date, fields)
+    console.log(`[Journal] Entry upserted successfully: ${entry.id}, content length: ${entry.content.length}`)
 
     // Verify the save by reading it back
     const verification = await db.journalEntry.findUnique({
@@ -180,20 +131,11 @@ export async function deleteJournalEntry(id: string) {
     await requireModuleAccess('journal')
     const { user } = await requireOwnership('journalEntry', id)
 
-    const { count } = await db.journalEntry.updateMany({
-      where: { id, userId: user.id, deletedAt: null },
-      data: { deletedAt: new Date() },
-    })
-
-    if (count === 0) {
-      return { success: false, error: 'Journal entry not found', code: 'NOT_FOUND' }
+    const { JournalService } = await import('@/modules/journal/server')
+    const result = await JournalService.delete(user.id, id)
+    if (!result.success) {
+      return { success: false, error: result.error || 'Journal entry not found', code: 'NOT_FOUND' }
     }
-
-    // Cascade soft-delete to linked activity log scoped to user
-    await db.activityLog.updateMany({
-      where: { journalEntryId: id, userId: user.id, deletedAt: null },
-      data: { deletedAt: new Date() }
-    })
 
     revalidatePath('/')
     return { success: true }
