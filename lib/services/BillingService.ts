@@ -702,7 +702,9 @@ export class BillingService {
    */
   static async cancelSubscription(
     userId: string,
-    providerOverride?: IBillingProvider
+    providerOverride?: IBillingProvider,
+    performedBy?: string,
+    reason?: string
   ): Promise<{ success: boolean; effectiveDate: Date }> {
     const provider = providerOverride || getBillingProvider()
 
@@ -739,13 +741,80 @@ export class BillingService {
       entityType: 'Subscription',
       entityId: sub.id,
       action: 'SUBSCRIPTION_CANCEL_REQUESTED',
-      performedBy: userId,
+      performedBy: performedBy || userId,
+      reason: reason ?? null,
       newData: {
         effectiveDate: effectiveDate.toISOString()
       }
     })
 
     return { success: true, effectiveDate }
+  }
+
+  /**
+   * Immediately cancels a subscription and revokes Pro access (Admin / Emergency operation).
+   * Unlike cancelSubscription (which cancels at period end), this immediately terminates the period.
+   */
+  static async cancelSubscriptionImmediately(
+    userId: string,
+    providerOverride?: IBillingProvider,
+    performedBy = 'ADMIN',
+    reason = 'Administrative immediate cancellation'
+  ): Promise<{ success: boolean; subscription: Subscription; isPro: boolean }> {
+    const provider = providerOverride || getBillingProvider()
+    const sub = await this.getCanonicalSubscription(userId)
+
+    if (!sub) {
+      throw new SubscriptionNotFoundError('No active subscription found to cancel.')
+    }
+
+    // Call provider cancel API immediately (cancelAtPeriodEnd: false)
+    try {
+      await provider.cancelSubscription({
+        providerSubscriptionId: sub.providerSubscriptionId,
+        cancelAtPeriodEnd: false
+      })
+    } catch {
+      // Proceed with local revocation if provider call errors or already cancelled
+    }
+
+    const now = new Date()
+    const updatedSub = await db.subscription.update({
+      where: { id: sub.id },
+      data: {
+        status: 'CANCELLED',
+        cancelAtPeriodEnd: false,
+        canceledAt: now,
+        currentPeriodEnd: now,
+        updatedAt: now
+      }
+    })
+
+    await AuditService.log({
+      userId,
+      entityType: 'Subscription',
+      entityId: sub.id,
+      action: 'ADMIN_SUBSCRIPTION_CANCELLED_IMMEDIATELY',
+      performedBy,
+      reason,
+      oldData: {
+        status: sub.status,
+        currentPeriodEnd: sub.currentPeriodEnd?.toISOString()
+      },
+      newData: {
+        status: 'CANCELLED',
+        currentPeriodEnd: now.toISOString()
+      }
+    })
+
+    const entitlements = await this.getEntitlements(userId)
+    const isPro = entitlements.plan === 'PRO_MONTHLY' || entitlements.plan === 'PRO_ANNUAL'
+
+    return {
+      success: true,
+      subscription: updatedSub,
+      isPro
+    }
   }
 
   /**

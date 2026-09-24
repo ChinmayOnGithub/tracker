@@ -56,8 +56,10 @@ export async function createNote(
       },
     })
 
-    revalidatePath('/notes')
-    revalidatePath('/')
+    try {
+      revalidatePath('/notes')
+      revalidatePath('/')
+    } catch {}
     return { success: true, note }
   } catch (error) {
     console.error('Failed to create note:', error)
@@ -98,8 +100,10 @@ export async function updateNote(
 
     const note = await db.note.findUnique({ where: { id } })
 
-    revalidatePath('/notes')
-    revalidatePath('/')
+    try {
+      revalidatePath('/notes')
+      revalidatePath('/')
+    } catch {}
     return { success: true, note }
   } catch (error) {
     console.error('Failed to update note:', error)
@@ -138,8 +142,10 @@ export async function deleteNote(id: string) {
       return { success: false, error: 'Note not found', code: 'NOT_FOUND' }
     }
 
-    revalidatePath('/notes')
-    revalidatePath('/')
+    try {
+      revalidatePath('/notes')
+      revalidatePath('/')
+    } catch {}
     return { success: true }
   } catch (error) {
     console.error('Failed to delete note:', error)

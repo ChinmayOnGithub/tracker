@@ -247,12 +247,15 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   )
 
   useEffect(() => {
+    // If the timeline is currently empty (e.g. initial mount or hydration transition),
+    // compute immediately (0ms timeout) so the UI becomes usable instantly without 150ms gating.
+    const delay = debouncedTimeline.length === 0 ? 0 : 150
     const t = setTimeout(() => {
       const freshTimeline = generateTimeline(analyzedTemplates, logs, todayStr, calendarEvents)
       setDebouncedTimeline(freshTimeline)
-    }, 150)
+    }, delay)
     return () => clearTimeout(t)
-  }, [analyzedTemplates, logs, todayStr, calendarEvents])
+  }, [analyzedTemplates, logs, todayStr, calendarEvents, debouncedTimeline.length])
 
   // Unified derived timeline viewModel selector to minimize layouts and re-filters
   const _viewModel = useMemo(() => {

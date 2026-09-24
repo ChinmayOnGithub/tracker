@@ -90,7 +90,9 @@ export async function upsertJournalEntry(
       console.error('Failed to log activity for journal entry:', activityError)
     }
 
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {}
     return { success: true, entry }
   } catch (error) {
     console.error('Failed to upsert journal entry:', error)
@@ -137,7 +139,9 @@ export async function deleteJournalEntry(id: string) {
       return { success: false, error: result.error || 'Journal entry not found', code: 'NOT_FOUND' }
     }
 
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {}
     return { success: true }
   } catch (error) {
     console.error('Failed to delete journal entry:', error)

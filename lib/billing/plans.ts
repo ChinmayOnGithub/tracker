@@ -12,11 +12,11 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     currency: 'INR',
     interval: 'none',
     features: [
-      'Daily Habits & Recurring Schedules',
-      'Timeline & Calendar Views',
-      'Standard Journal & Daily Notes',
-      'Weight & Health Tracking',
-      'Up to 10 Secure Vault Files',
+      'Up to 10 Active Habits & Recurring Activities',
+      'Up to 50 Daily Tasks & Schedule Events',
+      'Dynamic Timeline & Calendar Views',
+      'Historical Journal & Notes Access',
+      'Weight & Health Metric History',
       'Link Library & Bookmarking'
     ]
   },
@@ -24,7 +24,7 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     id: 'PRO_MONTHLY',
     tier: 'PRO',
     name: 'Pro Monthly',
-    tagline: 'Complete power, automated syncing, and unlimited capacity',
+    tagline: 'Complete power, automated syncing, and expanded capacity',
     price: 99,
     priceInPaise: 9900,
     introductoryPrice: 29, // ₹29 for first month for eligible new subscribers
@@ -35,10 +35,10 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     features: [
       'All Free Plan Capabilities',
       'Introductory First Month for ₹29',
-      'Unlimited Secure Vault Storage & Encrypted Export',
-      'Google Calendar Sync & Direct Integration',
-      'Rich Journal & Link Exports (PDF, CSV & JSON)',
-      'Unlimited Historical Notes & Analytics',
+      'Up to 10,000 Active Habits & Activities',
+      'Two-Way Google Calendar Sync & Writebacks',
+      'Daily Journal Writing & Archive Exports (JSON, Markdown)',
+      'Notes Creation, Writing & Full History',
       'Priority Customer Support'
     ],
     providerPlanIdEnvKey: 'RAZORPAY_PLAN_PRO_MONTHLY'
@@ -55,10 +55,10 @@ export const PLANS: Record<PlanId, PlanConfig> = {
     features: [
       'All Pro Features Included',
       '₹799/year (Save 33% compared to monthly)',
-      'Unlimited Secure Vault Storage & Encrypted Export',
-      'Google Calendar Sync & Direct Integration',
-      'Rich Journal & Link Exports (PDF, CSV & JSON)',
-      'Unlimited Historical Notes & Analytics',
+      'Up to 10,000 Active Habits & Activities',
+      'Two-Way Google Calendar Sync & Writebacks',
+      'Daily Journal Writing & Archive Exports (JSON, Markdown)',
+      'Notes Creation, Writing & Full History',
       'Priority Customer Support'
     ],
     providerPlanIdEnvKey: 'RAZORPAY_PLAN_PRO_ANNUAL'

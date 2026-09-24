@@ -13,7 +13,7 @@ import { MasterSearchEngine, SearchResult, SearchCategory } from '@/lib/search/M
 export interface MobileSearchModalProps {
   isOpen: boolean
   onClose: () => void
-  currentUser?: { id: string; username: string; email?: string | null; isOwner?: boolean } | null
+  currentUser?: { id: string; username: string; email?: string | null; isOwner?: boolean; isPro?: boolean } | null
   isOwner?: boolean
   guestPermissions?: Record<string, boolean>
 }
@@ -80,14 +80,60 @@ export const MobileSearchModal: React.FC<MobileSearchModalProps> = ({
     }
   }, [isOpen, onClose])
 
+  const [serverResults, setServerResults] = useState<SearchResult[]>([])
+  useEffect(() => {
+    const trimmed = query.trim()
+    if (!trimmed) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setServerResults([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const { searchGlobalAction } = await import('@/app/actions/search')
+        const res = await searchGlobalAction(trimmed, activeCategory)
+        if (res.success && res.results) {
+          setServerResults(res.results)
+        }
+      } catch (err) {
+        console.debug('[MobileSearchModal] Remote search skipped:', err)
+      }
+    }, 150)
+    return () => clearTimeout(timer)
+  }, [query, activeCategory])
+
   const results = useMemo(() => {
     if (!query.trim()) return []
-    return MasterSearchEngine.search(query, state, activeCategory, {
+
+    const effectiveAllowed = effectiveIsOwner ? undefined : {
+      ...guestPermissions,
+      ...(currentUser?.isPro ? { journal: true, calendar: true, documents: true, notes: true, today: true, activities: true } : {})
+    }
+
+    const localResults = MasterSearchEngine.search(query, state, activeCategory, {
       userId,
       isOwner: effectiveIsOwner,
-      allowedModules: guestPermissions,
+      allowedModules: effectiveAllowed,
     })
-  }, [query, state, activeCategory, userId, effectiveIsOwner, guestPermissions])
+
+    const seenIds = new Set<string>()
+    const allResults: SearchResult[] = []
+
+    for (const item of localResults) {
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id)
+        allResults.push(item)
+      }
+    }
+    for (const item of serverResults) {
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id)
+        allResults.push(item)
+      }
+    }
+
+    return allResults
+  }, [query, state, activeCategory, userId, effectiveIsOwner, guestPermissions, currentUser?.isPro, serverResults])
 
   if (!isOpen || !mounted) return null
 

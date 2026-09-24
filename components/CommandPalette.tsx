@@ -20,7 +20,7 @@ export interface CommandPaletteProps {
   onNewActivity: () => void
   onNavigate: (tabId: string) => void
   onShowPlaceholder: (title: string, message: string) => void
-  currentUser?: { id: string; username: string; email?: string | null; isOwner?: boolean } | null
+  currentUser?: { id: string; username: string; email?: string | null; isOwner?: boolean; isPro?: boolean } | null
   isOwner?: boolean
   guestPermissions?: Record<string, boolean>
 }
@@ -285,17 +285,62 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
   const effectiveIsOwner = props.isOwner ?? (props.currentUser?.isOwner ?? (props.currentUser?.username === 'admin'))
   const userId = props.currentUser?.id
 
-  // Live filtered data results using MasterSearchEngine
+  // Asynchronous background server search augmentation
+  const [serverResults, setServerResults] = useState<SearchResult[]>([])
+  useEffect(() => {
+    const trimmed = search.trim()
+    if (!trimmed) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setServerResults([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const { searchGlobalAction } = await import('@/app/actions/search')
+        const res = await searchGlobalAction(trimmed)
+        if (res.success && res.results) {
+          setServerResults(res.results)
+        }
+      } catch (err) {
+        console.debug('[CommandPalette] Remote search skipped:', err)
+      }
+    }, 150)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  // Live filtered data results using MasterSearchEngine + server augmentation
   const dataResults = useMemo(() => {
     if (!search.trim()) {
       return { notes: [], journal: [], tasks: [], links: [], vault: [], weight: [], leave: [], settings: [] }
     }
 
-    const allResults = MasterSearchEngine.search(search, state, 'all', {
+    const effectiveAllowed = effectiveIsOwner ? undefined : {
+      ...props.guestPermissions,
+      ...(props.currentUser?.isPro ? { journal: true, calendar: true, documents: true, notes: true, today: true, activities: true } : {})
+    }
+
+    const localResults = MasterSearchEngine.search(search, state, 'all', {
       userId,
       isOwner: effectiveIsOwner,
-      allowedModules: props.guestPermissions,
+      allowedModules: effectiveAllowed,
     })
+
+    const seenIds = new Set<string>()
+    const allResults: SearchResult[] = []
+
+    for (const item of localResults) {
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id)
+        allResults.push(item)
+      }
+    }
+    for (const item of serverResults) {
+      if (!seenIds.has(item.id)) {
+        seenIds.add(item.id)
+        allResults.push(item)
+      }
+    }
+
     const map: {
       notes: SearchResult[]
       journal: SearchResult[]
@@ -328,10 +373,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
     }
 
     return map
-  }, [search, state, userId, effectiveIsOwner, props.guestPermissions])
+  }, [search, state, userId, effectiveIsOwner, props.guestPermissions, props.currentUser?.isPro, serverResults])
 
-  // Filter commands by permissions
+  // Filter commands by permissions and query tokens
   const filteredCommands = useMemo(() => {
+    const q = search.trim().toLowerCase()
     return COMMANDS.filter(cmd => {
       // 1. Filter owner-only settings commands for guests
       if (!effectiveIsOwner) {
@@ -365,9 +411,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
         if (cmd.id === 'request-leave' && props.guestPermissions.leave === false) return false
       }
 
-      return true
+      if (!q) return true
+      return (
+        cmd.label.toLowerCase().includes(q) ||
+        (cmd.keywords ? cmd.keywords.toLowerCase().includes(q) : false) ||
+        cmd.group.toLowerCase().includes(q)
+      )
     })
-  }, [effectiveIsOwner, props.guestPermissions])
+  }, [search, effectiveIsOwner, props.guestPermissions])
 
   if (!isOpen || !mounted) return null
 
@@ -385,6 +436,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = (props) => {
       {/* cmdk dialog */}
       <Command
         label="Universal Search & Command palette"
+        shouldFilter={false}
         className={[
           'relative w-full max-w-xl overflow-hidden',
           'bg-[var(--color-bg-surface)] border border-[var(--color-border)]',

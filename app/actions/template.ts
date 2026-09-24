@@ -140,7 +140,9 @@ export async function createActivityTemplate(data: {
 
     eventBus.publish(EVENTS.ACTIVITY_CREATED, { template: created, userId: user.id })
 
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {}
     return { success: true, data: created }
   } catch (error) {
     console.error('Failed to create template:', error)
@@ -270,7 +272,9 @@ export async function updateActivityTemplate(
 
     eventBus.publish(EVENTS.ACTIVITY_UPDATED, { template: updated, userId: user.id })
 
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {}
     return { success: true }
   } catch (error) {
     console.error('Failed to update template:', error)
@@ -305,7 +309,9 @@ export async function deleteActivityTemplate(id: string) {
 
     eventBus.publish(EVENTS.ACTIVITY_DELETED, { calendarEventId: existing.calendarEventId, userId: user.id })
 
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {}
     return { success: true }
   } catch (error) {
     console.error('Failed to delete template:', error)
@@ -356,7 +362,9 @@ export async function duplicateActivityTemplate(id: string) {
       },
     })
 
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {}
     return { success: true }
   } catch (error) {
     console.error('Failed to duplicate template:', error)
@@ -414,7 +422,9 @@ export async function reorderActivityTemplates(orderedIds: string[]) {
       await db.$transaction(updates)
     }
 
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {}
     return { success: true }
   } catch (error) {
     console.error('Failed to reorder templates:', error)

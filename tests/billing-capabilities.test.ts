@@ -15,12 +15,12 @@ const free: UserEntitlements = {
     advanced_calendar: false,
     advanced_journal: false,
     advanced_vault: false,
-    unlimited_notes: true,
+    unlimited_notes: false,
     priority_sync: false,
     premiumVault: false,
     advancedCalendar: false,
     advancedJournal: false,
-    unlimitedNotes: true,
+    unlimitedNotes: false,
     prioritySupport: false,
   },
   limits: {
@@ -42,10 +42,12 @@ const pro: UserEntitlements = {
     advanced_calendar: true,
     advanced_journal: true,
     advanced_vault: true,
+    unlimited_notes: true,
     priority_sync: true,
     premiumVault: true,
     advancedCalendar: true,
     advancedJournal: true,
+    unlimitedNotes: true,
     prioritySupport: true,
   },
   limits: {
@@ -58,31 +60,26 @@ const pro: UserEntitlements = {
 }
 
 describe('billing capability presentation model', () => {
-  test('uses the canonical five feature capabilities', () => {
+  test('uses the canonical active commercial capabilities', () => {
     expect(BILLING_CAPABILITIES.map((item) => item.key)).toEqual([
       'advanced_calendar',
       'advanced_journal',
-      'advanced_vault',
       'unlimited_notes',
-      'priority_sync',
     ])
   })
 
   test('reflects feature flags from entitlements without frontend isPro inference', () => {
     expect(getCapabilityValue(free, 'advanced_calendar')).toBe(false)
-    expect(getCapabilityValue(free, 'unlimited_notes')).toBe(true)
+    expect(getCapabilityValue(free, 'unlimited_notes')).toBe(false)
     expect(getCapabilityValue(pro, 'advanced_calendar')).toBe(true)
-    expect(getCapabilityValue(pro, 'priority_sync')).toBe(true)
+    expect(getCapabilityValue(pro, 'unlimited_notes')).toBe(true)
   })
 
-  test('maps every canonical capability to a real product surface or explicit infrastructure surface', () => {
+  test('maps every canonical capability to a real product surface', () => {
     const byKey = Object.fromEntries(BILLING_CAPABILITIES.map((item) => [item.key, item]))
     expect(byKey.advanced_calendar.href).toBe('/calendar')
     expect(byKey.advanced_journal.href).toBe('/journal')
-    expect(byKey.advanced_vault.href).toBe('/documents')
     expect(byKey.unlimited_notes.href).toBe('/notes')
-    expect(byKey.priority_sync.href).toBeUndefined()
-    expect(byKey.priority_sync.description).toContain('no separate control')
   })
 
   test('renders canonical capacity limits', () => {

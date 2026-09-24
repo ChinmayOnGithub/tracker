@@ -280,7 +280,7 @@ export const PricingPanel: React.FC = () => {
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span>Unlimited Daily Tasks &amp; Schedule Events</span>
+                <span>Up to 50 Daily Tasks &amp; Schedule Events</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />
@@ -288,7 +288,7 @@ export const PricingPanel: React.FC = () => {
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span>Daily Notes & Journal Reflections</span>
+                <span>Historical Journal &amp; Notes Access</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />
@@ -296,7 +296,7 @@ export const PricingPanel: React.FC = () => {
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span>Secure Vault Storage (Up to 10 Files)</span>
+                <span>Link Library & Bookmarking</span>
               </li>
             </ul>
           </CardBody>
@@ -334,7 +334,7 @@ export const PricingPanel: React.FC = () => {
               )}
             </div>
             <p className="text-xs text-[var(--color-text-muted)] min-h-[32px]">
-              Automated syncing, unlimited storage capacity, and rich export analytics.
+              Automated calendar syncing, expanded capacity, and rich journal & notes workflows.
             </p>
 
             <div className="pt-2">
@@ -380,31 +380,27 @@ export const PricingPanel: React.FC = () => {
             <ul className="space-y-3 text-xs text-[var(--color-text-main)]">
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span className="font-semibold">Unlimited Habits &amp; Recurring Activities</span>
+                <span className="font-semibold">Up to 10,000 Habits &amp; Recurring Activities</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span className="font-semibold">Unlimited Secure Vault Storage</span>
+                <span className="font-semibold">Up to 10,000 Daily Tasks</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span>Automated External Calendar Sync &amp; Writebacks</span>
+                <span>Two-Way Google Calendar Sync &amp; Writebacks</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span>Rich Journal Exports (JSON &amp; Markdown Archive)</span>
+                <span>Daily Journal Writing &amp; Archive Exports (JSON, Markdown)</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span>Unlimited Vault Client-Side Encryption Exports</span>
+                <span>Notes Creation, Writing &amp; Full History</span>
               </li>
               <li className="flex items-center gap-2.5">
                 <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span>Priority Cloud Sync &amp; Automated Backup Engine</span>
-              </li>
-              <li className="flex items-center gap-2.5">
-                <Check className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-                <span className="font-semibold">Priority Support</span>
+                <span className="font-semibold">Priority Customer Support</span>
               </li>
             </ul>
 
@@ -481,8 +477,8 @@ export const PricingPanel: React.FC = () => {
             <tbody className="divide-y divide-[var(--color-border)]">
               <tr>
                 <td className="p-4 font-medium text-[var(--color-text-main)]">Habits & Recurring Activities</td>
-                <td className="p-4 text-center text-[var(--color-text-muted)]">Unlimited</td>
-                <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">Unlimited</td>
+                <td className="p-4 text-center text-[var(--color-text-muted)]">Up to 10</td>
+                <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">Up to 10,000</td>
               </tr>
               <tr>
                 <td className="p-4 font-medium text-[var(--color-text-main)]">Daily Dynamic Timeline</td>
@@ -490,9 +486,9 @@ export const PricingPanel: React.FC = () => {
                 <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">Full Access</td>
               </tr>
               <tr>
-                <td className="p-4 font-medium text-[var(--color-text-main)]">Secure Document Vault Capacity</td>
-                <td className="p-4 text-center text-[var(--color-text-muted)]">Up to 10 Files</td>
-                <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">Unlimited</td>
+                <td className="p-4 font-medium text-[var(--color-text-main)]">Daily Tasks & Schedule Events</td>
+                <td className="p-4 text-center text-[var(--color-text-muted)]">Up to 50 Daily</td>
+                <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">Up to 10,000 Daily</td>
               </tr>
               <tr>
                 <td className="p-4 font-medium text-[var(--color-text-main)]">Calendar Provider Sync</td>
@@ -501,13 +497,13 @@ export const PricingPanel: React.FC = () => {
               </tr>
               <tr>
                 <td className="p-4 font-medium text-[var(--color-text-main)]">Journal & Daily Reflections</td>
-                <td className="p-4 text-center text-[var(--color-text-muted)]">Standard</td>
-                <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">Rich Export & Insights</td>
+                <td className="p-4 text-center text-[var(--color-text-muted)]">Historical View (Read-Only)</td>
+                <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">Daily Writing & Archive Export</td>
               </tr>
               <tr>
-                <td className="p-4 font-medium text-[var(--color-text-main)]">Cloud Sync & Backup Engine</td>
-                <td className="p-4 text-center text-[var(--color-text-muted)]">Standard Local</td>
-                <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">Priority Multi-Client Sync</td>
+                <td className="p-4 font-medium text-[var(--color-text-main)]">Notes & Workspace</td>
+                <td className="p-4 text-center text-[var(--color-text-muted)]">Historical View (Read-Only)</td>
+                <td className="p-4 text-center font-bold text-emerald-600 dark:text-emerald-400">Creation, Writing & Search</td>
               </tr>
             </tbody>
           </table>

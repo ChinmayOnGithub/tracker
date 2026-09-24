@@ -36,9 +36,20 @@ export async function searchGlobalAction(
 
     const dataset: SearchableDataset = {}
 
+    const effectiveAllowedModules: Record<string, boolean> = {
+      notes: canAccessModule(user, 'notes', guestPerms, entitlements),
+      journal: canAccessModule(user, 'journal', guestPerms, entitlements),
+      activities: canAccessModule(user, 'activities', guestPerms, entitlements),
+      links: canAccessModule(user, 'links', guestPerms, entitlements),
+      documents: canAccessModule(user, 'documents', guestPerms, entitlements),
+      weight: canAccessModule(user, 'weight', guestPerms, entitlements),
+      leave: canAccessModule(user, 'leave', guestPerms, entitlements),
+      settings: true,
+    }
+
     const shouldQuery = (mod: TrackerModuleKey, cat: SearchCategory) => {
       const isCatMatch = category === 'all' || category === cat
-      const isModAllowed = canAccessModule(user, mod, guestPerms, entitlements)
+      const isModAllowed = effectiveAllowedModules[mod] === true
       return isCatMatch && isModAllowed
     }
 
@@ -228,7 +239,7 @@ export async function searchGlobalAction(
     const results = MasterSearchEngine.search(trimmedQuery, dataset, category, {
       userId: user.id,
       isOwner,
-      allowedModules: guestPerms,
+      allowedModules: isOwner ? undefined : effectiveAllowedModules,
     })
 
     return { success: true, results }

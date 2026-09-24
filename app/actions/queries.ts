@@ -160,6 +160,22 @@ export async function fetchCalendarDataAction() {
       payload: l.payload,
     }))
 
+    const journalEntries = journalRaw.map(j => ({
+      id: j.id,
+      journalDate: j.journalDate.toISOString(),
+      content: j.content,
+      mood: j.mood,
+      gratitude: j.gratitude,
+      reflections: j.reflections,
+      lessonsLearned: j.lessonsLearned,
+      tomorrowPlan: j.tomorrowPlan,
+      metadata: j.metadata,
+      userId: loggedUser.id,
+      createdAt: j.createdAt.toISOString(),
+      updatedAt: j.updatedAt.toISOString(),
+      deletedAt: null
+    }))
+
     const notes = journalRaw.map(j => ({
       id: j.id,
       date: j.journalDate.toISOString().split('T')[0],
@@ -177,6 +193,7 @@ export async function fetchCalendarDataAction() {
         templates,
         logs,
         notes,
+        journalEntries,
       }
     }
   } catch (error) {

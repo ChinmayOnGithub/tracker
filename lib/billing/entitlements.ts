@@ -20,13 +20,13 @@ const FREE_ENTITLEMENTS: UserEntitlements = {
     advanced_calendar: false,
     advanced_journal: false,
     advanced_vault: false,
-    unlimited_notes: true,
+    unlimited_notes: false,
     priority_sync: false,
     // Aliases
     premiumVault: false,
     advancedCalendar: false,
     advancedJournal: false,
-    unlimitedNotes: true,
+    unlimitedNotes: false,
     prioritySupport: false
   },
   limits: {

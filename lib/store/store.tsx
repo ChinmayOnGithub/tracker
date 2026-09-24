@@ -309,7 +309,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
         // getAllForUser uses the userId index; falls back to filtered getAll when userId is null.
         const localTemplates = userId ? await templateRepo.getAllForUser(userId) : await templateRepo.getAll()
         const localLogs = userId ? await logRepo.getAllForUser(userId) : await logRepo.getAll()
-        const localJournals = userId ? await journalRepo.getAllForUser(userId) : []
+        const localJournals = userId ? await journalRepo.getAllForUser(userId) : await journalRepo.getAll()
         const localWeights = userId ? await weightRepo.getAllForUser(userId) : await weightRepo.getAll()
         const localLeaves = userId ? await leaveRepo.getAllForUser(userId) : await leaveRepo.getAll()
 
@@ -436,6 +436,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
       // Local-first types: merge by timestamp
       if (initialData.templates !== undefined)     next.templates     = mergeById(prev.templates, initialData.templates)
       if (initialData.logs !== undefined)          next.logs          = mergeById(prev.logs, initialData.logs)
+      if (initialData.journalEntries !== undefined) {
+        const serverEntries = initialData.journalEntries
+        const userScoped = userId ? serverEntries.filter(e => !e.userId || e.userId === userId) : serverEntries
+        next.journalEntries = mergeById(prev.journalEntries, userScoped)
+      }
       if (initialData.weightRecords !== undefined) next.weightRecords = mergeById(prev.weightRecords, initialData.weightRecords)
       if (initialData.leaveRecords !== undefined)  next.leaveRecords  = mergeById(prev.leaveRecords, initialData.leaveRecords)
 
@@ -452,8 +457,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
 
     if (initialData.journalEntries) {
       const serverEntries = initialData.journalEntries
-      const userScopedEntries = userId ? serverEntries.filter(e => !e.userId || e.userId === userId) : serverEntries
-      setState(prev => ({ ...prev, journalEntries: userScopedEntries }))
       const reconcile = async () => {
         try {
           const { JournalRepository } = await import('@/modules/journal/repository/JournalRepository')

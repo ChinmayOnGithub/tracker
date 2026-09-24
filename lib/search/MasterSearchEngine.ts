@@ -281,6 +281,7 @@ export class MasterSearchEngine {
     const userId = options?.userId
 
     const isModuleEnabled = (mod: string) => {
+      if (isOwner) return true
       if (!allowedModules) return true
       return allowedModules[mod] !== false
     }
@@ -293,6 +294,7 @@ export class MasterSearchEngine {
     // 1. NOTES
     if ((categoryFilter === 'all' || categoryFilter === 'note') && dataset.notes && isModuleEnabled('notes')) {
       for (const note of dataset.notes) {
+        if (note.deletedAt) continue
         if (note.userId && !matchesUser(note.userId)) continue
         const plainContent = stripHtml(note.content || '')
         const title = note.title?.trim() || 'Untitled Note'
@@ -324,6 +326,7 @@ export class MasterSearchEngine {
     // 2. JOURNAL ENTRIES
     if ((categoryFilter === 'all' || categoryFilter === 'journal') && dataset.journalEntries && isModuleEnabled('journal')) {
       for (const entry of dataset.journalEntries) {
+        if (entry.deletedAt) continue
         if (entry.userId && !matchesUser(entry.userId)) continue
         const dateStr = typeof entry.journalDate === 'string'
           ? entry.journalDate.split('T')[0]
@@ -365,6 +368,7 @@ export class MasterSearchEngine {
     // 3. ACTIVITIES & TEMPLATES
     if ((categoryFilter === 'all' || categoryFilter === 'activity') && dataset.templates && isModuleEnabled('activities')) {
       for (const template of dataset.templates) {
+        if (template.deletedAt) continue
         if (template.userId && !matchesUser(template.userId)) continue
         // Search name, category, description/notes, type, tags, recurrence
         const tagsStr = (template as unknown as { tags?: Array<{ name: string }> }).tags
@@ -405,6 +409,7 @@ export class MasterSearchEngine {
       }
 
       for (const link of dataset.links) {
+        if (link.deletedAt) continue
         const linkUserId = (link as unknown as { userId?: string }).userId
         if (linkUserId && !matchesUser(linkUserId)) continue
         const colName = link.collectionId ? collectionMap.get(link.collectionId) : null
@@ -480,6 +485,7 @@ export class MasterSearchEngine {
     // 6. WEIGHT RECORDS
     if ((categoryFilter === 'all' || categoryFilter === 'weight') && dataset.weightRecords && isModuleEnabled('weight')) {
       for (const record of dataset.weightRecords) {
+        if (record.deletedAt) continue
         if (record.userId && !matchesUser(record.userId)) continue
         const dateStr = typeof record.date === 'string' ? record.date.split('T')[0] : toYMD(record.date)
         const dateFormatted = fmtDateMed(record.date)
@@ -512,6 +518,7 @@ export class MasterSearchEngine {
     // 7. LEAVE RECORDS
     if ((categoryFilter === 'all' || categoryFilter === 'leave') && dataset.leaveRecords && isModuleEnabled('leave')) {
       for (const record of dataset.leaveRecords) {
+        if (record.deletedAt) continue
         if (record.userId && !matchesUser(record.userId)) continue
         const start = typeof record.startDate === 'string' ? record.startDate.split('T')[0] : toYMD(record.startDate)
         const end = typeof record.endDate === 'string' ? record.endDate.split('T')[0] : toYMD(record.endDate)

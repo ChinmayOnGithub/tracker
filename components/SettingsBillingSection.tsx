@@ -19,7 +19,6 @@ import {
   BILLING_CAPABILITIES,
   getActivityLimit,
   getCapabilityValue,
-  getVaultLimit,
 } from '@/lib/billing/capabilities'
 import type { BillingCapabilityKey } from '@/lib/billing/capabilities'
 import { useEntitlements } from '@/lib/context/EntitlementContext'
@@ -202,7 +201,6 @@ export const SettingsBillingSection: React.FC = () => {
   const canonicalState = summary?.entitlements.subscription?.canonicalState
   const isCancelScheduled = canonicalState === 'CANCEL_AT_PERIOD_END'
   const isTransitional = canonicalState === 'CHECKOUT_PENDING'
-  const vaultLimit = summary ? getVaultLimit(summary.entitlements) : 0
   const activityLimit = summary ? getActivityLimit(summary.entitlements) : 0
 
   const capabilityRows = useMemo(() => {
@@ -430,26 +428,13 @@ export const SettingsBillingSection: React.FC = () => {
             ))}
           </div>
 
-          <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
-            <div className="flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-slate-50/60 px-3.5 py-3 dark:bg-zinc-900/30">
-              <div className="flex items-center gap-2.5">
-                <LockKeyhole className="h-4 w-4 text-[var(--color-text-muted)]" />
-                <div>
-                  <div className="text-xs font-bold text-[var(--color-text-main)]">Secure Vault capacity</div>
-                  <div className="text-[10px] text-[var(--color-text-muted)]">Encrypted document files</div>
-                </div>
-              </div>
-              <strong className={`text-xs ${isPro ? 'text-emerald-500' : 'text-[var(--color-text-main)]'}`}>
-                {vaultLimit.toLocaleString()} files
-              </strong>
-            </div>
-
+          <div className="mt-2">
             <div className="flex items-center justify-between rounded-xl border border-[var(--color-border)] bg-slate-50/60 px-3.5 py-3 dark:bg-zinc-900/30">
               <div className="flex items-center gap-2.5">
                 <Activity className="h-4 w-4 text-[var(--color-text-muted)]" />
                 <div>
-                  <div className="text-xs font-bold text-[var(--color-text-main)]">Active activities</div>
-                  <div className="text-[10px] text-[var(--color-text-muted)]">Recurring activity capacity</div>
+                  <div className="text-xs font-bold text-[var(--color-text-main)]">Active activities capacity</div>
+                  <div className="text-[10px] text-[var(--color-text-muted)]">Max habits and recurring activities allowed under plan</div>
                 </div>
               </div>
               <strong className={`text-xs ${isPro ? 'text-emerald-500' : 'text-[var(--color-text-main)]'}`}>

@@ -60,7 +60,7 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
             initialize({
               templates: res.data.templates,
               logs: res.data.logs,
-              journalEntries: res.data.notes.map((n: { id: string; date: string; content: string; createdAt: string; updatedAt: string }) => ({
+              journalEntries: res.data.journalEntries || res.data.notes?.map((n: { id: string; date: string; content: string; createdAt: string; updatedAt: string }) => ({
                 id: n.id,
                 journalDate: n.date,
                 content: n.content,
@@ -138,7 +138,7 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
   const selectedDayNote = notes.find(note => note.date === selectedDateStr) || null
 
   // Show a loading skeleton only on absolute cold first mount
-  if (state.templates.length === 0) {
+  if (!state.isHydrated && state.templates.length === 0) {
     return (
       <div className="p-8 space-y-6 max-w-5xl mx-auto">
         <Skeleton className="h-10 w-1/3 rounded-lg" />

@@ -8,6 +8,8 @@ export class SearchService {
     const q = queryStr.trim().toLowerCase()
     if (!q) return { templates: [], logs: [], journal: [] }
 
+    const { JournalService } = await import('@/modules/journal/server')
+
     const [templates, logs, journal] = await Promise.all([
       db.activityTemplate.findMany({
         where: {
@@ -29,20 +31,7 @@ export class SearchService {
         include: { activity: true },
         take: 10
       }),
-      db.journalEntry.findMany({
-        where: {
-          userId,
-          deletedAt: null,
-          OR: [
-            { content: { contains: q, mode: 'insensitive' } },
-            { gratitude: { contains: q, mode: 'insensitive' } },
-            { reflections: { contains: q, mode: 'insensitive' } },
-            { lessonsLearned: { contains: q, mode: 'insensitive' } },
-            { tomorrowPlan: { contains: q, mode: 'insensitive' } }
-          ]
-        },
-        take: 10
-      })
+      JournalService.search(userId, q)
     ])
 
     return {

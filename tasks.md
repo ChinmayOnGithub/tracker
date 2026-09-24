@@ -313,7 +313,7 @@ Before every release verify:
 ### Issue #31: Public MVP Release Boundary & Tiering Definition
 - **Status**: 🔄 **Updated for Monetization Model**
 - **MVP Scope & Boundary**:
-  - **Free Tier (Default)**: 100% unrestricted access to core tracker capabilities (habits, daily timeline, calendar, standard notes, leave balance, weight tracking). Vault storage capped at 10 items.
-  - **Pro Tier (Paid)**: Uncapped vault storage (10,000 files), advanced multi-calendar sync, rich PDF/Markdown journal exports, priority sync engine.
+  - **Free Tier (Default)**: 100% unrestricted access to core tracker capabilities (habits, daily timeline, calendar, leave balance, weight tracking). Active activities capped at 10; notes creation requires Pro.
+  - **Pro Tier (Paid)**: Up to 10,000 active activities, advanced calendar two-way sync and writebacks, full journal writing & exports, notes creation and workspace.
   - **Introductory Conversion Hook**: ₹29 introductory first-month offer for first-time subscribers to drive early adoption. Server-enforced once-per-account to prevent checkout churn abuse.
   - **Architecture Guardrail**: Client never holds pricing, plan IDs, or payment verification secrets. All entitlement gating is enforced at server action and route handler boundaries.

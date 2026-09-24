@@ -97,6 +97,10 @@ describe('Tracker Production Hardening & Reliability Suite (#6, #13, #14, #15, #
       requireOwnership: () => Promise.resolve({ user: { id: userA, username: 'alice' } }),
     }))
 
+    const { EntitlementService } = await import('@/lib/services/EntitlementService')
+    const origHasFeature = EntitlementService.hasFeature
+    EntitlementService.hasFeature = async () => true
+
     let upsertCalledWith: unknown = null
     db.note.upsert = mock((args?: unknown) => {
       upsertCalledWith = args
@@ -112,16 +116,20 @@ describe('Tracker Production Hardening & Reliability Suite (#6, #13, #14, #15, #
       } as Note)
     }) as unknown as typeof db.note.upsert
 
-    const noteRes = await createNote('<p>Updated content</p>', 'Work Summary', '2026-09-08')
-    expect(noteRes.success).toBe(true)
-    expect(upsertCalledWith).toBeDefined()
-    const args = upsertCalledWith as {
-      where: { userId_date: { userId: string; date: string } }
-      update: { content: string }
-      create: { content: string }
+    try {
+      const noteRes = await createNote('<p>Updated content</p>', 'Work Summary', '2026-09-08')
+      expect(noteRes.success).toBe(true)
+      expect(upsertCalledWith).toBeDefined()
+      const args = upsertCalledWith as {
+        where: { userId_date: { userId: string; date: string } }
+        update: { content: string }
+        create: { content: string }
+      }
+      expect(args.where.userId_date.userId).toBe(userA)
+      expect(args.where.userId_date.date).toBe('2026-09-08')
+    } finally {
+      EntitlementService.hasFeature = origHasFeature
     }
-    expect(args.where.userId_date.userId).toBe(userA)
-    expect(args.where.userId_date.date).toBe('2026-09-08')
   })
 
   it('Issue #30: Guest permissions action scopes to authenticated owner', async () => {

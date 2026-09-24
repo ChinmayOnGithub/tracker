@@ -105,6 +105,21 @@ describe('Issue #73: Activity Completion Persistence & Canonical Payload', () =>
     },
   })
 
+  it('Fuel 8.5 L persists as 8.5 L and formats properly', () => {
+    const payload = { value: 8.5, unit: 'L' }
+    const log: Partial<ActivityLog> = {
+      id: 'log-fuel-8-5',
+      activityId: fuelTemplate.id,
+      amount: 8.5,
+      payload,
+    }
+
+    const display = CompletionService.formatCompletionDisplay(fuelTemplate, log.payload, log.amount)
+    expect(display).not.toBeNull()
+    expect(display?.formatted).toBe('8.5 L')
+    expect(display?.isMoney).toBe(false)
+  })
+
   it('Fuel 12.5 L persists as 12.5 L and formats properly', () => {
     const payload = { value: 12.5, unit: 'L' }
     const log: Partial<ActivityLog> = {

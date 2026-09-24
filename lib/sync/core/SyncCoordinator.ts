@@ -339,22 +339,33 @@ export class SyncCoordinator {
         await this.dbEngine.delete('sync_queue', item.id);
         return true;
       } else {
-        console.error(`[SyncCoordinator] Server rejected queue item ${item.id}:`, result?.error);
-        return await this.handleItemFailure(item);
+        console.warn(`[SyncCoordinator] Server rejected queue item ${item.id}:`, result?.error);
+        return await this.handleItemFailure(item, result?.error);
       }
     } catch (err) {
       console.error(`[SyncCoordinator] Exception during sync of item ${item.id}:`, err);
-      return await this.handleItemFailure(item);
+      return await this.handleItemFailure(item, err instanceof Error ? err.message : String(err));
     }
   }
 
-  private async handleItemFailure(item: SyncQueueItem): Promise<boolean> {
-    item.retryCount += 1;
-    if (item.retryCount >= 10) {
+  private async handleItemFailure(item: SyncQueueItem, errorMsg?: string): Promise<boolean> {
+    const isUnrecoverable = errorMsg && (
+      errorMsg.includes('Tracker Pro subscription') ||
+      errorMsg.includes('Unauthorized') ||
+      errorMsg.includes('Forbidden')
+    );
+
+    if (isUnrecoverable) {
       item.syncStatus = 'BLOCKED';
-      console.error(`[SyncCoordinator] Item ${item.id} exceeded maximum retries. Blocked.`);
+      console.warn(`[SyncCoordinator] Item ${item.id} rejected due to subscription/entitlement restriction. Marked as BLOCKED.`);
     } else {
-      item.syncStatus = 'FAILED';
+      item.retryCount += 1;
+      if (item.retryCount >= 10) {
+        item.syncStatus = 'BLOCKED';
+        console.error(`[SyncCoordinator] Item ${item.id} exceeded maximum retries. Blocked.`);
+      } else {
+        item.syncStatus = 'FAILED';
+      }
     }
     await this.dbEngine.put('sync_queue', item);
     return false;

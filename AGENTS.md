@@ -7,7 +7,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- BEGIN:tracker-system-guidelines -->
 # Tracker Agent Guidelines
 
-You MUST read and strictly adhere to the **AI Constitution** in [AI Constitution.md](file:///d:/github_projeccts/tracker/docs/07-ai/AI Constitution.md) and the handbook directories under `docs/` before writing any code.
+You MUST read and strictly adhere to the **AI Constitution** in [AI Constitution.md](file:///d:/github_projeccts/tracker/docs/07-ai/AI Constitution.md) and the rules under `.agents/rules/`:
+* [Voice & Tone Guidelines](file:///d:/github_projeccts/tracker/.agents/rules/voice-and-tone.md)
+* [Business Model & Product Principles](file:///d:/github_projeccts/tracker/.agents/rules/business-and-product.md)
+* [Engineering & Architecture Standards](file:///d:/github_projeccts/tracker/.agents/rules/engineering-standards.md)
+* Skills available: `tracker-core` ([SKILL.md](file:///d:/github_projeccts/tracker/.agents/skills/tracker-core/SKILL.md)) and `tracker-qa` ([SKILL.md](file:///d:/github_projeccts/tracker/.agents/skills/tracker-qa/SKILL.md)).
 
 ### 1. Database Safety Safeguards (CRITICAL)
 * **Never** use hard delete queries (`delete` or `deleteMany`) on tables that support soft deletion (contain a `deletedAt` column). Use `update` or `updateMany` to set `deletedAt = new Date()`.
