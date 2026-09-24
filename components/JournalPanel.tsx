@@ -32,7 +32,7 @@ export interface JournalEntry {
 }
 
 export interface JournalPanelProps {
-  initialEntries: JournalEntry[]
+  initialEntries?: JournalEntry[]
 }
 
 function SyncStatus({ status }: { status: 'idle' | 'saving' | 'saved' | 'error' }) {
@@ -46,7 +46,7 @@ function SyncStatus({ status }: { status: 'idle' | 'saving' | 'saved' | 'error' 
   )
 }
 
-export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) => {
+export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries = [] }) => {
   const searchParams = useSearchParams()
   const router = useRouter()
   const dateParam = searchParams?.get('date')
@@ -65,7 +65,9 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries }) =>
   } = useStore()
 
   useEffect(() => {
-    initialize({ journalEntries: initialEntries })
+    if (initialEntries && initialEntries.length > 0) {
+      initialize({ journalEntries: initialEntries })
+    }
   }, [initialEntries, initialize])
 
   const currentUserId = userId

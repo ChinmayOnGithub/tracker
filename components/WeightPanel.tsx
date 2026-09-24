@@ -10,7 +10,7 @@ import { CalendarDataContext } from '@/components/DashboardLayout'
 import { getUserStorageItem, setUserStorageItem } from '@/lib/storage/userStorage'
 
 interface WeightPanelProps {
-  initialRecords: WeightRecord[]
+  initialRecords?: WeightRecord[]
 }
 
 // ---------------------------------------------------------------------------
@@ -455,12 +455,16 @@ function LogForm({ todayRecord, onLogged: _onLogged }: LogFormProps) {
 // ---------------------------------------------------------------------------
 // Main Panel
 // ---------------------------------------------------------------------------
-export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords }) => {
-  const { state, initialize, deleteWeightAction } = useStore()
+export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords = [] }) => {
+  const { state, initialize, hydrateModuleData, deleteWeightAction } = useStore()
 
   useEffect(() => {
-    initialize({ weightRecords: initialRecords })
-  }, [initialRecords, initialize])
+    if (initialRecords.length > 0) {
+      initialize({ weightRecords: initialRecords })
+    } else if (state.weightRecords.length === 0) {
+      hydrateModuleData('weight')
+    }
+  }, [initialRecords, initialize, hydrateModuleData, state.weightRecords.length])
 
   const calendarContext = useContext(CalendarDataContext)
   const currentUser = calendarContext?.currentUser

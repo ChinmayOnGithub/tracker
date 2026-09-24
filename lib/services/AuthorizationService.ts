@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { db } from '@/lib/db'
 import { ALLOWED_USER_EMAILS } from '@/lib/constants'
 import {
@@ -64,10 +65,11 @@ export class AuthorizationService {
 
   /**
    * Retrieves the canonical owner's effective guest permissions from userSetting.
+   * Scoped per request using React.cache().
    */
-  public static async getEffectiveGuestPermissions(
+  public static getEffectiveGuestPermissions = cache(async (
     customUser?: { id?: string; username?: string; email?: string | null; isOwner?: boolean; accessLevel?: string } | null
-  ): Promise<Record<TrackerModuleKey, boolean>> {
+  ): Promise<Record<TrackerModuleKey, boolean>> => {
     try {
       let loggedUser = customUser
       if (loggedUser === undefined) {
@@ -120,7 +122,7 @@ export class AuthorizationService {
       console.error('Failed to get effective guest permissions:', err)
       return { ...DEFAULT_GUEST_PERMISSIONS }
     }
-  }
+  })
 
   /**
    * Checks whether a user can access a specific module.
@@ -149,10 +151,11 @@ export class AuthorizationService {
   /**
    * Resolves the server-side authorized context for a page.
    * Executes authentication and module authorization before sensitive data is fetched.
+   * Scoped per request using React.cache().
    */
-  public static async getAuthorizedPageContext(options: {
+  public static getAuthorizedPageContext = cache(async (options: {
     module: TrackerModuleKey
-  }): Promise<AuthorizedPageContext> {
+  }): Promise<AuthorizedPageContext> => {
     const { SessionService } = await import('./SessionService')
     const user = await SessionService.getSessionUser()
     if (!user) {
@@ -189,7 +192,7 @@ export class AuthorizationService {
       isPro,
       entitlements,
     }
-  }
+  })
 
   /**
    * Server-side guard requiring authentication.

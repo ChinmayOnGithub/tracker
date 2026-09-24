@@ -35,9 +35,9 @@ interface LeaveAllowance {
 }
 
 interface LeavePanelProps {
-  leaveRecords: LeaveRecord[]
-  leaveAllowances: LeaveAllowance[]
-  currentYear: number
+  leaveRecords?: LeaveRecord[]
+  leaveAllowances?: LeaveAllowance[]
+  currentYear?: number
 }
 
 const ALL_LEAVE_TYPES: LeaveType[] = ['CASUAL', 'SICK', 'PTO', 'COMP_OFF', 'HALF_DAY', 'WFH']
@@ -490,19 +490,31 @@ function RequestForm({ onSubmit, loading, activeTypes, metaMap, existingRecords 
 // Main Panel
 // ---------------------------------------------------------------------------
 export const LeavePanel: React.FC<LeavePanelProps> = ({
-  leaveRecords: initial, leaveAllowances: initialAllowances, currentYear
+  leaveRecords: initial = [],
+  leaveAllowances: initialAllowances = [],
+  currentYear = new Date().getFullYear(),
 }) => {
   const {
-    state, initialize, createLeaveRecordAction, updateLeaveRecordAction,
-    deleteLeaveRecordAction, ensureLeaveAllowancesAction, batchUpdateLeaveAllowancesAction
+    state,
+    initialize,
+    hydrateModuleData,
+    createLeaveRecordAction,
+    updateLeaveRecordAction,
+    deleteLeaveRecordAction,
+    ensureLeaveAllowancesAction,
+    batchUpdateLeaveAllowancesAction,
   } = useStore()
 
   useEffect(() => {
-    initialize({
-      leaveRecords: initial as unknown as StoreLeaveRecord[],
-      leaveAllowances: initialAllowances as unknown as StoreLeaveAllowance[]
-    })
-  }, [initial, initialAllowances, initialize])
+    if (initial.length > 0 || initialAllowances.length > 0) {
+      initialize({
+        leaveRecords: initial as unknown as StoreLeaveRecord[],
+        leaveAllowances: initialAllowances as unknown as StoreLeaveAllowance[]
+      })
+    } else if (state.leaveRecords.length === 0) {
+      hydrateModuleData('leave')
+    }
+  }, [initial, initialAllowances, initialize, hydrateModuleData, state.leaveRecords.length])
 
   const records = (state.leaveRecords.length > 0 ? state.leaveRecords : initial) as unknown as LeaveRecord[]
   const allowances = (state.leaveAllowances.length > 0 ? state.leaveAllowances : initialAllowances) as unknown as LeaveAllowance[]

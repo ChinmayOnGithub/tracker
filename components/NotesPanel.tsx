@@ -45,13 +45,15 @@ interface NotesPanelProps {
 export const NotesPanel: React.FC<NotesPanelProps> = ({ initialNotes = [] }) => {
   const searchParams = useSearchParams()
   const noteParam = searchParams?.get('id') || searchParams?.get('noteId')
-  const { state, initialize, upsertNoteAction, deleteNoteAction } = useStore()
+  const { state, initialize, hydrateModuleData, upsertNoteAction, deleteNoteAction } = useStore()
 
   useEffect(() => {
     if (initialNotes.length > 0) {
       initialize({ notes: initialNotes })
+    } else if (state.notes.length === 0) {
+      hydrateModuleData('notes')
     }
-  }, [initialNotes, initialize])
+  }, [initialNotes, initialize, hydrateModuleData, state.notes.length])
 
   const notes = state.notes.length > 0 ? state.notes : initialNotes
 

@@ -2,9 +2,10 @@
 // lib/store/store.tsx
 "use client"
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { ActivityTemplate, ActivityLog, Note, TimelineItem, AnalyzedTemplate } from '@/types'
 import { writeQueue } from './write-queue'
+import { requestDeduplicator } from './requestDeduplicator'
 import { TaskStateMachine, TaskOccurrenceState } from '@/modules/activities/domain/TaskStateMachine'
 import { perfTracker } from '@/lib/performance/perfTracker'
 
@@ -108,6 +109,10 @@ export interface CalendarData {
 
 interface StoreState {
   isHydrated: boolean
+  shellReady: boolean
+  primaryDataReady: boolean
+  secondaryDataReady: boolean
+  backgroundSyncReady: boolean
   templates: ActivityTemplate[]
   logs: ActivityLog[]
   notes: Note[]
@@ -141,6 +146,9 @@ interface StoreContextType {
   state: StoreState
   isSyncing: boolean
   isHydrated: boolean
+  primaryDataReady: boolean
+  secondaryDataReady: boolean
+  hydrateModuleData: (module: 'weight' | 'leave' | 'notes' | 'links' | 'vault') => Promise<void>
   initialize: (initialData: Partial<StoreState>) => void
   setCacheMetadata: (domain: string, timestamp: number, isValidating?: boolean) => void
   saveJournalDraftAction: (date: string, fields: any) => void
@@ -198,6 +206,10 @@ interface StoreContextType {
 
 const defaultState: StoreState = {
   isHydrated: false,
+  shellReady: true,
+  primaryDataReady: false,
+  secondaryDataReady: false,
+  backgroundSyncReady: false,
   templates: [],
   logs: [],
   notes: [],
@@ -271,21 +283,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
     }
   }, [])
 
-  // Load offline data into store on startup (instant local-first path)
+  // User-scoped store reset on account switch or logout (#57)
+  const prevUserIdRef = useRef<string | null | undefined>(userId)
   useEffect(() => {
-    const loadLocalData = async () => {
-      perfTracker.mark('local_hydration_start')
+    if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
+      if (prevUserIdRef.current) {
+        requestDeduplicator.clearUser(prevUserIdRef.current)
+      }
+      setState(defaultState)
+    }
+    prevUserIdRef.current = userId
+  }, [userId])
+
+  // Concurrent two-tier hydration:
+  // Primary (templates, logs, journals) loads in parallel (<10ms) and sets primaryDataReady
+  // Secondary (weight, leave, notes, links, vault) loads in background without blocking Today
+  useEffect(() => {
+    let isCancelled = false
+
+    const loadPrimaryData = async () => {
+      perfTracker.mark('local_primary_hydration_start')
       try {
-        const { ActivityTemplateRepository, ActivityLogRepository } = await import('@/modules/activities/repository/ActivityRepository');
-        const { JournalRepository } = await import('@/modules/journal/repository/JournalRepository');
-        const { WeightRepository } = await import('@/modules/weight/repository/WeightRepository');
-        const { LeaveRepository } = await import('@/modules/leave/repository/LeaveRepository');
-        
-        const templateRepo = new ActivityTemplateRepository();
-        const logRepo = new ActivityLogRepository();
-        const journalRepo = new JournalRepository();
-        const weightRepo = new WeightRepository();
-        const leaveRepo = new LeaveRepository();
+        const { ActivityTemplateRepository, ActivityLogRepository } = await import('@/modules/activities/repository/ActivityRepository')
+        const { JournalRepository } = await import('@/modules/journal/repository/JournalRepository')
+
+        const templateRepo = new ActivityTemplateRepository()
+        const logRepo = new ActivityLogRepository()
+        const journalRepo = new JournalRepository()
 
         const mergeById = <T extends { id: string; updatedAt?: any }>(serverItems: T[], localItems: T[]): T[] => {
           const map = new Map<string, T>()
@@ -305,92 +329,120 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
           return Array.from(map.values())
         }
 
-        // Scope offline reads to the authenticated user (#57: cross-user data isolation).
-        // getAllForUser uses the userId index; falls back to filtered getAll when userId is null.
-        const localTemplates = userId ? await templateRepo.getAllForUser(userId) : await templateRepo.getAll()
-        const localLogs = userId ? await logRepo.getAllForUser(userId) : await logRepo.getAll()
-        const localJournals = userId ? await journalRepo.getAllForUser(userId) : await journalRepo.getAll()
-        const localWeights = userId ? await weightRepo.getAllForUser(userId) : await weightRepo.getAll()
-        const localLeaves = userId ? await leaveRepo.getAllForUser(userId) : await leaveRepo.getAll()
+        // Parallel execution of independent primary reads:
+        const [localTemplates, localLogs, localJournals] = await Promise.all([
+          userId ? templateRepo.getAllForUser(userId) : templateRepo.getAll(),
+          userId ? logRepo.getAllForUser(userId) : logRepo.getAll(),
+          userId ? journalRepo.getAllForUser(userId) : journalRepo.getAll(),
+        ])
 
-        let localNotes: Note[] = []
-        try {
-          const { NoteRepository } = await import('@/modules/notes/repository/NoteRepository')
-          const noteRepo = new NoteRepository()
-          localNotes = userId ? await noteRepo.getAllForUser(userId) : await noteRepo.getAll()
-        } catch (_) {}
+        if (isCancelled) return
 
-        perfTracker.mark('local_hydration_end')
+        perfTracker.mark('local_primary_hydration_end')
 
-        // IMMEDIATELY update state with local IndexedDB records so the UI is usable in milliseconds
+        // Immediately update state with primary records so Today, Activities, Calendar are usable
         setState(prev => ({
           ...prev,
           isHydrated: true,
+          shellReady: true,
+          primaryDataReady: true,
           templates: mergeById(prev.templates, localTemplates),
           logs: mergeById(prev.logs, localLogs),
           journalEntries: mergeById(prev.journalEntries, localJournals),
-          notes: prev.notes.length > 0 ? prev.notes : (localNotes.length > 0 ? localNotes : prev.notes),
-          weightRecords: mergeById(prev.weightRecords, localWeights),
-          leaveRecords: mergeById(prev.leaveRecords, localLeaves),
-        }));
+        }))
 
-        // Hydrate Link Library collections & Vault items asynchronously without blocking primary UI
+        // Queue secondary data hydration asynchronously without blocking primary UI
         const loadSecondaryData = async () => {
-          let initialLinks: LinkItem[] = []
-          let initialCollections: LinkCollection[] = []
+          if (isCancelled) return
           try {
-            const { listLinkCollections } = await import('@/app/actions/links')
-            const linkRes = await listLinkCollections()
-            if (linkRes.success && linkRes.collections) {
-              initialCollections = linkRes.collections.map(c => ({
-                id: c.id,
-                name: c.name,
-                description: null,
-                icon: c.icon || null,
-                color: c.color || null,
-                createdAt: c.createdAt,
-                updatedAt: c.updatedAt
-              }))
-              initialLinks = linkRes.collections.flatMap(c => (c.links || []).map(l => ({
-                id: l.id,
-                title: l.title,
-                url: l.url,
-                description: l.notes || null,
-                collectionId: l.collectionId,
-                clicks: l.openCount ?? 0,
-                isStarred: l.isPinned ?? false,
-                createdAt: l.createdAt,
-                updatedAt: l.updatedAt
-              })))
-            }
-          } catch (_) {}
+            const { WeightRepository } = await import('@/modules/weight/repository/WeightRepository')
+            const { LeaveRepository } = await import('@/modules/leave/repository/LeaveRepository')
+            const { NoteRepository } = await import('@/modules/notes/repository/NoteRepository')
 
-          let initialVault: VaultItem[] = []
-          if (userId) {
+            const weightRepo = new WeightRepository()
+            const leaveRepo = new LeaveRepository()
+            const noteRepo = new NoteRepository()
+
+            const [localWeights, localLeaves, localNotes] = await Promise.all([
+              userId ? weightRepo.getAllForUser(userId) : weightRepo.getAll(),
+              userId ? leaveRepo.getAllForUser(userId) : leaveRepo.getAll(),
+              userId ? noteRepo.getAllForUser(userId).catch(() => [] as Note[]) : noteRepo.getAll().catch(() => [] as Note[]),
+            ])
+
+            if (isCancelled) return
+
+            setState(prev => ({
+              ...prev,
+              secondaryDataReady: true,
+              weightRecords: mergeById(prev.weightRecords, localWeights),
+              leaveRecords: mergeById(prev.leaveRecords, localLeaves),
+              notes: prev.notes.length > 0 ? prev.notes : (localNotes.length > 0 ? localNotes : prev.notes),
+            }))
+
+            // Hydrate links & vault asynchronously
+            let initialLinks: LinkItem[] = []
+            let initialCollections: LinkCollection[] = []
             try {
-              const { listVaultItems } = await import('@/app/actions/vault')
-              const vaultRes = await listVaultItems(null, undefined, 200, true)
-              if (vaultRes.success && vaultRes.items) {
-                initialVault = vaultRes.items.map(v => ({
-                  id: v.id,
-                  name: v.name,
-                  isFolder: v.isFolder,
-                  parentId: v.parentId,
-                  size: v.fileSize,
-                  mimeGroup: v.mimeGroup,
-                  updatedAt: v.updatedAt,
-                  createdAt: v.createdAt
+              const { listLinkCollections } = await import('@/app/actions/links')
+              const linkRes = await listLinkCollections()
+              if (linkRes.success && linkRes.collections) {
+                initialCollections = linkRes.collections.map(c => ({
+                  id: c.id,
+                  name: c.name,
+                  description: null,
+                  icon: c.icon || null,
+                  color: c.color || null,
+                  createdAt: c.createdAt,
+                  updatedAt: c.updatedAt
                 }))
+                initialLinks = linkRes.collections.flatMap(c => (c.links || []).map(l => ({
+                  id: l.id,
+                  title: l.title,
+                  url: l.url,
+                  description: l.notes || null,
+                  collectionId: l.collectionId,
+                  clicks: l.openCount ?? 0,
+                  isStarred: l.isPinned ?? false,
+                  createdAt: l.createdAt,
+                  updatedAt: l.updatedAt
+                })))
               }
             } catch (_) {}
-          }
 
-          setState(prev => ({
-            ...prev,
-            links: prev.links.length > 0 ? prev.links : initialLinks,
-            collections: prev.collections.length > 0 ? prev.collections : initialCollections,
-            vaultItems: prev.vaultItems.length > 0 ? prev.vaultItems : initialVault,
-          }))
+            let initialVault: VaultItem[] = []
+            if (userId) {
+              try {
+                const { listVaultItems } = await import('@/app/actions/vault')
+                const vaultRes = await listVaultItems(null, undefined, 200, true)
+                if (vaultRes.success && vaultRes.items) {
+                  initialVault = vaultRes.items.map(v => ({
+                    id: v.id,
+                    name: v.name,
+                    isFolder: v.isFolder,
+                    parentId: v.parentId,
+                    size: v.fileSize,
+                    mimeGroup: v.mimeGroup,
+                    updatedAt: v.updatedAt,
+                    createdAt: v.createdAt
+                  }))
+                }
+              } catch (_) {}
+            }
+
+            if (!isCancelled) {
+              setState(prev => ({
+                ...prev,
+                links: prev.links.length > 0 ? prev.links : initialLinks,
+                collections: prev.collections.length > 0 ? prev.collections : initialCollections,
+                vaultItems: prev.vaultItems.length > 0 ? prev.vaultItems : initialVault,
+              }))
+            }
+          } catch (secErr) {
+            console.debug('[Store] Secondary hydration completed with partial data:', secErr)
+            if (!isCancelled) {
+              setState(prev => ({ ...prev, secondaryDataReady: true }))
+            }
+          }
         }
 
         if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
@@ -399,12 +451,84 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
           setTimeout(loadSecondaryData, 50)
         }
       } catch (err) {
-        console.error('Failed to load offline data into store:', err);
-        setState(prev => ({ ...prev, isHydrated: true }))
+        console.error('Failed to load primary offline data into store:', err)
+        if (!isCancelled) {
+          setState(prev => ({ ...prev, isHydrated: true, primaryDataReady: true }))
+        }
       }
-    };
-    loadLocalData();
-  }, [userId]);
+    }
+
+    loadPrimaryData()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [userId])
+
+  const hydrateModuleData = useCallback(async (module: 'weight' | 'leave' | 'notes' | 'links' | 'vault') => {
+    try {
+      if (module === 'weight' && state.weightRecords.length === 0) {
+        const { WeightRepository } = await import('@/modules/weight/repository/WeightRepository')
+        const repo = new WeightRepository()
+        const records = userId ? await repo.getAllForUser(userId) : await repo.getAll()
+        setState(prev => ({ ...prev, weightRecords: records }))
+      } else if (module === 'leave' && state.leaveRecords.length === 0) {
+        const { LeaveRepository } = await import('@/modules/leave/repository/LeaveRepository')
+        const repo = new LeaveRepository()
+        const records = userId ? await repo.getAllForUser(userId) : await repo.getAll()
+        setState(prev => ({ ...prev, leaveRecords: records }))
+      } else if (module === 'notes' && state.notes.length === 0) {
+        const { NoteRepository } = await import('@/modules/notes/repository/NoteRepository')
+        const repo = new NoteRepository()
+        const records = userId ? await repo.getAllForUser(userId) : await repo.getAll()
+        setState(prev => ({ ...prev, notes: records }))
+      } else if (module === 'links' && state.collections.length === 0) {
+        const { listLinkCollections } = await import('@/app/actions/links')
+        const res = await listLinkCollections()
+        if (res.success && res.collections) {
+          const collections = res.collections.map(c => ({
+            id: c.id,
+            name: c.name,
+            description: null,
+            icon: c.icon || null,
+            color: c.color || null,
+            createdAt: c.createdAt,
+            updatedAt: c.updatedAt
+          }))
+          const links = res.collections.flatMap(c => (c.links || []).map(l => ({
+            id: l.id,
+            title: l.title,
+            url: l.url,
+            description: l.notes || null,
+            collectionId: l.collectionId,
+            clicks: l.openCount ?? 0,
+            isStarred: l.isPinned ?? false,
+            createdAt: l.createdAt,
+            updatedAt: l.updatedAt
+          })))
+          setState(prev => ({ ...prev, collections, links }))
+        }
+      } else if (module === 'vault' && state.vaultItems.length === 0 && userId) {
+        const { listVaultItems } = await import('@/app/actions/vault')
+        const res = await listVaultItems(null, undefined, 200, true)
+        if (res.success && res.items) {
+          const vaultItems = res.items.map(v => ({
+            id: v.id,
+            name: v.name,
+            isFolder: v.isFolder,
+            parentId: v.parentId,
+            size: v.fileSize,
+            mimeGroup: v.mimeGroup,
+            updatedAt: v.updatedAt,
+            createdAt: v.createdAt
+          }))
+          setState(prev => ({ ...prev, vaultItems }))
+        }
+      }
+    } catch (err) {
+      console.error(`[Store] hydrateModuleData error for ${module}:`, err)
+    }
+  }, [userId, state.weightRecords.length, state.leaveRecords.length, state.notes.length, state.collections.length, state.vaultItems.length])
 
   const initialize = useCallback((initialData: Partial<StoreState>) => {
     setState(prev => {
@@ -1654,6 +1778,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
       state,
       isSyncing,
       isHydrated: state.isHydrated,
+      primaryDataReady: state.primaryDataReady,
+      secondaryDataReady: state.secondaryDataReady,
+      hydrateModuleData,
       initialize,
       setCacheMetadata,
       saveJournalDraftAction,

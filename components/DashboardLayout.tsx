@@ -7,19 +7,31 @@ import { verifyPinAction, registerUserAction, logoutAction } from '@/app/actions
 import { writeQueue } from '@/lib/store/write-queue'
 import { requestDeduplicator } from '@/lib/store/requestDeduplicator'
 import { Layers, Sun, Moon, ShieldAlert } from 'lucide-react'
+import dynamic from 'next/dynamic'
 import { DashboardShell } from '@/modules/core/dashboard'
 import { getAgendaAction } from '@/modules/sync/google-calendar/actions'
 import { ParsedCalendarEvent } from '@/modules/sync/google-calendar/services/GoogleCalendarService'
-import { CommandPalette } from './CommandPalette'
-import { MobileSearchModal } from './MobileSearchModal'
 import { Card, CardBody, Button, Input, Modal } from '@/design-system'
-import { TemplateModal } from './TemplateModal'
 import { getTodayDateStr } from '@/lib/recurrence'
 import { CalendarCacheService } from '@/modules/calendar/services/CalendarCacheService'
 import { clearDayDtoCache } from './DayLogsModal'
 import { EntitlementProvider } from '@/lib/context/EntitlementContext'
 import { purgeUserStorage } from '@/lib/storage/userStorage'
 import type { UserEntitlements } from '@/lib/billing/types'
+
+// Lazy-load heavy global modals only when opened
+const CommandPalette = dynamic(
+  () => import('./CommandPalette').then(m => m.CommandPalette),
+  { ssr: false }
+)
+const MobileSearchModal = dynamic(
+  () => import('./MobileSearchModal').then(m => m.MobileSearchModal),
+  { ssr: false }
+)
+const TemplateModal = dynamic(
+  () => import('./TemplateModal').then(m => m.TemplateModal),
+  { ssr: false }
+)
 
 export interface CalendarData {
   connected: boolean
@@ -48,12 +60,14 @@ interface DashboardLayoutProps {
   children: React.ReactNode
   currentUser?: { id: string; username: string; email?: string | null; isOwner?: boolean } | null
   initialEntitlements?: UserEntitlements | null
+  initialGuestPermissions?: Record<string, boolean> | null
 }
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   children,
   currentUser = null,
   initialEntitlements = null,
+  initialGuestPermissions = null,
 }) => {
   const router = useRouter()
   const pathname = usePathname()
@@ -93,7 +107,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   // Auth state
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!currentUser)
   const [user, setUser] = useState<{ id: string; username: string; email?: string | null; isOwner?: boolean } | null>(currentUser)
-  const [guestPerms, setGuestPerms] = useState<Record<string, boolean>>({
+  const [guestPerms, setGuestPerms] = useState<Record<string, boolean>>(() => initialGuestPermissions || {
     today: false,
     calendar: false,
     activities: false,
@@ -104,6 +118,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     documents: false,
     settings: true,
   })
+
+  // Synchronize initialGuestPermissions if it changes
+  useEffect(() => {
+    if (initialGuestPermissions) {
+      setGuestPerms(initialGuestPermissions)
+    }
+  }, [initialGuestPermissions])
   const [usernameInput, setUsernameInput] = useState('')
   const [isRegisterMode, setIsRegisterMode] = useState(false)
   const [enteredPin, setEnteredPin] = useState('')
@@ -113,7 +134,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [isAuthLoading, setIsAuthLoading] = useState(false)
   const pinInputRef = useRef<HTMLInputElement>(null)
 
-  // Fetch guest permissions for non-owner accounts
+  // Fetch guest permissions for non-owner accounts only if missing or upon settings change
   const isOwner = user?.username === 'admin' || user?.isOwner === true
   useEffect(() => {
     const fetchPerms = () => {
@@ -127,10 +148,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         })
       }
     }
-    fetchPerms()
+    if (!initialGuestPermissions) {
+      fetchPerms()
+    }
     window.addEventListener('personal_settings_changed', fetchPerms)
     return () => window.removeEventListener('personal_settings_changed', fetchPerms)
-  }, [user, isOwner])
+  }, [user, isOwner, initialGuestPermissions])
 
   // Synchronize state with incoming currentUser prop to eliminate cross-session stale identity (#57)
   useEffect(() => {
@@ -715,6 +738,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           theme={theme}
           onToggleTheme={toggleTheme}
           onOpenSearch={handleOpenSearch}
+          guestPermissions={guestPerms}
         >
         {children}
 
@@ -726,26 +750,30 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           />
         )}
 
-        <CommandPalette
-          isOpen={isCommandPaletteOpen}
-          onClose={() => setIsCommandPaletteOpen(false)}
-          onNewActivity={onOpenCreateActivity}
-          onNavigate={changeTab}
-          onShowPlaceholder={(title, message) => {
-            setPlaceholderDialog({ isOpen: true, title, message })
-          }}
-          currentUser={user}
-          isOwner={isOwner}
-          guestPermissions={guestPerms}
-        />
+        {isCommandPaletteOpen && (
+          <CommandPalette
+            isOpen={isCommandPaletteOpen}
+            onClose={() => setIsCommandPaletteOpen(false)}
+            onNewActivity={onOpenCreateActivity}
+            onNavigate={changeTab}
+            onShowPlaceholder={(title, message) => {
+              setPlaceholderDialog({ isOpen: true, title, message })
+            }}
+            currentUser={user}
+            isOwner={isOwner}
+            guestPermissions={guestPerms}
+          />
+        )}
 
-        <MobileSearchModal
-          isOpen={isMobileSearchOpen}
-          onClose={() => setIsMobileSearchOpen(false)}
-          currentUser={user}
-          isOwner={isOwner}
-          guestPermissions={guestPerms}
-        />
+        {isMobileSearchOpen && (
+          <MobileSearchModal
+            isOpen={isMobileSearchOpen}
+            onClose={() => setIsMobileSearchOpen(false)}
+            currentUser={user}
+            isOwner={isOwner}
+            guestPermissions={guestPerms}
+          />
+        )}
 
         {placeholderDialog && (
           <Modal

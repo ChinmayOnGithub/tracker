@@ -241,21 +241,10 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   const calendarEvents = useMemo(() => calendarData.agenda?.today || [], [calendarData.agenda?.today])
 
-  // Debounced timeline generation
-  const [debouncedTimeline, setDebouncedTimeline] = useState<TimelineItem[]>(() =>
-    generateTimeline(analyzedTemplates, logs, todayStr, calendarEvents)
-  )
-
-  useEffect(() => {
-    // If the timeline is currently empty (e.g. initial mount or hydration transition),
-    // compute immediately (0ms timeout) so the UI becomes usable instantly without 150ms gating.
-    const delay = debouncedTimeline.length === 0 ? 0 : 150
-    const t = setTimeout(() => {
-      const freshTimeline = generateTimeline(analyzedTemplates, logs, todayStr, calendarEvents)
-      setDebouncedTimeline(freshTimeline)
-    }, delay)
-    return () => clearTimeout(t)
-  }, [analyzedTemplates, logs, todayStr, calendarEvents, debouncedTimeline.length])
+  // Immediate derived timeline generation without artificial debounce delay (#73, Section 25)
+  const debouncedTimeline = useMemo(() => {
+    return generateTimeline(analyzedTemplates, logs, todayStr, calendarEvents)
+  }, [analyzedTemplates, logs, todayStr, calendarEvents])
 
   // Unified derived timeline viewModel selector to minimize layouts and re-filters
   const _viewModel = useMemo(() => {

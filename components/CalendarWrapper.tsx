@@ -8,24 +8,25 @@ import { ActivityTemplate, ActivityLog, Note, RecurrenceAnalysis } from '@/types
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useStore } from '@/lib/store/store'
 import { fetchCalendarDataAction } from '@/app/actions/queries'
-import { analyzeRecurrence } from '@/lib/recurrence'
+import { analyzeAllTemplatesIndexed, getTodayDateStr } from '@/lib/recurrence'
 import { Skeleton } from '@/design-system'
 
 import { requestDeduplicator } from '@/lib/store/requestDeduplicator'
 
 interface CalendarWrapperProps {
-  logs: ActivityLog[]
-  templates: ActivityTemplate[]
-  notes: Note[]
-  todayStr: string
-  analyzedTemplates: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]
+  logs?: ActivityLog[]
+  templates?: ActivityTemplate[]
+  notes?: Note[]
+  todayStr?: string
+  analyzedTemplates?: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]
 }
 
 const CALENDAR_TTL = 45000 // 45 seconds TTL for calendar revalidation
 
 export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
-  todayStr,
+  todayStr: propTodayStr,
 }) => {
+  const todayStr = propTodayStr || getTodayDateStr()
   const context = useContext(CalendarDataContext)
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -106,11 +107,7 @@ export const CalendarWrapper: React.FC<CalendarWrapperProps> = ({
   }, [state.journalEntries])
 
   const analyzedTemplates = useMemo(() => {
-    return state.templates.map(template => {
-      const templateLogs = state.logs.filter(log => log.activityId === template.id)
-      const analysis = analyzeRecurrence(template, templateLogs, todayStr)
-      return { template, analysis }
-    })
+    return analyzeAllTemplatesIndexed(state.templates, state.logs, todayStr)
   }, [state.templates, state.logs, todayStr])
 
   if (!context) {

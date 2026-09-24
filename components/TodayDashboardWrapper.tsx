@@ -5,7 +5,8 @@ import { CalendarDataContext } from './DashboardLayout'
 import { TodayDashboard } from './TodayDashboard'
 import { ActivityLog, AnalyzedTemplate } from '@/types'
 import { useStore, JournalEntry, LeaveRecord, LeaveAllowance, WeightRecord } from '@/lib/store/store'
-import { analyzeRecurrence } from '@/lib/recurrence'
+import { useSearchParams } from 'next/navigation'
+import { getTodayDateStr, analyzeAllTemplatesIndexed } from '@/lib/recurrence'
 import { fetchDashboardDataAction, prefetchSecondaryDataAction } from '@/app/actions/queries'
 import { Skeleton } from '@/design-system'
 import { DashboardConfig, LegacyDashboardConfig } from '@/lib/dashboard/types'
@@ -14,7 +15,7 @@ import { requestDeduplicator } from '@/lib/store/requestDeduplicator'
 interface TodayDashboardWrapperProps {
   analyzedTemplates?: AnalyzedTemplate[]
   logs?: ActivityLog[]
-  todayStr: string
+  todayStr?: string
   journalEntries?: JournalEntry[]
   leaveRecords?: LeaveRecord[]
   leaveAllowances?: LeaveAllowance[]
@@ -27,10 +28,13 @@ const TODAY_TTL = 30000 // 30 seconds freshness TTL for Today dashboard
 const SECONDARY_TTL = 300000 // 5 minutes freshness TTL for secondary prefetch (links, vault, notes)
 
 export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
-  todayStr,
+  todayStr: propTodayStr,
   initialDashboardConfig,
   initialWeeklyGoal,
 }) => {
+  const searchParams = useSearchParams()
+  const dateParam = searchParams?.get('date')
+  const todayStr = propTodayStr || dateParam || getTodayDateStr()
   const context = useContext(CalendarDataContext)
   const { state, initialize, setCacheMetadata } = useStore()
   // Scope dedupe keys to the authenticated user so requests from different
@@ -129,13 +133,9 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     // Standard Next.js route push is handled by parent or links, we can rely on standard navigation
   }
 
-  // Compute analyzedTemplates dynamically from the store state
+  // Compute analyzedTemplates using O(T + L) indexed log access
   const analyzedTemplates = useMemo(() => {
-    return state.templates.map(template => {
-      const templateLogs = state.logs.filter(log => log.activityId === template.id)
-      const analysis = analyzeRecurrence(template, templateLogs, todayStr)
-      return { template, analysis }
-    })
+    return analyzeAllTemplatesIndexed(state.templates, state.logs, todayStr)
   }, [state.templates, state.logs, todayStr])
 
   // Show a loading skeleton only on absolute cold first mount when IndexedDB is still hydrating

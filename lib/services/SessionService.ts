@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { cookies } from 'next/headers'
+import { cache } from 'react'
 import { signSession, verifySession } from '@/lib/session'
 import { AuthorizationService, AuthenticatedUser } from './AuthorizationService'
 
@@ -9,8 +10,10 @@ export class SessionService {
 
   /**
    * Resolves the authenticated user from a signed session token string.
+   * Memoized per request using React.cache() so multiple callers in a render tree
+   * do not perform duplicate DB lookups for the same token.
    */
-  public static async resolveUserFromToken(token: string | null | undefined): Promise<AuthenticatedUser | null> {
+  public static resolveUserFromToken = cache(async (token: string | null | undefined): Promise<AuthenticatedUser | null> => {
     if (!token) return null
     const session = verifySession(token)
     if (!session) return null
@@ -30,22 +33,23 @@ export class SessionService {
       email: user.email,
       isOwner,
     }
-  }
+  })
 
   /**
    * Retrieves the currently logged-in user from the signed session token cookie.
    * Safe for Server Components, Route Handlers, and Server Actions.
+   * Request-scoped memoization ensures single evaluation per SSR/RSC cycle.
    */
-  public static async getSessionUser(): Promise<AuthenticatedUser | null> {
+  public static getSessionUser = cache(async (): Promise<AuthenticatedUser | null> => {
     try {
       const cookieStore = await cookies()
       const token = cookieStore.get('session_token')?.value
-      return await this.resolveUserFromToken(token)
+      return await SessionService.resolveUserFromToken(token)
     } catch (error) {
       console.error('[SessionService] Failed to resolve session user from cookies:', error)
       return null
     }
-  }
+  })
 
   /**
    * Resolves authentication from an HTTP Request (checking Authorization: Bearer <token> or Cookie).

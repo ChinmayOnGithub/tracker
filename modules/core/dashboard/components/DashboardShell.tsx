@@ -40,6 +40,7 @@ interface DashboardShellProps {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
   onOpenSearch?: () => void
+  guestPermissions?: Record<string, boolean>
 }
 
 export const DashboardShell: React.FC<DashboardShellProps> = ({
@@ -50,7 +51,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
   onLogout,
   theme,
   onToggleTheme,
-  onOpenSearch
+  onOpenSearch,
+  guestPermissions: initialGuestPerms
 }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isMoreOpen, setIsMoreOpen] = useState(false)
@@ -100,8 +102,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
 
   const isOwner = user?.username === 'admin' || (user as { isOwner?: boolean })?.isOwner === true || isAuthorizedUserEmail(user?.email || user?.username)
 
-  // Fetch guest permissions for non-owner accounts
-  const [guestPerms, setGuestPerms] = React.useState<Record<string, boolean>>({
+  // Use passed guest permissions or fallback to defaults
+  const [guestPerms, setGuestPerms] = React.useState<Record<string, boolean>>(() => initialGuestPerms || {
     today: false,
     calendar: false,
     activities: false,
@@ -112,6 +114,13 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     documents: false,
     settings: true,
   })
+  const [prevInitialPerms, setPrevInitialPerms] = React.useState(initialGuestPerms)
+  if (initialGuestPerms !== prevInitialPerms) {
+    setPrevInitialPerms(initialGuestPerms)
+    if (initialGuestPerms) {
+      setGuestPerms(initialGuestPerms)
+    }
+  }
 
   React.useEffect(() => {
     const fetchPerms = () => {
@@ -125,10 +134,12 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
         })
       }
     }
-    fetchPerms()
+    if (!initialGuestPerms) {
+      fetchPerms()
+    }
     window.addEventListener('personal_settings_changed', fetchPerms)
     return () => window.removeEventListener('personal_settings_changed', fetchPerms)
-  }, [isOwner])
+  }, [isOwner, initialGuestPerms])
 
   // P1 Proactive Page Route Prefetching:
   // Warm up Next.js route bundles on mount so navigating to any tab is instantaneous

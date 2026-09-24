@@ -58,10 +58,10 @@ export interface LinkCollection {
 }
 
 interface LinkLibraryPanelProps {
-  initialCollections: LinkCollection[]
+  initialCollections?: LinkCollection[]
 }
 
-export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialCollections }) => {
+export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialCollections = [] }) => {
   const searchParams = useSearchParams()
   const targetLinkId = searchParams?.get('id') || searchParams?.get('linkId')
   const targetColId = searchParams?.get('colId') || searchParams?.get('collectionId')
@@ -77,6 +77,21 @@ export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialColle
     }
     return initialCollections.length > 0 ? initialCollections[0].id : null
   })
+
+  // Load collections asynchronously if mounted without preloaded server data
+  useEffect(() => {
+    if (collections.length === 0) {
+      import('@/app/actions/links').then(({ listLinkCollections }) => {
+        listLinkCollections().then(res => {
+          if (res.success && res.collections) {
+            const mapped = res.collections as unknown as LinkCollection[]
+            setCollections(mapped)
+            setActiveCollectionId(prev => prev || (mapped.length > 0 ? mapped[0].id : null))
+          }
+        })
+      })
+    }
+  }, [collections.length])
 
   // Search & Filters
   const [linkSearchQuery, setLinkSearchQuery] = useState('')

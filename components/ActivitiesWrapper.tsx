@@ -6,27 +6,27 @@ import { CalendarDataContext } from './DashboardLayout'
 import { ActivityManager } from './ActivityManager'
 import { DayLogsModal } from './DayLogsModal'
 import { ActivityTemplate, ActivityLog, Tag, RecurrenceAnalysis, Note } from '@/types'
-import { getTodayDateStr, analyzeRecurrence } from '@/lib/recurrence'
+import { getTodayDateStr, analyzeAllTemplatesIndexed } from '@/lib/recurrence'
 import { useStore } from '@/lib/store/store'
 
 import { TaskOccurrenceService } from '@/modules/activities/domain/TaskOccurrenceService'
 
 interface ActivitiesWrapperProps {
-  analyzedTemplates: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]
+  analyzedTemplates?: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]
   recentLogs?: ActivityLog[]
   tags?: Tag[]
-  templates: ActivityTemplate[]
-  logs: ActivityLog[]
-  notes: Note[]
+  templates?: ActivityTemplate[]
+  logs?: ActivityLog[]
+  notes?: Note[]
 }
 
 export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
-  analyzedTemplates: initialAnalyzedTemplates,
-  recentLogs: _recentLogs,
-  tags: _tags,
-  templates: initialTemplates,
-  logs: initialLogs,
-  notes: initialNotes,
+  analyzedTemplates: initialAnalyzedTemplates = [],
+  recentLogs: _recentLogs = [],
+  tags: _tags = [],
+  templates: initialTemplates = [],
+  logs: initialLogs = [],
+  notes: initialNotes = [],
 }) => {
   const searchParams = useSearchParams()
   const targetId = searchParams?.get('id') || searchParams?.get('activityId')
@@ -87,11 +87,7 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
 
   const analyzedTemplates = useMemo(() => {
     const todayStr = getTodayDateStr()
-    return persistentTemplates.map(template => {
-      const templateLogs = effectiveLogs.filter(log => log.activityId === template.id)
-      const analysis = analyzeRecurrence(template, templateLogs, todayStr)
-      return { template, analysis }
-    })
+    return analyzeAllTemplatesIndexed(persistentTemplates, effectiveLogs, todayStr)
   }, [persistentTemplates, effectiveLogs])
 
   // Filter logs and note for selected date

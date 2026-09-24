@@ -337,3 +337,62 @@ export function getWeekDates(dateStr: string, startOfWeekPref: 'monday' | 'sunda
   }
   return dates
 }
+
+/**
+ * Builds an index of ActivityLogs grouped by activityId in a single O(N) pass.
+ * Eliminates repeated O(N*M) array filtering during recurrence calculation.
+ */
+export function buildLogsByActivityIdIndex(logs: ActivityLog[]): Map<string, ActivityLog[]> {
+  const map = new Map<string, ActivityLog[]>()
+  for (let i = 0; i < logs.length; i++) {
+    const log = logs[i]
+    if (!log.activityId) continue
+    const existing = map.get(log.activityId)
+    if (existing) {
+      existing.push(log)
+    } else {
+      map.set(log.activityId, [log])
+    }
+  }
+  return map
+}
+
+/**
+ * Builds an index of ActivityLogs grouped by date (YYYY-MM-DD) in a single O(N) pass.
+ */
+export function buildLogsByDateIndex(logs: ActivityLog[]): Map<string, ActivityLog[]> {
+  const map = new Map<string, ActivityLog[]>()
+  for (let i = 0; i < logs.length; i++) {
+    const log = logs[i]
+    if (!log.date) continue
+    const existing = map.get(log.date)
+    if (existing) {
+      existing.push(log)
+    } else {
+      map.set(log.date, [log])
+    }
+  }
+  return map
+}
+
+/**
+ * Evaluates recurrence for a list of templates using a precomputed log index.
+ * Achieves O(T + L) complexity instead of O(T * L).
+ */
+export function analyzeAllTemplatesIndexed(
+  templates: ActivityTemplate[],
+  logs: ActivityLog[],
+  todayStr: string
+): { template: ActivityTemplate; analysis: RecurrenceAnalysis }[] {
+  const logsByIndex = buildLogsByActivityIdIndex(logs)
+  const result = new Array<{ template: ActivityTemplate; analysis: RecurrenceAnalysis }>(templates.length)
+  for (let i = 0; i < templates.length; i++) {
+    const template = templates[i]
+    const templateLogs = logsByIndex.get(template.id) || []
+    result[i] = {
+      template,
+      analysis: analyzeRecurrence(template, templateLogs, todayStr),
+    }
+  }
+  return result
+}
