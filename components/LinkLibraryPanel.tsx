@@ -899,17 +899,19 @@ export const LinkLibraryPanel: React.FC<LinkLibraryPanelProps> = ({ initialColle
               />
 
               <div className="flex items-center gap-3">
-                <div className="flex items-center border border-[var(--color-border)] rounded-[3px] bg-[var(--color-bg-surface)] p-0.5">
+                <div className="flex items-center border border-[var(--border)] rounded-[var(--radius-xs)] bg-[var(--surface)] p-0.5">
                   <button
+                    type="button"
                     onClick={() => setViewMode('grid')}
-                    className={`p-1 rounded-sm cursor-pointer ${viewMode === 'grid' ? 'bg-slate-100 dark:bg-zinc-800 text-[var(--color-text-main)]' : 'text-slate-400'}`}
+                    className={`p-1 rounded-[var(--radius-xs)] cursor-pointer transition-colors ${viewMode === 'grid' ? 'bg-[var(--accent)] text-[var(--foreground)]' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
                     title="Grid View"
                   >
                     <Grid size={13} />
                   </button>
                   <button
+                    type="button"
                     onClick={() => setViewMode('list')}
-                    className={`p-1 rounded-sm cursor-pointer ${viewMode === 'list' ? 'bg-slate-100 dark:bg-zinc-800 text-[var(--color-text-main)]' : 'text-slate-400'}`}
+                    className={`p-1 rounded-[var(--radius-xs)] cursor-pointer transition-colors ${viewMode === 'list' ? 'bg-[var(--accent)] text-[var(--foreground)]' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}`}
                     title="List View"
                   >
                     <List size={13} />

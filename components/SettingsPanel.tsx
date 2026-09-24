@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardBody, CardFooter, Button, Skeleton, Select, Input, ConfirmDialog, Badge, SearchInput } from '@/design-system'
+import { Card, CardHeader, CardBody, CardFooter, Button, Skeleton, Select, Input, ConfirmDialog, Badge, SearchInput, PageHeader } from '@/design-system'
 import { 
   User, Palette, Calendar, Layout, Bell, RefreshCw, Lock, 
   Settings2, Database, Shield, CheckCircle2, AlertCircle, 
@@ -605,17 +605,14 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
 
   return (
     <div className="space-y-[var(--spacing-6)]">
-      {/* Header Info */}
-      <div className="space-y-1">
-        <h2 className="text-base font-extrabold text-[var(--color-text-main)] tracking-tight">Personalization Center</h2>
-        <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
-          Configure modules, accent styling, dashboard preferences, and security options for your Life Operating System.
-        </p>
-      </div>
+      <PageHeader
+        title="Personalization Center"
+        description="Configure modules, accent styling, dashboard preferences, and security options for your Life Operating System."
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-[var(--spacing-6)] items-start">
         {/* Navigation Sidebar */}
-        <div className="flex lg:flex-col overflow-x-auto lg:overflow-x-visible gap-1.5 p-1 bg-slate-100/50 dark:bg-zinc-900/40 rounded-xl lg:bg-transparent lg:p-0">
+        <div className="flex lg:flex-col overflow-x-auto lg:overflow-x-visible gap-1.5 p-1 bg-[var(--surface-muted)] rounded-[var(--radius-lg)] lg:bg-transparent lg:p-0">
           {(
             userProfile?.isOwner !== false
               ? [

@@ -242,12 +242,14 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               Tracker
             </span>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => setIsSidebarOpen(false)}
-            className="p-1 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-[var(--color-accent)] lg:hidden"
-          >
-            <X className="w-4 h-4" />
-          </button>
+            icon={<X className="w-4 h-4" />}
+            className="lg:hidden"
+            aria-label="Close sidebar"
+          />
         </div>
 
         {/* Navigation list */}
@@ -267,12 +269,12 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
                   const route = item.id === 'today' ? '/' : `/${item.id}`
                   router.prefetch(route)
                 }}
-                className={`w-full flex items-center gap-3 px-3 py-1.75 text-xs font-medium rounded-[var(--radius-md)] transition-all duration-[var(--motion-duration-fast)] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-primary)] ${isActive
-                    ? 'bg-[var(--color-accent)] text-[var(--color-text-main)] border border-[var(--color-border)]'
-                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]/50 hover:text-[var(--color-text-main)] border border-transparent'
+                className={`w-full flex items-center gap-3 px-3 py-1.75 text-xs font-medium rounded-[var(--radius-md)] transition-all duration-[var(--motion-duration-fast)] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--focus-ring)] ${isActive
+                    ? 'bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] font-semibold'
+                    : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)]/50 hover:text-[var(--foreground)] border border-transparent'
                   }`}
               >
-                <IconComponent className={`w-3.75 h-3.75 transition-colors ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}`} />
+                <IconComponent className={`w-3.75 h-3.75 transition-colors ${isActive ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)]'}`} />
                 <span>{item.label}</span>
               </button>
             )
@@ -292,13 +294,13 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
             ) : (
               <button
                 onClick={() => router.push('/pricing')}
-                className="w-full flex items-center justify-between px-3 py-1.75 text-xs font-semibold rounded-[var(--radius-md)] bg-[var(--color-primary)]/10 text-[var(--color-primary)] hover:bg-[var(--color-primary)]/20 transition-all duration-150 cursor-pointer border border-[var(--color-primary)]/20"
+                className="w-full flex items-center justify-between px-3 py-1.75 text-xs font-semibold rounded-[var(--radius-md)] bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 transition-all duration-150 cursor-pointer border border-[var(--primary)]/20"
               >
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Upgrade to Pro</span>
                 </div>
-                <span className="text-[10px] font-bold bg-[var(--color-primary)] text-white px-1.5 py-0.5 rounded-full">₹29</span>
+                <span className="text-[10px] font-bold bg-[var(--primary)] text-[var(--primary-foreground)] px-1.5 py-0.5 rounded-full">₹29</span>
               </button>
             )
           )}
@@ -309,23 +311,26 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
               </span>
               <div className="flex items-center gap-1">
                 <QuickAppearancePopover />
-                <button
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
                   onClick={onToggleTheme}
                   title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-                  className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-text-muted)] hover:bg-[var(--color-accent)] hover:text-[var(--color-text-main)] transition-colors duration-150 cursor-pointer"
-                >
-                  {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-                </button>
+                  icon={theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                  aria-label="Toggle theme"
+                />
               </div>
             </div>
           )}
-          <button
+          <Button
+            variant="danger"
+            size="sm"
             onClick={onLogout}
-            className="w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-[var(--radius-md)] text-rose-500 hover:bg-rose-500/10 transition-colors duration-150 cursor-pointer"
+            icon={<LogOut className="w-4 h-4" />}
+            className="w-full justify-start font-semibold"
           >
-            <LogOut className="w-4 h-4" />
-            <span>Logout</span>
-          </button>
+            Logout
+          </Button>
         </div>
       </aside>
 

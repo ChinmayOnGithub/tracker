@@ -620,7 +620,7 @@ export const Calendar: React.FC<CalendarProps> = ({
             >
               Today
             </Button>
-            <div className="flex bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-lg p-0.5 shadow-xs">
+            <div className="flex bg-[var(--surface-muted)] border border-[var(--border)] rounded-[var(--radius-md)] p-0.5 shadow-xs">
               <Button variant="ghost" size="sm" onClick={handlePrev} className="p-0 w-11 h-11 md:w-auto md:h-auto md:p-1 flex items-center justify-center"><ChevronLeft size={16} /></Button>
               <Button variant="ghost" size="sm" onClick={handleNext} className="p-0 w-11 h-11 md:w-auto md:h-auto md:p-1 flex items-center justify-center"><ChevronRight size={16} /></Button>
             </div>
@@ -630,7 +630,7 @@ export const Calendar: React.FC<CalendarProps> = ({
 
       {/* Weekly Work Hours Tracker Summary banner */}
       {workStats && (
-        <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-semibold">
+        <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 rounded-[var(--radius-lg)] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs font-semibold">
           <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
             <Briefcase size={14} className="shrink-0" />
             <span>
@@ -639,10 +639,10 @@ export const Calendar: React.FC<CalendarProps> = ({
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <span className={workStats.goalMet ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : 'text-slate-500 dark:text-zinc-400'}>
+            <span className={workStats.goalMet ? 'text-emerald-600 dark:text-emerald-400 font-extrabold' : 'text-[var(--muted-foreground)]'}>
               {workStats.goalMet ? '🎉 Weekly Goal Met!' : `${workStats.remaining.toFixed(1)}h remaining`}
             </span>
-            <div className="w-24 h-1.5 bg-slate-200 dark:bg-zinc-800 rounded-full overflow-hidden shrink-0">
+            <div className="w-24 h-1.5 bg-[var(--border)] rounded-full overflow-hidden shrink-0">
               <div
                 className={`h-full ${workStats.goalMet ? 'bg-emerald-500' : 'bg-blue-500'} rounded-full`}
                 style={{ width: `${Math.min(100, (workStats.officeHours / workStats.weeklyGoal) * 100)}%` }}
@@ -655,7 +655,7 @@ export const Calendar: React.FC<CalendarProps> = ({
       {/* ── 1. MONTH VIEW ── */}
       {view === 'month' && (
         <div className="space-y-2">
-          <div className="grid grid-cols-7 text-center text-[11px] font-bold text-slate-400 dark:text-zinc-500 uppercase">
+          <div className="grid grid-cols-7 text-center text-[11px] font-bold text-[var(--muted-foreground)] uppercase">
             {(startOfWeekPref === 'monday' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : WEEKDAYS).map(day => (
               <div key={day} className="py-2">{day}</div>
             ))}

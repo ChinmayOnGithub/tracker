@@ -210,8 +210,8 @@ export const PricingPanel: React.FC = () => {
             onClick={() => setInterval('monthly')}
             className={`px-4 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] transition-all cursor-pointer ${
               interval === 'monthly'
-                ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-xs'
+                : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
             }`}
           >
             Monthly
@@ -221,8 +221,8 @@ export const PricingPanel: React.FC = () => {
             onClick={() => setInterval('annual')}
             className={`px-4 py-1.5 text-xs font-semibold rounded-[var(--radius-md)] transition-all flex items-center gap-1.5 cursor-pointer ${
               interval === 'annual'
-                ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                ? 'bg-[var(--primary)] text-[var(--primary-foreground)] shadow-xs'
+                : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
             }`}
           >
             <span>Annual</span>

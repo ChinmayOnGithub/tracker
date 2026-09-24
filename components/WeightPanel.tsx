@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect, useContext } from 'react'
 import { Plus, Minus, Trash2, TrendingDown, TrendingUp } from 'lucide-react'
 import { useStore, WeightRecord } from '@/lib/store/store'
-import { Input, Button, Card } from '@/design-system'
+import { Input, Button, Card, PageHeader, EmptyState } from '@/design-system'
 import { notify } from '@/lib/notifications'
 import { todayYMD, toYMD, fmtDateShort, fmtDateMed } from '@/lib/dateUtils'
 import { CalendarDataContext } from '@/components/DashboardLayout'
@@ -525,30 +525,26 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords = [] })
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-[var(--color-border)] pb-4">
-        <div>
-          <h1 className="text-xl font-black text-[var(--color-text-main)] tracking-tight">Weight Tracker</h1>
-          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-            {records.length} log{records.length !== 1 ? 's' : ''} recorded
-          </p>
-        </div>
-
-        {/* Height Settings */}
-        <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-text-muted)]">
-          <span>Height:</span>
-          <div className="relative">
-            <input
-              type="number"
-              min="100"
-              max="250"
-              value={heightCm}
-              onChange={e => handleHeightChange(Number(e.target.value) || 175)}
-              className="w-16 px-2 py-1 text-center font-black border border-[var(--color-border)] rounded-md bg-[var(--color-bg-base)] text-[var(--color-text-main)] focus:border-[var(--color-primary)] focus:outline-hidden"
-            />
-            <span className="absolute right-2 top-1.5 text-[10px] text-[var(--color-text-muted)] pointer-events-none">cm</span>
+      <PageHeader
+        title="Weight Tracker"
+        description={`${records.length} log${records.length !== 1 ? 's' : ''} recorded`}
+        actions={
+          <div className="flex items-center gap-2 text-xs font-semibold text-[var(--muted-foreground)]">
+            <span>Height:</span>
+            <div className="relative">
+              <input
+                type="number"
+                min="100"
+                max="250"
+                value={heightCm}
+                onChange={e => handleHeightChange(Number(e.target.value) || 175)}
+                className="w-16 px-2 py-1 text-center font-bold border border-[var(--border)] rounded-[var(--radius-md)] bg-[var(--surface)] text-[var(--foreground)] focus:border-[var(--primary)] focus:outline-hidden"
+              />
+              <span className="absolute right-2 top-1.5 text-[10px] text-[var(--muted-foreground)] pointer-events-none">cm</span>
+            </div>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* Stats Row */}
       {current !== null && (
@@ -580,22 +576,20 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords = [] })
               </span>
             </div>
             {chartData.length > 1 && (
-              <div className="flex bg-slate-100 dark:bg-zinc-900/60 p-0.5 rounded-[9px] shadow-inner text-[10px] self-start">
+              <div className="flex bg-[var(--surface-muted)] border border-[var(--border)] p-0.5 rounded-[var(--radius-md)] text-[10px] self-start">
                 {(['30D', '60D', '90D', 'All'] as const).map(p => (
-                  <Button
+                  <button
                     key={p}
                     type="button"
-                    variant={period === p ? 'secondary' : 'outline'}
-                    size="sm"
                     onClick={() => setPeriod(p)}
-                    className={`px-2.5 py-1 text-center font-bold rounded-md transition-all duration-200 cursor-pointer ${
+                    className={`px-2.5 py-1 text-center font-bold rounded-[var(--radius-sm)] transition-all duration-150 cursor-pointer ${
                       period === p
-                        ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
-                        : 'text-slate-500 dark:text-zinc-550 hover:text-slate-700 dark:hover:text-zinc-300 border-none bg-transparent shadow-none hover:bg-transparent'
+                        ? 'bg-[var(--accent)] text-[var(--foreground)] shadow-xs'
+                        : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'
                     }`}
                   >
                     {p}
-                  </Button>
+                  </button>
                 ))}
               </div>
             )}
@@ -620,8 +614,12 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords = [] })
           </h2>
         </div>
         {records.length === 0 ? (
-          <div className="py-12 text-center text-xs text-[var(--color-text-muted)]">
-            No entries yet. Log your first weight above.
+          <div className="py-6 px-4">
+            <EmptyState
+              compact
+              title="No Entries"
+              description="No entries yet. Log your first weight above."
+            />
           </div>
         ) : (
           <div className="divide-y divide-[var(--color-border)] max-h-96 overflow-y-auto">

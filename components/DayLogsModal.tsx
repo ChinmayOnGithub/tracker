@@ -740,20 +740,20 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
       )}
 
       {/* Tabs */}
-      <div className="px-5 py-2.5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/20 flex justify-center shrink-0">
-        <div className="flex bg-slate-100 dark:bg-zinc-800/60 p-0.5 rounded-[9px] shadow-inner w-full max-w-xs">
+      <div className="px-5 py-2.5 border-b border-[var(--color-border)] bg-[var(--color-bg-base)] flex justify-center shrink-0">
+        <div className="flex bg-[var(--color-bg-surface)] p-0.5 rounded-[var(--radius-md)] border border-[var(--color-border)] w-full max-w-xs">
           <button onClick={() => setActiveTab('activities')}
-            className={`flex-1 py-1.5 text-center font-bold rounded-md transition-all duration-200 flex justify-center items-center gap-1.5 text-xs cursor-pointer ${
-              activeTab === 'activities' ? 'bg-white dark:bg-zinc-700 text-black dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.1)] font-extrabold' : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300'
+            className={`flex-1 py-1.5 text-center font-bold rounded-[var(--radius-sm)] transition-all duration-200 flex justify-center items-center gap-1.5 text-xs cursor-pointer ${
+              activeTab === 'activities' ? 'bg-[var(--color-accent)] text-[var(--color-text-main)] shadow-xs font-extrabold' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
             }`}>
             <Sparkles size={14} /> Schedule & Tasks
           </button>
           <button onClick={() => setActiveTab('notes')}
-            className={`flex-1 py-1.5 text-center font-bold rounded-md transition-all duration-200 flex justify-center items-center gap-1.5 text-xs cursor-pointer ${
-              activeTab === 'notes' ? 'bg-white dark:bg-zinc-700 text-black dark:text-white shadow-[0_1px_3px_rgba(0,0,0,0.1)] font-extrabold' : 'text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300'
+            className={`flex-1 py-1.5 text-center font-bold rounded-[var(--radius-sm)] transition-all duration-200 flex justify-center items-center gap-1.5 text-xs cursor-pointer ${
+              activeTab === 'notes' ? 'bg-[var(--color-accent)] text-[var(--color-text-main)] shadow-xs font-extrabold' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
             }`}>
             <BookOpen size={14} /> Journal
-            {note && <span className="w-1.5 h-1.5 rounded-full bg-green-500 dark:bg-green-400" />}
+            {note && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
           </button>
         </div>
       </div>
@@ -989,7 +989,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                             </div>
                             <div className="min-w-0">
                               <span className="text-xs font-semibold text-[var(--color-text-main)] truncate block">{event.title}</span>
-                              <p className="text-[10px] text-slate-400 dark:text-zinc-500 flex items-center gap-1 mt-0.5">
+                              <p className="text-[10px] text-[var(--color-text-muted)] flex items-center gap-1 mt-0.5">
                                 <Clock size={10} /> {timeLabel}
                               </p>
                             </div>
@@ -1006,44 +1006,44 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsTemplatesExpanded(!isTemplatesExpanded)}
-                  className="w-full flex items-center justify-between font-bold text-[10px] uppercase tracking-wider text-slate-500 dark:text-zinc-405 cursor-pointer hover:text-[var(--color-text-main)] transition-colors"
+                  className="w-full flex items-center justify-between font-bold text-[10px] uppercase tracking-wider text-[var(--color-text-muted)] cursor-pointer hover:text-[var(--color-text-main)] transition-colors"
                 >
-                    <span>Schedule from Templates</span>
-                    <span className="text-[9px] text-[var(--color-text-muted)] font-normal border border-[var(--color-border)] rounded px-1.5 py-0.5 hover:bg-[var(--color-bg-surface)]">
-                      {isTemplatesExpanded ? 'Hide' : 'Show'}
-                    </span>
-                  </button>
-                  {isTemplatesExpanded && (
-                    <div className="space-y-3 animate-in fade-in duration-200">
-                      <div className="relative w-full">
-                        <Search className="absolute left-2.5 top-2.5 h-3 w-3 text-slate-400 dark:text-zinc-550" />
-                        <input type="text" placeholder="Search templates..." value={activitySearch} onChange={e => setActivitySearch(e.target.value)}
-                          className="w-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg pl-8 pr-3 py-1.5 text-[11px] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-600 focus:outline-hidden focus:border-[var(--color-border)]" />
-                      </div>
-                      {filteredTemplates.length === 0 ? (
-                        <div className="py-6 text-center text-xs text-slate-400 dark:text-zinc-650 italic">No activities match.</div>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                          {filteredTemplates.map(t => {
-                            const colorClasses = getTemplateColorClasses(t.color)
-                            return (
-                              <button key={t.id} type="button" onClick={() => handleQuickScheduleTemplate(t)}
-                                className="flex items-center gap-2 p-1.5 bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)]/20 border border-[var(--color-border)] rounded-lg transition-all cursor-pointer text-left hover:-translate-y-0.5 hover:shadow-xs group">
-                                <div className={`w-6 h-6 rounded-md flex items-center justify-center border group-hover:scale-105 transition-all ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}>
-                                  <Icon name={t.icon} size={11} />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="text-[10px] font-bold text-slate-850 dark:text-zinc-205 truncate group-hover:text-slate-950 dark:group-hover:text-white transition-colors">{t.name}</div>
-                                  <div className="text-[8px] text-slate-400 dark:text-zinc-500 font-medium capitalize truncate">{t.scheduledTime ? `@ ${t.scheduledTime}` : 'anytime'}</div>
-                                </div>
-                              </button>
-                            )
-                          })}
-                        </div>
-                      )}
+                  <span>Schedule from Templates</span>
+                  <span className="text-[9px] text-[var(--color-text-muted)] font-normal border border-[var(--color-border)] rounded px-1.5 py-0.5 hover:bg-[var(--color-bg-surface)]">
+                    {isTemplatesExpanded ? 'Hide' : 'Show'}
+                  </span>
+                </button>
+                {isTemplatesExpanded && (
+                  <div className="space-y-3 animate-in fade-in duration-200">
+                    <div className="relative w-full">
+                      <Search className="absolute left-2.5 top-2.5 h-3 w-3 text-[var(--color-text-muted)]" />
+                      <input type="text" placeholder="Search templates..." value={activitySearch} onChange={e => setActivitySearch(e.target.value)}
+                        className="w-full bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-lg pl-8 pr-3 py-1.5 text-[11px] text-[var(--color-text-main)] placeholder-[var(--color-text-muted)] focus:outline-hidden focus:border-[var(--color-border)]" />
                     </div>
-                  )}
-                </div>
+                    {filteredTemplates.length === 0 ? (
+                      <div className="py-6 text-center text-xs text-[var(--color-text-muted)] italic">No activities match.</div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                        {filteredTemplates.map(t => {
+                          const colorClasses = getTemplateColorClasses(t.color)
+                          return (
+                            <button key={t.id} type="button" onClick={() => handleQuickScheduleTemplate(t)}
+                              className="flex items-center gap-2 p-1.5 bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)]/20 border border-[var(--color-border)] rounded-lg transition-all cursor-pointer text-left hover:-translate-y-0.5 hover:shadow-xs group">
+                              <div className={`w-6 h-6 rounded-md flex items-center justify-center border group-hover:scale-105 transition-all ${colorClasses.bg} ${colorClasses.border} ${colorClasses.text}`}>
+                                <Icon name={t.icon} size={11} />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[10px] font-bold text-[var(--color-text-main)] truncate group-hover:text-[var(--color-primary)] transition-colors">{t.name}</div>
+                                <div className="text-[8px] text-[var(--color-text-muted)] font-medium capitalize truncate">{t.scheduledTime ? `@ ${t.scheduledTime}` : 'anytime'}</div>
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

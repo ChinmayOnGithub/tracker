@@ -3,12 +3,18 @@ import React from 'react'
 interface PageHeaderProps {
   /** The page title rendered as an h1 */
   title: string
-  /** Optional subtitle / contextual meta below the title */
+  /** Optional eyebrow tag / category above the title */
+  eyebrow?: React.ReactNode
+  /** Optional description or subtitle below the title */
+  description?: React.ReactNode
+  /** Optional subtitle / contextual meta below the title (alias for description) */
   subtitle?: React.ReactNode
   /** Optional slot for right-side action buttons */
   actions?: React.ReactNode
   /** Optional slot for left-side prefix (e.g. back button or nav arrows) */
   prefix?: React.ReactNode
+  /** Sizing scale for header density */
+  size?: 'compact' | 'default' | 'large'
   /** Removes the bottom border — use when the page has a sticky header or tabs below */
   noBorder?: boolean
   className?: string
@@ -16,36 +22,36 @@ interface PageHeaderProps {
 
 /**
  * PageHeader
- * Standard page-level header bar. Renders an h1 title (required), an optional
- * subtitle line, an optional left prefix slot, and an optional right actions slot.
- *
- * Conforms to Law UI3 — Typography Scale:
- *   - title → `text-2xl font-bold tracking-tight`
- *   - subtitle → `text-sm text-[var(--color-text-muted)]`
- *
- * @example
- * <PageHeader
- *   title="Today"
- *   subtitle="Monday, 14 Aug · 3 tasks due"
- *   prefix={<NavArrows />}
- *   actions={<Button>New Activity</Button>}
- * />
+ * Canonical page-level header bar. Renders an h1 title, optional eyebrow,
+ * optional description/subtitle, optional prefix, and optional actions.
  */
 export const PageHeader: React.FC<PageHeaderProps> = ({
   title,
+  eyebrow,
+  description,
   subtitle,
   actions,
   prefix,
+  size = 'default',
   noBorder = false,
   className = '',
 }) => {
+  const contentDescription = description ?? subtitle
+
+  const titleSizeClass = 
+    size === 'compact' ? 'text-lg font-bold' :
+    size === 'large' ? 'text-3xl font-extrabold' :
+    'text-2xl font-bold'
+
+  const spacingClass =
+    size === 'compact' ? 'pb-2 mb-4' :
+    'pb-4 mb-6'
+
   return (
     <div
       className={[
         'flex items-center justify-between gap-4',
-        noBorder
-          ? 'mb-6'
-          : 'border-b border-[var(--color-border)] pb-4 mb-6',
+        noBorder ? (size === 'compact' ? 'mb-4' : 'mb-6') : `border-b border-[var(--color-border)] ${spacingClass}`,
         className,
       ].filter(Boolean).join(' ')}
     >
@@ -57,12 +63,17 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-main)] leading-tight truncate">
+          {eyebrow && (
+            <div className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-text-muted)] mb-0.5">
+              {eyebrow}
+            </div>
+          )}
+          <h1 className={`${titleSizeClass} tracking-tight text-[var(--color-text-main)] leading-tight truncate`}>
             {title}
           </h1>
-          {subtitle && (
+          {contentDescription && (
             <div className="text-sm text-[var(--color-text-muted)] mt-0.5 font-normal leading-snug">
-              {subtitle}
+              {contentDescription}
             </div>
           )}
         </div>

@@ -3,9 +3,9 @@
 import React, { useState, useTransition, useEffect } from 'react'
 import { useStore, LeaveRecord as StoreLeaveRecord, LeaveAllowance as StoreLeaveAllowance } from '@/lib/store/store'
 import {
-  CalendarX, Plus, Trash2, CheckCircle2, Clock, XCircle, TrendingDown, ChevronDown, Sliders, X, Palette
+  Plus, Trash2, CheckCircle2, Clock, XCircle, TrendingDown, ChevronDown, Sliders, X, Palette
 } from 'lucide-react'
-import { Input, Select, Button, Card } from '@/design-system'
+import { Input, Select, Button, Card, PageHeader, EmptyState } from '@/design-system'
 import { toYMD, fmtDateShort, inclusiveDays } from '@/lib/dateUtils'
 import {
   LeaveType, LeaveTypeMeta, DEFAULT_LEAVE_TYPES_META, COLOR_OPTIONS,
@@ -604,40 +604,37 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-black text-[var(--color-text-main)] tracking-tight">Time Off</h1>
-          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{currentYear} leave & entitlement tracker</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Time Off"
+        description={`${currentYear} leave & entitlement tracker`}
+        actions={
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             onClick={() => setIsEntitlementsOpen(true)}
             icon={<Sliders size={14} />}
-            title="Configure Annual Entitlements"
           >
             Configure Entitlements
           </Button>
-          <CalendarX className="w-6 h-6 text-[var(--color-text-muted)]" />
-        </div>
-      </div>
+        }
+      />
 
       {/* Balance Cards */}
       {visibleCardTypes.length === 0 ? (
-        <div className="text-center py-8 bg-[var(--color-bg-surface)] border border-[var(--color-border)] rounded-xl space-y-3 shadow-xs">
-          <p className="text-xs text-[var(--color-text-muted)]">
-            No active leave types with allocation configured for {currentYear}.
-          </p>
-          <div className="flex items-center justify-center gap-2">
+        <EmptyState
+          title="No Active Leave Types"
+          description={`No active leave types with allocation configured for ${currentYear}.`}
+          primaryAction={
             <Button onClick={() => setIsEntitlementsOpen(true)} size="sm">
               Configure Leave Types
             </Button>
+          }
+          secondaryAction={
             <Button onClick={handleSeedAllowances} variant="outline" size="sm">
               Set Defaults
             </Button>
-          </div>
-        </div>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {visibleCardTypes.map(type => {
@@ -675,8 +672,12 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
         </div>
 
         {records.length === 0 ? (
-          <div className="py-12 text-center text-xs text-[var(--color-text-muted)]">
-            No leave records yet. Request your first time off above.
+          <div className="py-6 px-4">
+            <EmptyState
+              compact
+              title="No Leave Records"
+              description="No leave records yet. Request your first time off above."
+            />
           </div>
         ) : (
           <div className="divide-y divide-[var(--color-border)]">

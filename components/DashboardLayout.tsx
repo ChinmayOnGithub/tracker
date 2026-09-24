@@ -791,12 +791,13 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 {placeholderDialog.message}
               </p>
               <div className="flex justify-end pt-2">
-                <button
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => setPlaceholderDialog(null)}
-                  className="px-4 py-1.5 bg-[var(--color-text-main)] hover:opacity-90 text-[var(--color-bg-surface)] rounded-lg text-xs font-bold cursor-pointer transition-opacity"
                 >
                   Understood
-                </button>
+                </Button>
               </div>
             </div>
           </Modal>

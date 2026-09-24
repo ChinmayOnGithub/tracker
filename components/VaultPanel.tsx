@@ -1301,23 +1301,22 @@ export function VaultPanel() {
               </div>
             ) : (
               /* Single Clean Empty State: shown ONLY when zero fields are stored */
-              <div className="py-12 px-6 flex flex-col items-center justify-center text-center">
-                <div className="w-12 h-12 rounded-full bg-[var(--color-bg-subtle)] border border-[var(--color-border)] flex items-center justify-center mb-3">
-                  <Shield className="w-6 h-6 text-[var(--color-text-muted)]" />
-                </div>
-                <h4 className="text-sm font-bold text-[var(--color-text-main)]">No information stored yet</h4>
-                <p className="text-xs text-[var(--color-text-muted)] mt-1 max-w-sm">
-                  Add confidential details like your Aadhaar, PAN, Current & Permanent Address, or custom credentials with end-to-end encryption.
-                </p>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => setShowNewCustomField(true)}
-                  icon={<Plus className="w-3.5 h-3.5" />}
-                  className="mt-4 text-xs font-semibold"
-                >
-                  Add Field
-                </Button>
+              <div className="py-8 px-4">
+                <EmptyState
+                  icon={<Shield className="w-6 h-6" />}
+                  title="No information stored yet"
+                  description="Add confidential details like your Aadhaar, PAN, Current & Permanent Address, or custom credentials with end-to-end encryption."
+                  primaryAction={
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => setShowNewCustomField(true)}
+                      icon={<Plus className="w-3.5 h-3.5" />}
+                    >
+                      Add Field
+                    </Button>
+                  }
+                />
               </div>
             )}
           </div>

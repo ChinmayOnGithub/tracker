@@ -11,6 +11,8 @@ import { useStore } from '@/lib/store/store'
 
 import { TaskOccurrenceService } from '@/modules/activities/domain/TaskOccurrenceService'
 
+import { PageHeader } from '@/design-system'
+
 interface ActivitiesWrapperProps {
   analyzedTemplates?: { template: ActivityTemplate; analysis: RecurrenceAnalysis }[]
   recentLogs?: ActivityLog[]
@@ -96,12 +98,10 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-main)] font-sans">Activity Schedules & Templates</h1>
-          <p className="text-sm text-[var(--color-text-muted)] mt-0.5">Manage recurring routines, habits, and scheduled activities</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Activity Schedules & Templates"
+        description="Manage recurring routines, habits, and scheduled activities"
+      />
       
       <div className="w-full">
         <ActivityManager

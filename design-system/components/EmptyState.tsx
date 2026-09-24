@@ -1,10 +1,13 @@
 import React from 'react'
 
-interface EmptyStateProps {
+export interface EmptyStateProps {
   title: string
-  description: string
+  description?: string
   icon?: React.ReactNode
   action?: React.ReactNode
+  primaryAction?: React.ReactNode
+  secondaryAction?: React.ReactNode
+  compact?: boolean
   className?: string
 }
 
@@ -13,24 +16,52 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   description,
   icon,
   action,
-  className = ''
+  primaryAction,
+  secondaryAction,
+  compact = false,
+  className = '',
 }) => {
+  const effectivePrimaryAction = primaryAction ?? action
+
   return (
-    <div className={`flex flex-col items-center justify-center text-center p-10 bg-gradient-to-b from-[var(--color-bg-surface)] to-transparent border border-dashed border-[var(--color-border)]/60 rounded-[var(--radius-lg)] gap-5 transition-colors hover:border-[var(--color-border)] ${className}`}>
+    <div
+      className={[
+        'flex flex-col items-center justify-center text-center',
+        'border border-[var(--border)] bg-[var(--surface)] rounded-[var(--radius-lg)]',
+        'transition-colors duration-150',
+        compact ? 'p-6 gap-3' : 'p-10 gap-4',
+        className,
+      ].filter(Boolean).join(' ')}
+    >
       {icon && (
-        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-[var(--color-bg-base)] border border-[var(--color-border)] text-[var(--color-text-muted)] shadow-sm">
+        <div
+          className={[
+            'flex items-center justify-center rounded-full',
+            'bg-[var(--surface-muted)] border border-[var(--border)] text-[var(--muted-foreground)]',
+            compact ? 'w-10 h-10' : 'w-12 h-12',
+          ].join(' ')}
+        >
           {icon}
         </div>
       )}
-      <div className="flex flex-col gap-1.5 max-w-sm">
-        <h4 className="text-base font-bold tracking-tight text-[var(--color-text-main)]">
+
+      <div className="flex flex-col gap-1 max-w-sm">
+        <h4 className="text-sm font-semibold tracking-tight text-[var(--foreground)]">
           {title}
         </h4>
-        <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed font-medium">
-          {description}
-        </p>
+        {description && (
+          <p className="text-xs text-[var(--muted-foreground)] leading-relaxed">
+            {description}
+          </p>
+        )}
       </div>
-      {action && <div className="mt-2">{action}</div>}
+
+      {(effectivePrimaryAction || secondaryAction) && (
+        <div className="flex items-center justify-center gap-2 mt-1 flex-wrap">
+          {effectivePrimaryAction}
+          {secondaryAction}
+        </div>
+      )}
     </div>
   )
 }

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import {
   Button, SearchInput, DropdownMenu, DropdownMenuTrigger,
-  DropdownMenuContent, DropdownMenuItem, IconButton
+  DropdownMenuContent, DropdownMenuItem, IconButton, EmptyState
 } from '@/design-system'
 
 import { useSearchParams } from 'next/navigation'
@@ -268,8 +268,12 @@ export const NotesPanel: React.FC<NotesPanelProps> = ({ initialNotes = [] }) => 
           })}
 
           {filteredNotes.length === 0 && (
-            <div className="text-center py-12 px-4 text-xs text-[var(--color-text-muted)]">
-              {search.trim() ? `No notes match "${search}"` : 'No notes yet. Create your first note!'}
+            <div className="py-6 px-3">
+              <EmptyState
+                compact
+                title={search.trim() ? 'No matches' : 'No notes yet'}
+                description={search.trim() ? `No notes match "${search}"` : 'Create your first note to capture your thoughts.'}
+              />
             </div>
           )}
         </div>
@@ -368,17 +372,17 @@ export const NotesPanel: React.FC<NotesPanelProps> = ({ initialNotes = [] }) => 
             </div>
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-[var(--color-primary)]/10 flex items-center justify-center text-[var(--color-primary)]">
-              <FileText size={24} />
-            </div>
-            <h4 className="text-sm font-bold text-[var(--color-text-main)]">No note selected</h4>
-            <p className="text-xs text-[var(--color-text-muted)] max-w-xs">
-              Select a note from the sidebar or create a new note to start capturing your thoughts.
-            </p>
-            <Button onClick={handleCreateNote} size="sm" icon={<Plus size={14} />}>
-              Create Note
-            </Button>
+          <div className="flex-1 flex items-center justify-center p-8">
+            <EmptyState
+              icon={<FileText size={24} />}
+              title="No note selected"
+              description="Select a note from the sidebar or create a new note to start capturing your thoughts."
+              primaryAction={
+                <Button onClick={handleCreateNote} size="sm" icon={<Plus size={14} />}>
+                  Create Note
+                </Button>
+              }
+            />
           </div>
         )}
       </main>

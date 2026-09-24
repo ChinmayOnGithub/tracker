@@ -367,14 +367,15 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
           return (
             <button
               key={f.value}
+              type="button"
               onClick={() => {
                 setActiveRecurrence(f.value)
                 setSelectedIds([])
               }}
-              className={`px-3 py-1.5 text-[11px] font-bold rounded-full border transition-all cursor-pointer ${
+              className={`px-3 py-1 text-[11px] font-semibold rounded-full border transition-all cursor-pointer ${
                 isActive
-                  ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm'
-                  : 'bg-[var(--color-bg-surface)] text-[var(--color-text-muted)] border-[var(--color-border)] hover:border-[var(--color-primary)]/50 hover:text-[var(--color-text-main)]'
+                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)] shadow-xs'
+                  : 'bg-[var(--surface)] text-[var(--muted-foreground)] border-[var(--border)] hover:border-[var(--border-strong)] hover:text-[var(--foreground)]'
               }`}
             >
               {f.label}
@@ -385,8 +386,8 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
 
       {/* Bulk Action Bar overlay */}
       {selectedIds.length > 0 && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[var(--color-bg-surface)] border border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)] backdrop-blur-xl rounded-full px-6 py-3 flex items-center gap-8 z-50 animate-in slide-in-from-bottom-8 duration-300 ease-out">
-          <span className="text-sm font-bold text-[var(--color-text-main)] whitespace-nowrap">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-[var(--surface)] border border-[var(--border)] shadow-[var(--elevation-floating)] backdrop-blur-xl rounded-full px-6 py-3 flex items-center gap-8 z-50 animate-in slide-in-from-bottom-8 duration-300 ease-out">
+          <span className="text-sm font-bold text-[var(--foreground)] whitespace-nowrap">
             {selectedIds.length} item(s) selected
           </span>
           <div className="flex gap-3">
@@ -425,6 +426,11 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
         <EmptyState
           title="No Activities Found"
           description="Create your first activity template to schedule task reminders, workouts, bills, or study sessions."
+          primaryAction={
+            <Button size="sm" onClick={onAddTemplate} icon={<Plus size={14} />}>
+              Create Activity
+            </Button>
+          }
         />
       ) : (
         <div className="space-y-2">

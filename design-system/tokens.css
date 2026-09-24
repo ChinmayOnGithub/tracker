@@ -1,87 +1,182 @@
-/* design-system/tokens.css */
+/* design-system/tokens.css
+ * Tracker OS — Canonical Design Tokens & Semantic System
+ */
 
 :root {
-  /* Light Mode Palette (Apple HIG inspired depth) */
-  --color-bg-base: #f2f2f7;        /* System Grouped Background */
-  --color-bg-surface: #ffffff;
-  --color-bg-subtle: #f7f7fa;      /* Mid-level surface between base and surface */
-  --color-border: rgba(0, 0, 0, 0.1);
-  --color-text-main: #000000;
-  --color-text-muted: #8e8e93;
-  --color-primary: #007aff;
-  --color-primary-hover: #0056b3;
-  --color-accent: rgba(0, 0, 0, 0.05);
+  /* ── 1. Semantic Color Tokens (Light Mode) ─────────────────────────────────── */
+  --background: #f8fafc;
+  --foreground: #09090b;
 
-  /* Semantic Colors */
-  --color-external: #3b82f6;
-  --color-completed: #10b981;
-  --color-warning: #f59e0b;
-  --color-overdue: #ef4444;
+  --surface: #ffffff;
+  --surface-muted: #f4f4f6;
+  --surface-elevated: #ffffff;
+
+  --border: rgba(0, 0, 0, 0.1);
+  --border-subtle: rgba(0, 0, 0, 0.05);
+  --border-strong: rgba(0, 0, 0, 0.2);
+
+  --primary: #007aff;
+  --primary-hover: #0056b3;
+  --primary-foreground: #ffffff;
+
+  --secondary: #f4f4f6;
+  --secondary-hover: #e4e4e7;
+  --secondary-foreground: #18181b;
+
+  --muted: #f4f4f6;
+  --muted-foreground: #71717a;
+
+  --accent: rgba(0, 0, 0, 0.05);
+  --accent-hover: rgba(0, 0, 0, 0.08);
+  --accent-foreground: #09090b;
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --destructive: #ef4444;
+  --destructive-hover: #dc2626;
+  --info: #3b82f6;
+
+  --focus-ring: rgba(0, 122, 255, 0.4);
+
+  /* ── Backward-Compatible Aliases ────────────────────────────────────────── */
+  --color-bg-base: var(--background);
+  --color-bg-surface: var(--surface);
+  --color-bg-subtle: var(--surface-muted);
+  --color-border: var(--border);
+  --color-text-main: var(--foreground);
+  --color-text-muted: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-accent: var(--accent);
+
+  --color-external: var(--info);
+  --color-completed: var(--success);
+  --color-warning: var(--warning);
+  --color-overdue: var(--destructive);
   --color-personal: #8b5cf6;
   --color-archived: #6b7280;
 
-  /* Unified Card Design Tokens */
-  --card-radius: 6px;
+  /* ── 2. Elevation / Shadow Scale ─────────────────────────────────────────── */
+  --elevation-flat: none;
+  --elevation-surface: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --elevation-raised: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --elevation-floating: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --elevation-modal: 0 20px 25px -5px rgb(0 0 0 / 0.2), 0 8px 10px -6px rgb(0 0 0 / 0.2);
+
+  --card-shadow: var(--elevation-surface);
+  --card-hover-shadow: var(--elevation-raised);
+  --card-transition: all var(--motion-duration-normal) var(--motion-ease-standard);
+
+  /* ── 3. Border Radius Scale ──────────────────────────────────────────────── */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+  --radius-pill: 9999px;
+
+  --card-radius: var(--radius-md);
   --card-border-width: 1px;
   --card-padding: 16px;
   --card-header-spacing: 12px;
-  --card-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --card-hover-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --card-transition: all var(--motion-duration-normal) var(--motion-ease-standard);
 
-  /* Border Radius Scale */
-  --radius-sm: 2px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
-  --radius-xl: 12px;               /* Modals, sheets, large cards */
-  --radius-pill: 9999px;           /* Status badges, tags */
-
-  /* 8-Point Spacing Scale */
+  /* ── 4. Spacing Scale (4px base) ─────────────────────────────────────────── */
   --spacing-1: 4px;
   --spacing-2: 8px;
   --spacing-3: 12px;
   --spacing-4: 16px;
-  --spacing-5: 20px;               /* Fills gap between 4 and 6 */
+  --spacing-5: 20px;
   --spacing-6: 24px;
   --spacing-8: 32px;
   --spacing-10: 40px;
   --spacing-12: 48px;
 
-  /* Typography */
-  --font-size-xs2: 10px;           /* Micro labels, timestamps */
+  /* ── 5. Typography Scale ─────────────────────────────────────────────────── */
+  --font-size-xs2: 10px;
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-md: 15px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
 
-  /* Motion and Durations */
+  /* ── 6. Motion & Durations ───────────────────────────────────────────────── */
   --motion-duration-fast: 150ms;
   --motion-duration-normal: 200ms;
   --motion-duration-slow: 300ms;
   --motion-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --motion-ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
 
-  /* Click target sizing */
+  /* ── 7. Touch / Usability Bounds ─────────────────────────────────────────── */
   --click-target-min: 44px;
 }
 
 .dark {
-  /* Dark Mode Palette */
-  --color-bg-base: #09090b;        /* Zinc-950 */
-  --color-bg-surface: #18181b;     /* Zinc-900 */
-  --color-bg-subtle: #1c1c1f;      /* Between base and surface */
-  --color-border: rgba(255, 255, 255, 0.1);
-  --color-text-main: #f4f4f5;
-  --color-text-muted: #a1a1aa;
-  --color-primary: #818cf8;
-  --color-primary-hover: #6366f1;
-  --color-accent: rgba(255, 255, 255, 0.05);
+  /* ── Semantic Color Tokens (Dark Mode) ────────────────────────────────────── */
+  --background: #09090b;
+  --foreground: #f4f4f5;
 
-  /* Semantic Colors - Dark Mode */
-  --color-external: #60a5fa;          /* Blue-400 */
-  --color-completed: #34d399;         /* Emerald-400 */
-  --color-warning: #fbbf24;           /* Amber-400 */
-  --color-overdue: #f87171;           /* Red-400 */
-  --color-personal: #a78bfa;          /* Violet-400 */
-  --color-archived: #9ca3af;          /* Gray-400 */
+  --surface: #18181b;
+  --surface-muted: #1c1c1f;
+  --surface-elevated: #27272a;
 
-  /* Card shadows adjusted for dark mode */
+  --border: rgba(255, 255, 255, 0.1);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-strong: rgba(255, 255, 255, 0.2);
+
+  --primary: #818cf8;
+  --primary-hover: #6366f1;
+  --primary-foreground: #ffffff;
+
+  --secondary: #27272a;
+  --secondary-hover: #3f3f46;
+  --secondary-foreground: #f4f4f5;
+
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+
+  --accent: rgba(255, 255, 255, 0.05);
+  --accent-hover: rgba(255, 255, 255, 0.08);
+  --accent-foreground: #f4f4f5;
+
+  --success: #34d399;
+  --warning: #fbbf24;
+  --destructive: #f87171;
+  --destructive-hover: #ef4444;
+  --info: #60a5fa;
+
+  --focus-ring: rgba(129, 140, 248, 0.5);
+
+  /* ── Backward-Compatible Aliases ────────────────────────────────────────── */
+  --color-bg-base: var(--background);
+  --color-bg-surface: var(--surface);
+  --color-bg-subtle: var(--surface-muted);
+  --color-border: var(--border);
+  --color-text-main: var(--foreground);
+  --color-text-muted: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-accent: var(--accent);
+
+  --color-external: var(--info);
+  --color-completed: var(--success);
+  --color-warning: var(--warning);
+  --color-overdue: var(--destructive);
+  --color-personal: #a78bfa;
+  --color-archived: #9ca3af;
+
   --card-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.2);
   --card-hover-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
 }
+
+/* ── 8. Semantic Layout Utility Helpers ───────────────────────────────────── */
+.stack-xs { display: flex; flex-direction: column; gap: var(--spacing-1); }
+.stack-sm { display: flex; flex-direction: column; gap: var(--spacing-2); }
+.stack-md { display: flex; flex-direction: column; gap: var(--spacing-4); }
+.stack-lg { display: flex; flex-direction: column; gap: var(--spacing-6); }
+
+.page-gap { gap: var(--spacing-6); }
+.section-gap { gap: var(--spacing-4); }
+.content-gap { gap: var(--spacing-3); }

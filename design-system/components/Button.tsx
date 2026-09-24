@@ -1,9 +1,21 @@
 import React from 'react'
 import { Slot } from '@radix-ui/react-slot'
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost' | 'warning'
-  size?: 'sm' | 'md' | 'lg' | 'icon-sm'
+export type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'outline'
+  | 'destructive'
+  | 'danger'
+  | 'ghost'
+  | 'warning'
+  | 'link'
+
+export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm'
+
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: ButtonVariant
+  size?: ButtonSize
   isLoading?: boolean
   loading?: boolean
   icon?: React.ReactNode
@@ -23,27 +35,30 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
   ...props
 }, ref) => {
   const isLoadingState = isLoading || loading
-  const baseStyle = 'inline-flex items-center justify-center font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed'
-  
-  // Map variant styling using design tokens
-  const variants = {
-    primary: 'bg-[var(--color-primary)] text-white shadow-[0_2px_8px_rgba(99,102,241,0.25)] hover:shadow-[0_4px_12px_rgba(99,102,241,0.4)] hover:bg-[var(--color-primary-hover)] active:scale-[0.97]',
-    secondary: 'bg-[var(--color-accent)] text-[var(--color-text-main)] shadow-sm hover:shadow-md hover:bg-[var(--color-accent)]/80 active:scale-[0.97]',
-    outline: 'border border-[var(--color-border)] bg-[var(--color-bg-base)] text-[var(--color-text-main)] shadow-sm hover:shadow hover:bg-[var(--color-accent)] active:scale-[0.97]',
-    danger: 'bg-rose-600 text-white shadow-[0_2px_8px_rgba(225,29,72,0.25)] hover:shadow-[0_4px_12px_rgba(225,29,72,0.4)] hover:bg-rose-500 active:scale-[0.97]',
-    ghost: 'bg-transparent text-[var(--color-text-muted)] hover:bg-[var(--color-accent)] hover:text-[var(--color-text-main)] active:scale-[0.97]',
-    warning: 'bg-amber-500 text-white shadow-[0_2px_8px_rgba(245,158,11,0.25)] hover:shadow-[0_4px_12px_rgba(245,158,11,0.4)] hover:bg-amber-400 active:scale-[0.97]'
+  const baseStyle = 'inline-flex items-center justify-center font-medium transition-all duration-150 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none'
+
+  // Semantic token-based variants
+  const variants: Record<ButtonVariant, string> = {
+    primary: 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] shadow-xs active:scale-[0.98]',
+    secondary: 'bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:bg-[var(--secondary-hover)] border border-[var(--border-subtle)] shadow-xs active:scale-[0.98]',
+    outline: 'border border-[var(--border)] bg-transparent text-[var(--foreground)] hover:bg-[var(--accent)] shadow-xs active:scale-[0.98]',
+    destructive: 'bg-[var(--destructive)] text-white hover:bg-[var(--destructive-hover)] shadow-xs active:scale-[0.98]',
+    danger: 'bg-[var(--destructive)] text-white hover:bg-[var(--destructive-hover)] shadow-xs active:scale-[0.98]',
+    ghost: 'bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] active:scale-[0.98]',
+    warning: 'bg-[var(--warning)] text-white hover:opacity-90 shadow-xs active:scale-[0.98]',
+    link: 'bg-transparent text-[var(--primary)] underline-offset-4 hover:underline p-0 h-auto font-normal',
   }
 
-  // Spacing grid sizing
-  const sizes = {
-    sm: 'px-3 py-1.5 text-xs rounded-[var(--radius-sm)] gap-2',
-    md: 'px-4 py-2 text-sm rounded-[var(--radius-md)] gap-2.5',
-    lg: 'px-6 py-3 text-base rounded-[var(--radius-lg)] gap-3',
-    'icon-sm': 'p-1.5 rounded-lg'
+  // Normalized size scale
+  const sizes: Record<ButtonSize, string> = {
+    sm: 'h-8 px-3 py-1 text-xs rounded-[var(--radius-sm)] gap-1.5',
+    md: 'h-9 px-4 py-2 text-sm rounded-[var(--radius-md)] gap-2',
+    lg: 'h-10 px-5 py-2.5 text-base rounded-[var(--radius-lg)] gap-2.5',
+    icon: 'h-8 w-8 p-1.5 rounded-[var(--radius-md)] shrink-0',
+    'icon-sm': 'h-8 w-8 p-1.5 rounded-[var(--radius-md)] shrink-0',
   }
 
-  const Comp = asChild ? Slot : "button"
+  const Comp = asChild ? Slot : 'button'
 
   return (
     <Comp
@@ -56,7 +71,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(({
     >
       {isLoadingState && (
         <svg
-          className="animate-spin -ml-1 mr-2 h-4 w-4 text-current"
+          className="animate-spin -ml-0.5 mr-2 h-3.5 w-3.5 text-current shrink-0"
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
           viewBox="0 0 24 24"

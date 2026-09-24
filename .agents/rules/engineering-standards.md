@@ -26,16 +26,29 @@ Database via Prisma (lib/db.ts)    -- Protected by runtime interceptors
 
 ---
 
-## 3. UI Styling & Design System (CRITICAL)
-Tracker uses a bespoke **Shadcn Style** powered by Tailwind CSS 4 and CSS design tokens (`design-system/tokens.css`).
+## 3. UI Styling & Design System Architecture (CRITICAL)
+Tracker uses a centralized **Token-Driven Design System** powered by Tailwind CSS 4 and CSS design tokens in `design-system/tokens.css`.
+- **Core Principles**:
+  - **Never invent a new visual pattern** when an existing shared component can represent it.
+  - **Search the repository first**: Before creating any new UI component, check `@/design-system`.
+  - **Variant-driven over duplication**: Prefer extending an existing canonical component with a variant or size option over creating a visually duplicate component.
+  - **Semantic Tokens Only**: UI changes must consume semantic design tokens (`var(--surface)`, `var(--primary)`, `var(--border)`, `var(--foreground)`, `var(--muted-foreground)`, etc.) rather than hard-coded visual values (`text-slate-850`, `bg-zinc-900`) or uncontrolled arbitrary values.
+  - **Pages own composition; Primitives own visual styling & accessibility**.
+  - **Avoid "Everything is a card"**: Prefer lists, flat rows, and `<Surface variant="...">` or `<List>` primitives where applicable. Cards should only be used where grouping independent objects is structurally needed.
 - **Prohibited**:
-  - Do NOT write raw `<button>` elements in module panels.
-  - Do NOT write custom cards with ad-hoc border/shadow/margin classes.
-  - Do NOT write unstyled `<input>` or `<textarea>` tags.
-- **Mandatory Imports**:
-  - `<Button>` from `@/design-system/components/Button`: standardizes loading states, sizes, colors, and micro-hover scaling.
-  - `<Card>`, `<CardHeader>`, `<CardBody>`, `<CardFooter>` from `@/design-system/components/Card`: standardizes structural card panels and borders.
-  - `<Input>`, `<Textarea>`, `<Select>` from `@/design-system/components/Input`: standardizes focus rings, dark/light themes, and error feedback.
+  - Do NOT write raw `<button>` elements in module panels — import `<Button>` or `<IconButton>`.
+  - Do NOT write custom cards with ad-hoc border/shadow/margin classes — use `<Card>` or `<Surface>`.
+  - Do NOT write unstyled `<input>`, `<textarea>`, or `<select>` tags — use canonical form primitives.
+  - Do NOT create custom empty states with dashed borders — use canonical `<EmptyState>`.
+  - Do NOT write custom section headers — use `<PageHeader>` or `<SectionHeader>`.
+- **Mandatory Canonical Components (`@/design-system`)**:
+  - `<Button>`, `<IconButton>`: Normalized sizes, loading state, variants, and accessible focus rings.
+  - `<Surface>`, `<Card>`: Elevation hierarchy (`flat`, `subtle`, `interactive`, `raised`, `floating`).
+  - `<PageHeader>`, `<SectionHeader>`: Standardized page and section hierarchy.
+  - `<Input>`, `<Textarea>`, `<Select>`, `<FormField>`: Consistent form layout, labels, and validation.
+  - `<Badge>`: Canonical status, priority, and metadata chips.
+  - `<EmptyState>`, `<ErrorState>`: Standardized zero-data and failure UI.
+  - `<Skeleton>`, `<PageSkeleton>`, `<ListSkeleton>`: Non-blocking local-first loading states.
 
 ---
 

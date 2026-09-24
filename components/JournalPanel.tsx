@@ -8,7 +8,7 @@ import {
   Trash2, CheckCircle2, CloudOff, Loader2, PlusCircle, Edit3,
   X, ArrowLeft, ChevronLeft, ChevronRight, MoreVertical, SortAsc, Upload
 } from 'lucide-react'
-import { Button, SearchInput, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, IconButton } from '@/design-system'
+import { Button, SearchInput, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, IconButton, EmptyState } from '@/design-system'
 import { useSearchParams, useRouter } from 'next/navigation'
 
 import { RichTextEditor } from '@/components/shared/RichTextEditor'
@@ -446,10 +446,10 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries = [] 
     <div className="flex flex-col md:flex-row h-full min-h-[70vh] bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg overflow-hidden shadow-xs">
       
       {/* ── LEFT SIDEBAR: History ── */}
-      <aside className={`w-full md:w-72 md:shrink-0 flex flex-col bg-slate-50/50 dark:bg-zinc-900/40 border-b md:border-b-0 md:border-r border-slate-200 dark:border-zinc-800 ${mobileView === 'editor' ? 'hidden md:flex' : 'flex'}`}>
+      <aside className={`w-full md:w-72 md:shrink-0 flex flex-col bg-[var(--surface-muted)] border-b md:border-b-0 md:border-r border-[var(--border)] ${mobileView === 'editor' ? 'hidden md:flex' : 'flex'}`}>
         <div className="p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-black tracking-tight text-[var(--color-text-main)]">Journal</h3>
+            <h3 className="text-lg font-black tracking-tight text-[var(--foreground)]">Journal</h3>
             <div className="flex items-center gap-1">
               <Button
                 onClick={() => handleNavigateDate(today)}
@@ -497,7 +497,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries = [] 
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] transition-colors px-2 py-1 rounded-md hover:bg-slate-200/50 dark:hover:bg-zinc-800/60"
+                  className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors px-2 py-1 rounded-[var(--radius-sm)] hover:bg-[var(--accent)]/50 cursor-pointer"
                 >
                   <SortAsc className="w-3 h-3" />
                   {sortLabels[sort]}
@@ -508,7 +508,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries = [] 
                   <DropdownMenuItem
                     key={opt}
                     onClick={() => setSort(opt)}
-                    className={sort === opt ? 'font-bold text-[var(--color-primary)]' : ''}
+                    className={sort === opt ? 'font-bold text-[var(--primary)]' : ''}
                   >
                     {sortLabels[opt]}
                   </DropdownMenuItem>
@@ -517,7 +517,7 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries = [] 
             </DropdownMenu>
 
             {search.trim() && (
-              <span className="text-[10px] font-semibold text-[var(--color-text-muted)] ml-auto">
+              <span className="text-[10px] font-semibold text-[var(--muted-foreground)] ml-auto">
                 {filtered.length} result{filtered.length !== 1 ? 's' : ''}
               </span>
             )}
@@ -536,29 +536,29 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries = [] 
               <div
                 key={entry.id}
                 onClick={() => handleNavigateDate(dateStr)}
-                className={`group relative flex flex-col gap-1.5 px-3 py-3 rounded-lg cursor-pointer transition-all duration-150 border-l-4 ${
+                className={`group relative flex flex-col gap-1.5 px-3 py-3 rounded-[var(--radius-md)] cursor-pointer transition-all duration-150 border-l-4 ${
                   isActive
-                    ? 'bg-[var(--color-accent)] border-l-[var(--color-primary)] shadow-xs'
-                    : 'border-l-transparent text-[var(--color-text-main)] hover:bg-slate-200/50 dark:hover:bg-zinc-800/60 hover:translate-x-0.5'
+                    ? 'bg-[var(--accent)] border-l-[var(--primary)] shadow-xs'
+                    : 'border-l-transparent text-[var(--foreground)] hover:bg-[var(--accent)]/40 hover:translate-x-0.5'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[13px] font-bold flex items-center gap-1.5 text-[var(--color-text-main)]">
+                  <span className="text-[13px] font-bold flex items-center gap-1.5 text-[var(--foreground)]">
                     {hasMood && (
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[var(--color-primary)]" />
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[var(--primary)]" />
                     )}
                     {fmtDateMed(entry.journalDate)}
                   </span>
-                  <span className="text-[10px] font-semibold tabular-nums shrink-0 text-[var(--color-text-muted)]">
+                  <span className="text-[10px] font-semibold tabular-nums shrink-0 text-[var(--muted-foreground)]">
                     {wc > 0 ? `${wc}w` : ''}
                   </span>
                 </div>
-                <p className="text-xs line-clamp-2 leading-relaxed text-[var(--color-text-muted)]">
+                <p className="text-xs line-clamp-2 leading-relaxed text-[var(--muted-foreground)]">
                   {preview}
                 </p>
                 <button
                   onClick={e => { e.stopPropagation(); handleDelete(entry.id, dateStr) }}
-                  className="absolute right-2 bottom-2 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 rounded-lg transition-colors text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                  className="absolute right-2 bottom-2 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 rounded-[var(--radius-sm)] transition-colors text-[var(--muted-foreground)] hover:text-rose-500 hover:bg-rose-500/10 cursor-pointer"
                   title="Delete Entry"
                   aria-label="Delete Entry"
                 >
@@ -568,8 +568,12 @@ export const JournalPanel: React.FC<JournalPanelProps> = ({ initialEntries = [] 
             )
           })}
           {filtered.length === 0 && (
-            <div className="text-center text-sm text-[var(--color-text-muted)] py-8 font-medium">
-              {search.trim() ? `No entries match "${search}"` : 'No entries yet.'}
+            <div className="py-6 px-3">
+              <EmptyState
+                compact
+                title={search.trim() ? 'No matches' : 'No entries yet'}
+                description={search.trim() ? `No entries match "${search}"` : 'Write your first journal reflection for today.'}
+              />
             </div>
           )}
         </div>
