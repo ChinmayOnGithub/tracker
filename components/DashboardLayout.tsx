@@ -132,6 +132,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [authError, setAuthError] = useState('')
   const [shake, setShake] = useState(false)
   const [isAuthLoading, setIsAuthLoading] = useState(false)
+  const [robotChecked, setRobotChecked] = useState(false)
   const pinInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch guest permissions for non-owner accounts only if missing or upon settings change
@@ -519,203 +520,284 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       handleAuthSubmit(usernameInput, enteredPin)
     }
 
+    const openPlaceholder = (title: string, message: string) => {
+      setPlaceholderDialog({ isOpen: true, title, message })
+    }
+
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--color-bg-base)] p-4 transition-colors duration-300 relative overflow-hidden">
-        {/* Ambient background glowing orbs */}
-        <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-blue-500/10 dark:bg-blue-600/5 blur-3xl pointer-events-none select-none animate-pulse duration-[6000ms]" />
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-purple-500/10 dark:bg-purple-600/5 blur-3xl pointer-events-none select-none animate-pulse duration-[8000ms]" />
-
-        {/* Theme Toggle Button */}
-        <div className="absolute top-4 right-4 z-20">
-          <Button
-            variant="outline"
-            size="icon-sm"
-            onClick={toggleTheme}
-            title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
-          >
-            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-          </Button>
-        </div>
-
-        {/* Loading Overlay */}
-        {isAuthLoading && (
-          <div className="absolute inset-0 bg-[var(--color-bg-base)]/70 backdrop-blur-xs flex flex-col items-center justify-center z-50 transition-all duration-300">
-            <div className="w-10 h-10 border-4 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-xs font-black text-[var(--color-text-main)] uppercase tracking-widest mt-4 animate-pulse">
-              {isRegisterMode ? 'Creating Account...' : 'Logging in...'}
-            </p>
-          </div>
-        )}
-
-        <Card className={`w-full max-w-sm border-[var(--color-border)] bg-[var(--color-bg-surface)] backdrop-blur-xl shadow-xl transition-all duration-300 relative z-10 ${shake ? 'animate-shake' : ''}`}>
-          <CardBody className="p-6 md:p-8 space-y-6 flex flex-col items-center">
-            <div className="flex flex-col items-center text-center space-y-2.5 w-full">
-              <div className="relative group mb-1">
-                <div className="absolute inset-0 bg-gradient-to-tr from-blue-500 to-purple-500 rounded-2xl blur-md opacity-20 group-hover:opacity-35 transition-opacity duration-300" />
-                <div className="relative p-3.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-2xl text-[var(--color-primary)] shadow-xs flex items-center justify-center">
-                  <Layers size={24} className="animate-pulse" />
-                </div>
+      <main className="min-h-screen bg-white text-zinc-800 flex items-center justify-center px-5 py-10 sm:px-6 relative overflow-hidden">
+        <div className="w-full max-w-[610px]">
+          <div className="flex justify-center mb-10">
+            <button
+              type="button"
+              onClick={() => {
+                const nextTheme = theme === 'dark' ? 'light' : 'dark'
+                setTheme(nextTheme)
+                localStorage.setItem('theme', nextTheme)
+                document.cookie = `theme=${nextTheme}; path=/; max-age=31536000; SameSite=Lax`
+              }}
+              className="sr-only"
+              aria-label="Toggle theme"
+            />
+            <div className="flex items-center gap-2.5">
+              <div className="relative h-8 w-8 rounded-full bg-[#ff7557]">
+                <div className="absolute left-1.5 top-1.5 h-5 w-5 rounded-full bg-[#f9a68e]" />
+                <div className="absolute -bottom-0.5 right-0 h-3.5 w-3.5 rounded-full bg-white" />
               </div>
-              <h1 className="text-lg font-black tracking-wider text-[var(--color-text-main)] uppercase">
-                Operations Login
-              </h1>
-              <p className="text-[11px] text-[var(--color-text-muted)] font-medium max-w-[240px] leading-relaxed">
-                Access your personal control panel, metrics, activity schedules, and exercise workspace.
-              </p>
+              <span className="text-[30px] leading-none tracking-[-1.7px] font-semibold text-zinc-800">
+                tracker
+              </span>
+            </div>
+          </div>
+
+          <section className="w-full">
+            <div className="grid grid-cols-2 border-b border-zinc-200">
+              <button
+                type="button"
+                disabled={isAuthLoading}
+                onClick={() => {
+                  setIsRegisterMode(false)
+                  setAuthError('')
+                  setEnteredPin('')
+                }}
+                className={`h-14 text-[18px] font-medium transition-colors border-b-2 -mb-px ${
+                  !isRegisterMode
+                    ? 'text-zinc-800 border-zinc-700'
+                    : 'text-zinc-400 border-transparent hover:text-zinc-600'
+                }`}
+              >
+                Log in
+              </button>
+              <button
+                type="button"
+                disabled={isAuthLoading}
+                onClick={() => {
+                  setIsRegisterMode(true)
+                  setAuthError('')
+                  setEnteredPin('')
+                }}
+                className={`h-14 text-[18px] font-medium transition-colors border-b-2 -mb-px ${
+                  isRegisterMode
+                    ? 'text-zinc-800 border-zinc-700'
+                    : 'text-zinc-400 border-transparent hover:text-zinc-600'
+                }`}
+              >
+                Sign up
+              </button>
             </div>
 
-            {/* Unauthorized Account Alert */}
             {searchParams?.get('error') === 'unauthorized-account' && (
-              <div className="w-full p-3 bg-rose-500/10 border border-rose-500/30 rounded-[var(--radius-md)] flex items-start gap-2.5 text-rose-600 dark:text-rose-400">
-                <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-                <div className="text-[11px] leading-snug">
-                  <span className="font-bold block">Access Restricted</span>
-                  <span>
-                    {searchParams.get('account') 
-                      ? `${searchParams.get('account')} is not authorized. Only chinmaydpatil09@gmail.com can access this application.`
-                      : 'This private application is restricted exclusively to authorized accounts.'}
-                  </span>
-                </div>
+              <div className="mt-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <span className="font-semibold block">Access restricted</span>
+                <span>
+                  {searchParams.get('account')
+                    ? `${searchParams.get('account')} is not authorized for this application.`
+                    : 'This application is restricted to authorized accounts.'}
+                </span>
               </div>
             )}
 
-            {/* Primary Google Login Button */}
-            <div className="w-full">
+            <div className="pt-8 space-y-3">
               <a
                 href="/api/auth/google"
-                className="w-full bg-[var(--color-bg-base)] hover:bg-[var(--color-accent)] text-[var(--color-text-main)] flex items-center justify-center gap-3 py-3 px-4 rounded-[var(--radius-md)] text-xs font-bold uppercase tracking-wider transition-all duration-200 cursor-pointer border border-[var(--color-border)] hover:border-[var(--color-primary)] shadow-xs select-none"
+                className="h-[58px] w-full border border-zinc-300 rounded-[6px] bg-white hover:bg-zinc-50 text-zinc-700 flex items-center justify-center gap-3 text-[17px] font-normal transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
               >
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                <svg className="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                 </svg>
-                Sign In with Google
+                Log in with Google
               </a>
+
+              <button
+                type="button"
+                onClick={() => openPlaceholder(
+                  'Outlook login',
+                  'Microsoft / Outlook authentication is reserved for a future identity provider integration. The button is intentionally non-functional for now.'
+                )}
+                className="h-[58px] w-full border border-zinc-300 rounded-[6px] bg-white hover:bg-zinc-50 text-zinc-700 flex items-center justify-center gap-3 text-[17px] font-normal transition-colors"
+              >
+                <span className="grid h-[18px] w-[18px] grid-cols-2 gap-[1px]" aria-hidden="true">
+                  <span className="bg-[#f25022]" />
+                  <span className="bg-[#7fba00]" />
+                  <span className="bg-[#00a4ef]" />
+                  <span className="bg-[#ffb900]" />
+                </span>
+                Log in with Outlook
+              </button>
+
+              <button
+                type="button"
+                onClick={() => openPlaceholder(
+                  'Company SSO',
+                  'Enterprise SSO is planned. This entry point will later support company identity providers such as SAML or OIDC. No SSO connection is made yet.'
+                )}
+                className="h-[58px] w-full border border-zinc-300 rounded-[6px] bg-white hover:bg-zinc-50 text-zinc-700 flex items-center justify-center gap-3 text-[17px] font-normal transition-colors"
+              >
+                <svg className="h-[19px] w-[19px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                  <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5M8 10h1M15 10h1M8 13h1M15 13h1" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Log in with SSO
+              </button>
             </div>
 
-            {/* Passcode Login Divider */}
-            <div className="relative w-full flex items-center justify-center my-1 select-none">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[var(--color-border)]" />
-              </div>
-              <span className="relative px-3 bg-[var(--color-bg-surface)] text-[9px] font-black text-[var(--color-text-muted)] uppercase tracking-widest leading-none">
-                or access via passcode
-              </span>
+            <div className="flex items-center gap-4 py-7 text-[15px] text-zinc-400">
+              <div className="h-px flex-1 bg-zinc-200" />
+              <span>OR</span>
+              <div className="h-px flex-1 bg-zinc-200" />
             </div>
 
-            <form onSubmit={handleSubmitForm} className="w-full space-y-4 pt-1">
-              {/* Sign In vs Register Toggle */}
-              <div className="flex border border-[var(--color-border)] bg-[var(--color-bg-base)] p-1 rounded-[var(--radius-md)] w-full relative">
-                <button
-                  type="button"
-                  disabled={isAuthLoading}
-                  onClick={() => { setIsRegisterMode(false); setAuthError(''); setEnteredPin(''); }}
-                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-extrabold rounded-[var(--radius-sm)] transition-all duration-200 cursor-pointer ${!isRegisterMode
-                      ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] border border-[var(--color-border)] shadow-xs'
-                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
-                    } disabled:opacity-50`}
-                >
-                  Sign In
-                </button>
-                <button
-                  type="button"
-                  disabled={isAuthLoading}
-                  onClick={() => { setIsRegisterMode(true); setAuthError(''); setEnteredPin(''); }}
-                  className={`flex-1 py-1.5 text-center text-[10px] uppercase tracking-wider font-extrabold rounded-[var(--radius-sm)] transition-all duration-200 cursor-pointer ${isRegisterMode
-                      ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] border border-[var(--color-border)] shadow-xs'
-                      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
-                    } disabled:opacity-50`}
-                >
-                  Register
-                </button>
-              </div>
-
-              {/* Username Text Input via Design System Component */}
-              <Input
-                label="Username"
-                disabled={isAuthLoading}
-                type="text"
-                placeholder="e.g. chinmay"
+            <form onSubmit={handleSubmitForm} className="space-y-4">
+              <input
+                type="email"
                 value={usernameInput}
+                disabled={isAuthLoading}
                 onChange={(e) => {
                   setUsernameInput(e.target.value)
                   setAuthError('')
                 }}
-                error={authError ? authError : undefined}
+                placeholder="jane@company.com"
                 autoCapitalize="none"
                 autoCorrect="off"
+                autoComplete="email"
+                className="h-[58px] w-full rounded-[6px] border border-zinc-300 bg-white px-5 text-[17px] text-zinc-800 placeholder:text-zinc-400 outline-none transition-colors focus:border-zinc-500 focus:ring-1 focus:ring-zinc-300 disabled:bg-zinc-50"
               />
 
-              {/* Password / Passcode Input */}
-              <div className="w-full space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-medium text-[var(--color-text-muted)]">
-                    {isRegisterMode ? 'Password (Min 8 Characters)' : 'Password or 4-Digit PIN'}
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(prev => !prev)}
-                    className="text-[10px] text-[var(--color-primary)] hover:underline font-semibold cursor-pointer"
-                  >
-                    {showPassword ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-
-                <div className="relative w-full">
-                  <input
-                    ref={pinInputRef}
-                    type={showPassword ? 'text' : 'password'}
-                    value={enteredPin}
-                    disabled={isAuthLoading}
-                    onChange={(e) => {
-                      if (isAuthLoading) return
-                      const val = e.target.value
-                      setEnteredPin(val)
-                      setAuthError('')
-                      // For convenience: if exactly 4 numeric digits entered in login mode, auto-submit legacy PIN
-                      if (!isRegisterMode && /^\d{4}$/.test(val) && usernameInput.trim().length > 0) {
-                        handleAuthSubmit(usernameInput, val)
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        handleAuthSubmit(usernameInput, enteredPin)
-                      }
-                    }}
-                    className="w-full px-3 py-2.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] focus:border-[var(--color-primary)] rounded-[var(--radius-md)] text-[var(--color-text-main)] text-sm focus:outline-none transition-colors shadow-xs"
-                    placeholder={isRegisterMode ? 'At least 8 characters' : 'Enter password or PIN'}
-                    autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
-                  />
-                </div>
-                <p className="text-[10px] text-[var(--color-text-muted)]">
-                  {isRegisterMode 
-                    ? 'New accounts require a password with at least 8 characters.'
-                    : 'Existing accounts can sign in with their password or legacy 4-digit PIN.'}
-                </p>
+              <div className="relative">
+                <input
+                  ref={pinInputRef}
+                  type={showPassword ? 'text' : 'password'}
+                  value={enteredPin}
+                  disabled={isAuthLoading}
+                  onChange={(e) => {
+                    if (isAuthLoading) return
+                    const val = e.target.value
+                    setEnteredPin(val)
+                    setAuthError('')
+                    if (!isRegisterMode && /^\d{4}$/.test(val) && usernameInput.trim().length > 0) {
+                      handleAuthSubmit(usernameInput, val)
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleAuthSubmit(usernameInput, enteredPin)
+                    }
+                  }}
+                  placeholder="password"
+                  autoComplete={isRegisterMode ? 'new-password' : 'current-password'}
+                  className="h-[58px] w-full rounded-[6px] border border-zinc-300 bg-white px-5 pr-20 text-[17px] text-zinc-800 placeholder:text-zinc-400 outline-none transition-colors focus:border-zinc-500 focus:ring-1 focus:ring-zinc-300 disabled:bg-zinc-50"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(prev => !prev)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-zinc-500 hover:text-zinc-800"
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
               </div>
 
-              {/* Submit Action Button using Design System Component */}
-              <Button
+              {authError && (
+                <p className="text-sm text-red-600" role="alert">{authError}</p>
+              )}
+
+              <button
                 type="submit"
-                variant="primary"
-                size="md"
-                isLoading={isAuthLoading}
                 disabled={
-                  isAuthLoading || 
-                  usernameInput.trim().length === 0 || 
-                  (isRegisterMode ? enteredPin.length < 8 : enteredPin.length === 0)
+                  isAuthLoading ||
+                  !usernameInput.trim() ||
+                  !enteredPin ||
+                  !robotChecked
                 }
-                className="w-full font-semibold shadow-xs"
+                className="h-[58px] w-full rounded-[6px] bg-[#d3d3d3] text-white text-[17px] font-normal transition-colors disabled:cursor-not-allowed enabled:bg-zinc-700 enabled:hover:bg-zinc-800"
               >
-                {isRegisterMode ? 'Register Account' : 'Sign In'}
-              </Button>
+                {isAuthLoading ? (isRegisterMode ? 'Creating account...' : 'Logging in...') : (isRegisterMode ? 'Sign up with email' : 'Log in with email')}
+              </button>
             </form>
-          </CardBody>
-        </Card>
-      </div>
+
+            <div className="mt-4 flex items-center justify-between gap-4 text-[14px] text-zinc-500">
+              <button
+                type="button"
+                onClick={() => openPlaceholder(
+                  'Password recovery',
+                  'Password recovery is reserved for the account recovery flow. This placeholder keeps the entry point ready without pretending recovery is implemented.'
+                )}
+                className="text-left hover:text-zinc-800 transition-colors"
+              >
+                Forgot your password?
+              </button>
+              <button
+                type="button"
+                onClick={() => openPlaceholder(
+                  'Password recovery',
+                  'The recovery flow is planned and will be connected to verified email recovery later.'
+                )}
+                className="text-[#3aa6d8] hover:underline"
+              >
+                Recover password.
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setRobotChecked(prev => !prev)}
+              disabled={isAuthLoading}
+              className="mt-12 w-full max-w-[420px] mx-auto border border-zinc-300 bg-zinc-50 rounded-[4px] px-4 py-4 flex items-center justify-between text-left hover:bg-zinc-100 transition-colors"
+              aria-pressed={robotChecked}
+            >
+              <span className="flex items-center gap-3">
+                <span className={`h-7 w-7 border border-zinc-400 bg-white rounded-sm flex items-center justify-center transition-colors ${
+                  robotChecked ? 'bg-emerald-500 border-emerald-500 text-white' : 'text-transparent'
+                }`}>
+                  ✓
+                </span>
+                <span>
+                  <span className="block text-[15px] text-zinc-700">I'm not a robot</span>
+                  <span className="block text-[11px] text-zinc-400 mt-0.5">Security check placeholder</span>
+                </span>
+              </span>
+              <span className="text-[10px] text-zinc-400 font-medium text-right">
+                CAPTCHA<br/>PLACEHOLDER
+              </span>
+            </button>
+          </section>
+        </div>
+
+        {isAuthLoading && (
+          <div className="fixed inset-0 bg-white/75 backdrop-blur-[2px] flex flex-col items-center justify-center z-50">
+            <div className="h-9 w-9 border-4 border-zinc-300 border-t-zinc-700 rounded-full animate-spin" />
+            <p className="mt-4 text-xs font-semibold tracking-wide text-zinc-600">
+              {isRegisterMode ? 'Creating account...' : 'Logging in...'}
+            </p>
+          </div>
+        )}
+
+        {placeholderDialog && (
+          <Modal
+            isOpen={placeholderDialog.isOpen}
+            onClose={() => setPlaceholderDialog(null)}
+            title={placeholderDialog.title}
+            size="sm"
+          >
+            <div className="space-y-4 text-sm">
+              <p className="text-[var(--color-text-muted)] leading-relaxed">
+                {placeholderDialog.message}
+              </p>
+              <div className="flex justify-end">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setPlaceholderDialog(null)}
+                >
+                  Understood
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </main>
     )
   }
 
