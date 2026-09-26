@@ -3,6 +3,7 @@ import { CredentialService } from './CredentialService'
 import { SessionService } from './SessionService'
 import { AuthorizationService, AuthenticatedUser } from './AuthorizationService'
 import { DefaultActivitiesService } from './DefaultActivitiesService'
+import { OnboardingService } from './OnboardingService'
 
 export type { AuthenticatedUser } from './AuthorizationService'
 
@@ -160,29 +161,9 @@ export class AuthService {
       // Create default starter activities for new users
       await DefaultActivitiesService.seedDefaultActivities(u.id, tx)
 
-      await tx.userSetting.create({
-        data: {
-          userId: u.id,
-          module: 'ONBOARDING',
-          config: {
-            version: 1,
-            status: 'NOT_STARTED',
-            currentStep: 0,
-            completedSteps: [],
-            taskSources: [],
-            calendarProvider: null,
-            workStartTime: '09:00',
-            workEndTime: '17:00',
-            planningStyle: null,
-            dailyCapacity: 6,
-            focusAreas: [],
-            firstDayObjective: '',
-            momentum: 0,
-            createdAt: new Date().toISOString(),
-            completedAt: null,
-          },
-        },
-      })
+      await OnboardingService.initialize(u.id)
+
+
 
       return u
     })
