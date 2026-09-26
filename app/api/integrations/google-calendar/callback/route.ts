@@ -15,7 +15,9 @@ function safeReturnTo(value: string | undefined): string {
 }
 
 export async function GET(request: Request) {
-  const siteUrlUrl = new URL(env.NEXT_PUBLIC_SITE_URL)\n  if (process.env.NODE_ENV === 'production') siteUrlUrl.protocol = 'https:'\n  const siteUrl = siteUrlUrl.origin
+  const siteUrlUrl = new URL(env.NEXT_PUBLIC_SITE_URL)
+  if (process.env.NODE_ENV === 'production') siteUrlUrl.protocol = 'https:'
+  const siteUrl = siteUrlUrl.origin
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
   const error = requestUrl.searchParams.get('error')

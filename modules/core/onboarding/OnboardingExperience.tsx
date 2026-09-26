@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3,
-  Github, Layers3, ListTodo, LockKeyhole, Rocket, Sparkles, Target,
+  Layers3, ListTodo, Rocket, Sparkles, Target,
 } from 'lucide-react'
 import type { OnboardingState } from '@/lib/services/OnboardingService'
 import {
@@ -258,7 +258,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
 
               <div className="mt-auto hidden rounded-2xl border border-rose-100 bg-white/80 p-3.5 lg:block">
                 <div className="flex items-center gap-2">
-                  <LockKeyhole className="h-3.5 w-3.5 text-rose-600" />
+                  <Check className="h-3.5 w-3.5 text-rose-600" />
                   <p className="text-[11px] font-semibold">Existing data stays untouched</p>
                 </div>
                 <p className="mt-1.5 text-[10px] leading-4 text-slate-500">Onboarding only adds the new starter activities it creates.</p>
@@ -321,7 +321,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
                   <Step title="Where does your work already live?" description="This helps Tracker create a relevant first action. Connections are not made just by selecting an item.">
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {TASK_SOURCES.map(([label, value]) => (
-                        <ChoiceTile key={value} selected={state.taskSources.includes(value)} onClick={() => toggleSource(value)} label={label} icon={value === 'github' ? <Github className="h-4 w-4" /> : <ListTodo className="h-4 w-4" />} />
+                        <ChoiceTile key={value} selected={state.taskSources.includes(value)} onClick={() => toggleSource(value)} label={label} icon={<ListTodo className="h-4 w-4" />} />
                       ))}
                     </div>
                     <p className="mt-4 text-[11px] text-slate-400">You can skip this. Tracker will not invent an integration connection.</p>
@@ -493,7 +493,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
                 </footer>
 
                 <p className="mt-5 flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
-                  <LockKeyhole className="h-3 w-3" /> Progress saves as you go
+                  <Check className="h-3 w-3" /> Progress saves as you go
                 </p>
               </div>
             </div>
@@ -574,7 +574,7 @@ function formatCalendarTime(value: string) {
 }
 
 function sourceLabel(value: string) {
-  return {
+  const labels: Record<string, string> = {
     'google-tasks': 'Google Tasks',
     todoist: 'Todoist',
     notion: 'Notion',
@@ -584,5 +584,6 @@ function sourceLabel(value: string) {
     trello: 'Trello',
     clickup: 'ClickUp',
     outlook: 'Outlook',
-  }[value] || value
+  }
+  return labels[value] || value
 }
