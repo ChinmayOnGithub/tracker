@@ -94,7 +94,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
     return () => {
       active = false
     }
-  }, [])
+  }, [state.calendarProvider])
 
   const questComplete = useMemo(() => {
     const completed = new Set(state.completedSteps)
