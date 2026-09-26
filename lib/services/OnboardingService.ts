@@ -93,15 +93,91 @@ function safeTimezone(timezone: string): string {
   }
 }
 
-function chooseDuration(state: OnboardingState): number {
-  const styleDuration = {
-    focused: 90,
-    structured: 75,
-    flexible: 60,
-  }[state.planningStyle || 'focused'] || 75
+function choosePrimaryDuration(state: OnboardingState): number {
+  const preferred = state.planningStyle === 'flexible' ? 60 : state.planningStyle === 'structured' ? 75 : 90
+  return Math.min(preferred, Math.max(30, Math.floor((state.dailyCapacity * 60) / 2)))
+}
 
-  const capacityCeiling = Math.max(30, Math.floor((state.dailyCapacity * 60) / 2))
-  return Math.min(styleDuration, capacityCeiling)
+function chooseSecondaryDuration(state: OnboardingState): number {
+  return state.planningStyle === 'structured' ? 30 : 25
+}
+
+function activityBlueprints(state: OnboardingState) {
+  const focusLabels: Record<string, string> = {
+    work: 'Work',
+    learning: 'Learning',
+    personal: 'Personal',
+    health: 'Health & fitness',
+    'life-admin': 'Life admin',
+    creative: 'Creative work',
+  }
+
+  const focusActions: Record<string, string> = {
+    work: 'Review today’s work priorities',
+    learning: 'Choose one learning outcome for today',
+    personal: 'Choose one personal priority for today',
+    health: 'Set one realistic health action for today',
+    'life-admin': 'Clear one small life-admin task',
+    creative: 'Create one small first step for your creative work',
+  }
+
+  const sourceLabels: Record<string, string> = {
+    'google-tasks': 'Google Tasks',
+    todoist: 'Todoist',
+    notion: 'Notion',
+    linear: 'Linear',
+    github: 'GitHub',
+    jira: 'Jira',
+    trello: 'Trello',
+    clickup: 'ClickUp',
+    outlook: 'Outlook',
+  }
+
+  const blueprints: Array<{
+    name: string
+    category: string
+    duration: number
+    priority: 'HIGH' | 'MEDIUM'
+    icon: string
+    notes: string
+  }> = [
+    {
+      name: state.firstDayObjective.trim(),
+      category: state.focusAreas[0] || 'work',
+      duration: choosePrimaryDuration(state),
+      priority: 'HIGH',
+      icon: 'Target',
+      notes: 'Your main onboarding mission, created from your stated objective.',
+    },
+  ]
+
+  const maxActivities = state.dailyCapacity <= 3 ? 2 : state.dailyCapacity <= 6 ? 3 : 4
+
+  for (const focus of state.focusAreas.slice(1, 3)) {
+    if (blueprints.length >= maxActivities) break
+    blueprints.push({
+      name: focusActions[focus] || `Make progress on ${focusLabels[focus] || focus}`,
+      category: focus,
+      duration: chooseSecondaryDuration(state),
+      priority: 'MEDIUM',
+      icon: 'Sparkles',
+      notes: `Added because you selected ${focusLabels[focus] || focus} as a focus area.`,
+    })
+  }
+
+  if (blueprints.length < maxActivities && state.taskSources.length > 0) {
+    const source = sourceLabels[state.taskSources[0]] || state.taskSources[0]
+    blueprints.push({
+      name: `Review your ${source} queue`,
+      category: state.focusAreas[0] || 'work',
+      duration: chooseSecondaryDuration(state),
+      priority: 'MEDIUM',
+      icon: 'ListTodo',
+      notes: `Added because ${source} is one of your selected work sources.`,
+    })
+  }
+
+  return blueprints
 }
 
 export class OnboardingService {
@@ -127,10 +203,10 @@ export class OnboardingService {
   }
 
   /**
-   * Development-phase onboarding policy: every successful login starts the
-   * gamified onboarding journey again. This intentionally ignores whether the
-   * user is new or has completed onboarding previously. Remove/disable this
-   * behavior when the onboarding rollout becomes persistent for returning users.
+   * Development rollout: start a fresh onboarding run without touching
+   * activities, journal entries, calendar events, documents, or other user data.
+   * The previous onboarding state is intentionally not used to mutate anything
+   * outside the ONBOARDING setting.
    */
   static async resetForDevelopmentLogin(userId: string): Promise<OnboardingState> {
     const state: OnboardingState = {
@@ -199,9 +275,8 @@ export class OnboardingService {
   static async createFirstDayPlan(userId: string, state: OnboardingState): Promise<{
     state: OnboardingState
     created: boolean
-    activityId: string | null
-    scheduledTime: string | null
-    durationMinutes: number
+    activityIds: string[]
+    activities: Array<{ id: string; name: string; scheduledTime: string | null; estimatedDuration: number; category: string }>
   }> {
     if (!state.firstDayObjective.trim()) {
       throw new Error('A first-day objective is required before generating the plan.')
@@ -210,22 +285,20 @@ export class OnboardingService {
     if (state.firstPlanActivityId) {
       const existing = await db.activityTemplate.findFirst({
         where: { id: state.firstPlanActivityId, userId, deletedAt: null },
-        select: { id: true, scheduledTime: true, estimatedDuration: true },
+        select: { id: true, name: true, scheduledTime: true, estimatedDuration: true, category: true },
       })
 
       if (existing) {
         return {
           state,
           created: false,
-          activityId: existing.id,
-          scheduledTime: existing.scheduledTime,
-          durationMinutes: existing.estimatedDuration,
+          activityIds: [existing.id],
+          activities: [existing],
         }
       }
     }
 
     const timezone = safeTimezone(state.timezone || 'UTC')
-    const durationMinutes = chooseDuration(state)
     const workStart = timeToMinutes(state.workStartTime)
     const workEnd = timeToMinutes(state.workEndTime)
 
@@ -236,8 +309,8 @@ export class OnboardingService {
     const now = new Date()
     const localToday = localParts(now, timezone).date
     const dayStart = new Date(`${localToday}T00:00:00.000Z`)
-    const queryStart = new Date(dayStart.getTime() - 24 * 60 * 60 * 1000)
-    const queryEnd = new Date(dayStart.getTime() + 48 * 60 * 60 * 1000)
+    const queryStart = new Date(dayStart.getTime() - 2 * 24 * 60 * 60 * 1000)
+    const queryEnd = new Date(dayStart.getTime() + 3 * 24 * 60 * 60 * 1000)
 
     const calendarEvents = state.calendarProvider === 'google'
       ? await db.calendarEvent.findMany({
@@ -259,68 +332,79 @@ export class OnboardingService {
         end: localParts(event.end, timezone),
       }))
       .filter((event) => event.start.date === localToday || event.end.date === localToday)
-      .map((event) => ({
-        start: event.start.minutes,
-        end: event.end.minutes,
-      }))
+      .map((event) => ({ start: event.start.minutes, end: event.end.minutes }))
       .filter((event) => event.end > event.start)
 
-    let scheduledTime: string | null = null
-    for (let candidate = workStart; candidate + durationMinutes <= workEnd; candidate += 30) {
-      const candidateEnd = candidate + durationMinutes
-      const overlaps = busy.some((event) => candidate < event.end && candidateEnd > event.start)
-      if (!overlaps) {
-        scheduledTime = minutesToTime(candidate)
-        break
+    const blueprints = activityBlueprints(state)
+    const occupied: Array<{ start: number; end: number }> = [...busy]
+
+    const scheduled = blueprints.map((blueprint) => {
+      let scheduledTime: string | null = null
+      for (let candidate = workStart; candidate + blueprint.duration <= workEnd; candidate += 15) {
+        const candidateEnd = candidate + blueprint.duration
+        const overlaps = occupied.some((event) => candidate < event.end && candidateEnd > event.start)
+        if (!overlaps) {
+          scheduledTime = minutesToTime(candidate)
+          occupied.push({ start: candidate, end: candidateEnd })
+          break
+        }
       }
-    }
+      return { ...blueprint, scheduledTime }
+    })
 
     const targetDate = new Date(`${localToday}T12:00:00.000Z`)
-    const focusCategory = state.focusAreas[0] || 'work'
+    const sessionId = state.createdAt || new Date().toISOString()
 
-    const createdActivity = await db.$transaction(async (tx) => {
-      const activity = await tx.activityTemplate.create({
-        data: {
-          userId,
-          name: state.firstDayObjective.trim(),
-          category: focusCategory,
-          type: 'TASK',
-          priority: 'HIGH',
-          estimatedDuration: durationMinutes,
-          scheduledTime,
-          energyRequired: state.planningStyle === 'flexible' ? 'MEDIUM' : 'HIGH',
-          calendarProvider: state.calendarProvider === 'google' ? 'GOOGLE' : 'NONE',
-          recurrenceType: 'one_time',
-          targetDate,
-          icon: 'Target',
-          color: 'primary',
-          sortOrder: 0,
-          notes: `Generated during Tracker onboarding. Planning style: ${state.planningStyle || 'focused'}.`,
-          metadata: {
-            source: 'onboarding',
-            timezone,
-            calendarAware: state.calendarProvider === 'google',
-          } as Prisma.InputJsonValue,
-        },
-        select: { id: true, scheduledTime: true, estimatedDuration: true },
-      })
-
-      return activity
+    const createdActivities = await db.$transaction(async (tx) => {
+      const results: Array<{ id: string; name: string; scheduledTime: string | null; estimatedDuration: number; category: string }> = []
+      for (let index = 0; index < scheduled.length; index += 1) {
+        const blueprint = scheduled[index]
+        const activity = await tx.activityTemplate.create({
+          data: {
+            userId,
+            name: blueprint.name,
+            category: blueprint.category,
+            type: 'TASK',
+            priority: blueprint.priority,
+            estimatedDuration: blueprint.duration,
+            scheduledTime: blueprint.scheduledTime,
+            energyRequired: state.planningStyle === 'flexible' ? 'MEDIUM' : index === 0 ? 'HIGH' : 'MEDIUM',
+            calendarProvider: state.calendarProvider === 'google' ? 'GOOGLE' : 'NONE',
+            recurrenceType: 'one_time',
+            targetDate,
+            icon: blueprint.icon,
+            color: 'rose',
+            sortOrder: index,
+            notes: blueprint.notes,
+            metadata: {
+              source: 'onboarding',
+              onboardingSession: sessionId,
+              timezone,
+              calendarAware: state.calendarProvider === 'google',
+              planningStyle: state.planningStyle,
+              selectedFocusAreas: state.focusAreas,
+              selectedTaskSources: state.taskSources,
+            } as Prisma.InputJsonValue,
+          },
+          select: { id: true, name: true, scheduledTime: true, estimatedDuration: true, category: true },
+        })
+        results.push(activity)
+      }
+      return results
     })
 
     const nextState: OnboardingState = {
       ...state,
-      firstPlanActivityId: createdActivity.id,
+      firstPlanActivityId: createdActivities[0]?.id || null,
     }
 
     await this.saveState(userId, nextState)
 
     return {
       state: nextState,
-      created: true,
-      activityId: createdActivity.id,
-      scheduledTime: createdActivity.scheduledTime,
-      durationMinutes: createdActivity.estimatedDuration,
+      created: createdActivities.length > 0,
+      activityIds: createdActivities.map((activity) => activity.id),
+      activities: createdActivities,
     }
   }
 }
