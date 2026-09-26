@@ -2,6 +2,8 @@ export const ROUTES = {
   HOME: '/',
   AUTH_GOOGLE: '/api/auth/google',
   AUTH_CALLBACK_GOOGLE: '/api/auth/callback/google',
+  GOOGLE_CALENDAR_CONNECT: '/api/integrations/google-calendar',
+  GOOGLE_CALENDAR_CALLBACK: '/api/integrations/google-calendar/callback',
   SYNC_CALENDAR: '/api/sync/calendar',
   MOBILE_SYNC: '/api/mobile/sync'
 } as const
@@ -9,8 +11,10 @@ export const ROUTES = {
 export const COOKIES = {
   SESSION_TOKEN: 'session_token',
   AUTH_SOURCE: 'auth_source',
-  OAUTH_STATE: 'oauth_state',
-  OAUTH_CODE_VERIFIER: 'oauth_code_verifier'
+  GOOGLE_AUTH_STATE: 'google_auth_state',
+  GOOGLE_AUTH_CODE_VERIFIER: 'google_auth_code_verifier',
+  GOOGLE_CALENDAR_STATE: 'google_calendar_state',
+  GOOGLE_CALENDAR_CODE_VERIFIER: 'google_calendar_code_verifier'
 } as const
 
 export const GOOGLE_OAUTH = {
