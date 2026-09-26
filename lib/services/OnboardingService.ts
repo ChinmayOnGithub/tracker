@@ -356,7 +356,7 @@ export class OnboardingService {
     const sessionId = state.createdAt || new Date().toISOString()
 
     const createdActivities = await db.$transaction(async (tx) => {
-      const results = []
+      const results: Array<{ id: string; name: string; scheduledTime: string | null; estimatedDuration: number; category: string }> = []
       for (let index = 0; index < scheduled.length; index += 1) {
         const blueprint = scheduled[index]
         const activity = await tx.activityTemplate.create({
