@@ -13,13 +13,14 @@ export type LoginResult =
 export type RegisterResult =
   | { success: true; user: { id: string; username: string }; token: string }
   | { success: false; error: string }
-
+ 
 export const hashPin = CredentialService.hashLegacyPin
 export const legacyHashPin = CredentialService.legacyHashPin
 export const hashPassword = CredentialService.hashPassword
 export const verifyPassword = CredentialService.verifyPassword
 
 export class AuthService {
+  // Expose credential helper delegations for backward compatibility
   public static hashPassword = CredentialService.hashPassword
   public static verifyPassword = CredentialService.verifyPassword
   public static hashPin = CredentialService.hashLegacyPin
@@ -29,6 +30,9 @@ export class AuthService {
   public static recordFailedAttempt = CredentialService.recordFailedAttempt
   public static clearRateLimit = CredentialService.clearRateLimit
 
+  /**
+   * Canonical login flow: validates credentials, enforces rate limiting, checks legacy PIN migration.
+   */
   public static async login(
     usernameInput: string,
     secret: string
@@ -41,6 +45,7 @@ export class AuthService {
       return { success: false, error: 'Password or PIN is required.' }
     }
 
+    // Check rate limit
     const rateCheck = CredentialService.checkRateLimit(username)
     if (!rateCheck.allowed) {
       return {
@@ -49,7 +54,9 @@ export class AuthService {
       }
     }
 
-    const user = await db.user.findUnique({ where: { username } })
+    const user = await db.user.findUnique({
+      where: { username },
+    })
 
     if (!user) {
       CredentialService.recordFailedAttempt(username)
@@ -66,9 +73,11 @@ export class AuthService {
     let isMatch = false
     let isLegacyPinMatch = false
 
+    // 1. If stored hash is modern scrypt hash
     if (user.passwordHash.startsWith('scrypt:')) {
       isMatch = await CredentialService.verifyPassword(secret, username, user.passwordHash)
     } else {
+      // 2. Stored hash is PBKDF2 legacy PIN hash
       const pinHash = CredentialService.hashLegacyPin(secret, username)
       if (user.passwordHash === pinHash) {
         isMatch = true
@@ -87,6 +96,7 @@ export class AuthService {
       return { success: false, error: 'Incorrect username or password.' }
     }
 
+    // Successful login clears rate limit counter
     CredentialService.clearRateLimit(username)
 
     const token = SessionService.signSession(user.id, user.username)
@@ -105,10 +115,16 @@ export class AuthService {
     }
   }
 
+  /**
+   * Compatibility alias for verifyCredentials.
+   */
   public static async verifyCredentials(usernameInput: string, secret: string): Promise<LoginResult> {
     return this.login(usernameInput, secret)
   }
 
+  /**
+   * Canonical user registration flow. Creates user and default starter activities transactionally.
+   */
   public static async register(
     usernameInput: string,
     secret: string
@@ -123,7 +139,11 @@ export class AuthService {
       return { success: false, error: passCheck.error || 'Invalid password' }
     }
 
-    const existing = await db.user.findUnique({ where: { username } })
+    // Check if username already exists
+    const existing = await db.user.findUnique({
+      where: { username }
+    })
+
     if (existing) {
       return { success: false, error: 'Username is already taken.' }
     }
@@ -137,6 +157,7 @@ export class AuthService {
         }
       })
 
+      // Create default starter activities for new users
       await DefaultActivitiesService.seedDefaultActivities(u.id, tx)
 
       await tx.userSetting.create({
@@ -175,6 +196,9 @@ export class AuthService {
     }
   }
 
+  /**
+   * Migration helper: upgrades an authenticated user's credentials from legacy PIN to scrypt password.
+   */
   public static async migratePinToPassword(
     userId: string,
     newPassword: string
@@ -184,7 +208,10 @@ export class AuthService {
       return { success: false, error: passCheck.error }
     }
 
-    const user = await db.user.findUnique({ where: { id: userId } })
+    const user = await db.user.findUnique({
+      where: { id: userId }
+    })
+
     if (!user) {
       return { success: false, error: 'User not found' }
     }
@@ -198,14 +225,23 @@ export class AuthService {
     return { success: true }
   }
 
+  /**
+   * Delegates token-based user resolution to SessionService.
+   */
   public static async resolveUserFromToken(token: string | null | undefined): Promise<AuthenticatedUser | null> {
     return SessionService.resolveUserFromToken(token)
   }
 
+  /**
+   * Delegates request-based user resolution to SessionService.
+   */
   public static async resolveAuthFromRequest(request: Request): Promise<AuthenticatedUser | null> {
     return SessionService.resolveAuthFromRequest(request)
   }
 
+  /**
+   * Invalidates active session and clears session cookie.
+   */
   public static async logout(): Promise<void> {
     await SessionService.invalidateSession()
   }
