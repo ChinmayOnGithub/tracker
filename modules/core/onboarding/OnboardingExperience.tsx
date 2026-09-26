@@ -3,8 +3,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3,
-  Github, Layers3, ListTodo, LockKeyhole, Rocket, Sparkles, Target,
+  Compass, Layers3, ListTodo, Rocket, Sparkles, Target, Trophy, Zap,
 } from 'lucide-react'
+import { Button, Card, Checkbox, Select, Textarea } from '@/design-system'
 import type { OnboardingState } from '@/lib/services/OnboardingService'
 import {
   completeOnboardingAction,
@@ -23,33 +24,29 @@ interface CalendarDiscovery {
   events: Array<{ id: string; title: string; start: string; end: string }>
 }
 
-const TOTAL_STEPS = 7
-
-const FOCUS_AREAS = [
-  ['Work', 'work', 'Projects, deadlines and career'],
-  ['Learning', 'learning', 'Study, skills and growth'],
-  ['Personal', 'personal', 'Home, relationships and life'],
-  ['Health', 'health', 'Movement, food and wellbeing'],
-  ['Life admin', 'life-admin', 'Errands, money and paperwork'],
-  ['Creative', 'creative', 'Writing, design and side projects'],
-]
+const TOTAL_STEPS = 8
 
 const TASK_SOURCES = [
-  ['Google Tasks', 'google-tasks'],
-  ['Todoist', 'todoist'],
-  ['Notion', 'notion'],
-  ['Linear', 'linear'],
-  ['GitHub', 'github'],
-  ['Jira', 'jira'],
-  ['Trello', 'trello'],
-  ['ClickUp', 'clickup'],
-  ['Outlook', 'outlook'],
+  ['Google Tasks', 'google-tasks'], ['Todoist', 'todoist'], ['Notion', 'notion'],
+  ['Linear', 'linear'], ['GitHub', 'github'], ['Jira', 'jira'],
+  ['Trello', 'trello'], ['ClickUp', 'clickup'], ['Outlook', 'outlook'],
+]
+
+const FOCUS_AREAS = [
+  ['Work', 'work'], ['Learning', 'learning'], ['Personal', 'personal'],
+  ['Health & fitness', 'health'], ['Life admin', 'life-admin'], ['Creative work', 'creative'],
 ]
 
 const PLANNING_STYLES = [
-  ['Focused', 'focused', 'A short list. Protect deep work.'],
-  ['Structured', 'structured', 'Plan the day before you start.'],
-  ['Flexible', 'flexible', 'Keep direction and adapt as you go.'],
+  ['Focused', 'focused', 'A short, intentional list with room to think.'],
+  ['Structured', 'structured', 'Plan most of the day before you start.'],
+  ['Flexible', 'flexible', 'Keep a direction and adapt as the day changes.'],
+]
+
+const CALENDARS = [
+  ['Google Calendar', 'google', 'Connect now'],
+  ['Outlook Calendar', 'outlook', 'Coming next'],
+  ['Apple Calendar', 'apple', 'Coming next'],
 ]
 
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
@@ -60,15 +57,12 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
   return { value, label: `${displayHour}:${minute} ${hour < 12 ? 'AM' : 'PM'}` }
 })
 
-const STEPS = [
-  ['Start', 'A little context'],
-  ['Focus', 'What matters'],
-  ['Work', 'Where work lives'],
-  ['Calendar', 'Protect your time'],
-  ['Rhythm', 'Your workday'],
-  ['Planning', 'Your style'],
-  ['Mission', 'Your first outcome'],
-  ['Ready', 'Your starting day'],
+const QUESTS = [
+  { key: 'work', label: 'Your work', icon: <ListTodo className="h-3.5 w-3.5" /> },
+  { key: 'calendar', label: 'Your calendar', icon: <CalendarDays className="h-3.5 w-3.5" /> },
+  { key: 'rhythm', label: 'Your rhythm', icon: <Clock3 className="h-3.5 w-3.5" /> },
+  { key: 'capacity', label: 'Your capacity', icon: <Zap className="h-3.5 w-3.5" /> },
+  { key: 'plan', label: 'Your first plan', icon: <Target className="h-3.5 w-3.5" /> },
 ]
 
 export function OnboardingExperience({ initialState, username }: Props) {
@@ -80,54 +74,56 @@ export function OnboardingExperience({ initialState, username }: Props) {
 
   useEffect(() => {
     let active = true
-    void getOnboardingCalendarDiscoveryAction().then((result) => {
+
+    const loadCalendarDiscovery = async () => {
+      const result = await getOnboardingCalendarDiscoveryAction()
       if (!active || !result.success) return
+
       setCalendarDiscovery({
         connected: result.connected,
         eventCount: result.eventCount || 0,
         events: result.events || [],
       })
-      if (result.connected) {
+
+      if (result.connected && state.calendarProvider !== 'google') {
         setState((current) => ({ ...current, calendarProvider: 'google' }))
       }
-    })
-    return () => { active = false }
-  }, [])
+    }
 
-  const selectedFocusLabels = useMemo(
-    () => state.focusAreas.map((value) => FOCUS_AREAS.find((item) => item[1] === value)?.[0] || value),
-    [state.focusAreas],
-  )
+    void loadCalendarDiscovery()
+    return () => {
+      active = false
+    }
+  }, [state.calendarProvider])
 
-  const progress = Math.round((step / TOTAL_STEPS) * 100)
+  const questComplete = useMemo(() => {
+    const completed = new Set(state.completedSteps)
+    return {
+      work: completed.has(1),
+      calendar: completed.has(2) && (state.calendarProvider !== 'google' || !!calendarDiscovery?.connected),
+      rhythm: completed.has(3),
+      capacity: completed.has(5),
+      plan: !!state.firstPlanActivityId || state.status === 'COMPLETED',
+    }
+  }, [calendarDiscovery?.connected, state])
+
+  const questCount = Object.values(questComplete).filter(Boolean).length
+  const progress = Math.round((Math.min(step, TOTAL_STEPS) / TOTAL_STEPS) * 100)
 
   const update = <K extends keyof OnboardingState>(key: K, value: OnboardingState[K]) => {
     setState((current) => ({ ...current, [key]: value }))
     setError('')
   }
 
-  const toggleFocus = (value: string) => {
-    const selected = state.focusAreas.includes(value)
-    if (selected) update('focusAreas', state.focusAreas.filter((item) => item !== value))
-    else if (state.focusAreas.length < 3) update('focusAreas', [...state.focusAreas, value])
-  }
+  const canContinue = () => {
+    if (step === 3) {
+      const [startHour, startMinute] = state.workStartTime.split(':').map(Number)
+      const [endHour, endMinute] = state.workEndTime.split(':').map(Number)
+      const start = startHour * 60 + startMinute
+      const end = endHour * 60 + endMinute
 
-  const toggleSource = (value: string) => {
-    update('taskSources', state.taskSources.includes(value)
-      ? state.taskSources.filter((item) => item !== value)
-      : [...state.taskSources, value])
-  }
-
-  const validate = () => {
-    if (step === 1 && state.focusAreas.length === 0) {
-      setError('Pick at least one area. This changes the activities Tracker creates for you.')
-      return false
-    }
-    if (step === 4) {
-      const start = timeToMinutes(state.workStartTime)
-      const end = timeToMinutes(state.workEndTime)
       if (end <= start) {
-        setError('Finish time must be later than start time.')
+        setError('Your finish time must be later than your start time.')
         return false
       }
       if (end - start < 60) {
@@ -135,61 +131,69 @@ export function OnboardingExperience({ initialState, username }: Props) {
         return false
       }
     }
-    if (step === 5 && !state.planningStyle) {
+
+    if (step === 4 && !state.planningStyle) {
       setError('Choose the planning style that feels most natural.')
       return false
     }
-    if (step === 6 && !state.firstDayObjective.trim()) {
-      setError('Give your first day one clear outcome.')
+
+    if (step === 6 && state.focusAreas.length === 0) {
+      setError('Choose at least one focus area.')
       return false
     }
+
+    if (step === 7 && !state.firstDayObjective.trim()) {
+      setError('Give your first day one clear objective.')
+      return false
+    }
+
     return true
   }
 
-  const persist = async (nextStep: number) => {
+  const getClientTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || state.timezone || 'UTC'
+
+  const saveAndContinue = async () => {
+    if (!canContinue()) return
+
+    const nextStep = Math.min(step + 1, TOTAL_STEPS)
+    const completedSteps = Array.from(new Set([...state.completedSteps, step]))
     const nextState: OnboardingState = {
       ...state,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || state.timezone || 'UTC',
+      timezone: getClientTimezone(),
       status: 'IN_PROGRESS',
       currentStep: nextStep,
-      completedSteps: Array.from(new Set([...state.completedSteps, step])),
+      completedSteps,
     }
 
     setSaving(true)
+    setError('')
     const result = await saveOnboardingStateAction(nextState)
     setSaving(false)
 
     if (!result.success || !result.state) {
-      setError(result.error || 'Could not save your progress.')
-      return false
+      setError(result.error || 'Could not save your progress. Please try again.')
+      return
     }
 
     setState(result.state)
     setStep(nextStep)
-    return true
-  }
-
-  const continueStep = async () => {
-    if (!validate()) return
-    await persist(Math.min(step + 1, TOTAL_STEPS))
   }
 
   const finish = async () => {
-    if (!validate()) return
+    if (!canContinue()) return
+
     setSaving(true)
     setError('')
-
     const result = await completeOnboardingAction({
       ...state,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || state.timezone || 'UTC',
+      timezone: getClientTimezone(),
       currentStep: TOTAL_STEPS,
       completedSteps: Array.from(new Set([...state.completedSteps, TOTAL_STEPS])),
     })
-
     setSaving(false)
 
     if (!result.success || !result.state) {
-      setError(result.error || 'Could not build your starting day.')
+      setError(result.error || 'Could not generate your first-day plan. Please try again.')
       return
     }
 
@@ -202,387 +206,341 @@ export function OnboardingExperience({ initialState, username }: Props) {
     setStep((current) => Math.max(0, current - 1))
   }
 
-  const connectCalendar = () => {
-    window.location.href = '/api/integrations/google-calendar?returnTo=/onboarding'
+  const toggleTaskSource = (source: string) => {
+    update('taskSources', state.taskSources.includes(source)
+      ? state.taskSources.filter((item) => item !== source)
+      : [...state.taskSources, source])
   }
 
+  const toggleFocus = (focus: string) => {
+    const selected = state.focusAreas.includes(focus)
+    const next = selected
+      ? state.focusAreas.filter((item) => item !== focus)
+      : state.focusAreas.length < 3
+        ? [...state.focusAreas, focus]
+        : state.focusAreas
+    update('focusAreas', next)
+  }
+
+  const capacityLabel = state.planningStyle === 'flexible'
+    ? 'protected focus'
+    : state.planningStyle === 'structured'
+      ? 'planned work'
+      : 'focused work'
+
   return (
-    <main
-      className="min-h-screen bg-[#f8f7f8] px-3 py-3 text-slate-950 sm:px-6 sm:py-6"
-      style={{
-        '--onboarding-rose': '#e11d48',
-        '--onboarding-rose-dark': '#be123c',
-        '--onboarding-rose-soft': '#fff1f2',
-      } as React.CSSProperties}
-    >
-      <div className="mx-auto min-h-[calc(100vh-1.5rem)] max-w-5xl overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_20px_70px_-35px_rgba(15,23,42,0.35)] sm:min-h-[calc(100vh-3rem)]">
-        <div className="grid min-h-full lg:grid-cols-[260px_1fr]">
-          <aside className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-br from-rose-50 via-white to-white p-5 sm:p-7 lg:border-b-0 lg:border-r">
-            <div className="absolute -right-14 -top-14 h-40 w-40 rounded-full bg-rose-200/30 blur-3xl" />
-            <div className="relative flex h-full flex-col">
-              <div className="flex items-center gap-2.5">
-                <div className="grid h-9 w-9 place-items-center rounded-xl bg-slate-950 text-white shadow-lg">
-                  <Layers3 className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold tracking-tight">tracker</p>
-                  <p className="text-[10px] text-slate-500">Personal operating system</p>
-                </div>
-              </div>
-
-              <div className="mt-7 hidden lg:block">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-rose-600">Setup</p>
-                <h2 className="mt-2 text-xl font-bold tracking-tight">Let’s make your first day feel like yours.</h2>
-                <p className="mt-2 text-xs leading-5 text-slate-500">
-                  Every answer changes what Tracker prepares. Nothing here replaces or deletes your existing data.
-                </p>
-              </div>
-
-              <div className="mt-5 space-y-1.5">
-                {STEPS.map(([label, hint], index) => {
-                  const active = index === step
-                  const done = index < step
-                  return (
-                    <div key={label} className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 ${active ? 'bg-white shadow-sm ring-1 ring-slate-200' : ''}`}>
-                      <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-bold ${done ? 'bg-rose-600 text-white' : active ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                        {done ? <Check className="h-3.5 w-3.5" /> : index + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <p className={`text-xs font-semibold ${active ? 'text-slate-950' : 'text-slate-500'}`}>{label}</p>
-                        <p className="truncate text-[10px] text-slate-400">{hint}</p>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              <div className="mt-auto hidden rounded-2xl border border-rose-100 bg-white/80 p-3.5 lg:block">
-                <div className="flex items-center gap-2">
-                  <LockKeyhole className="h-3.5 w-3.5 text-rose-600" />
-                  <p className="text-[11px] font-semibold">Existing data stays untouched</p>
-                </div>
-                <p className="mt-1.5 text-[10px] leading-4 text-slate-500">Onboarding only adds the new starter activities it creates.</p>
-              </div>
+    <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)] px-4 py-6 sm:px-6 sm:py-8">
+      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-4xl flex-col">
+        <header className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="grid h-8 w-8 place-items-center rounded-md bg-[var(--primary)] text-[var(--primary-foreground)] shadow-[var(--elevation-raised)]">
+              <Layers3 className="h-4 w-4" />
             </div>
-          </aside>
+            <div>
+              <p className="text-sm font-semibold tracking-tight">tracker</p>
+              <p className="text-[11px] text-[var(--muted-foreground)]">Setup quest</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+            <Trophy className="h-3.5 w-3.5 text-[var(--primary)]" />
+            <span>{questCount}/5 complete</span>
+          </div>
+        </header>
 
-          <section className="flex min-h-[650px] flex-col bg-white">
-            <header className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-8">
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-rose-600">{STEPS[step][0]}</p>
-                <p className="mt-0.5 truncate text-xs text-slate-500">{STEPS[step][1]}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100 sm:w-28">
-                  <div className="h-full rounded-full bg-rose-600 transition-all duration-300" style={{ width: `${Math.max(progress, 8)}%` }} />
+        <div className="mt-5 grid grid-cols-5 gap-1.5">
+          {QUESTS.map((quest) => {
+            const complete = questComplete[quest.key as keyof typeof questComplete]
+            return (
+              <div key={quest.key} className="min-w-0">
+                <div className={`h-1 overflow-hidden rounded-full ${complete ? 'bg-[var(--primary)]' : 'bg-[var(--muted)]'}`} />
+                <div className="mt-2 hidden items-center gap-1.5 text-[10px] text-[var(--muted-foreground)] sm:flex">
+                  <span className={complete ? 'text-[var(--success)]' : ''}>{quest.icon}</span>
+                  <span className="truncate">{quest.label}</span>
                 </div>
-                <span className="text-[10px] font-semibold text-slate-400">{step + 1}/{TOTAL_STEPS + 1}</span>
               </div>
-            </header>
+            )
+          })}
+        </div>
 
-            <div className="flex flex-1 items-center px-5 py-7 sm:px-10 sm:py-10">
-              <div className="mx-auto w-full max-w-2xl">
-                {step === 0 && (
-                  <Step title={`Hi ${username}. Let’s build your starting day.`} description="A few choices are enough. Tracker will use them to prepare useful activities instead of giving you a generic checklist.">
-                    <div className="relative overflow-hidden rounded-[22px] border border-slate-200 bg-gradient-to-br from-slate-950 to-slate-800 p-5 text-white shadow-xl sm:p-7">
-                      <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full bg-rose-500/30 blur-2xl" />
-                      <div className="relative">
-                        <div className="flex items-center justify-between">
-                          <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-semibold">SETUP QUEST</span>
-                          <Sparkles className="h-4 w-4 text-rose-300" />
-                        </div>
-                        <p className="mt-12 max-w-sm text-2xl font-bold tracking-tight">Turn your answers into a day you can actually use.</p>
-                        <div className="mt-5 flex flex-wrap gap-2 text-[10px] text-white/70">
-                          <span className="rounded-full bg-white/10 px-2.5 py-1">Focus</span>
-                          <span className="rounded-full bg-white/10 px-2.5 py-1">Calendar</span>
-                          <span className="rounded-full bg-white/10 px-2.5 py-1">Capacity</span>
-                          <span className="rounded-full bg-white/10 px-2.5 py-1">Activities</span>
-                        </div>
-                      </div>
-                    </div>
-                  </Step>
-                )}
+        <div className="mt-3 h-px overflow-hidden bg-[var(--muted)]">
+          <div className="h-full bg-[var(--primary)] transition-all duration-300" style={{ width: `${Math.max(progress, 4)}%` }} />
+        </div>
 
-                {step === 1 && (
-                  <Step title="What do you want Tracker to help with first?" description="Pick up to three. These choices directly influence the starter activities created at the end.">
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {FOCUS_AREAS.map(([label, value, hint]) => (
-                        <ChoiceRow key={value} selected={state.focusAreas.includes(value)} onClick={() => toggleFocus(value)} icon={<Target className="h-4 w-4" />} title={label} description={hint} />
-                      ))}
-                    </div>
-                    <div className="mt-4 flex items-center justify-between text-[11px]">
-                      <span className="text-slate-400">Up to 3 areas</span>
-                      <span className="font-semibold text-rose-600">{state.focusAreas.length}/3 selected</span>
-                    </div>
-                  </Step>
-                )}
+        <section className="flex flex-1 items-center py-8 sm:py-12">
+          <div className="w-full">
+            {step === 0 && (
+              <StepFrame icon={<Sparkles />} eyebrow="WELCOME" title={`Let's make Tracker fit ${username}.`} description="A few quick choices will shape your Today view, calendar and daily planning flow. The setup is saved as you go.">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <IntroCard icon={<Compass />} title="Understand" text="Tell Tracker where your work lives." />
+                  <IntroCard icon={<Clock3 />} title="Shape" text="Set your hours, capacity and rhythm." />
+                  <IntroCard icon={<Rocket />} title="Launch" text="Leave with a real first-day activity." />
+                </div>
+              </StepFrame>
+            )}
 
-                {step === 2 && (
-                  <Step title="Where does your work already live?" description="This helps Tracker create a relevant first action. Connections are not made just by selecting an item.">
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {TASK_SOURCES.map(([label, value]) => (
-                        <ChoiceTile key={value} selected={state.taskSources.includes(value)} onClick={() => toggleSource(value)} label={label} icon={value === 'github' ? <Github className="h-4 w-4" /> : <ListTodo className="h-4 w-4" />} />
-                      ))}
-                    </div>
-                    <p className="mt-4 text-[11px] text-slate-400">You can skip this. Tracker will not invent an integration connection.</p>
-                  </Step>
-                )}
-
-                {step === 3 && (
-                  <Step title="Should Tracker plan around your calendar?" description="Connect Google Calendar only if you want your first activities placed around real commitments.">
-                    <button
-                      type="button"
-                      onClick={connectCalendar}
-                      className={`group w-full rounded-[20px] border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-lg ${calendarDiscovery?.connected ? 'border-emerald-200 bg-emerald-50/60' : 'border-slate-200 bg-white shadow-sm'}`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
-                          <CalendarDays className="h-5 w-5 text-rose-600" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-bold">Google Calendar</p>
-                          <p className="mt-0.5 text-xs text-slate-500">
-                            {calendarDiscovery?.connected ? `Connected · ${calendarDiscovery.eventCount} upcoming events found` : 'Import commitments and protect those times.'}
-                          </p>
-                        </div>
-                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${calendarDiscovery?.connected ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                          {calendarDiscovery?.connected ? 'Connected' : 'Connect'}
-                        </span>
-                      </div>
-                    </button>
-
-                    {calendarDiscovery?.connected && calendarDiscovery.events.length > 0 && (
-                      <div className="mt-3 overflow-hidden rounded-[18px] border border-slate-200">
-                        {calendarDiscovery.events.slice(0, 4).map((event) => (
-                          <div key={event.id} className="flex items-center gap-3 border-b border-slate-100 px-3.5 py-3 last:border-b-0">
-                            <div className="h-7 w-1 rounded-full bg-rose-400" />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-semibold">{event.title}</p>
-                              <p className="mt-0.5 text-[10px] text-slate-400">{formatCalendarTime(event.start)}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <button type="button" onClick={() => update('calendarProvider', null)} className="mt-3 text-[11px] font-semibold text-slate-400 hover:text-slate-700">
-                      Continue without a calendar
-                    </button>
-                  </Step>
-                )}
-
-                {step === 4 && (
-                  <Step title="What does a normal workday look like?" description="Tracker uses this window when it finds room for the starter activities. Your time zone is detected from this device.">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <TimeSelect label="Start" value={state.workStartTime} onChange={(value) => update('workStartTime', value)} />
-                      <TimeSelect label="Finish" value={state.workEndTime} onChange={(value) => update('workEndTime', value)} />
-                    </div>
-                    <div className="mt-4 rounded-[18px] border border-rose-100 bg-rose-50/60 p-4">
-                      <div className="flex items-center gap-2">
-                        <Clock3 className="h-4 w-4 text-rose-600" />
-                        <span className="text-xs font-bold">Planning window</span>
-                      </div>
-                      <p className="mt-2 text-xl font-bold tracking-tight">{formatTime(state.workStartTime)} — {formatTime(state.workEndTime)}</p>
-                      <p className="mt-1 text-[10px] text-slate-500">{Intl.DateTimeFormat().resolvedOptions().timeZone || state.timezone}</p>
-                    </div>
-                  </Step>
-                )}
-
-                {step === 5 && (
-                  <Step title="How should Tracker shape the day?" description="This changes the duration and number of starter activities. It is a planning preference, not a productivity score.">
-                    <div className="space-y-2">
-                      {PLANNING_STYLES.map(([label, value, hint]) => (
-                        <ChoiceRow key={value} selected={state.planningStyle === value} onClick={() => update('planningStyle', value)} icon={<Sparkles className="h-4 w-4" />} title={label} description={hint} />
-                      ))}
-                    </div>
-                    <div className="mt-5">
-                      <div className="flex items-end justify-between">
-                        <div>
-                          <p className="text-sm font-bold">Daily capacity</p>
-                          <p className="mt-0.5 text-[11px] text-slate-400">How much focused work feels realistic?</p>
-                        </div>
-                        <span className="text-lg font-bold text-rose-600">{state.dailyCapacity}h</span>
-                      </div>
-                      <input
-                        aria-label="Daily capacity"
-                        type="range"
-                        min="2"
-                        max="10"
-                        step="1"
-                        value={state.dailyCapacity}
-                        onChange={(event) => update('dailyCapacity', Number(event.target.value))}
-                        className="mt-4 w-full accent-rose-600"
-                      />
-                      <div className="flex justify-between text-[10px] text-slate-400"><span>2h</span><span>10h</span></div>
-                    </div>
-                  </Step>
-                )}
-
-                {step === 6 && (
-                  <Step title="What would make today a good day?" description="Write one concrete outcome. Tracker will keep this as your main activity and add smaller activities around the priorities you selected.">
-                    <textarea
-                      value={state.firstDayObjective}
-                      onChange={(event) => update('firstDayObjective', event.target.value)}
-                      maxLength={1000}
-                      rows={5}
-                      autoFocus
-                      placeholder="Ship the API integration, finish my portfolio update, study Java for two hours…"
-                      className="w-full resize-none rounded-[20px] border border-slate-200 bg-slate-50/50 p-4 text-sm leading-6 outline-none transition focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100"
+            {step === 1 && (
+              <StepFrame icon={<ListTodo />} eyebrow="01 · YOUR WORK" title="Where does your work live?" description="Pick the tools you already use. Tracker records the preference now; actual provider connections can happen when each integration is ready.">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {TASK_SOURCES.map(([label, value]) => (
+                    <Checkbox
+                      key={value}
+                      checked={state.taskSources.includes(value)}
+                      onChange={() => toggleTaskSource(value)}
+                      label={label}
+                      className={`min-h-16 rounded-md border p-3 transition-colors ${state.taskSources.includes(value) ? 'border-[var(--primary)] bg-[var(--accent)]' : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--accent)]'}`}
                     />
-                    <div className="mt-2 flex justify-between text-[10px] text-slate-400">
-                      <span>Concrete beats ambitious.</span><span>{state.firstDayObjective.length}/1000</span>
-                    </div>
-                    <div className="mt-5 flex flex-wrap gap-2">
-                      {selectedFocusLabels.map((label) => (
-                        <span key={label} className="rounded-full bg-rose-50 px-3 py-1.5 text-[10px] font-semibold text-rose-700">{label}</span>
-                      ))}
-                    </div>
-                  </Step>
-                )}
+                  ))}
+                </div>
+                <p className="mt-3 text-xs text-[var(--muted-foreground)]">
+                  {state.taskSources.length ? `${state.taskSources.length} source${state.taskSources.length === 1 ? '' : 's'} selected` : 'You can skip this and connect tools later.'}
+                </p>
+              </StepFrame>
+            )}
 
-                {step === 7 && (
-                  <Step title="Here’s what Tracker will add." description="Nothing is replaced. These are new one-time activities generated from this onboarding run.">
-                    <div className="rounded-[22px] border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
-                      <div className="mb-4 flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-rose-600">YOUR STARTING DAY</p>
-                          <p className="mt-1 text-sm font-bold">Built around your choices</p>
-                        </div>
-                        <div className="grid h-9 w-9 place-items-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
-                          <Rocket className="h-4 w-4 text-rose-600" />
-                        </div>
-                      </div>
+            {step === 2 && (
+              <StepFrame icon={<CalendarDays />} eyebrow="02 · YOUR SCHEDULE" title="Where does your schedule live?" description="Tracker plans around your calendar instead of competing with it. Google Calendar can be connected now so your first plan respects your existing commitments.">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {CALENDARS.map(([label, value, note]) => {
+                    const selected = state.calendarProvider === value
+                    const google = value === 'google'
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        disabled={!google}
+                        onClick={() => google && update('calendarProvider', selected ? null : value)}
+                        className={`min-h-24 rounded-md border p-4 text-left transition-colors ${selected ? 'border-[var(--primary)] bg-[var(--accent)]' : 'border-[var(--border)] bg-[var(--surface)]'} ${!google ? 'cursor-default opacity-60' : 'hover:bg-[var(--accent)]'}`}
+                      >
+                        <p className="text-sm font-semibold">{label}</p>
+                        <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">{note}</p>
+                        {google && (
+                          <p className={`mt-3 text-xs font-medium ${calendarDiscovery?.connected ? 'text-[var(--success)]' : 'text-[var(--primary)]'}`}>
+                            {calendarDiscovery?.connected ? 'Connected' : selected ? 'Selected' : 'Select'}
+                          </p>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
 
-                      <div className="space-y-2">
-                        <PreviewActivity icon={<Target />} title={state.firstDayObjective || 'Your main outcome'} meta={`${state.dailyCapacity}h capacity · ${state.planningStyle || 'focused'} planning`} primary />
-                        {state.focusAreas.slice(1, 3).map((focus) => {
-                          const item = FOCUS_AREAS.find((entry) => entry[1] === focus)
-                          return <PreviewActivity key={focus} icon={<Sparkles />} title={item?.[0] || focus} meta="A supporting activity based on your focus" />
-                        })}
-                        {state.taskSources[0] && (
-                          <PreviewActivity icon={<ListTodo />} title={`Review your ${sourceLabel(state.taskSources[0])} queue`} meta="Added from your selected work source" />
+                {state.calendarProvider === 'google' && (
+                  <div className="mt-4 rounded-md border border-[var(--border)] bg-[var(--surface-muted)] p-4">
+                    {calendarDiscovery?.connected ? (
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-[var(--success)]" />
+                          <p className="text-sm font-semibold">Google Calendar is connected.</p>
+                        </div>
+                        <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                          {calendarDiscovery.eventCount === 0
+                            ? 'Your next seven days are clear in the synced range.'
+                            : `We found ${calendarDiscovery.eventCount} upcoming calendar event${calendarDiscovery.eventCount === 1 ? '' : 's'}.`}
+                        </p>
+                        {calendarDiscovery.events.length > 0 && (
+                          <div className="mt-3 space-y-2">
+                            {calendarDiscovery.events.slice(0, 3).map((event) => (
+                              <div key={event.id} className="flex items-center justify-between gap-3 rounded border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                                <span className="truncate text-xs font-medium">{event.title}</span>
+                                <span className="shrink-0 text-[10px] text-[var(--muted-foreground)]">{formatCalendarTime(event.start)}</span>
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </div>
-                    </div>
-
-                    <div className="mt-3 flex items-center gap-2 rounded-[16px] bg-emerald-50 px-3.5 py-3 text-[11px] font-semibold text-emerald-700">
-                      <CheckCircle2 className="h-4 w-4 shrink-0" />
-                      Existing activities and other Tracker data stay untouched.
-                    </div>
-                  </Step>
+                    ) : (
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">Connect Google Calendar</p>
+                          <p className="mt-1 text-xs text-[var(--muted-foreground)]">Tracker will import your schedule, store the sync token, and prepare change notifications.</p>
+                        </div>
+                        <Button size="md" onClick={() => { window.location.href = '/api/integrations/google-calendar?returnTo=/onboarding' }}>
+                          Connect
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 )}
 
-                {error && <p className="mt-4 rounded-xl bg-rose-50 px-3 py-2.5 text-xs font-medium text-rose-700" role="alert">{error}</p>}
+                <p className="mt-3 text-xs text-[var(--muted-foreground)]">You can continue without a calendar. Tracker will use your workday as the planning frame.</p>
+              </StepFrame>
+            )}
 
-                <footer className="mt-7 flex items-center justify-between gap-3">
-                  <button type="button" onClick={back} disabled={step === 0 || saving} className="inline-flex h-11 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 disabled:invisible">
-                    <ArrowLeft className="h-4 w-4" /> Back
-                  </button>
+            {step === 3 && (
+              <StepFrame icon={<Clock3 />} eyebrow="03 · YOUR RHYTHM" title="When does your workday usually run?" description="Tracker uses this as the planning frame. Your browser time zone is saved automatically so calendar-aware planning can stay local.">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Select label="Start" value={state.workStartTime} onChange={(e) => update('workStartTime', e.target.value)} options={TIME_OPTIONS} />
+                  <Select label="Finish" value={state.workEndTime} onChange={(e) => update('workEndTime', e.target.value)} options={TIME_OPTIONS} />
+                </div>
+                <Card compact className="mt-4 bg-[var(--surface-muted)]">
+                  <p className="text-xs font-medium text-[var(--muted-foreground)]">Planning window</p>
+                  <p className="mt-1 text-sm font-semibold">{state.workStartTime} → {state.workEndTime}</p>
+                  <p className="mt-1 text-[11px] text-[var(--muted-foreground)]">{state.timezone}</p>
+                </Card>
+              </StepFrame>
+            )}
 
-                  {step < TOTAL_STEPS ? (
-                    <button type="button" onClick={continueStep} disabled={saving} className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-xs font-bold text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-rose-600 disabled:opacity-60">
-                      {saving ? 'Saving…' : step === 0 ? 'Start setup' : 'Continue'}
-                      <ArrowRight className="h-4 w-4" />
-                    </button>
-                  ) : (
-                    <button type="button" onClick={finish} disabled={saving} className="inline-flex h-11 items-center gap-2 rounded-xl bg-rose-600 px-5 text-xs font-bold text-white shadow-lg shadow-rose-600/20 transition hover:-translate-y-0.5 hover:bg-rose-700 disabled:opacity-60">
-                      {saving ? 'Building…' : 'Build my day'}
-                      <Rocket className="h-4 w-4" />
-                    </button>
-                  )}
-                </footer>
+            {step === 4 && (
+              <StepFrame icon={<Compass />} eyebrow="04 · PLANNING STYLE" title="How do you like to plan?" description="This changes how much structure Tracker uses when creating your first plan.">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {PLANNING_STYLES.map(([label, value, description]) => (
+                    <Checkbox
+                      key={value}
+                      checked={state.planningStyle === value}
+                      onChange={() => update('planningStyle', value)}
+                      label={label}
+                      description={description}
+                      className={`min-h-32 rounded-md border p-4 transition-colors ${state.planningStyle === value ? 'border-[var(--primary)] bg-[var(--accent)]' : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--accent)]'}`}
+                    />
+                  ))}
+                </div>
+              </StepFrame>
+            )}
 
-                <p className="mt-5 flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
-                  <LockKeyhole className="h-3 w-3" /> Progress saves as you go
-                </p>
+            {step === 5 && (
+              <StepFrame icon={<Zap />} eyebrow="05 · CAPACITY" title={state.planningStyle === 'flexible' ? 'How much time should Tracker protect?' : state.planningStyle === 'structured' ? 'How much of your day can be planned?' : 'How much focused work feels realistic?'} description="This is a capacity guardrail, not a productivity score.">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {[2, 3, 4, 5, 6, 7, 8, 10].map((hours) => (
+                    <label key={hours} className={`flex cursor-pointer items-center justify-center rounded-md border px-3 py-4 text-center transition-colors ${state.dailyCapacity === hours ? 'border-[var(--primary)] bg-[var(--accent)]' : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--accent)]'}`}>
+                      <input type="radio" name="capacity" className="sr-only" checked={state.dailyCapacity === hours} onChange={() => update('dailyCapacity', hours)} />
+                      <span><span className="block text-lg font-semibold">{hours}h</span><span className="text-[11px] text-[var(--muted-foreground)]">{capacityLabel}</span></span>
+                    </label>
+                  ))}
+                </div>
+              </StepFrame>
+            )}
+
+            {step === 6 && (
+              <StepFrame icon={<Target />} eyebrow="06 · FOCUS" title="What deserves space in your life?" description="Choose up to three areas. Tracker will use the first selected area to categorize your first generated activity.">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {FOCUS_AREAS.map(([label, value]) => (
+                    <Checkbox key={value} checked={state.focusAreas.includes(value)} onChange={() => toggleFocus(value)} label={label}
+                      className={`min-h-16 rounded-md border p-3 transition-colors ${state.focusAreas.includes(value) ? 'border-[var(--primary)] bg-[var(--accent)]' : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--accent)]'}`} />
+                  ))}
+                </div>
+                <p className="mt-3 text-xs text-[var(--muted-foreground)]">{state.focusAreas.length}/3 selected</p>
+              </StepFrame>
+            )}
+
+            {step === 7 && (
+              <StepFrame icon={<Target />} eyebrow="07 · FIRST MISSION" title="What would make today a good day?" description="Give Tracker one concrete outcome. It will turn this into your first real activity and place it inside your available work window when possible.">
+                <Textarea
+                  value={state.firstDayObjective}
+                  onChange={(e) => update('firstDayObjective', e.target.value)}
+                  placeholder="Finish the API integration, study for two hours, ship my portfolio update…"
+                  rows={5}
+                  maxLength={1000}
+                />
+                <div className="mt-2 flex justify-between text-[11px] text-[var(--muted-foreground)]">
+                  <span>Keep it concrete and achievable.</span><span>{state.firstDayObjective.length}/1000</span>
+                </div>
+              </StepFrame>
+            )}
+
+            {step === 8 && (
+              <StepFrame icon={<Trophy />} eyebrow="READY" title="Your first day is ready to be built." description="Tracker will use your objective, workday, capacity, planning style and connected calendar to create the first activity.">
+                <Card className="relative overflow-hidden bg-[var(--surface)]">
+                  <div className="pointer-events-none absolute -right-12 -top-12 h-32 w-32 rounded-full bg-[var(--primary)] opacity-10 blur-2xl" />
+                  <div className="relative grid gap-4 sm:grid-cols-3">
+                    <SummaryItem icon={<ListTodo />} label="Work sources" value={state.taskSources.length ? `${state.taskSources.length} selected` : 'Connect later'} />
+                    <SummaryItem icon={<CalendarDays />} label="Calendar" value={calendarDiscovery?.connected ? 'Google connected' : 'Workday only'} />
+                    <SummaryItem icon={<Zap />} label="Daily capacity" value={`${state.dailyCapacity}h`} />
+                  </div>
+                  <div className="mt-6 border-t border-[var(--border)] pt-6">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[var(--success)]" />
+                      <div><p className="text-sm font-semibold">First mission</p><p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">{state.firstDayObjective}</p></div>
+                    </div>
+                  </div>
+                </Card>
+                <div className="mt-4 flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3">
+                  <Sparkles className="h-4 w-4 text-[var(--primary)]" />
+                  <span className="text-sm font-medium">{questCount}/5 setup milestones complete</span>
+                  <span className="ml-auto text-xs text-[var(--muted-foreground)]">No points, no pressure.</span>
+                </div>
+              </StepFrame>
+            )}
+
+            {error && <p className="mt-4 text-sm text-[var(--destructive)]" role="alert">{error}</p>}
+
+            <footer className="mt-8 flex items-center justify-between gap-3">
+              <div className="min-w-24">
+                {step > 0 && step < TOTAL_STEPS && <Button variant="ghost" size="md" onClick={back} icon={<ArrowLeft className="h-4 w-4" />}>Back</Button>}
               </div>
-            </div>
-          </section>
+              <div className="flex items-center gap-3">
+                <span className="hidden text-xs text-[var(--muted-foreground)] sm:inline">{step + 1} / {TOTAL_STEPS + 1}</span>
+                {step < TOTAL_STEPS ? (
+                  <Button size="lg" onClick={saveAndContinue} disabled={saving} isLoading={saving} icon={<ArrowRight className="h-4 w-4" />}>
+                    {step === 0 ? 'Start setup' : 'Continue'}
+                  </Button>
+                ) : (
+                  <Button size="lg" onClick={finish} disabled={saving} isLoading={saving} icon={<Rocket className="h-4 w-4" />}>Build my first day</Button>
+                )}
+              </div>
+            </footer>
+          </div>
+        </section>
+
+        <div className="flex items-center justify-center gap-2 text-[11px] text-[var(--muted-foreground)]">
+          <Check className="h-3.5 w-3.5 text-[var(--success)]" /> Progress is saved as you go
         </div>
       </div>
     </main>
   )
 }
 
-function Step({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+function formatCalendarTime(value: string) {
+  return new Date(value).toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
+
+function StepFrame({ icon, eyebrow, title, description, children }: {
+  icon: React.ReactNode
+  eyebrow: string
+  title: string
+  description: string
+  children: React.ReactNode
+}) {
   return (
-    <div>
-      <h1 className="max-w-xl text-[28px] font-bold leading-tight tracking-[-0.035em] text-slate-950 sm:text-4xl">{title}</h1>
-      <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500">{description}</p>
-      <div className="mt-7">{children}</div>
+    <div className="mx-auto max-w-2xl">
+      <div className="mb-8 flex items-start gap-4">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-[var(--border)] bg-[var(--surface)] text-[var(--primary)] shadow-[var(--elevation-surface)]">
+          {icon}
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold tracking-[0.16em] text-[var(--primary)]">{eyebrow}</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--muted-foreground)]">{description}</p>
+        </div>
+      </div>
+      {children}
     </div>
   )
 }
 
-function ChoiceRow({ selected, onClick, icon, title, description }: { selected: boolean; onClick: () => void; icon: React.ReactNode; title: string; description: string }) {
+function IntroCard({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
   return (
-    <button type="button" onClick={onClick} className={`group flex w-full items-center gap-3 rounded-[18px] border p-3.5 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-md ${selected ? 'border-rose-300 bg-rose-50/70 shadow-sm' : 'border-slate-200 bg-white'}`}>
-      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${selected ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{selected ? <Check className="h-4 w-4" /> : icon}</span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-xs font-bold">{title}</span>
-        <span className="mt-0.5 block text-[10px] leading-4 text-slate-400">{description}</span>
-      </span>
-      <span className={`h-4 w-4 rounded-full border ${selected ? 'border-rose-600 bg-rose-600' : 'border-slate-300'}`} />
-    </button>
+    <Card className="min-h-32 justify-between" compact>
+      <div className="mb-6 text-[var(--primary)]">{icon}</div>
+      <div>
+        <p className="text-sm font-semibold">{title}</p>
+        <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{text}</p>
+      </div>
+    </Card>
   )
 }
 
-function ChoiceTile({ selected, onClick, label, icon }: { selected: boolean; onClick: () => void; label: string; icon: React.ReactNode }) {
+function SummaryItem({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <button type="button" onClick={onClick} className={`flex min-h-16 items-center gap-2.5 rounded-[16px] border px-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${selected ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-700'}`}>
-      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${selected ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{selected ? <Check className="h-3.5 w-3.5" /> : icon}</span>
-      <span className="text-[11px] font-semibold">{label}</span>
-    </button>
-  )
-}
-
-function TimeSelect({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return (
-    <label className="block rounded-[18px] border border-slate-200 bg-white p-3.5 shadow-sm">
-      <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-2 w-full bg-transparent text-base font-bold outline-none">
-        {TIME_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-      </select>
-    </label>
-  )
-}
-
-function PreviewActivity({ icon, title, meta, primary = false }: { icon: React.ReactNode; title: string; meta: string; primary?: boolean }) {
-  return (
-    <div className={`flex items-center gap-3 rounded-[16px] border bg-white p-3 shadow-sm ${primary ? 'border-rose-200' : 'border-slate-200'}`}>
-      <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${primary ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-600'}`}>{icon}</div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-bold">{title}</p>
-        <p className="mt-0.5 truncate text-[10px] text-slate-400">{meta}</p>
+    <div className="flex items-center gap-3">
+      <div className="grid h-8 w-8 place-items-center rounded-md bg-[var(--accent)] text-[var(--primary)]">{icon}</div>
+      <div className="min-w-0">
+        <p className="text-[11px] text-[var(--muted-foreground)]">{label}</p>
+        <p className="truncate text-sm font-semibold">{value}</p>
       </div>
     </div>
   )
-}
-
-function timeToMinutes(value: string) {
-  const [hour, minute] = value.split(':').map(Number)
-  return hour * 60 + minute
-}
-
-function formatTime(value: string) {
-  const [hour, minute] = value.split(':').map(Number)
-  return `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`
-}
-
-function formatCalendarTime(value: string) {
-  return new Date(value).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-}
-
-function sourceLabel(value: string) {
-  return {
-    'google-tasks': 'Google Tasks',
-    todoist: 'Todoist',
-    notion: 'Notion',
-    linear: 'Linear',
-    github: 'GitHub',
-    jira: 'Jira',
-    trello: 'Trello',
-    clickup: 'ClickUp',
-    outlook: 'Outlook',
-  }[value] || value
 }
