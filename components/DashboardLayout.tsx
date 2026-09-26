@@ -452,7 +452,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       if (res.success) {
         setIsAuthenticated(true)
         if (res.user) setUser(res.user)
-        window.location.replace('/')
+        window.location.replace(res.onboardingRequired ? '/onboarding' : '/')
       } else {
         setIsAuthLoading(false)
         setAuthError(res.error || 'Registration failed')

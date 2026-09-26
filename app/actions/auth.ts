@@ -5,6 +5,7 @@ import { AuthService } from '@/lib/services/AuthService'
 import { SessionService } from '@/lib/services/SessionService'
 import { CredentialService } from '@/lib/services/CredentialService'
 import { AuthorizationService } from '@/lib/services/AuthorizationService'
+import { OnboardingService } from '@/lib/services/OnboardingService'
 
 /**
  * Retrieves the currently logged-in user from the signed session token cookie.
@@ -22,6 +23,7 @@ export async function registerUserAction(usernameInput: string, secret: string):
   success: boolean
   error?: string
   user?: { id: string; username: string }
+  onboardingRequired?: boolean
 }> {
   try {
     const result = await AuthService.register(usernameInput, secret)
@@ -30,7 +32,8 @@ export async function registerUserAction(usernameInput: string, secret: string):
     }
 
     await SessionService.setSessionCookie(result.token)
-    return { success: true, user: result.user }
+    const onboarding = await OnboardingService.getState(result.user.id)
+    return { success: true, user: result.user, onboardingRequired: onboarding?.status !== 'COMPLETED' }
   } catch (error) {
     console.error('[registerUserAction] Registration failed:', error)
     return { success: false, error: 'Database error during registration.' }
@@ -46,6 +49,7 @@ export async function verifyPinAction(usernameInput: string, secret: string): Pr
   error?: string
   user?: { id: string; username: string }
   requiresPasswordMigration?: boolean
+  onboardingRequired?: boolean
 }> {
   try {
     const result = await AuthService.login(usernameInput, secret)
@@ -54,11 +58,13 @@ export async function verifyPinAction(usernameInput: string, secret: string): Pr
     }
 
     await SessionService.setSessionCookie(result.token)
+    const onboarding = await OnboardingService.getState(result.user.id)
 
     return {
       success: true,
       user: { id: result.user.id, username: result.user.username },
       requiresPasswordMigration: result.requiresPasswordMigration,
+      onboardingRequired: onboarding?.status !== 'COMPLETED',
     }
   } catch (error) {
     console.error('[verifyPinAction] Login failed:', error)
