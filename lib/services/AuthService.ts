@@ -100,6 +100,10 @@ export class AuthService {
     // Successful login clears rate limit counter
     CredentialService.clearRateLimit(username)
 
+    // Development rollout: every successful login re-enters the gamified onboarding,
+    // including existing users who have completed it before.
+    await OnboardingService.resetForDevelopmentLogin(user.id)
+
     const token = SessionService.signSession(user.id, user.username)
     const isOwner = AuthorizationService.isOwner(user)
 
