@@ -161,9 +161,7 @@ export class AuthService {
       // Create default starter activities for new users
       await DefaultActivitiesService.seedDefaultActivities(u.id, tx)
 
-      await OnboardingService.initialize(u.id)
-
-
+      await OnboardingService.initialize(u.id, tx)
 
       return u
     })
