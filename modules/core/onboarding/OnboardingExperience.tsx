@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3,
-  Layers3, ListTodo, LockKeyhole, Rocket, Sparkles, Target,
+  Layers3, ListTodo, Rocket, Sparkles, Target,
 } from 'lucide-react'
 import type { OnboardingState } from '@/lib/services/OnboardingService'
 import {
@@ -258,7 +258,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
 
               <div className="mt-auto hidden rounded-2xl border border-rose-100 bg-white/80 p-3.5 lg:block">
                 <div className="flex items-center gap-2">
-                  <LockKeyhole className="h-3.5 w-3.5 text-rose-600" />
+                  <Check className="h-3.5 w-3.5 text-rose-600" />
                   <p className="text-[11px] font-semibold">Existing data stays untouched</p>
                 </div>
                 <p className="mt-1.5 text-[10px] leading-4 text-slate-500">Onboarding only adds the new starter activities it creates.</p>
@@ -493,7 +493,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
                 </footer>
 
                 <p className="mt-5 flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
-                  <LockKeyhole className="h-3 w-3" /> Progress saves as you go
+                  <Check className="h-3 w-3" /> Progress saves as you go
                 </p>
               </div>
             </div>
