@@ -146,7 +146,7 @@ export class OnboardingService {
       create: {
         userId,
         module: MODULE,
-        config: state,
+        config: state as unknown as Prisma.InputJsonValue,
       },
     })
 
