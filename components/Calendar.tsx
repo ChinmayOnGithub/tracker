@@ -564,65 +564,149 @@ export const Calendar: React.FC<CalendarProps> = ({
   const monthName = currentDate.toLocaleString('default', { month: 'long' })
 
   return (
-    <Card className="p-4 md:p-6 flex flex-col gap-6 bg-[var(--color-bg-surface)] border-[var(--color-border)] shadow-xs">
+    <Card className="p-2.5 sm:p-4 md:p-6 flex flex-col gap-4 sm:gap-6 bg-[var(--color-bg-surface)] border-[var(--color-border)] shadow-xs rounded-[22px] sm:rounded-2xl">
       
-      {/* Header controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-black tracking-tight text-[var(--color-text-main)] flex items-center gap-2 leading-none">
-            {monthName} <span className="text-[var(--color-text-muted)] font-bold">{year}</span>
-            {loading && <RefreshCw className="w-4 h-4 animate-spin text-[var(--color-primary)] shrink-0" />}
-          </h2>
-          <p className="text-[11px] text-[var(--color-text-muted)] mt-1.5 font-bold uppercase tracking-wider">
-            {view === 'month' ? 'Month Summary' : 'Week Schedule Planner'}
-          </p>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-3">
-          {/* iOS-style Segmented Control */}
-          <div className="flex bg-[var(--color-bg-subtle)]/50 p-0.5 border border-[var(--color-border)] rounded-[var(--radius-md)]">
-            {(['month', 'week'] as const).map(v => (
+      {/* Calendar header — redesigned for compact mobile first use */}
+      <div className="space-y-3 sm:space-y-0">
+        {/* Mobile header */}
+        <div className="sm:hidden space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-[25px] font-black tracking-[-0.04em] text-[var(--color-text-main)] leading-none">
+                  {monthName}
+                </h2>
+                <span className="text-[14px] font-semibold text-[var(--color-text-muted)]">{year}</span>
+                {loading && <RefreshCw className="w-3.5 h-3.5 animate-spin text-[var(--color-primary)]" />}
+              </div>
+              <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-text-muted)]">
+                {view === 'month' ? 'Month' : 'Week schedule'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              {googleConnected && (
+                <button
+                  type="button"
+                  onClick={handleManualSync}
+                  disabled={syncing}
+                  aria-label="Sync Google Calendar"
+                  className="grid h-10 w-10 place-items-center rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-xs transition active:scale-95 disabled:opacity-50"
+                >
+                  <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+                </button>
+              )}
               <button
-                key={v}
-                onClick={() => {
-                  setView(v)
-                  localStorage.setItem('calendar_default_view', v)
-                }}
-                className={`px-3.5 py-2.5 md:py-1.5 text-[11px] font-bold rounded-[var(--radius-sm)] transition-all duration-200 capitalize cursor-pointer border ${
-                  view === v 
-                    ? 'bg-[var(--color-accent)] border-[var(--color-border)] text-[var(--color-text-main)] shadow-xs'
-                    : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
-                }`}
+                type="button"
+                onClick={handleResetToToday}
+                className="h-10 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 text-[11px] font-bold text-[var(--color-text-main)] shadow-xs transition active:scale-95"
               >
-                {v}
+                Today
               </button>
-            ))}
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {googleConnected && (
-              <Button
-                onClick={handleManualSync}
-                variant="outline"
-                size="sm"
-                disabled={syncing}
-                className="flex items-center gap-1.5"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-                <span>{syncing ? 'Syncing...' : 'Sync'}</span>
-                {lastSynced && <span className="text-[9px] text-[var(--color-text-muted)] font-normal">({lastSynced})</span>}
-              </Button>
-            )}
-            <Button
-              onClick={handleResetToToday}
-              variant="outline"
-              size="sm"
+          <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-1 rounded-2xl bg-[var(--color-bg-subtle)] p-1 border border-[var(--color-border)]/70">
+              {(['month', 'week'] as const).map(v => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => {
+                    setView(v)
+                    localStorage.setItem('calendar_default_view', v)
+                  }}
+                  className={`h-9 flex-1 rounded-xl px-3 text-[11px] font-bold capitalize transition-all ${
+                    view === v
+                      ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-sm ring-1 ring-[var(--color-border)]'
+                      : 'text-[var(--color-text-muted)]'
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-1 shadow-xs">
+              <button type="button" onClick={handlePrev} aria-label="Previous" className="grid h-9 w-9 place-items-center rounded-xl text-[var(--color-text-main)] active:bg-[var(--color-bg-subtle)]">
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={handleNext} aria-label="Next" className="grid h-9 w-9 place-items-center rounded-xl text-[var(--color-text-main)] active:bg-[var(--color-bg-subtle)]">
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {selectedDateStr && (
+            <button
+              type="button"
+              onClick={() => onDayClick(selectedDateStr)}
+              className="flex w-full items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-3 text-left shadow-xs active:scale-[0.99]"
             >
-              Today
-            </Button>
-            <div className="flex bg-[var(--surface-muted)] border border-[var(--border)] rounded-[var(--radius-md)] p-0.5 shadow-xs">
-              <Button variant="ghost" size="sm" onClick={handlePrev} className="p-0 w-11 h-11 md:w-auto md:h-auto md:p-1 flex items-center justify-center"><ChevronLeft size={16} /></Button>
-              <Button variant="ghost" size="sm" onClick={handleNext} className="p-0 w-11 h-11 md:w-auto md:h-auto md:p-1 flex items-center justify-center"><ChevronRight size={16} /></Button>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--color-primary)]">
+                  Selected day
+                </p>
+                <p className="mt-0.5 text-sm font-bold text-[var(--color-text-main)]">
+                  {new Date(`${selectedDateStr}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                </p>
+              </div>
+              <span className="text-[10px] font-bold text-[var(--color-text-muted)]">Open details →</span>
+            </button>
+          )}
+        </div>
+
+        {/* Desktop header — existing controls preserved */}
+        <div className="hidden sm:flex sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-black tracking-tight text-[var(--color-text-main)] flex items-center gap-2 leading-none">
+              {monthName} <span className="text-[var(--color-text-muted)] font-bold">{year}</span>
+              {loading && <RefreshCw className="w-4 h-4 animate-spin text-[var(--color-primary)] shrink-0" />}
+            </h2>
+            <p className="text-[11px] text-[var(--color-text-muted)] mt-1.5 font-bold uppercase tracking-wider">
+              {view === 'month' ? 'Month Summary' : 'Week Schedule Planner'}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex bg-[var(--color-bg-subtle)]/50 p-0.5 border border-[var(--color-border)] rounded-[var(--radius-md)]">
+              {(['month', 'week'] as const).map(v => (
+                <button
+                  key={v}
+                  onClick={() => {
+                    setView(v)
+                    localStorage.setItem('calendar_default_view', v)
+                  }}
+                  className={`px-3.5 py-2.5 md:py-1.5 text-[11px] font-bold rounded-[var(--radius-sm)] transition-all duration-200 capitalize cursor-pointer border ${
+                    view === v
+                      ? 'bg-[var(--color-accent)] border-[var(--color-border)] text-[var(--color-text-main)] shadow-xs'
+                      : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
+                  }`}
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              {googleConnected && (
+                <Button
+                  onClick={handleManualSync}
+                  variant="outline"
+                  size="sm"
+                  disabled={syncing}
+                  className="flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                  <span>{syncing ? 'Syncing...' : 'Sync'}</span>
+                  {lastSynced && <span className="text-[9px] text-[var(--color-text-muted)] font-normal">({lastSynced})</span>}
+                </Button>
+              )}
+              <Button onClick={handleResetToToday} variant="outline" size="sm">Today</Button>
+              <div className="flex bg-[var(--surface-muted)] border border-[var(--border)] rounded-[var(--radius-md)] p-0.5 shadow-xs">
+                <Button variant="ghost" size="sm" onClick={handlePrev} className="p-0 w-11 h-11 md:w-auto md:h-auto md:p-1 flex items-center justify-center"><ChevronLeft size={16} /></Button>
+                <Button variant="ghost" size="sm" onClick={handleNext} className="p-0 w-11 h-11 md:w-auto md:h-auto md:p-1 flex items-center justify-center"><ChevronRight size={16} /></Button>
+              </div>
             </div>
           </div>
         </div>
@@ -654,14 +738,14 @@ export const Calendar: React.FC<CalendarProps> = ({
 
       {/* ── 1. MONTH VIEW ── */}
       {view === 'month' && (
-        <div className="space-y-2">
-          <div className="grid grid-cols-7 text-center text-[11px] font-bold text-[var(--muted-foreground)] uppercase">
+        <div className="space-y-2.5">
+          <div className="grid grid-cols-7 text-center text-[9px] sm:text-[11px] font-bold text-[var(--muted-foreground)] uppercase tracking-[0.08em]">
             {(startOfWeekPref === 'monday' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : WEEKDAYS).map(day => (
-              <div key={day} className="py-2">{day}</div>
+              <div key={day} className="py-1.5 sm:py-2">{day.slice(0, 1)}<span className="hidden sm:inline">{day.slice(1)}</span></div>
             ))}
           </div>
 
-          <div className="grid grid-cols-7 border-t border-l border-[var(--color-border)]/60 rounded-xl overflow-hidden bg-[var(--color-bg-surface)] shadow-xs">
+          <div className="grid grid-cols-7 border-t border-l border-[var(--color-border)]/60 rounded-2xl overflow-hidden bg-[var(--color-bg-surface)] shadow-sm">
             {cells.map((cell, idx) => {
               const { dateStr, dayNumber, isCurrentMonth } = cell
               if (!isCurrentMonth || !dateStr) {
@@ -736,11 +820,11 @@ export const Calendar: React.FC<CalendarProps> = ({
 
                   {/* Mobile indicator dots */}
                   {summary && (
-                    <div className="flex sm:hidden w-full flex-wrap gap-0.5 justify-center mt-auto">
-                      {summary.taskCount > 0 && <span className="w-1 h-1 rounded-full bg-slate-400" />}
-                      {summary.eventCount > 0 && <span className="w-1 h-1 rounded-full bg-blue-500" />}
-                      {summary.workedHours > 0 && <span className="w-1 h-1 rounded-full bg-emerald-500" />}
-                      {summary.hasLeave && <span className="w-1 h-1 rounded-full bg-amber-500" />}
+                    <div className="flex sm:hidden w-full flex-wrap gap-1 justify-center mt-auto pb-0.5">
+                      {summary.taskCount > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-primary)]" />}
+                      {summary.eventCount > 0 && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+                      {summary.workedHours > 0 && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+                      {summary.hasLeave && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />}
                     </div>
                   )}
                 </button>
@@ -752,10 +836,12 @@ export const Calendar: React.FC<CalendarProps> = ({
 
       {/* ── 2. WEEK VIEW (HOURLY TIME-GRID) ── */}
       {view === 'week' && (
-        <div className="flex flex-col bg-[var(--color-bg-surface)] rounded-xl border border-[var(--color-border)]/60 overflow-hidden shadow-xs">
+        <div className="flex flex-col bg-[var(--color-bg-surface)] rounded-2xl border border-[var(--color-border)]/60 overflow-hidden shadow-sm">
           
           {/* Day Headers (7 Columns + Left Time Column Buffer) */}
-          <div className="grid grid-cols-8 border-b border-[var(--color-border)]/60 text-center bg-[var(--color-bg-subtle)]/50 py-2.5 font-bold uppercase tracking-wider text-[11px] text-[var(--color-text-muted)]">
+          <div className="overflow-x-auto">
+            <div className="min-w-[780px]">
+              <div className="grid grid-cols-8 border-b border-[var(--color-border)]/60 text-center bg-[var(--color-bg-subtle)]/60 py-2.5 font-bold uppercase tracking-wider text-[11px] text-[var(--color-text-muted)]">
             {/* Hour column buffer */}
             <div className="text-[9px] flex items-center justify-center font-black">Time</div>
             
@@ -788,13 +874,13 @@ export const Calendar: React.FC<CalendarProps> = ({
                 </div>
               )
             })}
-          </div>
+              </div>
 
           {/* Time-Grid Scroll Container */}
-          <div data-calendar-grid="true" className="flex-1 min-h-[480px] max-h-[700px] overflow-y-auto relative select-none">
+          <div data-calendar-grid="true" className="flex-1 min-h-[480px] max-h-[700px] overflow-y-auto relative select-none overscroll-contain">
             
             {/* Absolute positioning container for time grids */}
-            <div className="grid grid-cols-8 relative" style={{ height: `${HOURS.length * 60}px` }}>
+            <div className="grid min-w-[780px] grid-cols-8 relative" style={{ height: `${HOURS.length * 60}px` }}>
               
               {/* Left Column Hour Label Grid */}
               <div className="border-r border-[var(--color-border)]/60 flex flex-col h-full bg-[var(--color-bg-subtle)]/30 z-10">
@@ -981,6 +1067,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                 )
               })}
             </div>
+          </div>
           </div>
         </div>
       )}
