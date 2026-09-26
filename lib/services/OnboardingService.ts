@@ -126,6 +126,31 @@ export class OnboardingService {
     }
   }
 
+  /**
+   * Development-phase onboarding policy: every successful login starts the
+   * gamified onboarding journey again. This intentionally ignores whether the
+   * user is new or has completed onboarding previously. Remove/disable this
+   * behavior when the onboarding rollout becomes persistent for returning users.
+   */
+  static async resetForDevelopmentLogin(userId: string): Promise<OnboardingState> {
+    const state: OnboardingState = {
+      ...DEFAULT_ONBOARDING_STATE,
+      createdAt: new Date().toISOString(),
+    }
+
+    await db.userSetting.upsert({
+      where: { userId_module: { userId, module: MODULE } },
+      update: { config: state as unknown as Prisma.InputJsonValue },
+      create: {
+        userId,
+        module: MODULE,
+        config: state as unknown as Prisma.InputJsonValue,
+      },
+    })
+
+    return state
+  }
+
   static async initialize(userId: string, client: Prisma.TransactionClient | typeof db = db): Promise<OnboardingState> {
     const existingSetting = await client.userSetting.findUnique({
       where: { userId_module: { userId, module: MODULE } },
