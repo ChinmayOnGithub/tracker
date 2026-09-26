@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3,
-  Github, Layers3, ListTodo, LockKeyhole, Rocket, Sparkles, Target,
+  Layers3, ListTodo, LockKeyhole, Rocket, Sparkles, Target,
 } from 'lucide-react'
 import type { OnboardingState } from '@/lib/services/OnboardingService'
 import {
@@ -321,7 +321,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
                   <Step title="Where does your work already live?" description="This helps Tracker create a relevant first action. Connections are not made just by selecting an item.">
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {TASK_SOURCES.map(([label, value]) => (
-                        <ChoiceTile key={value} selected={state.taskSources.includes(value)} onClick={() => toggleSource(value)} label={label} icon={value === 'github' ? <Github className="h-4 w-4" /> : <ListTodo className="h-4 w-4" />} />
+                        <ChoiceTile key={value} selected={state.taskSources.includes(value)} onClick={() => toggleSource(value)} label={label} icon={<ListTodo className="h-4 w-4" />} />
                       ))}
                     </div>
                     <p className="mt-4 text-[11px] text-slate-400">You can skip this. Tracker will not invent an integration connection.</p>
