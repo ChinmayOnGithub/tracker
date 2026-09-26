@@ -9,8 +9,8 @@ import { GoogleCredentialService } from '@/modules/sync/google-calendar/services
 const onboardingStateSchema = z.object({
   version: z.literal(1),
   status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED']),
-  currentStep: z.number().int().min(0).max(8),
-  completedSteps: z.array(z.number().int().min(0).max(8)).max(9),
+  currentStep: z.number().int().min(0).max(7),
+  completedSteps: z.array(z.number().int().min(0).max(7)).max(8),
   taskSources: z.array(z.string().min(1).max(64)).max(12),
   calendarProvider: z.string().max(64).nullable(),
   workStartTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
@@ -82,9 +82,8 @@ export async function completeOnboardingAction(input: OnboardingState): Promise<
   state?: OnboardingState
   plan?: {
     created: boolean
-    activityId: string | null
-    scheduledTime: string | null
-    durationMinutes: number
+    activityIds: string[]
+    activities: Array<{ id: string; name: string; scheduledTime: string | null; estimatedDuration: number; category: string }>
   }
   error?: string
 }> {
@@ -106,8 +105,8 @@ export async function completeOnboardingAction(input: OnboardingState): Promise<
     const completedState: OnboardingState = {
       ...plan.state,
       status: 'COMPLETED',
-      currentStep: 8,
-      completedSteps: Array.from(new Set([...plan.state.completedSteps, 8])),
+      currentStep: 7,
+      completedSteps: Array.from(new Set([...plan.state.completedSteps, 7])),
       completedAt: new Date().toISOString(),
     }
 
@@ -117,9 +116,8 @@ export async function completeOnboardingAction(input: OnboardingState): Promise<
       state,
       plan: {
         created: plan.created,
-        activityId: plan.activityId,
-        scheduledTime: plan.scheduledTime,
-        durationMinutes: plan.durationMinutes,
+        activityIds: plan.activityIds,
+        activities: plan.activities,
       },
     }
   } catch (error) {
