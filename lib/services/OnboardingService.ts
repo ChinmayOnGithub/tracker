@@ -126,8 +126,13 @@ export class OnboardingService {
     }
   }
 
-  static async initialize(userId: string): Promise<OnboardingState> {
-    const existing = await this.getState(userId)
+  static async initialize(userId: string, client: Prisma.TransactionClient | typeof db = db): Promise<OnboardingState> {
+    const existingSetting = await client.userSetting.findUnique({
+      where: { userId_module: { userId, module: MODULE } },
+    })
+    const existing = existingSetting && isOnboardingState(existingSetting.config)
+      ? { ...DEFAULT_ONBOARDING_STATE, ...existingSetting.config } as OnboardingState
+      : null
     if (existing) return existing
 
     const state: OnboardingState = {
@@ -135,7 +140,7 @@ export class OnboardingService {
       createdAt: new Date().toISOString(),
     }
 
-    await db.userSetting.upsert({
+    await client.userSetting.upsert({
       where: { userId_module: { userId, module: MODULE } },
       update: {},
       create: {
