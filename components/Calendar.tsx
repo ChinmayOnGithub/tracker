@@ -1,4 +1,3 @@
-/* eslint-disable */
 "use client"
 
 import React, { useState, useEffect, useMemo } from 'react'
@@ -564,6 +563,15 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   const monthName = currentDate.toLocaleString('default', { month: 'long' })
 
+  const selectedDayLabel = useMemo(() => {
+    if (!selectedDateStr) return ''
+    return new Date(`${selectedDateStr}T12:00:00`).toLocaleDateString(undefined, {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric',
+    })
+  }, [selectedDateStr])
+
   return (
     <Card className="p-2.5 sm:p-4 md:p-6 flex flex-col gap-4 sm:gap-6 bg-[var(--color-bg-surface)] border-[var(--color-border)] shadow-xs rounded-[22px] sm:rounded-2xl">
       
@@ -649,7 +657,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                   Selected day
                 </p>
                 <p className="mt-0.5 text-sm font-bold text-[var(--color-text-main)]">
-                  {new Date(`${selectedDateStr}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                  {selectedDayLabel}
                 </p>
               </div>
               <span className="text-[10px] font-bold text-[var(--color-text-muted)]">Open details →</span>
@@ -840,8 +848,9 @@ export const Calendar: React.FC<CalendarProps> = ({
         <div className="flex flex-col bg-[var(--color-bg-surface)] rounded-2xl border border-[var(--color-border)]/60 overflow-hidden shadow-sm">
           
           {/* Day Headers (7 Columns + Left Time Column Buffer) */}
-          <div className="overflow-x-auto border-b border-[var(--color-border)]/60">
-          <div className="grid min-w-[780px] grid-cols-8 text-center bg-[var(--color-bg-subtle)]/60 py-2.5 font-bold uppercase tracking-wider text-[11px] text-[var(--color-text-muted)]">
+          <div className="overflow-x-auto">
+            <div className="min-w-[780px]">
+              <div className="grid grid-cols-8 border-b border-[var(--color-border)]/60 text-center bg-[var(--color-bg-subtle)]/60 py-2.5 font-bold uppercase tracking-wider text-[11px] text-[var(--color-text-muted)]">
             {/* Hour column buffer */}
             <div className="text-[9px] flex items-center justify-center font-black">Time</div>
             
@@ -874,11 +883,10 @@ export const Calendar: React.FC<CalendarProps> = ({
                 </div>
               )
             })}
-          </div>
-        </div>
+              </div>
 
           {/* Time-Grid Scroll Container */}
-          <div data-calendar-grid="true" className="flex-1 min-h-[480px] max-h-[700px] overflow-auto relative select-none overscroll-contain">
+          <div data-calendar-grid="true" className="flex-1 min-h-[480px] max-h-[700px] overflow-y-auto relative select-none overscroll-contain">
             
             {/* Absolute positioning container for time grids */}
             <div className="grid min-w-[780px] grid-cols-8 relative" style={{ height: `${HOURS.length * 60}px` }}>
@@ -1068,6 +1076,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                 )
               })}
             </div>
+          </div>
           </div>
         </div>
       )}
