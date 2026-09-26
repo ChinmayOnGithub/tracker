@@ -14,7 +14,8 @@ export const COOKIES = {
   GOOGLE_AUTH_STATE: 'google_auth_state',
   GOOGLE_AUTH_CODE_VERIFIER: 'google_auth_code_verifier',
   GOOGLE_CALENDAR_STATE: 'google_calendar_state',
-  GOOGLE_CALENDAR_CODE_VERIFIER: 'google_calendar_code_verifier'
+  GOOGLE_CALENDAR_CODE_VERIFIER: 'google_calendar_code_verifier',
+  GOOGLE_CALENDAR_RETURN_TO: 'google_calendar_return_to'
 } as const
 
 export const GOOGLE_OAUTH = {
