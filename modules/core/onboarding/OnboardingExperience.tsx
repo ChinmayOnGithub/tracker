@@ -202,22 +202,48 @@ export function OnboardingExperience({ initialState, username }: Props) {
     setStep((current) => Math.max(0, current - 1))
   }
 
+  const skip = async () => {
+    setError('')
+    const nextState = { ...state }
+    if (step === 5 && !nextState.planningStyle) nextState.planningStyle = 'focused'
+    if (step === 6 && !nextState.firstDayObjective.trim()) {
+      nextState.firstDayObjective = 'Plan my day around my priorities'
+    }
+    const previousState = state
+    // Persist the skipped step exactly like a normal step so refresh/re-entry is safe.
+    setState(nextState)
+    const result = await saveOnboardingStateAction({
+      ...nextState,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || nextState.timezone || 'UTC',
+      status: 'IN_PROGRESS',
+      currentStep: Math.min(step + 1, TOTAL_STEPS),
+      completedSteps: Array.from(new Set([...nextState.completedSteps, step])),
+    })
+    if (!result.success || !result.state) {
+      setState(previousState)
+      setError(result.error || 'Could not save this step.')
+      return
+    }
+    setState(result.state)
+    setStep(Math.min(step + 1, TOTAL_STEPS))
+  }
+
   const connectCalendar = () => {
     window.location.href = '/api/integrations/google-calendar?returnTo=/onboarding'
   }
 
   return (
     <main
-      className="min-h-screen bg-[#f8f7f8] px-3 py-3 text-slate-950 sm:px-6 sm:py-6"
+      className="h-[100svh] overflow-hidden bg-[#f8f7f8] px-2 py-2 text-slate-950 sm:px-4 sm:py-4"
       style={{
         '--onboarding-rose': '#e11d48',
         '--onboarding-rose-dark': '#be123c',
         '--onboarding-rose-soft': '#fff1f2',
       } as React.CSSProperties}
     >
-      <div className="mx-auto min-h-[calc(100vh-1.5rem)] max-w-5xl overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_20px_70px_-35px_rgba(15,23,42,0.35)] sm:min-h-[calc(100vh-3rem)]">
-        <div className="grid min-h-full lg:grid-cols-[260px_1fr]">
-          <aside className="relative overflow-hidden border-b border-slate-200 bg-gradient-to-br from-rose-50 via-white to-white p-5 sm:p-7 lg:border-b-0 lg:border-r">
+      <div className="mx-auto h-full min-h-0 max-w-5xl overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_20px_70px_-35px_rgba(15,23,42,0.35)] sm:h-full">
+        <div className="grid h-full min-h-0 lg:grid-cols-[260px_1fr]">
+          <aside className="relative max-h-[92px] overflow-hidden border-b border-slate-200 bg-gradient-to-br from-rose-50 via-white to-white p-3 sm:p-4 lg:max-h-none lg:p-7 lg:border-b-0 lg:border-r">
             <div className="absolute -right-14 -top-14 h-40 w-40 rounded-full bg-rose-200/30 blur-3xl" />
             <div className="relative flex h-full flex-col">
               <div className="flex items-center gap-2.5">
@@ -238,7 +264,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
                 </p>
               </div>
 
-              <div className="mt-5 space-y-1.5">
+              <div className="mt-5 hidden space-y-1.5 lg:block">
                 {STEPS.map(([label, hint], index) => {
                   const active = index === step
                   const done = index < step
@@ -256,6 +282,14 @@ export function OnboardingExperience({ initialState, username }: Props) {
                 })}
               </div>
 
+              <div className="mt-3 flex items-center gap-2 lg:hidden">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+                  {STEPS.map(([label], index) => (
+                    <span key={label} aria-label={label} className={`h-1.5 flex-1 rounded-full ${index <= step ? 'bg-rose-600' : 'bg-slate-200'}`} />
+                  ))}
+                </div>
+                <span className="shrink-0 text-[10px] font-semibold text-slate-400">{step + 1}/{STEPS.length}</span>
+              </div>
               <div className="mt-auto hidden rounded-2xl border border-rose-100 bg-white/80 p-3.5 lg:block">
                 <div className="flex items-center gap-2">
                   <Check className="h-3.5 w-3.5 text-rose-600" />
@@ -266,8 +300,8 @@ export function OnboardingExperience({ initialState, username }: Props) {
             </div>
           </aside>
 
-          <section className="flex min-h-[650px] flex-col bg-white">
-            <header className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-8">
+          <section className="flex h-full min-h-0 flex-col bg-white">
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5 sm:px-8 sm:py-4">
               <div className="min-w-0">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-rose-600">{STEPS[step][0]}</p>
                 <p className="mt-0.5 truncate text-xs text-slate-500">{STEPS[step][1]}</p>
@@ -280,8 +314,8 @@ export function OnboardingExperience({ initialState, username }: Props) {
               </div>
             </header>
 
-            <div className="flex flex-1 items-center px-5 py-7 sm:px-10 sm:py-10">
-              <div className="mx-auto w-full max-w-2xl">
+            <div className="flex min-h-0 flex-1 items-center overflow-hidden px-4 py-2.5 sm:px-10 sm:py-6">
+              <div className="mx-auto w-full max-w-2xl min-h-0">
                 {step === 0 && (
                   <Step title={`Hi ${username}. Let’s build your starting day.`} description="A few choices are enough. Tracker will use them to prepare useful activities instead of giving you a generic checklist.">
                     <div className="relative overflow-hidden rounded-[22px] border border-slate-200 bg-gradient-to-br from-slate-950 to-slate-800 p-5 text-white shadow-xl sm:p-7">
@@ -305,7 +339,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
 
                 {step === 1 && (
                   <Step title="What do you want Tracker to help with first?" description="Pick up to three. These choices directly influence the starter activities created at the end.">
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                       {FOCUS_AREAS.map(([label, value, hint]) => (
                         <ChoiceRow key={value} selected={state.focusAreas.includes(value)} onClick={() => toggleFocus(value)} icon={<Target className="h-4 w-4" />} title={label} description={hint} />
                       ))}
@@ -319,9 +353,9 @@ export function OnboardingExperience({ initialState, username }: Props) {
 
                 {step === 2 && (
                   <Step title="Where does your work already live?" description="This helps Tracker create a relevant first action. Connections are not made just by selecting an item.">
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                       {TASK_SOURCES.map(([label, value]) => (
-                        <ChoiceTile key={value} selected={state.taskSources.includes(value)} onClick={() => toggleSource(value)} label={label} icon={<ListTodo className="h-4 w-4" />} />
+                        <ChoiceTile key={value} selected={state.taskSources.includes(value)} onClick={() => toggleSource(value)} label={label} icon={<SourceIcon source={value} />} />
                       ))}
                     </div>
                     <p className="mt-4 text-[11px] text-slate-400">You can skip this. Tracker will not invent an integration connection.</p>
@@ -353,8 +387,8 @@ export function OnboardingExperience({ initialState, username }: Props) {
 
                     {calendarDiscovery?.connected && calendarDiscovery.events.length > 0 && (
                       <div className="mt-3 overflow-hidden rounded-[18px] border border-slate-200">
-                        {calendarDiscovery.events.slice(0, 4).map((event) => (
-                          <div key={event.id} className="flex items-center gap-3 border-b border-slate-100 px-3.5 py-3 last:border-b-0">
+                        {calendarDiscovery.events.slice(0, 2).map((event) => (
+                          <div key={event.id} className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
                             <div className="h-7 w-1 rounded-full bg-rose-400" />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-xs font-semibold">{event.title}</p>
@@ -474,25 +508,32 @@ export function OnboardingExperience({ initialState, username }: Props) {
 
                 {error && <p className="mt-4 rounded-xl bg-rose-50 px-3 py-2.5 text-xs font-medium text-rose-700" role="alert">{error}</p>}
 
-                <footer className="mt-7 flex items-center justify-between gap-3">
-                  <button type="button" onClick={back} disabled={step === 0 || saving} className="inline-flex h-11 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 disabled:invisible">
+                <footer className="mt-3 flex shrink-0 items-center justify-between gap-2 sm:mt-5">
+                  <button type="button" onClick={back} disabled={step === 0 || saving} className="inline-flex h-10 items-center gap-1 rounded-xl px-2.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 disabled:invisible">
                     <ArrowLeft className="h-4 w-4" /> Back
                   </button>
 
-                  {step < TOTAL_STEPS ? (
-                    <button type="button" onClick={continueStep} disabled={saving} className="inline-flex h-11 items-center gap-2 rounded-xl bg-slate-950 px-5 text-xs font-bold text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-rose-600 disabled:opacity-60">
-                      {saving ? 'Saving…' : step === 0 ? 'Start setup' : 'Continue'}
-                      <ArrowRight className="h-4 w-4" />
-                    </button>
-                  ) : (
-                    <button type="button" onClick={finish} disabled={saving} className="inline-flex h-11 items-center gap-2 rounded-xl bg-rose-600 px-5 text-xs font-bold text-white shadow-lg shadow-rose-600/20 transition hover:-translate-y-0.5 hover:bg-rose-700 disabled:opacity-60">
-                      {saving ? 'Building…' : 'Build my day'}
-                      <Rocket className="h-4 w-4" />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {step > 0 && step < TOTAL_STEPS && (
+                      <button type="button" onClick={skip} disabled={saving} className="inline-flex h-10 items-center rounded-xl px-3 text-xs font-semibold text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50">
+                        Skip
+                      </button>
+                    )}
+                    {step < TOTAL_STEPS ? (
+                      <button type="button" onClick={continueStep} disabled={saving} className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 text-xs font-bold text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-rose-600 disabled:opacity-60">
+                        {saving ? 'Saving…' : step === 0 ? 'Start setup' : 'Continue'}
+                        <ArrowRight className="h-4 w-4" />
+                      </button>
+                    ) : (
+                      <button type="button" onClick={finish} disabled={saving} className="inline-flex h-10 items-center gap-2 rounded-xl bg-rose-600 px-4 text-xs font-bold text-white shadow-lg shadow-rose-600/20 transition hover:-translate-y-0.5 hover:bg-rose-700 disabled:opacity-60">
+                        {saving ? 'Building…' : 'Build my day'}
+                        <Rocket className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </footer>
 
-                <p className="mt-5 flex items-center justify-center gap-1.5 text-[10px] text-slate-400">
+                <p className="mt-2 flex items-center justify-center gap-1.5 text-[9px] text-slate-400 sm:mt-5">
                   <Check className="h-3 w-3" /> Progress saves as you go
                 </p>
               </div>
@@ -507,17 +548,17 @@ export function OnboardingExperience({ initialState, username }: Props) {
 function Step({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
     <div>
-      <h1 className="max-w-xl text-[28px] font-bold leading-tight tracking-[-0.035em] text-slate-950 sm:text-4xl">{title}</h1>
-      <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500">{description}</p>
-      <div className="mt-7">{children}</div>
+      <h1 className="max-w-xl text-[23px] font-bold leading-[1.08] tracking-[-0.035em] text-slate-950 sm:text-4xl">{title}</h1>
+      <p className="mt-2 max-w-xl text-xs leading-5 sm:mt-3 sm:text-sm sm:leading-6 text-slate-500">{description}</p>
+      <div className="mt-4 sm:mt-7">{children}</div>
     </div>
   )
 }
 
 function ChoiceRow({ selected, onClick, icon, title, description }: { selected: boolean; onClick: () => void; icon: React.ReactNode; title: string; description: string }) {
   return (
-    <button type="button" onClick={onClick} className={`group flex w-full items-center gap-3 rounded-[18px] border p-3.5 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-md ${selected ? 'border-rose-300 bg-rose-50/70 shadow-sm' : 'border-slate-200 bg-white'}`}>
-      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${selected ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{selected ? <Check className="h-4 w-4" /> : icon}</span>
+    <button type="button" onClick={onClick} className={`group flex w-full items-center gap-3 rounded-[16px] border p-2.5 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-md ${selected ? 'border-rose-300 bg-rose-50/70 shadow-sm' : 'border-slate-200 bg-white'}`}>
+      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${selected ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{selected ? <Check className="h-4 w-4" /> : icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block text-xs font-bold">{title}</span>
         <span className="mt-0.5 block text-[10px] leading-4 text-slate-400">{description}</span>
@@ -527,9 +568,19 @@ function ChoiceRow({ selected, onClick, icon, title, description }: { selected: 
   )
 }
 
+function SourceIcon({ source }: { source: string }) {
+  if (source === 'github') {
+    return <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true"><path d="M12 .6A11.4 11.4 0 0 0 8.4 23c.57.1.78-.25.78-.55v-2.16c-3.17.69-3.84-1.34-3.84-1.34-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.25 3.33.96.1-.74.4-1.25.72-1.54-2.53-.29-5.19-1.27-5.19-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.03 0 0 .96-.31 3.15 1.17A10.9 10.9 0 0 1 12 6.2c.97 0 1.94.13 2.85.39 2.18-1.48 3.14-1.17 3.14-1.17.63 1.57.24 2.74.12 3.03.73.8 1.17 1.82 1.17 3.07 0 4.4-2.67 5.36-5.21 5.65.41.36.77 1.06.77 2.14v3.14c0 .31.2.66.79.55A11.4 11.4 0 0 0 12 .6Z"/></svg>
+  }
+  if (source === 'outlook') {
+    return <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true"><path fill="#0078d4" d="M2.5 5.5 13 4v16L2.5 18.5v-13Z"/><path fill="#106ebe" d="M13 4h8.5v16H13z"/><path fill="#fff" d="M5 9.2c1.4 0 2.5 1.1 2.5 2.8S6.4 14.8 5 14.8 2.5 13.7 2.5 12 3.6 9.2 5 9.2Zm0 1.4c-.6 0-1 .5-1 1.4s.4 1.4 1 1.4 1-.5 1-1.4-.4-1.4-1-1.4Z"/></svg>
+  }
+  return <ListTodo className="h-4 w-4" />
+}
+
 function ChoiceTile({ selected, onClick, label, icon }: { selected: boolean; onClick: () => void; label: string; icon: React.ReactNode }) {
   return (
-    <button type="button" onClick={onClick} className={`flex min-h-16 items-center gap-2.5 rounded-[16px] border px-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${selected ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-700'}`}>
+    <button type="button" onClick={onClick} className={`flex min-h-14 items-center gap-2 rounded-[14px] border px-2.5 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${selected ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-700'}`}>
       <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${selected ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{selected ? <Check className="h-3.5 w-3.5" /> : icon}</span>
       <span className="text-[11px] font-semibold">{label}</span>
     </button>
