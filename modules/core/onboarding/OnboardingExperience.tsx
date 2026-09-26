@@ -73,13 +73,6 @@ export function OnboardingExperience({ initialState, username }: Props) {
   const [calendarDiscovery, setCalendarDiscovery] = useState<CalendarDiscovery | null>(null)
 
   useEffect(() => {
-    const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
-    if (browserTimezone && browserTimezone !== state.timezone) {
-      setState((current) => ({ ...current, timezone: browserTimezone }))
-    }
-  }, [state.timezone])
-
-  useEffect(() => {
     let active = true
 
     const loadCalendarDiscovery = async () => {
@@ -101,7 +94,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
     return () => {
       active = false
     }
-  }, [state.calendarProvider])
+  }, [])
 
   const questComplete = useMemo(() => {
     const completed = new Set(state.completedSteps)
@@ -157,6 +150,8 @@ export function OnboardingExperience({ initialState, username }: Props) {
     return true
   }
 
+  const getClientTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || state.timezone || 'UTC'
+
   const saveAndContinue = async () => {
     if (!canContinue()) return
 
@@ -164,6 +159,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
     const completedSteps = Array.from(new Set([...state.completedSteps, step]))
     const nextState: OnboardingState = {
       ...state,
+      timezone: getClientTimezone(),
       status: 'IN_PROGRESS',
       currentStep: nextStep,
       completedSteps,
@@ -190,6 +186,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
     setError('')
     const result = await completeOnboardingAction({
       ...state,
+      timezone: getClientTimezone(),
       currentStep: TOTAL_STEPS,
       completedSteps: Array.from(new Set([...state.completedSteps, TOTAL_STEPS])),
     })
