@@ -209,7 +209,6 @@ export function OnboardingExperience({ initialState, username }: Props) {
     if (step === 6 && !nextState.firstDayObjective.trim()) {
       nextState.firstDayObjective = 'Plan my day around my priorities'
     }
-    setState(nextState)
     const previousState = state
     // Persist the skipped step exactly like a normal step so refresh/re-entry is safe.
     setState(nextState)
@@ -316,7 +315,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
             </header>
 
             <div className="flex min-h-0 flex-1 items-center overflow-hidden px-4 py-2.5 sm:px-10 sm:py-6">
-              <div className="mx-auto w-full max-w-2xl">
+              <div className="mx-auto w-full max-w-2xl min-h-0">
                 {step === 0 && (
                   <Step title={`Hi ${username}. Let’s build your starting day.`} description="A few choices are enough. Tracker will use them to prepare useful activities instead of giving you a generic checklist.">
                     <div className="relative overflow-hidden rounded-[22px] border border-slate-200 bg-gradient-to-br from-slate-950 to-slate-800 p-5 text-white shadow-xl sm:p-7">
@@ -356,7 +355,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
                   <Step title="Where does your work already live?" description="This helps Tracker create a relevant first action. Connections are not made just by selecting an item.">
                     <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
                       {TASK_SOURCES.map(([label, value]) => (
-                        <ChoiceTile key={value} selected={state.taskSources.includes(value)} onClick={() => toggleSource(value)} label={label} icon={<ListTodo className="h-4 w-4" />} />
+                        <ChoiceTile key={value} selected={state.taskSources.includes(value)} onClick={() => toggleSource(value)} label={label} icon={<SourceIcon source={value} />} />
                       ))}
                     </div>
                     <p className="mt-4 text-[11px] text-slate-400">You can skip this. Tracker will not invent an integration connection.</p>
@@ -549,7 +548,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
 function Step({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
     <div>
-      <h1 className="max-w-xl text-[23px] font-bold leading-[1.08] tracking-[-0.035em] sm:text-4xl text-slate-950 sm:text-4xl">{title}</h1>
+      <h1 className="max-w-xl text-[23px] font-bold leading-[1.08] tracking-[-0.035em] text-slate-950 sm:text-4xl">{title}</h1>
       <p className="mt-2 max-w-xl text-xs leading-5 sm:mt-3 sm:text-sm sm:leading-6 text-slate-500">{description}</p>
       <div className="mt-4 sm:mt-7">{children}</div>
     </div>
