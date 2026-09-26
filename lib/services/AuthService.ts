@@ -3,6 +3,7 @@ import { CredentialService } from './CredentialService'
 import { SessionService } from './SessionService'
 import { AuthorizationService, AuthenticatedUser } from './AuthorizationService'
 import { DefaultActivitiesService } from './DefaultActivitiesService'
+import { OnboardingService } from './OnboardingService'
 
 export type { AuthenticatedUser } from './AuthorizationService'
 
@@ -99,6 +100,10 @@ export class AuthService {
     // Successful login clears rate limit counter
     CredentialService.clearRateLimit(username)
 
+    // Development rollout: every successful login re-enters the gamified onboarding,
+    // including existing users who have completed it before.
+    await OnboardingService.resetForDevelopmentLogin(user.id)
+
     const token = SessionService.signSession(user.id, user.username)
     const isOwner = AuthorizationService.isOwner(user)
 
@@ -159,8 +164,11 @@ export class AuthService {
 
       // Create default starter activities for new users
       await DefaultActivitiesService.seedDefaultActivities(u.id, tx)
+
       return u
     })
+
+    await OnboardingService.initialize(newUser.id)
 
     const token = SessionService.signSession(newUser.id, newUser.username)
 

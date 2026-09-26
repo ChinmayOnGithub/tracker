@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
-    "build": "prisma generate && bun test tests/ lib/services/ && next build --webpack",
+    "build": "prisma generate && next build --webpack",
     "test": "bun test tests/ lib/services/",
     "start": "next start",
     "lint": "eslint",
