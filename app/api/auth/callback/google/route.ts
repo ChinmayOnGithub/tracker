@@ -236,7 +236,9 @@ export async function GET(request: Request) {
       logger.info('OAuthCallback', 'Linked Google ID to existing user', { userId: user.id })
     }
 
-    await OnboardingService.initialize(user.id)
+    // Development rollout: every successful Google login re-enters the gamified onboarding,
+    // including existing users who have completed it before.
+    await OnboardingService.resetForDevelopmentLogin(user.id)
 
     const picture = payload.picture as string | undefined
     if (picture) {
