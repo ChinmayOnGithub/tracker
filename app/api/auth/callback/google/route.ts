@@ -120,7 +120,7 @@ export async function GET(request: Request) {
   const error = searchParams.get('error')
   const stateFromGoogle = searchParams.get('state')
 
-  const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL).origin
+  const siteUrlUrl = new URL(env.NEXT_PUBLIC_SITE_URL)\n  if (process.env.NODE_ENV === 'production') siteUrlUrl.protocol = 'https:'\n  const siteUrl = siteUrlUrl.origin
 
   if (error || !code) {
     logger.error('OAuthCallback', 'OAuth error or missing code', { error, hasCode: !!code })
