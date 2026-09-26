@@ -120,7 +120,7 @@ export async function GET(request: Request) {
   const error = searchParams.get('error')
   const stateFromGoogle = searchParams.get('state')
 
-  const siteUrlUrl = new URL(env.NEXT_PUBLIC_SITE_URL)\n  if (process.env.NODE_ENV === 'production') siteUrlUrl.protocol = 'https:'\n  const siteUrl = siteUrlUrl.origin
+  const siteUrl = env.NEXT_PUBLIC_SITE_URL
 
   if (error || !code) {
     logger.error('OAuthCallback', 'OAuth error or missing code', { error, hasCode: !!code })
@@ -150,7 +150,7 @@ export async function GET(request: Request) {
 
   const clientId = env.GOOGLE_CLIENT_ID
   const clientSecret = env.GOOGLE_CLIENT_SECRET
-  const redirectUri = new URL('/api/auth/callback/google', siteUrl).toString()
+  const redirectUri = `${siteUrl}/api/auth/callback/google`
 
   try {
     const tokenResponse = await fetch(GOOGLE_OAUTH.TOKEN_URI, {
