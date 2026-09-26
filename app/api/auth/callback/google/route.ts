@@ -325,6 +325,30 @@ export async function GET(request: Request) {
           }
         ]
       })
+
+      await db.userSetting.create({
+        data: {
+          userId: user.id,
+          module: 'ONBOARDING',
+          config: {
+            version: 1,
+            status: 'NOT_STARTED',
+            currentStep: 0,
+            completedSteps: [],
+            taskSources: [],
+            calendarProvider: null,
+            workStartTime: '09:00',
+            workEndTime: '17:00',
+            planningStyle: null,
+            dailyCapacity: 6,
+            focusAreas: [],
+            firstDayObjective: '',
+            momentum: 0,
+            createdAt: new Date().toISOString(),
+            completedAt: null,
+          },
+        },
+      })
     } else {
       if (!user.googleId) {
         user = await db.user.update({
