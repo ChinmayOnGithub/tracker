@@ -15,7 +15,7 @@ function safeReturnTo(value: string | undefined): string {
 }
 
 export async function GET(request: Request) {
-  const siteUrl = env.NEXT_PUBLIC_SITE_URL
+  const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL).origin
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
   const error = requestUrl.searchParams.get('error')
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
 
   const clientId = env.GOOGLE_CLIENT_ID
   const clientSecret = env.GOOGLE_CLIENT_SECRET
-  const redirectUri = `${siteUrl}/api/integrations/google-calendar/callback`
+  const redirectUri = new URL('/api/integrations/google-calendar/callback', siteUrl).toString()
 
   try {
     const tokenResponse = await fetch(GOOGLE_OAUTH.TOKEN_URI, {
