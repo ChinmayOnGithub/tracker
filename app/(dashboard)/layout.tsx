@@ -15,7 +15,7 @@ export default async function DashboardRootLayout({
 
   if (loggedUser?.id) {
     const onboarding = await OnboardingService.getState(loggedUser.id)
-    if (onboarding && onboarding.status !== 'COMPLETED') {
+    if (!onboarding || onboarding.status !== 'COMPLETED') {
       redirect('/onboarding')
     }
   }
