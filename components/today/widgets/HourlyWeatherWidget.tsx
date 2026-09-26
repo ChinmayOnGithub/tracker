@@ -247,12 +247,13 @@ export const HourlyWeatherWidget: React.FC<HourlyWeatherWidgetProps> = ({
     if (lastScrolledDateRef.current === targetDateStr) return
     if (!scrollContainerRef.current) return
 
-    if (isViewingToday && currentHourItemRef.current) {
-      currentHourItemRef.current.scrollIntoView({
-        behavior: 'smooth',
-        inline: 'center',
-        block: 'nearest',
-      })
+    if (isViewingToday && currentHourItemRef.current && scrollContainerRef.current) {
+      // Scroll only the horizontal weather strip. scrollIntoView() can scroll the
+      // nearest page ancestor as well, which makes the Today dashboard jump.
+      const container = scrollContainerRef.current
+      const item = currentHourItemRef.current
+      const targetLeft = item.offsetLeft - Math.max(0, (container.clientWidth - item.offsetWidth) / 2)
+      container.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' })
       lastScrolledDateRef.current = targetDateStr
     } else if (!isViewingToday && dayHourlyEntries.length > 0) {
       scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' })
