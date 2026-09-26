@@ -839,8 +839,9 @@ export const Calendar: React.FC<CalendarProps> = ({
         <div className="flex flex-col bg-[var(--color-bg-surface)] rounded-2xl border border-[var(--color-border)]/60 overflow-hidden shadow-sm">
           
           {/* Day Headers (7 Columns + Left Time Column Buffer) */}
-          <div className="overflow-x-auto border-b border-[var(--color-border)]/60">
-          <div className="grid min-w-[780px] grid-cols-8 text-center bg-[var(--color-bg-subtle)]/60 py-2.5 font-bold uppercase tracking-wider text-[11px] text-[var(--color-text-muted)]">
+          <div className="overflow-x-auto">
+            <div className="min-w-[780px]">
+              <div className="grid grid-cols-8 border-b border-[var(--color-border)]/60 text-center bg-[var(--color-bg-subtle)]/60 py-2.5 font-bold uppercase tracking-wider text-[11px] text-[var(--color-text-muted)]">
             {/* Hour column buffer */}
             <div className="text-[9px] flex items-center justify-center font-black">Time</div>
             
@@ -873,11 +874,10 @@ export const Calendar: React.FC<CalendarProps> = ({
                 </div>
               )
             })}
-          </div>
-        </div>
+              </div>
 
           {/* Time-Grid Scroll Container */}
-          <div data-calendar-grid="true" className="flex-1 min-h-[480px] max-h-[700px] overflow-auto relative select-none overscroll-contain">
+          <div data-calendar-grid="true" className="flex-1 min-h-[480px] max-h-[700px] overflow-y-auto relative select-none overscroll-contain">
             
             {/* Absolute positioning container for time grids */}
             <div className="grid min-w-[780px] grid-cols-8 relative" style={{ height: `${HOURS.length * 60}px` }}>
@@ -1067,6 +1067,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                 )
               })}
             </div>
+          </div>
           </div>
         </div>
       )}
