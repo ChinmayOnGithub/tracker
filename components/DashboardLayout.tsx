@@ -466,7 +466,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         window.location.replace('/')
       } else {
         setIsAuthLoading(false)
-        setShake(true)
         setAuthError(res.error || 'Incorrect username or password/PIN')
         setEnteredPin('')
         setTimeout(() => setShake(false), 600)
