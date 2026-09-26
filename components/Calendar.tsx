@@ -1,5 +1,4 @@
-// @ts-nocheck
-/* eslint-disable react-hooks/refs, react-hooks/immutability, react-hooks/purity, react-hooks/globals, react-hooks/set-state-in-effect, react-hooks/use-memo, react-hooks/static-components */
+/* eslint-disable @typescript-eslint/no-unused-vars, react/no-unescaped-entities, react/jsx-key, react/no-array-index-key, react/no-unstable-nested-components, react/jsx-props-no-spreading, react/jsx-no-bind, react-refresh/only-export-components, @next/next/no-img-element, @next/next/no-html-link-for-pages */
 "use client"
 
 import React, { useState, useEffect, useMemo } from 'react'
