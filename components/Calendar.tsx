@@ -640,7 +640,10 @@ export const Calendar: React.FC<CalendarProps> = ({
           {selectedDateStr && (
             <button
               type="button"
-              onClick={() => onDayClick(selectedDateStr)}
+              onClick={() => {
+                const date = selectedDateStr
+                if (date) onDayClick(date)
+              }}
               className="flex w-full items-center justify-between rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-3 text-left shadow-xs active:scale-[0.99]"
             >
               <div>
