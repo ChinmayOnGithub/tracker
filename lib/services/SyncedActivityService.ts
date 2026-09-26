@@ -322,24 +322,15 @@ class SyncedActivityServiceImpl {
   /**
    * Subscribe to sync events
    */
-  onSyncEvent<K extends keyof SyncEventMap>(event: K, callback: (data: SyncEventMap[K]) => void): () => void {
+  onSyncEvent<K extends keyof SyncEventMap>(userId: string, event: K, callback: (data: SyncEventMap[K]) => void): () => void {
     if (!this.isSyncEnabled()) {
       return () => {} // No-op unsubscribe
     }
 
-    // Subscribe to all user engines - this is a limitation of the singleton approach
-    // For production, consider per-user event bus
-    const unsubscribers: Array<() => void> = []
-    
-    for (const syncEngine of this.syncEngineByUser.values()) {
-      const unsub = syncEngine.on(event, callback)
-      unsubscribers.push(unsub)
-    }
+    const syncEngine = this.syncEngineByUser.get(userId)
+    if (!syncEngine) return () => {}
 
-    // Return combined unsubscribe function
-    return () => {
-      unsubscribers.forEach(unsub => unsub())
-    }
+    return syncEngine.on(event, callback)
   }
 
   /**
