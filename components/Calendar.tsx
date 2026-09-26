@@ -41,6 +41,14 @@ interface CalendarProps {
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const HOURS = Array.from({ length: 17 }).map((_, i) => i + 6) // 6 AM to 10 PM
+function formatSelectedDayLabel(dateStr: string): string {
+  return new Date(`${dateStr}T12:00:00`).toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
 
 export const Calendar: React.FC<CalendarProps> = ({
   logs,
@@ -563,15 +571,6 @@ export const Calendar: React.FC<CalendarProps> = ({
 
   const monthName = currentDate.toLocaleString('default', { month: 'long' })
 
-  const selectedDayLabel = useMemo(() => {
-    if (!selectedDateStr) return ''
-    return new Date(`${selectedDateStr}T12:00:00`).toLocaleDateString(undefined, {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric',
-    })
-  }, [selectedDateStr])
-
   return (
     <Card className="p-2.5 sm:p-4 md:p-6 flex flex-col gap-4 sm:gap-6 bg-[var(--color-bg-surface)] border-[var(--color-border)] shadow-xs rounded-[22px] sm:rounded-2xl">
       
@@ -657,7 +656,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                   Selected day
                 </p>
                 <p className="mt-0.5 text-sm font-bold text-[var(--color-text-main)]">
-                  {selectedDayLabel}
+                  {formatSelectedDayLabel(selectedDateStr)}
                 </p>
               </div>
               <span className="text-[10px] font-bold text-[var(--color-text-muted)]">Open details →</span>
