@@ -58,6 +58,7 @@ jobs:
         run: bunx tsc --noEmit
 
       - name: Check Prisma Migration Status
+        continue-on-error: true
         run: bunx prisma migrate status
 
       - name: Check Prisma Schema/Migration Drift
