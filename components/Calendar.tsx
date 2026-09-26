@@ -839,12 +839,10 @@ export const Calendar: React.FC<CalendarProps> = ({
 
       {/* ── 2. WEEK VIEW (HOURLY TIME-GRID) ── */}
       {view === 'week' && (
-        <div className="flex flex-col bg-[var(--color-bg-surface)] rounded-2xl border border-[var(--color-border)]/60 overflow-hidden shadow-sm">
+        <div className="flex flex-col bg-[var(--color-bg-surface)] rounded-xl border border-[var(--color-border)]/60 overflow-hidden shadow-xs">
           
           {/* Day Headers (7 Columns + Left Time Column Buffer) */}
-          <div className="overflow-x-auto">
-            <div className="min-w-[780px]">
-              <div className="grid grid-cols-8 border-b border-[var(--color-border)]/60 text-center bg-[var(--color-bg-subtle)]/60 py-2.5 font-bold uppercase tracking-wider text-[11px] text-[var(--color-text-muted)]">
+          <div className="grid grid-cols-8 border-b border-[var(--color-border)]/60 text-center bg-[var(--color-bg-subtle)]/50 py-2.5 font-bold uppercase tracking-wider text-[11px] text-[var(--color-text-muted)]">
             {/* Hour column buffer */}
             <div className="text-[9px] flex items-center justify-center font-black">Time</div>
             
@@ -877,13 +875,13 @@ export const Calendar: React.FC<CalendarProps> = ({
                 </div>
               )
             })}
-              </div>
+          </div>
 
           {/* Time-Grid Scroll Container */}
-          <div data-calendar-grid="true" className="flex-1 min-h-[480px] max-h-[700px] overflow-y-auto relative select-none overscroll-contain">
+          <div data-calendar-grid="true" className="flex-1 min-h-[480px] max-h-[700px] overflow-y-auto relative select-none">
             
             {/* Absolute positioning container for time grids */}
-            <div className="grid min-w-[780px] grid-cols-8 relative" style={{ height: `${HOURS.length * 60}px` }}>
+            <div className="grid grid-cols-8 relative" style={{ height: `${HOURS.length * 60}px` }}>
               
               {/* Left Column Hour Label Grid */}
               <div className="border-r border-[var(--color-border)]/60 flex flex-col h-full bg-[var(--color-bg-subtle)]/30 z-10">
@@ -1070,7 +1068,6 @@ export const Calendar: React.FC<CalendarProps> = ({
                 )
               })}
             </div>
-          </div>
           </div>
         </div>
       )}
