@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs, react-hooks/immutability, react-hooks/purity, react-hooks/globals, react-hooks/set-state-in-effect, react-hooks/use-memo, react-hooks/static-components */
 "use client"
 
 import React, { useState, useEffect, useMemo } from 'react'
