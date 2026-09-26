@@ -211,15 +211,16 @@ export class OnboardingService {
     const now = new Date()
     const localToday = localParts(now, timezone).date
     const dayStart = new Date(`${localToday}T00:00:00.000Z`)
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000)
+    const queryStart = new Date(dayStart.getTime() - 24 * 60 * 60 * 1000)
+    const queryEnd = new Date(dayStart.getTime() + 48 * 60 * 60 * 1000)
 
     const calendarEvents = state.calendarProvider === 'google'
       ? await db.calendarEvent.findMany({
           where: {
             userId,
             deletedAt: null,
-            start: { lt: dayEnd },
-            end: { gt: dayStart },
+            start: { lt: queryEnd },
+            end: { gt: queryStart },
           },
           select: { start: true, end: true, externalProvider: true },
           orderBy: { start: 'asc' },
@@ -229,8 +230,13 @@ export class OnboardingService {
     const busy = calendarEvents
       .filter((event) => event.externalProvider === 'GOOGLE')
       .map((event) => ({
-        start: localParts(event.start, timezone).minutes,
-        end: localParts(event.end, timezone).minutes,
+        start: localParts(event.start, timezone),
+        end: localParts(event.end, timezone),
+      }))
+      .filter((event) => event.start.date === localToday || event.end.date === localToday)
+      .map((event) => ({
+        start: event.start.minutes,
+        end: event.end.minutes,
       }))
       .filter((event) => event.end > event.start)
 
