@@ -288,7 +288,8 @@ export async function GET(request: Request) {
       isNewUser
     })
 
-    return NextResponse.redirect(siteUrl)
+    const onboarding = await OnboardingService.getState(user.id)
+    return NextResponse.redirect(onboarding?.status !== 'COMPLETED' ? `${siteUrl}/onboarding` : siteUrl)
   } catch (err) {
     logger.error('OAuthCallback', 'Unhandled exception in OAuth callback', err)
     return NextResponse.redirect(`${siteUrl}/?error=google-callback-exception`)
