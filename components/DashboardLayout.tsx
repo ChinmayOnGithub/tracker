@@ -6,12 +6,12 @@ import { ActivityTemplate } from '@/types'
 import { verifyPinAction, registerUserAction, logoutAction } from '@/app/actions/auth'
 import { writeQueue } from '@/lib/store/write-queue'
 import { requestDeduplicator } from '@/lib/store/requestDeduplicator'
-import { Layers, Sun, Moon, ShieldAlert } from 'lucide-react'
+import { ShieldAlert } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { DashboardShell } from '@/modules/core/dashboard'
 import { getAgendaAction } from '@/modules/sync/google-calendar/actions'
 import { ParsedCalendarEvent } from '@/modules/sync/google-calendar/services/GoogleCalendarService'
-import { Card, CardBody, Button, Input, Modal } from '@/design-system'
+import { Button, Modal } from '@/design-system'
 import { getTodayDateStr } from '@/lib/recurrence'
 import { CalendarCacheService } from '@/modules/calendar/services/CalendarCacheService'
 import { clearDayDtoCache } from './DayLogsModal'
@@ -130,7 +130,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [enteredPin, setEnteredPin] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [authError, setAuthError] = useState('')
-  const [shake, setShake] = useState(false)
   const [isAuthLoading, setIsAuthLoading] = useState(false)
   const [robotChecked, setRobotChecked] = useState(false)
   const pinInputRef = useRef<HTMLInputElement>(null)
@@ -456,10 +455,8 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         window.location.replace('/')
       } else {
         setIsAuthLoading(false)
-        setShake(true)
         setAuthError(res.error || 'Registration failed')
         setEnteredPin('')
-        setTimeout(() => setShake(false), 600)
       }
     } else {
       const res = await verifyPinAction(username, pin)
@@ -754,7 +751,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   ✓
                 </span>
                 <span>
-                  <span className="block text-[15px] text-zinc-700">I'm not a robot</span>
+                  <span className="block text-[15px] text-zinc-700">I&apos;m not a robot</span>
                   <span className="block text-[11px] text-zinc-400 mt-0.5">Security check placeholder</span>
                 </span>
               </span>
