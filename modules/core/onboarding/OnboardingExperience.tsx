@@ -574,7 +574,7 @@ function formatCalendarTime(value: string) {
 }
 
 function sourceLabel(value: string) {
-  return {
+  const labels: Record<string, string> = {
     'google-tasks': 'Google Tasks',
     todoist: 'Todoist',
     notion: 'Notion',
@@ -584,5 +584,6 @@ function sourceLabel(value: string) {
     trello: 'Trello',
     clickup: 'ClickUp',
     outlook: 'Outlook',
-  }[value] || value
+  }
+  return labels[value] || value
 }
