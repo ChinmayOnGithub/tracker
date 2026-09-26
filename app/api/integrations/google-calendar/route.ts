@@ -15,7 +15,7 @@ function safeReturnTo(value: string | null): string {
 
 export async function GET(request: Request) {
   const user = await SessionService.getSessionUser()
-  const siteUrlUrl = new URL(env.NEXT_PUBLIC_SITE_URL)\n  if (process.env.NODE_ENV === 'production') siteUrlUrl.protocol = 'https:'\n  const siteUrl = siteUrlUrl.origin
+  const siteUrl = env.NEXT_PUBLIC_SITE_URL
 
   if (!user) {
     return NextResponse.redirect(`${siteUrl}/?error=calendar-auth-required`)
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
 
   const requestUrl = new URL(request.url)
   const returnTo = safeReturnTo(requestUrl.searchParams.get('returnTo'))
-  const redirectUri = new URL('/api/integrations/google-calendar/callback', siteUrl).toString()
+  const redirectUri = `${siteUrl}/api/integrations/google-calendar/callback`
 
   const state = crypto.randomUUID()
   const codeVerifier = crypto.randomBytes(32).toString('base64url')
