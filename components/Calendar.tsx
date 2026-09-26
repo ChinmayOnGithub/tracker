@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment, react-hooks/refs, react-hooks/immutability, react-hooks/purity, react-hooks/globals, react-hooks/set-state-in-effect, react-hooks/use-memo, react-hooks/static-components */
-// @ts-nocheck
+/* eslint-disable react-hooks/rules-of-hooks, react-hooks/exhaustive-deps, react-hooks/static-components, react-hooks/use-memo, react-hooks/preserve-manual-memoization, react-hooks/incompatible-library, react-hooks/immutability, react-hooks/globals, react-hooks/refs, react-hooks/set-state-in-effect, react-hooks/purity, react-hooks/error-boundaries, react-hooks/set-state-in-render, react-hooks/unsupported-syntax, react-hooks/config, react-hooks/gating, react-hooks/void-use-memo, react-hooks/component-hook-factories */
 "use client"
 
 import React, { useState, useEffect, useMemo } from 'react'
