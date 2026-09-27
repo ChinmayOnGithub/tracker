@@ -119,6 +119,7 @@ export async function registerUserAction(usernameInput: string, secret: string, 
     }
 
     await SessionService.setSessionCookie(result.token)
+    if ((await import('next/headers')).cookies) (await (await import('next/headers')).cookies()).delete(HUMAN_VERIFIED_COOKIE)
     const onboarding = await OnboardingService.getState(result.user.id)
     return { success: true, user: result.user, onboardingRequired: onboarding?.status !== 'COMPLETED' }
   } catch (error) {
@@ -151,6 +152,7 @@ export async function verifyPinAction(usernameInput: string, secret: string, hum
     }
 
     await SessionService.setSessionCookie(result.token)
+    if ((await import('next/headers')).cookies) (await (await import('next/headers')).cookies()).delete(HUMAN_VERIFIED_COOKIE)
     const onboarding = await OnboardingService.getState(result.user.id)
 
     return {
