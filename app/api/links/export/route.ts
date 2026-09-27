@@ -13,15 +13,37 @@ export async function GET(req: NextRequest) {
     const collectionId = searchParams.get('collectionId')
     const format = searchParams.get('format') || 'json'
 
-    // Free users can export JSON; rich format exports (CSV/HTML) require the advanced_journal capability
+function escapeHtml(value: string | null | undefined): string {
+  if (!value) return ''
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function isValidHttpUrl(urlStr: string): boolean {
+  try {
+    const parsed = new URL(urlStr)
+    return ['http:', 'https:'].includes(parsed.protocol)
+  } catch {
+    return false
+  }
+}
+
+    // Free users can export JSON; rich format exports (CSV/HTML) require a Pro tier subscription
     if (format === 'csv' || format === 'html') {
       const { EntitlementService } = await import('@/lib/services/EntitlementService')
-      const hasExportAccess = await EntitlementService.hasFeature(user.id, 'advanced_journal')
+      const entitlements = await EntitlementService.getEntitlements(user.id)
+      const hasExportAccess = entitlements.tier === 'PRO' || Boolean(entitlements.features?.advanced_journal)
       if (!hasExportAccess) {
         return NextResponse.json(
           {
-            error: 'Rich format export (CSV/HTML) requires a Tracker Pro subscription.',
-            code: 'CAPABILITY_REQUIRED'
+            error: {
+              code: 'CAPABILITY_REQUIRED',
+              message: 'Rich format export (CSV/HTML) requires a Tracker Pro subscription.'
+            }
           },
           { status: 403 }
         )
@@ -90,10 +112,18 @@ export async function GET(req: NextRequest) {
 <DL><p>
 `
       for (const col of collections) {
-        htmlContent += `    <DT><H3 ADD_DATE="${Math.floor(col.createdAt.getTime() / 1000)}" LAST_MODIFIED="${Math.floor(col.updatedAt.getTime() / 1000)}" COLOR="${col.color}">${col.name}</H3>\n    <DL><p>\n`
+        const safeColName = escapeHtml(col.name)
+        const safeColor = escapeHtml(col.color)
+        htmlContent += `    <DT><H3 ADD_DATE="${Math.floor(col.createdAt.getTime() / 1000)}" LAST_MODIFIED="${Math.floor(col.updatedAt.getTime() / 1000)}" COLOR="${safeColor}">${safeColName}</H3>\n    <DL><p>\n`
         for (const link of col.links) {
-          const tagsStr = link.tags.map(t => t.name).join(',')
-          htmlContent += `        <DT><A HREF="${link.url}" ADD_DATE="${Math.floor(link.createdAt.getTime() / 1000)}" PRIVATE="${link.isPrivate}" PINNED="${link.isPinned}" ARCHIVED="${link.isArchived}" TAGS="${tagsStr}" NOTES="${link.notes || ''}">${link.title}</A>\n`
+          if (!isValidHttpUrl(link.url)) {
+            continue // reject non-http/https schemes such as javascript:
+          }
+          const safeUrl = escapeHtml(link.url)
+          const safeTitle = escapeHtml(link.title)
+          const safeNotes = escapeHtml(link.notes || '')
+          const safeTags = escapeHtml(link.tags.map(t => t.name).join(','))
+          htmlContent += `        <DT><A HREF="${safeUrl}" ADD_DATE="${Math.floor(link.createdAt.getTime() / 1000)}" PRIVATE="${link.isPrivate}" PINNED="${link.isPinned}" ARCHIVED="${link.isArchived}" TAGS="${safeTags}" NOTES="${safeNotes}">${safeTitle}</A>\n`
         }
         htmlContent += `    </DL><p>\n`
       }

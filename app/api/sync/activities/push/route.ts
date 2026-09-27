@@ -58,7 +58,7 @@ function parseJsonMetadata(metadata: unknown): Prisma.InputJsonValue | undefined
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireAuth()
+    const user = await requireAuth(request)
     const { operations } = await request.json()
 
     if (!Array.isArray(operations)) {
@@ -86,19 +86,19 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        // 2. Check durable database-backed idempotency
-        const dbCached = await db.auditLog.findFirst({
+        // 2. Check durable database-backed idempotency using dedicated SyncOperation model
+        const dbCached = await db.syncOperation.findUnique({
           where: {
-            userId: user.id,
-            entityType: 'sync_idempotency',
-            entityId: rawIdempotencyKey,
-          },
-          select: { newData: true }
+            userId_clientRequestId: {
+              userId: user.id,
+              clientRequestId: rawIdempotencyKey,
+            }
+          }
         })
 
-        if (dbCached && dbCached.newData) {
+        if (dbCached && dbCached.status === 'COMPLETED' && dbCached.responseJson) {
           console.log(`[SyncAPI] Returning database-cached result for ${scopedKey}`)
-          const cachedResult = dbCached.newData as unknown as SyncResult
+          const cachedResult = dbCached.responseJson as unknown as SyncResult
           memoryIdempotencyCache.set(scopedKey, {
             timestamp: Date.now(),
             result: cachedResult
@@ -110,19 +110,39 @@ export async function POST(request: NextRequest) {
         // 3. Execute operation
         const result = await processOperation(operation, user.id)
 
-        // 4. Persist durable idempotency log in database
-        await db.auditLog.create({
-          data: {
+        // 4. Persist durable idempotency record in SyncOperation table
+        await db.syncOperation.upsert({
+          where: {
+            userId_clientRequestId: {
+              userId: user.id,
+              clientRequestId: rawIdempotencyKey
+            }
+          },
+          create: {
             userId: user.id,
-            entityType: 'sync_idempotency',
-            entityId: rawIdempotencyKey,
-            action: 'SYNC_PUSH',
-            performedBy: user.username || user.id,
-            newData: result as unknown as Prisma.InputJsonValue,
+            clientRequestId: rawIdempotencyKey,
+            operationType: operation.type,
+            status: result.success ? 'COMPLETED' : 'FAILED',
+            responseJson: result as unknown as Prisma.InputJsonValue,
+            completedAt: new Date()
+          },
+          update: {
+            status: result.success ? 'COMPLETED' : 'FAILED',
+            responseJson: result as unknown as Prisma.InputJsonValue,
+            completedAt: new Date()
           }
-        }).catch(err => console.warn('[SyncAPI] Failed to record durable idempotency:', err))
+        }).catch(err => console.warn('[SyncAPI] Failed to record durable sync operation:', err))
 
-        // 5. Update memory cache
+        // 5. Update user's monotonic sync cursor on successful mutation
+        if (result.success) {
+          await db.syncCursor.upsert({
+            where: { userId: user.id },
+            create: { userId: user.id, revision: 1n },
+            update: { revision: { increment: 1n } }
+          }).catch(err => console.warn('[SyncAPI] Failed to bump sync cursor:', err))
+        }
+
+        // 6. Update memory cache
         memoryIdempotencyCache.set(scopedKey, {
           timestamp: Date.now(),
           result
@@ -339,9 +359,8 @@ async function processActivityTemplateOperation(
         const isTemporaryId = entityId.startsWith('temp_')
         const targetId = isTemporaryId ? undefined : entityId
 
-        const template = await db.activityTemplate.upsert({
-          where: { id: targetId || entityId },
-          create: {
+        const template = await db.activityTemplate.create({
+          data: {
             id: targetId,
             userId,
             name: data.name,
@@ -360,27 +379,8 @@ async function processActivityTemplateOperation(
             recurrenceDaysOfWeek: data.recurrenceDaysOfWeek || null,
             recurrenceDayOfMonth: data.recurrenceDayOfMonth || null,
             recurrenceMonth: data.recurrenceMonth || null,
-            metadata: parseJsonMetadata(data.metadata)
-          },
-          update: {
-            name: data.name,
-            category: data.category,
-            type: parseActivityType(data.type),
-            priority: parsePriority(data.priority),
-            estimatedDuration: data.estimatedDuration || 0,
-            energyRequired: data.energyRequired || 'MEDIUM',
-            icon: data.icon || 'default',
-            color: data.color || '#3b82f6',
-            isActive: data.isActive !== undefined ? data.isActive : true,
-            notes: data.notes || null,
-            amount: data.amount || null,
-            recurrenceType: parseRecurrenceType(data.recurrenceType),
-            recurrenceInterval: data.recurrenceInterval || null,
-            recurrenceDaysOfWeek: data.recurrenceDaysOfWeek || null,
-            recurrenceDayOfMonth: data.recurrenceDayOfMonth || null,
-            recurrenceMonth: data.recurrenceMonth || null,
             metadata: parseJsonMetadata(data.metadata),
-            deletedAt: null
+            version: 1
           }
         })
 
@@ -390,6 +390,7 @@ async function processActivityTemplateOperation(
           resolvedData: {
             ...data,
             id: template.id,
+            version: 1,
             lastModified: template.updatedAt.getTime()
           },
           timing: {
@@ -402,8 +403,42 @@ async function processActivityTemplateOperation(
       }
 
       case 'update': {
-        await db.activityTemplate.updateMany({
-          where: { id: entityId, userId },
+        const existing = await db.activityTemplate.findFirst({
+          where: { id: entityId, userId, deletedAt: null }
+        })
+
+        if (!existing) {
+          throw new Error('Activity template not found')
+        }
+
+        // Version conflict detection
+        if (data.version !== undefined && data.version !== existing.version) {
+          return {
+            operation,
+            success: false,
+            error: {
+              category: 'conflict',
+              code: 'VERSION_CONFLICT',
+              message: `Server version is ${existing.version}, incoming is ${data.version}`,
+              retryable: false
+            },
+            resolvedData: {
+              ...data,
+              id: existing.id,
+              version: existing.version,
+              lastModified: existing.updatedAt.getTime()
+            },
+            timing: {
+              queuedAt: operation.createdAt,
+              startedAt: Date.now(),
+              completedAt: Date.now(),
+              duration: 0
+            }
+          }
+        }
+
+        const updated = await db.activityTemplate.update({
+          where: { id: existing.id },
           data: {
             name: data.name,
             category: data.category,
@@ -421,7 +456,9 @@ async function processActivityTemplateOperation(
             recurrenceDaysOfWeek: data.recurrenceDaysOfWeek,
             recurrenceDayOfMonth: data.recurrenceDayOfMonth,
             recurrenceMonth: data.recurrenceMonth,
-            metadata: parseJsonMetadata(data.metadata)
+            metadata: parseJsonMetadata(data.metadata),
+            version: existing.version + 1,
+            updatedAt: new Date()
           }
         })
 
@@ -430,8 +467,8 @@ async function processActivityTemplateOperation(
           success: true,
           resolvedData: {
             ...data,
-            lastModified: Date.now(),
-            version: data.version + 1
+            lastModified: updated.updatedAt.getTime(),
+            version: updated.version
           },
           timing: {
             queuedAt: operation.createdAt,
@@ -444,10 +481,14 @@ async function processActivityTemplateOperation(
 
       case 'delete': {
         // Soft delete activity template (safeguard: never hard delete)
-        await db.activityTemplate.updateMany({
-          where: { id: entityId, userId },
-          data: { deletedAt: new Date() }
+        const result = await db.activityTemplate.updateMany({
+          where: { id: entityId, userId, deletedAt: null },
+          data: { deletedAt: new Date(), version: { increment: 1 } }
         })
+
+        if (result.count !== 1) {
+          throw new Error('Activity template not found or already deleted')
+        }
 
         return {
           operation,

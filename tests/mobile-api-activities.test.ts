@@ -31,6 +31,8 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
     email: 'alice@example.com',
     googleId: null,
     passwordHash: aliceHash,
+    isSuspended: false,
+    sessionVersion: 1,
     createdAt: new Date(),
     updatedAt: new Date(),
   }
@@ -38,7 +40,7 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
   let aliceToken: string
 
   beforeEach(() => {
-    aliceToken = signSession(aliceId, 'alice')
+    aliceToken = signSession(aliceId, 'alice', 1)
 
     // Mock db.user.findUnique
     db.user.findUnique = mock((args?: { where?: { username?: string; id?: string } }) => {
@@ -150,6 +152,7 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
         scheduledTime: null,
         sortOrder: 1,
         isActive: true,
+        version: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
@@ -207,6 +210,7 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
+        version: 1,
       }
 
       db.activityLog.findMany = mock(() =>
@@ -281,6 +285,7 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
+        version: 1,
       }
 
       db.activityLog.create = mock(() => Promise.resolve(createdLog)) as unknown as typeof db.activityLog.create
@@ -402,6 +407,7 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
           leaveRecordId: null,
           journalEntryId: null,
           workSessionId: null,
+          version: 1,
           createdAt: new Date(),
           updatedAt: new Date(),
           deletedAt: null,
@@ -471,6 +477,7 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
+        version: 1,
       }
 
       db.activityLog.findUnique = mock(() =>
@@ -517,6 +524,7 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
+        version: 1,
       }
 
       db.activityLog.findUnique = mock(() =>
@@ -560,7 +568,8 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
         workSessionId: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-        deletedAt: new Date(), // Soft-deleted!
+        deletedAt: new Date(),
+        version: 1, // Soft-deleted!
       }
 
       db.activityLog.findUnique = mock(() =>
@@ -605,7 +614,8 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
         workSessionId: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-        deletedAt: new Date(), // Already deleted!
+        deletedAt: new Date(),
+        version: 1, // Already deleted!
       }
 
       db.activityLog.findUnique = mock(() =>
@@ -653,6 +663,7 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
+        version: 1,
       }
 
       db.activityLog.findUnique = mock(() =>
@@ -690,7 +701,8 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
         workSessionId: null,
         createdAt: new Date(),
         updatedAt: new Date(),
-        deletedAt: new Date(), // Soft-deleted
+        deletedAt: new Date(),
+        version: 1, // Soft-deleted
       }
 
       db.activityLog.findUnique = mock(() =>
@@ -734,6 +746,7 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
+        version: 1,
       }
 
       // Step 1: Initial findUnique in route.ts returns null (Request B checked before Request A committed)
@@ -810,6 +823,7 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
+        version: 1,
       }
 
       db.activityLog.findFirst = mock(() => Promise.resolve(null)) as unknown as typeof db.activityLog.findFirst
@@ -875,6 +889,7 @@ describe('Mobile API Foundation & Activities Vertical Slice Suite', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         deletedAt: null,
+        version: 1,
       }
 
       db.activityLog.findFirst = mock(() => Promise.resolve(null)) as unknown as typeof db.activityLog.findFirst

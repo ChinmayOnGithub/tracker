@@ -262,8 +262,13 @@ export async function GET(request: Request) {
       }
     }
 
+    if (user.isSuspended) {
+      logger.warn('OAuthCallback', 'Suspended user attempted login via Google OAuth', { userId: user.id })
+      return NextResponse.redirect(`${siteUrl}/?error=account_suspended`)
+    }
+
     const isMobile = cookieStore.get(COOKIES.AUTH_SOURCE)?.value === 'mobile'
-    const sessionToken = signSession(user.id, user.username)
+    const sessionToken = signSession(user.id, user.username, user.sessionVersion)
 
     cookieStore.set(COOKIES.SESSION_TOKEN, sessionToken, {
       httpOnly: true,

@@ -77,7 +77,7 @@ This document establishes the architecture foundation for a **scalable multi-cli
 | Layer | Current Implementation | Mobile Readiness Assessment |
 | :--- | :--- | :--- |
 | **Database** | PostgreSQL (Prisma ORM in `prisma/schema.prisma`) | **100% Ready**: Comprehensive schema with `userId` scoping and `deletedAt` soft deletion. |
-| **Authentication** | Username + 4-digit PIN (PBKDF2 salted) + Google OAuth, signed HMAC-SHA256 session tokens (`lib/session.ts`) | **Ready**: Session tokens are platform-neutral and already accepted in Bearer headers. Mobile needs an HTTP login endpoint. |
+| **Authentication** | Username + modern scrypt password + Google OAuth, signed HMAC-SHA256 session tokens with `sessionVersion` and account status checks (`lib/session.ts`, `SessionService.ts`). Legacy PIN is retained solely as a migration path. | **Ready**: Session tokens are platform-neutral and accepted in Bearer headers and cookies. |
 | **Authorization** | `lib/auth-guards.ts` (`requireAuth`, `requireOwnership`, `requireCapability`) | **Ready**: Ownership guards query Prisma dynamically by `userId`. |
 | **Service Layer** | `lib/services/` (`ActivityService`, `TimelineService`, `DefaultActivitiesService`, etc.) | **Ready**: Business logic is separated from web UI and Server Actions. |
 | **Validation** | Zod schemas in `lib/validations/` (`template.ts`, `journal.ts`, etc.) | **Ready**: Input validation schemas exist and can be shared between actions and route handlers. |

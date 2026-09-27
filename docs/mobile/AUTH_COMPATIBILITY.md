@@ -8,10 +8,9 @@
 ## 1. Current Authentication Architecture
 
 ### 1.1 Credential & Identity Provider
-- **Primary Mechanism**: Unique lowercase `username` + 4-digit numeric `pin`.
-- **Password Hashing**: PBKDF2 with SHA-512, 1000 iterations, 64-byte key length.
-- **Salt Policy**: Per-user dynamic salt derived from `AUTH_SALT` combined with the user's lowercase username (`${SALT}-${username.toLowerCase()}`).
+- **Primary Mechanism**: Unique lowercase `username` + modern password (scrypt hashed with N=16384, r=8, p=1, keylen=64).
 - **Secondary Identity**: Optional Google OAuth linking to `googleId` and `email` on the `User` model.
+- **Legacy Migration Path**: Legacy accounts originally provisioned with a 4-digit PIN can still sign in, but are immediately prompted to migrate to a standard scrypt password via `migratePinToPassword()`.
 
 ### 1.2 Session Token Generation & Verification
 Tracker utilizes a custom, lightweight, cryptographically secure signed session mechanism implemented in `lib/session.ts`:
@@ -21,12 +20,13 @@ Tracker utilizes a custom, lightweight, cryptographically secure signed session 
     userId: string
     username: string
     exp: number // 30-day epoch timestamp
+    sessionVersion: number // Server-incremented integer for global token revocation
   }
   ```
 - **Serialization**: `base64url(JSON.stringify(payload))`
-- **Signature**: HMAC-SHA256 using `SESSION_SECRET` over the base64url payload.
+- **Signature**: HMAC-SHA256 using `AUTH_SECRET` over the base64url payload.
 - **Token Format**: `${payloadStr}.${signature}`
-- **Constant-Time Verification**: `verifySession(token)` compares signature hashes using `crypto.timingSafeEqual` to prevent timing attacks, and checks if `Date.now() > payload.exp`.
+- **Constant-Time Verification**: `verifySession(token)` compares signature hashes using `crypto.timingSafeEqual` to prevent timing attacks, checks expiration, and validates against `User.sessionVersion` and `User.isSuspended` in `SessionService.resolveUserFromToken()`.
 
 ### 1.3 Web Transport
 On the web, `app/actions/auth.ts` sets the token in an `httpOnly` cookie:

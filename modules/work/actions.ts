@@ -4,6 +4,7 @@ import { requireCapability } from '@/lib/auth-guards';
 import { WorkSessionService } from './services/WorkSessionService';
 import { revalidatePath } from 'next/cache';
 import { WorkSession } from './types';
+import { toSafeActionError } from '@/lib/errors';
 
 export async function createWorkSession(session: Partial<WorkSession>) {
   try {
@@ -36,7 +37,7 @@ export async function createWorkSession(session: Partial<WorkSession>) {
     return { success: true, data: record };
   } catch (error) {
     console.error('Failed to create work session action:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    return { success: false, error: toSafeActionError(error).message };
   }
 }
 
@@ -51,7 +52,7 @@ export async function updateWorkSession(id: string, session: Partial<WorkSession
     return { success: true, data: record };
   } catch (error) {
     console.error('Failed to update work session action:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    return { success: false, error: toSafeActionError(error).message };
   }
 }
 
@@ -63,7 +64,7 @@ export async function pauseWorkSession(id: string) {
     return { success: true, data: record };
   } catch (error) {
     console.error('Failed to pause work session action:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    return { success: false, error: toSafeActionError(error).message };
   }
 }
 
@@ -75,7 +76,7 @@ export async function resumeWorkSession(id: string) {
     return { success: true, data: record };
   } catch (error) {
     console.error('Failed to resume work session action:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    return { success: false, error: toSafeActionError(error).message };
   }
 }
 
@@ -87,7 +88,7 @@ export async function finishWorkSession(id: string) {
     return { success: true, data: record };
   } catch (error) {
     console.error('Failed to finish work session action:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    return { success: false, error: toSafeActionError(error).message };
   }
 }
 
@@ -99,6 +100,6 @@ export async function deleteWorkSession(id: string) {
     return { success: true };
   } catch (error) {
     console.error('Failed to delete work session action:', error);
-    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    return { success: false, error: toSafeActionError(error).message };
   }
 }

@@ -95,14 +95,15 @@ Errors consistently return a standard envelope with no stack traces, SQL errors,
 ### 4.1 Authentication
 
 #### `POST /api/mobile/v1/auth/login`
-Authenticates a user via username and 4-digit PIN, issuing a signed session token.
+Authenticates a user via username and password (modern scrypt hashing), issuing a signed session token.
 - **Request Body**:
   ```json
   {
     "username": "alice",
-    "pin": "1234"
+    "password": "SecurePassword123!"
   }
   ```
+  *(Optional legacy migration: `"pin": "1234"` is accepted solely for existing legacy accounts awaiting password upgrade)*
 - **Response `200 OK`**:
   ```json
   {

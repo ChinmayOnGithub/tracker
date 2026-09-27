@@ -17,16 +17,24 @@ interface SessionPayload {
   userId: string
   username: string
   exp: number
+  sessionVersion?: number
+}
+
+export interface VerifiedSession {
+  userId: string
+  username: string
+  sessionVersion: number
 }
 
 /**
  * Creates a signed session token.
  */
-export function signSession(userId: string, username: string): string {
+export function signSession(userId: string, username: string, sessionVersion: number = 0): string {
   const payload: SessionPayload = {
     userId,
     username,
-    exp: Date.now() + SESSION_EXPIRY
+    exp: Date.now() + SESSION_EXPIRY,
+    sessionVersion
   }
   
   const payloadStr = Buffer.from(JSON.stringify(payload)).toString('base64url')
@@ -41,7 +49,7 @@ export function signSession(userId: string, username: string): string {
 /**
  * Verifies a session token. Returns null if expired, tampered, or missing.
  */
-export function verifySession(token: string | undefined | null): { userId: string; username: string } | null {
+export function verifySession(token: string | undefined | null): VerifiedSession | null {
   if (!token) return null
   
   const parts = token.split('.')
@@ -69,7 +77,11 @@ export function verifySession(token: string | undefined | null): { userId: strin
       return null // Expired
     }
     
-    return { userId: payload.userId, username: payload.username }
+    return {
+      userId: payload.userId,
+      username: payload.username,
+      sessionVersion: payload.sessionVersion ?? 0
+    }
   } catch {
     return null
   }

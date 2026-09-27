@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
 import { requireAuth, requireOwnership } from '@/lib/auth-guards'
 import { todayYMD } from '@/lib/dateUtils'
+import { toSafeActionError } from '@/lib/errors'
 
 export interface NoteItem {
   id: string
@@ -14,6 +15,7 @@ export interface NoteItem {
   createdAt: Date
   updatedAt: Date
   deletedAt?: Date | null
+  version?: number
 }
 
 export async function createNote(
@@ -46,13 +48,14 @@ export async function createNote(
       update: {
         content: content ?? '',
         title: title !== undefined ? (title ? title.trim() : null) : undefined,
-        deletedAt: null,
+        version: { increment: 1 },
       },
       create: {
         date: finalDate,
         content: content ?? '',
         title: title ? title.trim() : null,
         userId: user.id,
+        version: 1,
       },
     })
 
@@ -63,8 +66,8 @@ export async function createNote(
     return { success: true, note }
   } catch (error) {
     console.error('Failed to create note:', error)
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return { success: false, error: message }
+    const safe = toSafeActionError(error)
+    return { success: false, error: safe.message, code: safe.code }
   }
 }
 
@@ -91,11 +94,12 @@ export async function updateNote(
       data: {
         content: content ?? '',
         title: title !== undefined ? (title ? title.trim() : null) : undefined,
+        version: { increment: 1 }
       },
     })
 
     if (count === 0) {
-      return { success: false, error: 'Note not found', code: 'NOT_FOUND' }
+      return { success: false, error: 'Note not found or deleted', code: 'NOT_FOUND' }
     }
 
     const note = await db.note.findUnique({ where: { id } })
@@ -107,8 +111,38 @@ export async function updateNote(
     return { success: true, note }
   } catch (error) {
     console.error('Failed to update note:', error)
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return { success: false, error: message }
+    const safe = toSafeActionError(error)
+    return { success: false, error: safe.message, code: safe.code }
+  }
+}
+
+export async function restoreNote(id: string) {
+  try {
+    const { user } = await requireOwnership('note', id)
+
+    const { count } = await db.note.updateMany({
+      where: { id, userId: user.id, deletedAt: { not: null } },
+      data: {
+        deletedAt: null,
+        version: { increment: 1 }
+      }
+    })
+
+    if (count === 0) {
+      return { success: false, error: 'Note not found or not deleted', code: 'NOT_FOUND' }
+    }
+
+    const note = await db.note.findUnique({ where: { id } })
+
+    try {
+      revalidatePath('/notes')
+      revalidatePath('/')
+    } catch {}
+    return { success: true, note }
+  } catch (error) {
+    console.error('Failed to restore note:', error)
+    const safe = toSafeActionError(error)
+    return { success: false, error: safe.message, code: safe.code }
   }
 }
 
@@ -124,8 +158,8 @@ export async function listNotes() {
     return { success: true, notes }
   } catch (error) {
     console.error('Failed to list notes:', error)
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return { success: false, error: message, notes: [] }
+    const safe = toSafeActionError(error)
+    return { success: false, error: safe.message, code: safe.code, notes: [] }
   }
 }
 
@@ -135,7 +169,10 @@ export async function deleteNote(id: string) {
 
     const { count } = await db.note.updateMany({
       where: { id, userId: user.id, deletedAt: null },
-      data: { deletedAt: new Date() }
+      data: {
+        deletedAt: new Date(),
+        version: { increment: 1 }
+      }
     })
 
     if (count === 0) {
@@ -149,7 +186,7 @@ export async function deleteNote(id: string) {
     return { success: true }
   } catch (error) {
     console.error('Failed to delete note:', error)
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return { success: false, error: message }
+    const safe = toSafeActionError(error)
+    return { success: false, error: safe.message, code: safe.code }
   }
 }

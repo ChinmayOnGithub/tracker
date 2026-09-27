@@ -15,8 +15,10 @@ import crypto from 'crypto'
  */
 export async function GET(request: Request) {
   try {
+    const headerSecret = request.headers.get('x-tracker-sync-secret')
     const { searchParams } = new URL(request.url)
-    const secret = searchParams.get('secret')
+    const querySecret = searchParams.get('secret')
+    const secret = headerSecret || querySecret
     const configSecret = env.SYNC_SECRET
 
     // Fail-closed: if SYNC_SECRET is not configured, reject all requests
@@ -95,34 +97,59 @@ export async function GET(request: Request) {
   }
 }
 
-// In-memory sync lock map to prevent concurrent duplicate full/incremental syncs for the same user
-const activeSyncPromises = new Map<string, Promise<unknown>>()
+/**
+ * Executes user synchronization protected by a durable database lease lock.
+ * Prevents race conditions and duplicate concurrent work across multiple server instances.
+ */
+async function executeLockedUserSync(syncStateId: string, userId: string): Promise<boolean> {
+  const now = new Date()
+  const lockUntil = new Date(now.getTime() + 60_000) // 60-second lease
+  const lockToken = crypto.randomUUID()
 
-function scheduleUserSync(userId: string) {
-  if (activeSyncPromises.has(userId)) {
-    logger.info('BackgroundSyncApi', 'Sync already in-progress for user, reusing active run', { userId })
-    return activeSyncPromises.get(userId)
+  const lockResult = await db.calendarSyncState.updateMany({
+    where: {
+      id: syncStateId,
+      OR: [
+        { syncLockUntil: null },
+        { syncLockUntil: { lt: now } }
+      ]
+    },
+    data: {
+      syncLockUntil: lockUntil,
+      syncLockToken: lockToken
+    }
+  })
+
+  if (lockResult.count !== 1) {
+    // Check if the record actually exists in the database with an active lease
+    const currentRecord = await db.calendarSyncState.findFirst({
+      where: { id: syncStateId }
+    })
+    if (currentRecord && currentRecord.syncLockUntil && currentRecord.syncLockUntil > now) {
+      logger.info('BackgroundSyncApi', 'Sync lease already held by another worker instance, skipping duplicate', { userId })
+      return false
+    }
   }
 
-  const syncPromise = (async () => {
-    try {
-      const syncResult = await CalendarService.sync(userId)
-      logger.info('BackgroundSyncApi', 'Webhook background sync completed successfully', {
-        userId,
-        result: syncResult,
-      })
-    } catch (err) {
-      logger.error('BackgroundSyncApi', 'Webhook background sync execution failed', {
-        userId,
-        error: err instanceof Error ? err.message : String(err),
-      })
-    } finally {
-      activeSyncPromises.delete(userId)
-    }
-  })()
-
-  activeSyncPromises.set(userId, syncPromise)
-  return syncPromise
+  try {
+    await CalendarService.sync(userId)
+    logger.info('BackgroundSyncApi', 'Webhook background sync completed successfully', { userId })
+    return true
+  } catch (err) {
+    logger.error('BackgroundSyncApi', 'Webhook background sync execution failed', {
+      userId,
+      error: err instanceof Error ? err.message : String(err)
+    })
+    return false
+  } finally {
+    await db.calendarSyncState.updateMany({
+      where: { id: syncStateId, syncLockToken: lockToken },
+      data: {
+        syncLockUntil: null,
+        syncLockToken: null
+      }
+    }).catch(cleanupErr => console.warn('[BackgroundSyncApi] Failed to release sync lease:', cleanupErr))
+  }
 }
 
 /**
@@ -136,20 +163,25 @@ export async function POST(request: Request) {
     const resourceId = headers.get('x-goog-resource-id')
     const resourceState = headers.get('x-goog-resource-state')
 
-    logger.info('BackgroundSyncApi', 'Received Google Calendar webhook notification', {
-      channelId,
-      resourceId,
-      resourceState,
-    })
+    const headerSecret = request.headers.get('x-tracker-sync-secret')
+    const { searchParams } = new URL(request.url)
+    const querySecret = searchParams.get('secret')
+    const secret = headerSecret || querySecret
+
+    if (secret) {
+      const configSecret = env.SYNC_SECRET || process.env.CALENDAR_WEBHOOK_SECRET
+      if (configSecret) {
+        const secretHash = crypto.createHash('sha256').update(secret).digest()
+        const configSecretHash = crypto.createHash('sha256').update(configSecret).digest()
+        if (!crypto.timingSafeEqual(secretHash, configSecretHash)) {
+          logger.warn('BackgroundSyncApi', 'Unauthorized calendar webhook access attempt')
+          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+      }
+    }
 
     if (!channelId || !resourceId) {
       return NextResponse.json({ error: 'Missing required webhook identity headers' }, { status: 400 })
-    }
-
-    // Ignore sync channel establishment confirmation
-    if (resourceState === 'sync') {
-      logger.info('BackgroundSyncApi', 'Sync channel confirmed', { channelId })
-      return new Response(null, { status: 200 })
     }
 
     // Direct query validation: Match both channelId AND resourceId directly at query time
@@ -161,7 +193,6 @@ export async function POST(request: Request) {
     })
 
     if (!syncState) {
-      // Channel or resource unrecognized or mismatched
       logger.warn('BackgroundSyncApi', 'No sync state matches channel/resource identity pair', {
         channelId,
         resourceId,
@@ -169,13 +200,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Channel or resource not recognized' }, { status: 404 })
     }
 
-    // Acknowledge webhook quickly and execute sync reliably
-    scheduleUserSync(syncState.userId)
+    // Verify provider matches
+    if (syncState.provider !== 'google') {
+      return NextResponse.json({ error: 'Mismatched provider identity' }, { status: 400 })
+    }
 
-    return NextResponse.json({ success: true, acknowledged: true })
+    // Explicit state handling
+    switch (resourceState) {
+      case 'sync':
+        logger.info('BackgroundSyncApi', 'Sync channel confirmed', { channelId })
+        return new Response(null, { status: 200 })
+
+      case 'exists': {
+        // Schedule durable locked sync
+        const synced = await executeLockedUserSync(syncState.id, syncState.userId)
+        return NextResponse.json({ success: true, acknowledged: true, synced })
+      }
+
+      case 'not_exists': {
+        logger.warn('BackgroundSyncApi', 'Calendar resource deleted externally, marking channel invalid', { channelId, resourceId })
+        await db.calendarSyncState.update({
+          where: { id: syncState.id },
+          data: {
+            channelId: null,
+            resourceId: null,
+            expiration: null
+          }
+        })
+        return NextResponse.json({ success: true, acknowledged: true, channelInvalidated: true })
+      }
+
+      default:
+        logger.info('BackgroundSyncApi', `Ignored webhook notification for unhandled state: ${resourceState}`)
+        return NextResponse.json({ success: true, acknowledged: true, ignored: true })
+    }
   } catch (error) {
-    const errorMsg = error instanceof Error ? `${error.message}\n${error.stack}` : String(error)
+    const errorMsg = error instanceof Error ? error.message : String(error)
     logger.error('BackgroundSyncApi', `Webhook sync trigger failed: ${errorMsg}`)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
+

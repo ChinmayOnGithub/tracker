@@ -92,6 +92,10 @@ export class AuthService {
       }
     }
 
+    if (user.isSuspended) {
+      return { success: false, error: 'This account has been suspended.' }
+    }
+
     if (!isMatch) {
       CredentialService.recordFailedAttempt(username)
       return { success: false, error: 'Incorrect username or password.' }
@@ -100,7 +104,7 @@ export class AuthService {
     // Successful login clears rate limit counter
     CredentialService.clearRateLimit(username)
 
-    const token = SessionService.signSession(user.id, user.username)
+    const token = SessionService.signSession(user.id, user.username, user.sessionVersion)
     const isOwner = AuthorizationService.isOwner(user)
 
     return {
@@ -166,7 +170,7 @@ export class AuthService {
 
     await OnboardingService.initialize(newUser.id)
 
-    const token = SessionService.signSession(newUser.id, newUser.username)
+    const token = SessionService.signSession(newUser.id, newUser.username, newUser.sessionVersion)
 
     return {
       success: true,
@@ -198,10 +202,25 @@ export class AuthService {
     const passwordHash = await CredentialService.hashPassword(newPassword, user.username)
     await db.user.update({
       where: { id: user.id },
-      data: { passwordHash }
+      data: {
+        passwordHash,
+        sessionVersion: { increment: 1 }
+      }
     })
 
     return { success: true }
+  }
+
+  /**
+   * Revokes all active sessions for a user by incrementing their sessionVersion.
+   */
+  public static async revokeAllSessions(userId: string): Promise<void> {
+    await db.user.update({
+      where: { id: userId },
+      data: {
+        sessionVersion: { increment: 1 }
+      }
+    })
   }
 
   /**

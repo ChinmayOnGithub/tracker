@@ -17,7 +17,12 @@ export async function POST(req: NextRequest) {
     const signature = req.headers.get('x-razorpay-signature')
     if (!signature) {
       return NextResponse.json(
-        { error: 'Missing required x-razorpay-signature header' },
+        {
+          error: {
+            code: 'INVALID_SIGNATURE',
+            message: 'Missing required x-razorpay-signature header'
+          }
+        },
         { status: 400 }
       )
     }
@@ -25,12 +30,29 @@ export async function POST(req: NextRequest) {
     const rawBody = await req.text()
     if (!rawBody) {
       return NextResponse.json(
-        { error: 'Empty webhook payload' },
+        {
+          error: {
+            code: 'INVALID_PAYLOAD',
+            message: 'Empty webhook payload'
+          }
+        },
         { status: 400 }
       )
     }
 
     const result = await BillingService.processWebhook('RAZORPAY', rawBody, signature)
+
+    if (result.status >= 400) {
+      return NextResponse.json(
+        {
+          error: {
+            code: 'WEBHOOK_PROCESSING_FAILED',
+            message: 'Webhook could not be processed.'
+          }
+        },
+        { status: result.status }
+      )
+    }
 
     return NextResponse.json(
       { message: result.message },
@@ -39,7 +61,12 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('Unhandled Razorpay webhook error:', error)
     return NextResponse.json(
-      { error: 'Internal webhook processing error' },
+      {
+        error: {
+          code: 'WEBHOOK_PROCESSING_FAILED',
+          message: 'Webhook could not be processed.'
+        }
+      },
       { status: 500 }
     )
   }

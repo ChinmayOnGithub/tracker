@@ -87,6 +87,8 @@ model User {
   email        String?  @unique
   googleId     String?  @unique
   passwordHash String?
+  isSuspended  Boolean  @default(false)
+  sessionVersion Int    @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -114,6 +116,8 @@ model User {
   subscriptions     Subscription[]
   payments          Payment[]
   usageCounters     UsageCounter[]
+  syncOperations    SyncOperation[]
+  syncCursor        SyncCursor?
 }
 
 model GoogleCredential {
@@ -381,6 +385,7 @@ model ActivityTemplate {
   updatedAt            DateTime         @updatedAt
   deletedAt            DateTime?
   effectiveFrom        DateTime         @default(now())
+  version              Int              @default(1)
 
   @@index([userId])
 }
@@ -409,6 +414,7 @@ model ActivityLog {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+  version   Int       @default(1)
 
   @@index([activityId])
   @@index([logDate])
@@ -425,6 +431,7 @@ model Note {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+  version   Int       @default(1)
 
   @@unique([userId, date])
   @@index([date])
@@ -543,6 +550,8 @@ model CalendarSyncState {
   channelId         String?           // For webhook watch channels
   resourceId        String?
   expiration        DateTime?
+  syncLockUntil     DateTime?
+  syncLockToken     String?
   lastSyncAt        DateTime          @default(now())
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
@@ -687,5 +696,42 @@ model UsageCounter {
 
   @@unique([userId, key, period])
   @@index([userId])
+}
+
+// ----------------------------------------------------
+// Sync Infrastructure & Distributed Rate Limiting
+// ----------------------------------------------------
+
+model SyncOperation {
+  id              String    @id @default(cuid())
+  userId          String
+  clientRequestId String
+  operationType   String
+  status          String
+  responseJson    Json?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clientRequestId])
+  @@index([userId, createdAt])
+}
+
+model SyncCursor {
+  userId    String   @id
+  revision  BigInt   @default(0)
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RateLimit {
+  key       String   @id
+  count     Int      @default(0)
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
 }
 

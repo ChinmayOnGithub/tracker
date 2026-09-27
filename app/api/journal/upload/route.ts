@@ -55,6 +55,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const { rateLimiter } = await import('@/lib/services/RateLimiter')
+    const limit = await rateLimiter.check(`upload:journal:${user.id}`, 20, 60)
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: `Upload rate limit exceeded. Retry in ${limit.retryAfterSeconds} seconds.` },
+        { status: 429 }
+      )
+    }
+
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     if (!file) {

@@ -998,55 +998,86 @@ export class BillingService {
           where: { providerPaymentId: norm.providerPaymentId }
         })
         if (!existingPayment || existingPayment.status !== 'SUCCESS') {
-          const upserted = await db.payment.upsert({
-            where: { providerPaymentId: norm.providerPaymentId },
-            create: {
-              userId: existingPayment?.userId || 'system',
-              subscriptionId: existingPayment?.subscriptionId,
-              provider: provider.name,
-              providerPaymentId: norm.providerPaymentId,
-              amount: norm.amount || 0,
-              currency: norm.currency || 'INR',
-              status: 'SUCCESS',
-              method: norm.method,
-              paidAt: norm.occurredAt || new Date()
-            },
-            update: {
-              status: 'SUCCESS',
-              amount: norm.amount ?? undefined,
-              paidAt: norm.occurredAt || new Date(),
-              method: norm.method || undefined
-            }
-          })
+          // Resolve userId from existing payment, or from subscription if linked, or from customer
+          let resolvedUserId: string | null = (existingPayment?.userId && existingPayment.userId !== 'system') ? existingPayment.userId : null
+          if (!resolvedUserId && norm.providerSubscriptionId) {
+            const sub = (await db.subscription.findUnique?.({
+              where: { providerSubscriptionId: norm.providerSubscriptionId }
+            })) || (await db.subscription.findFirst({
+              where: { providerSubscriptionId: norm.providerSubscriptionId, deletedAt: null }
+            }))
+            if (sub) resolvedUserId = sub.userId
+          }
+          if (!resolvedUserId && norm.providerCustomerId) {
+            const cust = await db.billingCustomer.findFirst({
+              where: { providerCustomerId: norm.providerCustomerId, deletedAt: null }
+            })
+            if (cust) resolvedUserId = cust.userId
+          }
 
-          await AuditService.log({
-            userId: upserted.userId,
-            entityType: 'Payment',
-            entityId: norm.providerPaymentId,
-            action: 'PAYMENT_SUCCESS',
-            performedBy: 'WEBHOOK',
-            newData: {
-              amount: norm.amount,
-              status: 'SUCCESS'
-            }
-          })
+          if (!resolvedUserId) {
+            console.warn(`[BillingService] Unmapped user for payment ${norm.providerPaymentId}. Storing for reconciliation without mutating user tables.`)
+          } else {
+            const upserted = await db.payment.upsert({
+              where: { providerPaymentId: norm.providerPaymentId },
+              create: {
+                userId: resolvedUserId,
+                subscriptionId: existingPayment?.subscriptionId,
+                provider: provider.name,
+                providerPaymentId: norm.providerPaymentId,
+                amount: norm.amount || 0,
+                currency: norm.currency || 'INR',
+                status: 'SUCCESS',
+                method: norm.method,
+                paidAt: norm.occurredAt || new Date()
+              },
+              update: {
+                userId: resolvedUserId,
+                status: 'SUCCESS',
+                amount: norm.amount ?? undefined,
+                paidAt: norm.occurredAt || new Date(),
+                method: norm.method || undefined
+              }
+            })
+
+            await AuditService.log({
+              userId: upserted.userId,
+              entityType: 'Payment',
+              entityId: norm.providerPaymentId,
+              action: 'PAYMENT_SUCCESS',
+              performedBy: 'WEBHOOK',
+              newData: {
+                amount: norm.amount,
+                status: 'SUCCESS'
+              }
+            })
+          }
         }
       }
 
       // Handle standalone payment failure
       if (norm.eventType === 'payment.failed' && norm.providerPaymentId) {
-        let userId = 'system'
+        let userId: string | null = null
         if (norm.providerSubscriptionId) {
-          const sub = await db.subscription.findUnique({
+          const sub = (await db.subscription.findUnique?.({
             where: { providerSubscriptionId: norm.providerSubscriptionId }
-          })
+          })) || (await db.subscription.findFirst({
+            where: { providerSubscriptionId: norm.providerSubscriptionId, deletedAt: null }
+          }))
           if (sub) userId = sub.userId
         }
+        if (!userId && norm.providerCustomerId) {
+          const cust = await db.billingCustomer.findFirst({
+            where: { providerCustomerId: norm.providerCustomerId, deletedAt: null }
+          })
+          if (cust) userId = cust.userId
+        }
 
+        const effectiveUserId = userId || 'system'
         await db.payment.upsert({
           where: { providerPaymentId: norm.providerPaymentId },
           create: {
-            userId,
+            userId: effectiveUserId,
             provider: provider.name,
             providerPaymentId: norm.providerPaymentId,
             amount: norm.amount || 0,
@@ -1061,7 +1092,7 @@ export class BillingService {
         })
 
         await AuditService.log({
-          userId,
+          userId: effectiveUserId,
           entityType: 'Payment',
           entityId: norm.providerPaymentId,
           action: 'PAYMENT_FAILED',
@@ -1089,8 +1120,56 @@ export class BillingService {
           error: errorMsg
         }
       })
-      console.error('Webhook processing failure:', err)
-      return { status: 500, message: `Internal processing error: ${errorMsg}` }
+      console.error(`[BillingWebhook] Failed processing event ${norm.eventId} for provider ${provider.name}:`, err)
+      return { status: 500, message: 'Webhook could not be processed.' }
     }
+  }
+
+  /**
+   * Authoritatively reconciles subscription state directly from provider.
+   * Safe to run multiple times, heals discrepancies between provider and local DB.
+   */
+  static async reconcileSubscription(
+    providerSubscriptionId: string,
+    providerOverride?: IBillingProvider
+  ): Promise<{
+    subscription: Subscription
+    payment?: Payment | null
+    status: string
+    isPro: boolean
+  }> {
+    const provider = providerOverride || getBillingProvider()
+
+    // 1. Fetch provider state
+    const providerSub = await provider.retrieveSubscription(providerSubscriptionId)
+    if (!providerSub) {
+      throw new SubscriptionNotFoundError(`Provider subscription not found: ${providerSubscriptionId}`)
+    }
+
+    // 2. Find local subscription and map to user
+    let sub = await db.subscription.findFirst({
+      where: { providerSubscriptionId, deletedAt: null },
+      include: { billingCustomer: true }
+    })
+
+    if (!sub && db.subscription.findUnique) {
+      sub = await db.subscription.findUnique({
+        where: { providerSubscriptionId },
+        include: { billingCustomer: true }
+      })
+    }
+
+    if (!sub) {
+      throw new SubscriptionNotFoundError(`No local subscription found for provider ID ${providerSubscriptionId}`)
+    }
+
+    // 3, 4, 5, 6, 7 — Calculate local state, update DB, recalculate entitlements, write audit log
+    return await this.reconcileSubscriptionState(
+      sub.userId,
+      providerSubscriptionId,
+      undefined,
+      provider,
+      undefined
+    )
   }
 }

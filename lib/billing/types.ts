@@ -165,6 +165,8 @@ export interface NormalizedWebhookEvent {
   occurredAt?: Date
   providerSubscriptionId?: string
   providerPaymentId?: string
+  /** Provider-side customer ID (e.g. Razorpay customer_id on a payment entity) */
+  providerCustomerId?: string
   status?: string
   currentPeriodStart?: Date | null
   currentPeriodEnd?: Date | null

@@ -196,10 +196,17 @@ export class AuthorizationService {
 
   /**
    * Server-side guard requiring authentication.
+   * Can accept an optional Request instance to resolve bearer or cookie tokens directly in Route Handlers.
    */
-  public static async requireAuth(): Promise<AuthenticatedUser> {
+  public static async requireAuth(request?: Request): Promise<AuthenticatedUser> {
     const { SessionService } = await import('./SessionService')
-    const user = await SessionService.getSessionUser()
+    let user: AuthenticatedUser | null = null
+    if (request) {
+      user = await SessionService.resolveAuthFromRequest(request)
+    }
+    if (!user) {
+      user = await SessionService.getSessionUser()
+    }
     if (!user) {
       throw new Error('Authentication required')
     }

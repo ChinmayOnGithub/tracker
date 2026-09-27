@@ -15,19 +15,17 @@ export function getCanonicalOrigin(request?: Request): string {
   const isProduction = process.env.NODE_ENV === 'production'
   const configured = process.env.NEXT_PUBLIC_SITE_URL || env.NEXT_PUBLIC_SITE_URL
 
-  // 1. In production, configured NEXT_PUBLIC_SITE_URL is the authoritative source
+  // 1. In production, configured NEXT_PUBLIC_SITE_URL is strictly authoritative when configured
   // to prevent host header injection or spoofed OAuth callback targets.
   if (isProduction && configured && !configured.includes('localhost')) {
-    try {
-      const url = new URL(configured)
-      url.protocol = 'https:'
-      return url.origin
-    } catch {
-      // Fall through if misconfigured
+    const url = new URL(configured)
+    if (url.protocol !== 'https:') {
+      throw new Error('NEXT_PUBLIC_SITE_URL must use HTTPS in production.')
     }
+    return url.origin
   }
 
-  // 2. In development or test, evaluate request origin or forwarded headers
+  // 2. Evaluate request origin or forwarded headers (enforcing https in production)
   if (request) {
     const forwardedHost = request.headers.get('x-forwarded-host')
     const forwardedProto =
@@ -52,7 +50,7 @@ export function getCanonicalOrigin(request?: Request): string {
   }
 
   // 3. Fallback to configured URL in dev/test if available
-  if (configured) {
+  if (configured && !configured.includes('localhost')) {
     try {
       const url = new URL(configured)
       return url.origin
@@ -61,5 +59,9 @@ export function getCanonicalOrigin(request?: Request): string {
     }
   }
 
-  return isProduction ? 'https://tracker.vercel.app' : 'http://localhost:3000'
+  if (isProduction) {
+    throw new Error('NEXT_PUBLIC_SITE_URL is required in production.')
+  }
+
+  return 'http://localhost:3000'
 }

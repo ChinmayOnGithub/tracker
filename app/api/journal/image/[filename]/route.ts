@@ -45,12 +45,15 @@ export async function GET(
       }
     })
 
-    // If attachment record doesn't exist, verify user isn't accessing other user's files
+    if (!attachment) {
+      return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+    }
+
     let fileBuffer: Buffer
     try {
       fileBuffer = await StorageService.readJournalImage(user.id, safeFilename)
     } catch {
-      return NextResponse.json({ error: 'Image not found' }, { status: 404 })
+      return NextResponse.json({ error: 'Image not found in storage' }, { status: 404 })
     }
 
     const ext = path.extname(safeFilename).toLowerCase()

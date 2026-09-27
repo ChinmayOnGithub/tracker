@@ -179,6 +179,24 @@ export async function verifyPinAction(usernameInput: string, secret: string): Pr
   onboardingRequired?: boolean
 }> {
   try {
+    const { rateLimiter, getClientIp } = await import('@/lib/services/RateLimiter')
+    const { headers } = await import('next/headers')
+    const reqHeaders = await headers()
+    const clientIp = getClientIp(reqHeaders)
+    const normalizedIdentifier = usernameInput.trim().toLowerCase()
+
+    // 1. IP-level rate limiting
+    const ipLimit = await rateLimiter.check(`login:ip:${clientIp}`, 30, 60)
+    if (!ipLimit.allowed) {
+      return { success: false, error: `Too many login attempts. Please retry in ${ipLimit.retryAfterSeconds} seconds.` }
+    }
+
+    // 2. Account-level rate limiting
+    const accountLimit = await rateLimiter.check(`login:account:${normalizedIdentifier}`, 5, 60)
+    if (!accountLimit.allowed) {
+      return { success: false, error: `Too many failed attempts for this account. Please retry in ${accountLimit.retryAfterSeconds} seconds.` }
+    }
+
     const security = await getLoginSecuritySettingsAction()
     if (security.humanVerificationEnabled) {
       const { cookies } = await import('next/headers')
@@ -189,6 +207,9 @@ export async function verifyPinAction(usernameInput: string, secret: string): Pr
     if (!result.success) {
       return { success: false, error: result.error }
     }
+
+    // Clear failed account counter on successful login
+    await rateLimiter.reset(`login:account:${normalizedIdentifier}`)
 
     await SessionService.setSessionCookie(result.token)
     ;(await cookies()).delete(HUMAN_VERIFIED_COOKIE)

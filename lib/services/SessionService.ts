@@ -18,13 +18,21 @@ export class SessionService {
     const session = verifySession(token)
     if (!session) return null
 
-    // Look up user in database to obtain associated email and verify owner status
+    // Look up user in database to verify existence, suspension status, and sessionVersion
     const user = await db.user.findUnique({
       where: { id: session.userId },
-      select: { id: true, username: true, email: true }
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        isSuspended: true,
+        sessionVersion: true
+      }
     })
 
     if (!user) return null
+    if (user.isSuspended) return null
+    if ((session.sessionVersion ?? 0) !== (user.sessionVersion ?? 0)) return null
 
     const isOwner = AuthorizationService.isOwner(user)
     return {
@@ -119,6 +127,21 @@ export class SessionService {
     const user = await this.getSessionUser()
     if (!user) {
       throw new Error('Authentication required')
+    }
+    return user
+  }
+
+  /**
+   * Unified authoritative authentication boundary.
+   * Resolves authentication from request (Bearer/cookie) or session cookie,
+   * verifying user exists, account is not suspended, and session is not revoked.
+   */
+  public static async requireAuthenticatedUser(request?: Request): Promise<AuthenticatedUser> {
+    const user = request
+      ? await this.resolveAuthFromRequest(request)
+      : await this.getSessionUser()
+    if (!user) {
+      throw new Error('Authentication required: user missing, suspended, or session revoked')
     }
     return user
   }

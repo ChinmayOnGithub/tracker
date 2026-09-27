@@ -115,6 +115,15 @@ export class AdminService {
    * Checks if an account is suspended.
    */
   static async isUserSuspended(userId: string): Promise<boolean> {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { isSuspended: true }
+    })
+
+    if (user) {
+      return Boolean(user.isSuspended)
+    }
+
     const setting = await db.userSetting.findUnique({
       where: {
         userId_module: {
@@ -134,6 +143,7 @@ export class AdminService {
 
   /**
    * Suspends a user account, preventing subsequent authenticated actions.
+   * Immediately revokes all active sessions by incrementing sessionVersion.
    */
   static async suspendUser(
     adminActor: string,
@@ -150,6 +160,19 @@ export class AdminService {
       suspended: true,
       suspendedAt: now.toISOString(),
       reason
+    }
+
+    try {
+      await db.user.update({
+        where: { id: userId },
+        data: {
+          isSuspended: true,
+          sessionVersion: { increment: 1 }
+        }
+      })
+    } catch (err: unknown) {
+      const e = err as { code?: string }
+      if (e?.code !== 'P2025') throw err
     }
 
     await db.userSetting.upsert({
@@ -202,6 +225,18 @@ export class AdminService {
       suspended: false,
       restoredAt: now.toISOString(),
       reason
+    }
+
+    try {
+      await db.user.update({
+        where: { id: userId },
+        data: {
+          isSuspended: false
+        }
+      })
+    } catch (err: unknown) {
+      const e = err as { code?: string }
+      if (e?.code !== 'P2025') throw err
     }
 
     await db.userSetting.upsert({

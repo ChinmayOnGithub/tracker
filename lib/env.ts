@@ -25,6 +25,7 @@ export interface Env {
   RAZORPAY_PLAN_PRO_MONTHLY?: string
   RAZORPAY_PLAN_PRO_ANNUAL?: string
   RAZORPAY_OFFER_INTRODUCTORY?: string
+  VAULT_ENCRYPTION_KEY?: string
 }
 
 function validateEnv(): Env {
@@ -72,7 +73,8 @@ function validateEnv(): Env {
     NEXT_PUBLIC_RAZORPAY_KEY_ID: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
     RAZORPAY_PLAN_PRO_MONTHLY: process.env.RAZORPAY_PLAN_PRO_MONTHLY,
     RAZORPAY_PLAN_PRO_ANNUAL: process.env.RAZORPAY_PLAN_PRO_ANNUAL,
-    RAZORPAY_OFFER_INTRODUCTORY: process.env.RAZORPAY_OFFER_INTRODUCTORY
+    RAZORPAY_OFFER_INTRODUCTORY: process.env.RAZORPAY_OFFER_INTRODUCTORY,
+    VAULT_ENCRYPTION_KEY: process.env.VAULT_ENCRYPTION_KEY
   }
 }
 
@@ -117,3 +119,28 @@ export function isTurnstileConfigured(): boolean {
   const hasRealSecret = Boolean(secretKey && !secretKey.startsWith('1x00000000000000000000'))
   return hasRealSite && hasRealSecret
 }
+
+/**
+ * Returns whether durable storage is configured.
+ */
+export function isStorageConfigured(): boolean {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_ANON_KEY
+  return Boolean(url && key)
+}
+
+/**
+ * Returns whether Vault is fully configured with dedicated encryption key and durable storage.
+ */
+export function isVaultConfigured(): boolean {
+  const hasKey = Boolean(process.env.VAULT_ENCRYPTION_KEY || env.VAULT_ENCRYPTION_KEY)
+  const hasStorage = isStorageConfigured()
+  if (process.env.NODE_ENV === 'production') {
+    return hasKey && hasStorage
+  }
+  return true
+}
+

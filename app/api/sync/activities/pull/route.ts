@@ -12,9 +12,55 @@ import { db } from '@/lib/db'
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await requireAuth()
+    const user = await requireAuth(request)
     const { searchParams } = new URL(request.url)
-    const since = parseInt(searchParams.get('since') || '0')
+    const sinceParam = searchParams.get('since')
+    const since = parseInt(sinceParam || '0')
+
+    // Cursor validation: if since is invalid/negative, require full resync
+    if (sinceParam !== null && (isNaN(since) || since < 0)) {
+      return NextResponse.json(
+        {
+          error: {
+            code: 'SYNC_RESYNC_REQUIRED',
+            message: 'A full synchronization is required.'
+          }
+        },
+        { status: 409 }
+      )
+    }
+
+    const cursorParam = searchParams.get('cursor')
+    if (cursorParam !== null) {
+      const clientCursor = parseInt(cursorParam, 10)
+      if (isNaN(clientCursor) || clientCursor < 0) {
+        return NextResponse.json(
+          {
+            error: {
+              code: 'SYNC_RESYNC_REQUIRED',
+              message: 'A full synchronization is required.'
+            }
+          },
+          { status: 409 }
+        )
+      }
+      const syncCursor = await db.syncCursor.findUnique({
+        where: { userId: user.id }
+      })
+      const serverRevision = syncCursor ? Number(syncCursor.revision) : 0
+      if (clientCursor > serverRevision) {
+        return NextResponse.json(
+          {
+            error: {
+              code: 'SYNC_RESYNC_REQUIRED',
+              message: 'A full synchronization is required.'
+            }
+          },
+          { status: 409 }
+        )
+      }
+    }
+
     const isIncrementalSync = since > 0
 
     console.log(`[SyncAPI] Pulling changes for user ${user.id} since ${new Date(since).toISOString()}`)
@@ -64,7 +110,7 @@ export async function GET(request: NextRequest) {
           entityType: 'activityLog',
           entityId: log.id,
           lastModified: log.updatedAt.getTime(),
-          version: 1,
+          version: log.version ?? 1,
           syncStatus: 'synced',
           retryCount: 0,
           createdAt: log.createdAt.getTime(),
@@ -134,7 +180,7 @@ export async function GET(request: NextRequest) {
           entityType: 'activityTemplate',
           entityId: template.id,
           lastModified: template.updatedAt.getTime(),
-          version: 1,
+          version: template.version ?? 1,
           syncStatus: 'synced',
           retryCount: 0,
           createdAt: template.createdAt.getTime(),
@@ -145,9 +191,16 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    const syncCursor = await db.syncCursor.findUnique({
+      where: { userId: user.id }
+    })
+
     console.log(`[SyncAPI] Returning ${operations.length} operations`)
 
-    return NextResponse.json({ operations })
+    return NextResponse.json({
+      operations,
+      cursor: (syncCursor?.revision ?? 0n).toString()
+    })
   } catch (error) {
     console.error('[SyncAPI] Pull failed:', error)
     return NextResponse.json(

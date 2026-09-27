@@ -14,7 +14,13 @@ let cachedKey: Buffer | null = null
  */
 function getVaultKey(): Buffer {
   if (cachedKey) return cachedKey
-  const secret = env.GOOGLE_OAUTH_ENCRYPTION_KEY
+  const secret =
+    process.env.VAULT_ENCRYPTION_KEY ||
+    env.VAULT_ENCRYPTION_KEY ||
+    (process.env.NODE_ENV !== 'production' ? env.GOOGLE_OAUTH_ENCRYPTION_KEY : '')
+  if (!secret) {
+    throw new Error('VAULT_ENCRYPTION_KEY is required for vault operations.')
+  }
   cachedKey = crypto.pbkdf2Sync(secret, VAULT_SALT, 100000, 32, 'sha256')
   return cachedKey
 }

@@ -73,7 +73,7 @@ export class ActivityService {
           leaveRecordId: leaveRecordId !== undefined ? leaveRecordId : existing.leaveRecordId,
           journalEntryId: journalEntryId !== undefined ? journalEntryId : existing.journalEntryId,
           workSessionId: workSessionId !== undefined ? workSessionId : existing.workSessionId,
-          deletedAt: null // Un-delete if it was soft-deleted
+          version: { increment: 1 }
         }
       })
     } else {

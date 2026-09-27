@@ -42,5 +42,17 @@ yarn-error.log*
 next-env.d.ts
 
 # uploads
+uploads/
 /uploads/
 
+# sqlite & local database files
+dev.db
+dev.db.*
+*.db
+*.db-journal
+
+# build and scratch logs
+*.log
+build-output.txt
+build.log
+scratch/

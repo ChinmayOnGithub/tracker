@@ -6,6 +6,7 @@ import { requireOwnership, requireModuleAccess } from '@/lib/auth-guards'
 import { LeaveType, LeaveStatus } from '@prisma/client'
 import { ActivityService } from '@/lib/services/ActivityService'
 import { createLeaveSchema, updateLeaveStatusSchema, updateLeaveAllowanceSchema } from '@/lib/validations'
+import { toSafeActionError } from '@/lib/errors'
 
 /** Get leave allowances for a given year for the current user. */
 export async function getLeaveAllowances(year: number) {
@@ -18,7 +19,7 @@ export async function getLeaveAllowances(year: number) {
     return { success: true, allowances }
   } catch (error) {
     console.error('Failed to get leave allowances:', error)
-    return { success: false, error: String(error), allowances: [] }
+    return { success: false, error: toSafeActionError(error).message, allowances: [] }
   }
 }
 
@@ -43,7 +44,7 @@ export async function getLeaveRecords(year?: number) {
     return { success: true, records }
   } catch (error) {
     console.error('Failed to get leave records:', error)
-    return { success: false, error: String(error), records: [] }
+    return { success: false, error: toSafeActionError(error).message, records: [] }
   }
 }
 
@@ -143,7 +144,7 @@ export async function createLeaveRequest(data: {
     return { success: true, record }
   } catch (error) {
     console.error('Failed to create leave request:', error)
-    return { success: false, error: String(error) }
+    return { success: false, error: toSafeActionError(error).message }
   }
 }
 
@@ -156,6 +157,7 @@ export async function updateLeaveStatus(id: string, status: LeaveStatus) {
   }
 
   try {
+    await requireModuleAccess('leave')
     const { user } = await requireOwnership('leaveRecord', id)
 
     const { count } = await db.leaveRecord.updateMany({
@@ -200,7 +202,7 @@ export async function updateLeaveStatus(id: string, status: LeaveStatus) {
     return { success: true, record: updated }
   } catch (error) {
     console.error('Failed to update leave status:', error)
-    return { success: false, error: String(error) }
+    return { success: false, error: toSafeActionError(error).message }
   }
 }
 
@@ -236,7 +238,7 @@ export async function deleteLeaveRecord(id: string) {
     return { success: true }
   } catch (error) {
     console.error('Failed to delete leave record:', error)
-    return { success: false, error: String(error) }
+    return { success: false, error: toSafeActionError(error).message }
   }
 }
 
@@ -264,7 +266,7 @@ export async function ensureLeaveAllowances(year: number) {
     return { success: true }
   } catch (error) {
     console.error('Failed to ensure leave allowances:', error)
-    return { success: false, error: String(error) }
+    return { success: false, error: toSafeActionError(error).message }
   }
 }
 
@@ -300,7 +302,7 @@ export async function updateLeaveAllowance(leaveType: LeaveType, year: number, a
     return { success: true, allowance: updated }
   } catch (error) {
     console.error('Failed to update leave allowance:', error)
-    return { success: false, error: String(error) }
+    return { success: false, error: toSafeActionError(error).message }
   }
 }
 
@@ -332,7 +334,7 @@ export async function batchUpdateLeaveAllowances(year: number, updates: { leaveT
     return { success: true }
   } catch (error) {
     console.error('Failed to batch update leave allowances:', error)
-    return { success: false, error: String(error) }
+    return { success: false, error: toSafeActionError(error).message }
   }
 }
 

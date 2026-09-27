@@ -66,8 +66,8 @@ export function canAccess(
 /**
  * Server-side guard requiring authentication.
  */
-export async function requireAuth(): Promise<AuthenticatedUser> {
-  return AuthorizationService.requireAuth()
+export async function requireAuth(request?: Request): Promise<AuthenticatedUser> {
+  return AuthorizationService.requireAuth(request)
 }
 
 /**
