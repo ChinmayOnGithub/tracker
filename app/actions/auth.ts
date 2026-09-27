@@ -101,7 +101,7 @@ export async function getLoggedUser(): Promise<{ id: string; username: string; e
  * Registers a new user with a unique username and a secure password (minimum 8 characters).
  * Server Action adapter delegating to AuthService.
  */
-export async function registerUserAction(usernameInput: string, secret: string, humanChallengeToken?: string): Promise<{
+export async function registerUserAction(usernameInput: string, secret: string): Promise<{
   success: boolean
   error?: string
   user?: { id: string; username: string }
@@ -133,7 +133,7 @@ export async function registerUserAction(usernameInput: string, secret: string, 
  * Verifies credentials (password or legacy PIN) and sets session cookie.
  * Server Action adapter delegating to AuthService.
  */
-export async function verifyPinAction(usernameInput: string, secret: string, humanChallengeToken?: string): Promise<{
+export async function verifyPinAction(usernameInput: string, secret: string): Promise<{
   success: boolean
   error?: string
   user?: { id: string; username: string }
