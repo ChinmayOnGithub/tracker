@@ -10,10 +10,10 @@ export async function GET(request: Request) {
   const source = searchParams.get('source')
 
   const clientId = env.GOOGLE_CLIENT_ID
-  // Always derive the OAuth origin from the actual request host so the redirect URI
-  // used to start OAuth exactly matches the one used by the callback.
-  const siteUrl = new URL(request.url).origin
-  const redirectUri = new URL('/api/auth/callback/google', siteUrl).toString()
+  // Google OAuth redirect URIs are configured against the canonical public site URL.
+  // Do not derive this from the incoming Vercel/preview hostname.
+  const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL).origin
+  const redirectUri = `${siteUrl}/api/auth/callback/google`
 
   if (!clientId || clientId === 'test-client-id') {
     logger.error('OAuthInitiator', 'Google OAuth client ID is not configured')
