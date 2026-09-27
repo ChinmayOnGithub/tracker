@@ -153,7 +153,7 @@ export async function verifyPinAction(usernameInput: string, secret: string): Pr
     }
 
     await SessionService.setSessionCookie(result.token)
-    (await cookies()).delete(HUMAN_VERIFIED_COOKIE)
+    ;(await cookies()).delete(HUMAN_VERIFIED_COOKIE)
     const onboarding = await OnboardingService.getState(result.user.id)
 
     return {
