@@ -5,15 +5,16 @@ import { env } from '@/lib/env'
 import { GOOGLE_OAUTH, COOKIES } from '@/lib/constants'
 import { logger } from '@/lib/logger'
 
-import { getCanonicalOrigin } from '@/lib/url'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const source = searchParams.get('source')
 
   const clientId = env.GOOGLE_CLIENT_ID
-  const siteUrl = getCanonicalOrigin(request)
-  const redirectUri = new URL('/api/auth/callback/google', siteUrl).toString()
+  // Google OAuth redirect URIs are configured against the canonical public site URL.
+  // Do not derive this from the incoming Vercel/preview hostname.
+  const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL).origin
+  const redirectUri = `${siteUrl}/api/auth/callback/google`
 
   if (!clientId || clientId === 'test-client-id') {
     logger.error('OAuthInitiator', 'Google OAuth client ID is not configured')

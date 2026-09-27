@@ -88,6 +88,7 @@ describe('Tracker Production Hardening & Reliability Suite (#6, #13, #14, #15, #
     expect(res.success).toBe(true)
     expect(savedConfig).toEqual({
       hidden: ['recentDocuments', 'leaveBalance'],
+      revision: 1,
     })
   })
 
