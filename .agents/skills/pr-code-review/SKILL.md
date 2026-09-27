@@ -11,21 +11,19 @@ Default to reviewing committed changes and reporting results in the current agen
 
 ## Runtime capability
 
-This workflow requires a real independent-subagent surface. Inspect the active runtime's delegation schema and concurrency limit before resolving the target. Use native subagents and real model selectors only when exposed; otherwise report models as inherited or unknown.
-
-One available subagent is sufficient: run specialist and validator roles sequentially in waves. If no independent subagent is available, report `BLOCKED` and explain that an ordinary inline review is possible only outside this skill's independence contract. Never simulate multiple independent reviewers in one context.
+Use an independent reviewer when the active runtime actually provides one. If no independent-subagent surface is available, perform a single-agent evidence-led review rather than simulating multiple reviewers. Clearly label the review as single-agent.
 
 ## Resolve the review target
 
 Resolve one stable base/head pair, or an explicit WIP-only `HEAD` anchor, before gathering evidence or dispatching specialists:
 
-- **Pull request URL or number**: Resolve repository, PR metadata, base SHA, and head SHA with `gh pr view`.
-- **Explicit base and head**: Verify both refs and compare their merge-base with `git diff <base>...<head>`.
+- **Pull request URL or number**: Resolve repository, PR metadata, base SHA, and head SHA with `GitHub repository integration`.
+- **Explicit base and head**: Verify both refs and compare their merge-base with `the repository's compare/diff operation`.
 - **Explicit Git range**: Preserve the user's two-dot or three-dot semantics after verifying every ref. Prefer three-dot for branch review because it isolates changes since divergence.
 - **Explicit WIP-only request**: Anchor the review at the current `HEAD`, set the committed comparison diff to empty by definition, and collect only the requested staged, unstaged, and untracked evidence. Do not ask for a base branch or include committed branch changes.
-- **Named or current branch without a base**: When a matching GitHub remote is available, first check whether the branch has an associated PR with `gh pr view`; if so, use the PR target and its base. Otherwise, inspect the repository's default branch, upstream configuration, and likely long-lived bases only to suggest choices. Ask the user which branch to compare against; never silently assume `main`, `master`, `develop`, or an upstream tracking branch.
+- **Named or current branch without a base**: When a matching GitHub remote is available, first check whether the branch has an associated PR with `GitHub repository integration`; if so, use the PR target and its base. Otherwise, inspect the repository's default branch, upstream configuration, and likely long-lived bases only to suggest choices. Ask the user which branch to compare against; never silently assume `main`, `master`, `develop`, or an upstream tracking branch.
 
-For every committed target, verify that the resolved base and head SHAs exist in the review checkout and record their merge-base. For a base/head pair or inferred branch comparison, use `git diff <base>...<head>` and `git log <base>..<head> --oneline`. For an explicit Git range, use the exact operator the user supplied for the diff; never rewrite `A..B` to `A...B`. For PR targets, treat the GitHub PR diff as authoritative, reproduce it from the resolved base/head SHAs in the matching checkout, and confirm the changed-file set agrees before dispatch. For a WIP-only target, verify `HEAD` and record it as the anchor without manufacturing a base or merge-base.
+For every committed target, verify that the resolved base and head SHAs exist in the review checkout and record their merge-base. For a base/head pair or inferred branch comparison, use `the repository's compare/diff operation` and `the repository's commit history operation`. For an explicit Git range, use the exact operator the user supplied for the diff; never rewrite `A..B` to `A...B`. For PR targets, treat the GitHub PR diff as authoritative, reproduce it from the resolved base/head SHAs in the matching checkout, and confirm the changed-file set agrees before dispatch. For a WIP-only target, verify `HEAD` and record it as the anchor without manufacturing a base or merge-base.
 
 If the user explicitly requests uncommitted work, append staged and unstaged diffs plus each untracked text file's contents as a clearly marked supplemental evidence set. Record only metadata for binary untracked files. State that this portion has no stable head SHA and cannot be published as GitHub line comments. Stop with the exact reason only when the complete requested change set is empty: no committed diff and, when requested, no staged, unstaged, or untracked evidence.
 
