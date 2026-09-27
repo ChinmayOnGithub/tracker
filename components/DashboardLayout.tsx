@@ -481,7 +481,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     setAuthError('')
 
     if (isRegisterMode) {
-      const res = await registerUserAction(username, pin, humanChallengeToken || undefined)
+      const res = await registerUserAction(username, pin)
       if (res.success) {
         setIsAuthenticated(true)
         if (res.user) setUser(res.user)
@@ -492,7 +492,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         setEnteredPin('')
       }
     } else {
-      const res = await verifyPinAction(username, pin, humanChallengeToken || undefined)
+      const res = await verifyPinAction(username, pin)
       if (res.success) {
         setIsAuthenticated(true)
         if (res.user) setUser(res.user)
