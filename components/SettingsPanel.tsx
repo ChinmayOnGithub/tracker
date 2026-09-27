@@ -676,6 +676,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
                 { id: 'notifications', label: 'Notifications', description: 'Alerts and daily summaries', icon: Bell },
               ]}
               onSelect={(id) => { setActiveSection(id as typeof activeSection); setMobileSettingsHub(false) }}
+              canShowOwnerOnly={userProfile?.isOwner !== false}
             />
 
             <MobileSettingsGroup
@@ -686,6 +687,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
                 { id: 'integrations', label: 'Apps & Integrations', description: 'Google Calendar and connected apps', icon: Blocks },
               ]}
               onSelect={(id) => { setActiveSection(id as typeof activeSection); setMobileSettingsHub(false) }}
+              canShowOwnerOnly={userProfile?.isOwner !== false}
             />
 
             <MobileSettingsGroup
@@ -697,6 +699,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
                 ...(userProfile?.isOwner !== false ? [{ id: 'admin', label: 'Guest Access Admin', description: 'Owner controls for shared access', icon: ShieldCheck, ownerOnly: true }] : []),
               ]}
               onSelect={(id) => { setActiveSection(id as typeof activeSection); setMobileSettingsHub(false) }}
+              canShowOwnerOnly={userProfile?.isOwner !== false}
             />
           </div>
         ) : (
