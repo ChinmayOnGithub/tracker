@@ -92,6 +92,20 @@ export async function requireModuleAccess(moduleKey: TrackerModuleKey): Promise<
 }
 
 /**
+ * Asserts module access for an already-resolved authenticated user.
+ */
+export async function assertUserModuleAccess(user: AuthenticatedUser, moduleKey: TrackerModuleKey): Promise<AuthenticatedUser> {
+  return AuthorizationService.assertUserModuleAccess(user, moduleKey)
+}
+
+/**
+ * Asserts capability access for an already-resolved authenticated user.
+ */
+export async function assertUserCapability(user: AuthenticatedUser, capability: TrackerCapability): Promise<AuthenticatedUser> {
+  return AuthorizationService.assertUserCapability(user, capability)
+}
+
+/**
  * Server-side guard requiring ownership of a database entity.
  * Eliminates redundant database lookups by delegating to AuthorizationService.requireOwnership.
  */

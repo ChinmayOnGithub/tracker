@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { SessionService } from '@/lib/services/SessionService'
+import { AuthorizationService } from '@/lib/services/AuthorizationService'
+import { EntitlementService } from '@/lib/services/EntitlementService'
+import { StorageService } from '@/lib/services/StorageService'
+import { db } from '@/lib/db'
 import { randomUUID } from 'crypto'
 import path from 'path'
-import fs from 'fs/promises'
 
 const MAX_JOURNAL_IMAGE_SIZE = 5 * 1024 * 1024 // 5 MB
 const ALLOWED_MIME_TYPES = new Set([
@@ -12,10 +15,6 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/gif',
   'image/svg+xml',
 ])
-
-function getJournalDir(userId: string): string {
-  return path.join(process.cwd(), 'uploads', 'journal', userId)
-}
 
 function getExtension(mimeType: string, originalName: string): string {
   switch (mimeType) {
@@ -38,6 +37,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
+    // ─── Module Authorization & Pro Entitlement Check ──────────────────
+    try {
+      await AuthorizationService.assertUserModuleAccess(user, 'journal')
+    } catch {
+      return NextResponse.json({ error: 'Access denied to Journal module' }, { status: 403 })
+    }
+
+    const hasAccess = await EntitlementService.hasFeature(user.id, 'advanced_journal')
+    if (!hasAccess) {
+      return NextResponse.json(
+        {
+          error: 'Journal image uploads require an active Tracker Pro subscription.',
+          code: 'PRO_REQUIRED'
+        },
+        { status: 403 }
+      )
+    }
+
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     if (!file) {
@@ -58,12 +75,21 @@ export async function POST(request: NextRequest) {
 
     const ext = getExtension(mimeType, file.name)
     const fileId = `${randomUUID()}.${ext}`
-    const userDir = getJournalDir(user.id)
-    await fs.mkdir(userDir, { recursive: true })
-
     const buffer = Buffer.from(await file.arrayBuffer())
-    const filePath = path.join(userDir, fileId)
-    await fs.writeFile(filePath, buffer)
+
+    // ─── Persist to Durable Storage ───────────────────────────────────
+    await StorageService.saveJournalImage(user.id, fileId, buffer, mimeType)
+
+    // ─── Create Database-backed Ownership Record ───────────────────────
+    await db.attachment.create({
+      data: {
+        userId: user.id,
+        fileName: file.name,
+        fileKey: fileId,
+        fileSize: file.size,
+        mimeType: mimeType,
+      }
+    })
 
     const url = `/api/journal/image/${fileId}`
     return NextResponse.json({

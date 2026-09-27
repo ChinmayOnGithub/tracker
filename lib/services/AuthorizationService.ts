@@ -218,10 +218,9 @@ export class AuthorizationService {
   }
 
   /**
-   * Server-side guard requiring module access.
+   * Asserts that a resolved user has access to the specified module.
    */
-  public static async requireModuleAccess(moduleKey: TrackerModuleKey): Promise<AuthenticatedUser> {
-    const user = await this.requireAuth()
+  public static async assertUserModuleAccess(user: AuthenticatedUser, moduleKey: TrackerModuleKey): Promise<AuthenticatedUser> {
     if (this.isOwner(user)) {
       return user
     }
@@ -242,10 +241,9 @@ export class AuthorizationService {
   }
 
   /**
-   * Server-side guard requiring specific capability.
+   * Asserts that a resolved user has access to the specified capability.
    */
-  public static async requireCapability(capability: TrackerCapability): Promise<AuthenticatedUser> {
-    const user = await this.requireAuth()
+  public static async assertUserCapability(user: AuthenticatedUser, capability: TrackerCapability): Promise<AuthenticatedUser> {
     if (this.isOwner(user)) {
       return user
     }
@@ -263,6 +261,22 @@ export class AuthorizationService {
       throw new Error(`Unauthorized: missing capability ${capability}`)
     }
     return user
+  }
+
+  /**
+   * Server-side guard requiring module access.
+   */
+  public static async requireModuleAccess(moduleKey: TrackerModuleKey): Promise<AuthenticatedUser> {
+    const user = await this.requireAuth()
+    return this.assertUserModuleAccess(user, moduleKey)
+  }
+
+  /**
+   * Server-side guard requiring specific capability.
+   */
+  public static async requireCapability(capability: TrackerCapability): Promise<AuthenticatedUser> {
+    const user = await this.requireAuth()
+    return this.assertUserCapability(user, capability)
   }
 
   /**

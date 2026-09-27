@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { requireAuth, requireOwnership, requireModuleAccess } from '@/lib/auth-guards'
+import { requireOwnership, requireModuleAccess } from '@/lib/auth-guards'
 import { LeaveType, LeaveStatus } from '@prisma/client'
 import { ActivityService } from '@/lib/services/ActivityService'
 import { createLeaveSchema, updateLeaveStatusSchema, updateLeaveAllowanceSchema } from '@/lib/validations'
@@ -307,7 +307,7 @@ export async function updateLeaveAllowance(leaveType: LeaveType, year: number, a
 /** Batch update multiple leave allowances for a year. */
 export async function batchUpdateLeaveAllowances(year: number, updates: { leaveType: LeaveType; allowance: number }[]) {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('leave')
     for (const u of updates) {
       await db.leaveAllowance.upsert({
         where: {

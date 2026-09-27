@@ -6,48 +6,60 @@ import { env } from '@/lib/env'
  * same canonical host and protocol, preventing domain mismatch and redirect_uri_mismatch.
  *
  * Precedence:
- * 1. Standard reverse-proxy headers from incoming request (x-forwarded-host, x-forwarded-proto)
- * 2. Incoming request's parsed URL origin
- * 3. Configured NEXT_PUBLIC_SITE_URL
- * 4. Safe environment fallback
+ * 1. Production: Configured NEXT_PUBLIC_SITE_URL is authoritative to prevent host-header injection.
+ * 2. Development/Test: Standard reverse-proxy headers from request (x-forwarded-host, x-forwarded-proto).
+ * 3. Incoming request's parsed URL origin.
+ * 4. Fallback default.
  */
 export function getCanonicalOrigin(request?: Request): string {
+  const isProduction = process.env.NODE_ENV === 'production'
+  const configured = process.env.NEXT_PUBLIC_SITE_URL || env.NEXT_PUBLIC_SITE_URL
+
+  // 1. In production, configured NEXT_PUBLIC_SITE_URL is the authoritative source
+  // to prevent host header injection or spoofed OAuth callback targets.
+  if (isProduction && configured && !configured.includes('localhost')) {
+    try {
+      const url = new URL(configured)
+      url.protocol = 'https:'
+      return url.origin
+    } catch {
+      // Fall through if misconfigured
+    }
+  }
+
+  // 2. In development or test, evaluate request origin or forwarded headers
   if (request) {
     const forwardedHost = request.headers.get('x-forwarded-host')
     const forwardedProto =
-      request.headers.get('x-forwarded-proto') || (process.env.NODE_ENV === 'production' ? 'https' : 'http')
+      request.headers.get('x-forwarded-proto') || (isProduction ? 'https' : 'http')
 
     if (forwardedHost) {
-      // In production behind HTTPS proxy, always ensure https scheme
-      const scheme = process.env.NODE_ENV === 'production' ? 'https' : forwardedProto
+      const scheme = isProduction ? 'https' : forwardedProto
       return `${scheme}://${forwardedHost}`
     }
 
     try {
       const origin = new URL(request.url).origin
       if (origin && !origin.includes('0.0.0.0')) {
-        if (process.env.NODE_ENV === 'production' && origin.startsWith('http://')) {
+        if (isProduction && origin.startsWith('http://')) {
           return origin.replace('http://', 'https://')
         }
         return origin
       }
     } catch {
-      // Fall through to configured NEXT_PUBLIC_SITE_URL
+      // Fall through
     }
   }
 
-  const configured = env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_SITE_URL
+  // 3. Fallback to configured URL in dev/test if available
   if (configured) {
     try {
       const url = new URL(configured)
-      if (process.env.NODE_ENV === 'production') {
-        url.protocol = 'https:'
-      }
       return url.origin
     } catch {
       // Fall through
     }
   }
 
-  return process.env.NODE_ENV === 'production' ? 'https://tracker.vercel.app' : 'http://localhost:3000'
+  return isProduction ? 'https://tracker.vercel.app' : 'http://localhost:3000'
 }

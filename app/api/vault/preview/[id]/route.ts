@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { SessionService } from '@/lib/services/SessionService'
+import { AuthorizationService } from '@/lib/services/AuthorizationService'
+import { StorageService } from '@/lib/services/StorageService'
 import { db } from '@/lib/db'
 import { decryptBuffer, decryptMimeType } from '@/lib/vault-crypto'
-import path from 'path'
-import fs from 'fs/promises'
-
-function getVaultDir(userId: string): string {
-  return path.join(process.cwd(), 'uploads', 'vault', userId)
-}
 
 export async function GET(
   request: NextRequest,
@@ -17,6 +13,12 @@ export async function GET(
     const user = await SessionService.resolveAuthFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
+    try {
+      await AuthorizationService.assertUserModuleAccess(user, 'documents')
+    } catch {
+      return NextResponse.json({ error: 'Access denied to Vault module' }, { status: 403 })
     }
 
     const { id } = await params
@@ -37,14 +39,11 @@ export async function GET(
       return NextResponse.json({ error: 'Document not found' }, { status: 404 })
     }
 
-    const vaultDir = getVaultDir(user.id)
-    const filePath = path.join(vaultDir, `${doc.storageKey}.enc`)
-
     let encryptedBuffer: Buffer
     try {
-      encryptedBuffer = await fs.readFile(filePath)
+      encryptedBuffer = await StorageService.readVaultFile(user.id, doc.storageKey)
     } catch {
-      return NextResponse.json({ error: 'File not found on disk' }, { status: 404 })
+      return NextResponse.json({ error: 'File not found in storage' }, { status: 404 })
     }
 
     let decryptedBuffer: Buffer

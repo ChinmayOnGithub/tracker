@@ -1,6 +1,16 @@
 import crypto from 'crypto'
 
-const SESSION_SECRET = process.env.AUTH_SECRET || 'tracker-super-secret-key-108-multi-user-session-salt'
+function getSessionSecret(): string {
+  const secret = process.env.AUTH_SECRET
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('AUTH_SECRET environment variable is missing in production')
+    }
+    return 'tracker-super-secret-key-108-multi-user-session-salt'
+  }
+  return secret
+}
+
 const SESSION_EXPIRY = 30 * 24 * 60 * 60 * 1000 // 30 days session expiry
 
 interface SessionPayload {
@@ -21,7 +31,7 @@ export function signSession(userId: string, username: string): string {
   
   const payloadStr = Buffer.from(JSON.stringify(payload)).toString('base64url')
   
-  const hmac = crypto.createHmac('sha256', SESSION_SECRET)
+  const hmac = crypto.createHmac('sha256', getSessionSecret())
   hmac.update(payloadStr)
   const signature = hmac.digest('base64url')
   
@@ -39,19 +49,19 @@ export function verifySession(token: string | undefined | null): { userId: strin
   
   const [payloadStr, signature] = parts
   
-  const hmac = crypto.createHmac('sha256', SESSION_SECRET)
-  hmac.update(payloadStr)
-  const expectedSignature = hmac.digest('base64url')
-  
-  // Protect against timing attacks by hashing both signatures to 32-byte fixed-length digests
-  const sigHash = crypto.createHash('sha256').update(signature).digest()
-  const expHash = crypto.createHash('sha256').update(expectedSignature).digest()
-  
-  if (!crypto.timingSafeEqual(sigHash, expHash)) {
-    return null
-  }
-  
   try {
+    const hmac = crypto.createHmac('sha256', getSessionSecret())
+    hmac.update(payloadStr)
+    const expectedSignature = hmac.digest('base64url')
+    
+    // Protect against timing attacks by hashing both signatures to 32-byte fixed-length digests
+    const sigHash = crypto.createHash('sha256').update(signature).digest()
+    const expHash = crypto.createHash('sha256').update(expectedSignature).digest()
+    
+    if (!crypto.timingSafeEqual(sigHash, expHash)) {
+      return null
+    }
+    
     const payloadJson = Buffer.from(payloadStr, 'base64url').toString('utf8')
     const payload: SessionPayload = JSON.parse(payloadJson)
     

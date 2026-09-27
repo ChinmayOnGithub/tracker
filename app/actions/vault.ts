@@ -2,24 +2,18 @@
 
 import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
-import { requireAuth, requireModuleAccess } from '@/lib/auth-guards'
+import { requireModuleAccess } from '@/lib/auth-guards'
 import {
   encryptTitle,
   decryptTitle,
   maskValue,
-  getVaultKeyHex
 } from '@/lib/vault-crypto'
-import path from 'path'
-import fs from 'fs/promises'
+import { StorageService } from '@/lib/services/StorageService'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_PAGE_SIZE = 100
 const MAX_PAGE_SIZE = 500
-
-function getVaultDir(userId: string): string {
-  return path.join(process.cwd(), 'uploads', 'vault', userId)
-}
 
 /** Normalize filename into a fast-searchable plaintext token */
 export async function normalizeSearchName(filename: string): Promise<string> {
@@ -316,7 +310,7 @@ export async function createVaultFolder(
       throw new Error('Folder name is too long (maximum 255 characters)')
     }
 
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
 
     if (parentId) {
       const parent = await db.secureDocument.findFirst({
@@ -395,7 +389,7 @@ export async function renameVaultItem(
       throw new Error('Name is too long (maximum 255 characters)')
     }
 
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
 
     const doc = await db.secureDocument.findFirst({
       where: { id, userId: user.id, deletedAt: null },
@@ -454,7 +448,7 @@ export async function toggleVaultFavorite(
       throw new Error('Invalid favorite status')
     }
 
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     const doc = await db.secureDocument.findFirst({
       where: { id, userId: user.id, deletedAt: null },
       select: { id: true },
@@ -486,7 +480,7 @@ export async function deleteVaultItem(
       throw new Error('Invalid document ID')
     }
 
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
 
     const doc = await db.secureDocument.findFirst({
       where: { id, userId: user.id, deletedAt: null },
@@ -539,18 +533,17 @@ export async function deleteVaultItem(
       })
     })
 
-    // Clean up encrypted files from disk (after database transaction succeeds)
-    const vaultDir = getVaultDir(user.id)
+    // Clean up encrypted files from storage (after database transaction succeeds)
     const cleanupErrors: string[] = []
     
     for (const item of itemsToDelete) {
       if (item.storageKey) {
         try {
-          await fs.unlink(path.join(vaultDir, `${item.storageKey}.enc`))
+          await StorageService.deleteVaultFile(user.id, item.storageKey)
         } catch (error) {
           // Log but don't fail - file might already be deleted
           cleanupErrors.push(item.storageKey)
-          console.warn(`Failed to delete file ${item.storageKey}.enc:`, error)
+          console.warn(`Failed to delete file ${item.storageKey}:`, error)
         }
       }
     }
@@ -600,7 +593,7 @@ export async function getVaultBreadcrumbs(
   folderId: string | null
 ): Promise<{ success: boolean; breadcrumbs: VaultBreadcrumb[]; error?: string }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     const breadcrumbs: VaultBreadcrumb[] = [{ id: null, name: 'Vault' }]
     if (!folderId) return { success: true, breadcrumbs }
 
@@ -656,7 +649,7 @@ export async function getVaultStats(): Promise<{
   error?: string
 }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
 
     const fileCount = await db.secureDocument.count({ where: { userId: user.id, isFolder: false, deletedAt: null } })
     const folderCount = await db.secureDocument.count({ where: { userId: user.id, isFolder: true, deletedAt: null } })
@@ -684,7 +677,7 @@ export async function getVaultStats(): Promise<{
 
 export async function listVaultFavorites(): Promise<{ success: boolean; items: VaultItem[]; error?: string }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     const documents = await db.secureDocument.findMany({
       where: { userId: user.id, isFavorite: true, deletedAt: null },
       select: {
@@ -744,7 +737,7 @@ const VAULT_SETTINGS_MODULE = 'VAULT_SETTINGS'
 
 export async function getVaultDashboardData(): Promise<VaultDashboardData> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     
     // Find or create VAULT_SETTINGS in UserSetting
     let setting = await db.userSetting.findUnique({
@@ -976,7 +969,7 @@ export async function saveVaultBankAccount(
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     
     const setting = await db.userSetting.findUnique({
       where: { userId_module: { userId: user.id, module: VAULT_SETTINGS_MODULE } }
@@ -1038,7 +1031,7 @@ export async function deleteVaultBankAccount(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     
     const setting = await db.userSetting.findUnique({
       where: { userId_module: { userId: user.id, module: VAULT_SETTINGS_MODULE } }
@@ -1079,7 +1072,7 @@ export async function getVaultSecretValue(
   actionType: 'copy' | 'reveal'
 ): Promise<{ success: boolean; value?: string; error?: string }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     
     const setting = await db.userSetting.findUnique({
       where: { userId_module: { userId: user.id, module: VAULT_SETTINGS_MODULE } }
@@ -1126,7 +1119,7 @@ export async function saveVaultQuickInfoField(
   rawValue: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     
     const setting = await db.userSetting.findUnique({
       where: { userId_module: { userId: user.id, module: VAULT_SETTINGS_MODULE } }
@@ -1175,7 +1168,7 @@ export async function deleteVaultQuickInfoField(
   id: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     
     const setting = await db.userSetting.findUnique({
       where: { userId_module: { userId: user.id, module: VAULT_SETTINGS_MODULE } }
@@ -1219,7 +1212,7 @@ export async function saveVaultQuickActions(
   actions: string[]
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     
     const setting = await db.userSetting.findUnique({
       where: { userId_module: { userId: user.id, module: VAULT_SETTINGS_MODULE } }
@@ -1247,7 +1240,7 @@ export async function toggleVaultPin(
   pin: boolean
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     
     if (pin && documentId) {
       const doc = await db.secureDocument.findFirst({
@@ -1304,7 +1297,7 @@ export async function setVaultSpecialAsset(
   docId: string | null
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     
     if (docId) {
       const doc = await db.secureDocument.findFirst({
@@ -1362,7 +1355,7 @@ export async function logVaultAuditAction(
   entityType: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     await db.auditLog.create({
       data: {
         userId: user.id,
@@ -1384,7 +1377,7 @@ export async function updateVaultItemCategory(
   category: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const user = await requireAuth()
+    const user = await requireModuleAccess('documents')
     const doc = await db.secureDocument.findFirst({
       where: { id, userId: user.id, deletedAt: null }
     })
@@ -1407,13 +1400,7 @@ export async function updateVaultItemCategory(
 }
 
 export async function getVaultKeyAction(): Promise<{ success: boolean; key?: string; error?: string }> {
-  try {
-    await requireAuth()
-    return { success: true, key: getVaultKeyHex() }
-  } catch (error) {
-    console.error('getVaultKeyAction error:', error)
-    return { success: false, error: 'Failed to retrieve vault key' }
-  }
+  return { success: false, error: 'Direct access to the master vault key is deprecated.' }
 }
 
 

@@ -5,7 +5,7 @@
 * [x] **Domain & Callback URLs**:
   * Production domain: Configured with enforced HTTPS.
   * Google OAuth Redirect: `https://<DOMAIN>/api/auth/callback/google`.
-  * Razorpay Webhook URL: `https://<DOMAIN>/api/billing/webhook`.
+  * Razorpay Webhook URL: `https://<DOMAIN>/api/webhooks/razorpay` (with legacy `/api/billing/webhook` supported for backward compatibility).
 * [x] **Live Billing Enforcement**: `RAZORPAY_ENFORCE_LIVE=true` in production to prevent test-mode keys (`rzp_test_`) from executing paid transactions.
 
 ---

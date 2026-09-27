@@ -9,13 +9,13 @@
 | **Plan ID (Monthly)** | `plan_TdpzGACweUZ0Qj` | `plan_live_...` | Created separately in Razorpay Live Dashboard. |
 | **Plan ID (Annual)** | `plan_test_...` | `plan_live_...` | Created separately in Razorpay Live Dashboard. |
 | **Introductory Offer ID** | `offer_test_...` | `offer_live_...` | Linked to 1st cycle discount in Live Dashboard. |
-| **Webhook Secret** | Custom secret string | Dedicated live secret | Verified via HMAC-SHA256 in `/api/billing/webhook`. |
+| **Webhook Secret** | Custom secret string | Dedicated live secret | Verified via HMAC-SHA256 in `/api/webhooks/razorpay` (or legacy `/api/billing/webhook`). |
 
 ---
 
 ## 2. Webhook Verification & Lifecycle Management
 
-* **Endpoint**: `https://<DOMAIN>/api/billing/webhook`
+* **Endpoint**: `https://<DOMAIN>/api/webhooks/razorpay` (legacy alias: `/api/billing/webhook`)
 * **HMAC Signature**: Checked with `crypto.createHmac('sha256', secret).update(body).digest('hex')` against `x-razorpay-signature`.
 * **Idempotency**: Webhook events logged in `BillingWebhookEvent` table. Duplicate events with same `eventId` are idempotently skipped with HTTP 200.
 * **Handled Lifecycle Events**:

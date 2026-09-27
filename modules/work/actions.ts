@@ -1,13 +1,13 @@
 "use server"
 
-import { requireAuth } from '@/lib/auth-guards';
+import { requireCapability } from '@/lib/auth-guards';
 import { WorkSessionService } from './services/WorkSessionService';
 import { revalidatePath } from 'next/cache';
 import { WorkSession } from './types';
 
 export async function createWorkSession(session: Partial<WorkSession>) {
   try {
-    const user = await requireAuth();
+    const user = await requireCapability('work-hours.write');
     if (!session.date || !session.mode) {
       throw new Error('Missing required session fields: date or mode');
     }
@@ -42,7 +42,7 @@ export async function createWorkSession(session: Partial<WorkSession>) {
 
 export async function updateWorkSession(id: string, session: Partial<WorkSession>) {
   try {
-    const user = await requireAuth();
+    const user = await requireCapability('work-hours.write');
     let record;
     if (session.endedAt) {
       record = await WorkSessionService.stopSession(user.id, id);
@@ -57,7 +57,7 @@ export async function updateWorkSession(id: string, session: Partial<WorkSession
 
 export async function pauseWorkSession(id: string) {
   try {
-    const user = await requireAuth();
+    const user = await requireCapability('work-hours.write');
     const record = await WorkSessionService.pauseSession(user.id, id);
     revalidatePath('/');
     return { success: true, data: record };
@@ -69,7 +69,7 @@ export async function pauseWorkSession(id: string) {
 
 export async function resumeWorkSession(id: string) {
   try {
-    const user = await requireAuth();
+    const user = await requireCapability('work-hours.write');
     const record = await WorkSessionService.resumeSession(user.id, id);
     revalidatePath('/');
     return { success: true, data: record };
@@ -81,7 +81,7 @@ export async function resumeWorkSession(id: string) {
 
 export async function finishWorkSession(id: string) {
   try {
-    const user = await requireAuth();
+    const user = await requireCapability('work-hours.write');
     const record = await WorkSessionService.finishSession(user.id, id);
     revalidatePath('/');
     return { success: true, data: record };
@@ -93,7 +93,7 @@ export async function finishWorkSession(id: string) {
 
 export async function deleteWorkSession(id: string) {
   try {
-    const user = await requireAuth();
+    const user = await requireCapability('work-hours.write');
     await WorkSessionService.deleteSession(user.id, id);
     revalidatePath('/');
     return { success: true };

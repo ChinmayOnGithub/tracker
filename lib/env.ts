@@ -4,7 +4,8 @@ const REQUIRED_ENV_VARS = [
   'AUTH_SECRET',
   'GOOGLE_CLIENT_ID',
   'GOOGLE_CLIENT_SECRET',
-  'GOOGLE_OAUTH_ENCRYPTION_KEY'
+  'GOOGLE_OAUTH_ENCRYPTION_KEY',
+  'NEXT_PUBLIC_SITE_URL'
 ] as const
 
 export interface Env {
@@ -89,14 +90,18 @@ export function isGoogleConfigured(): boolean {
 }
 
 /**
- * Returns whether Razorpay payments are fully configured.
+ * Returns whether Razorpay payments are fully configured and operational.
  */
 export function isRazorpayConfigured(): boolean {
-  return Boolean(
+  const hasKeys = Boolean(
     (env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID) &&
     env.RAZORPAY_KEY_SECRET &&
     !env.RAZORPAY_KEY_ID?.includes('placeholder')
   )
+  const hasWebhook = Boolean(env.RAZORPAY_WEBHOOK_SECRET)
+  const hasPlans = Boolean(env.RAZORPAY_PLAN_PRO_MONTHLY && env.RAZORPAY_PLAN_PRO_ANNUAL)
+
+  return hasKeys && hasWebhook && hasPlans
 }
 
 /**

@@ -32,6 +32,17 @@ export interface ActivityTemplateSync {
   userId: string
   lastModified: number
   version: number
+  priority?: string
+  estimatedDuration?: number
+  energyRequired?: string
+  notes?: string | null
+  amount?: number | null
+  recurrenceType?: string
+  recurrenceInterval?: number | null
+  recurrenceDaysOfWeek?: string | null
+  recurrenceDayOfMonth?: number | null
+  recurrenceMonth?: number | null
+  metadata?: unknown | null
 }
 
 export class ActivitySyncAdapter implements NetworkAdapter {
@@ -197,7 +208,18 @@ export class ActivitySyncAdapter implements NetworkAdapter {
       isActive: template.isActive,
       userId,
       lastModified: Date.now(),
-      version: 1 // This would come from sync metadata
+      version: 1, // This would come from sync metadata
+      priority: template.priority,
+      estimatedDuration: template.estimatedDuration,
+      energyRequired: template.energyRequired,
+      notes: template.notes,
+      amount: template.amount,
+      recurrenceType: template.recurrenceType,
+      recurrenceInterval: template.recurrenceInterval,
+      recurrenceDaysOfWeek: template.recurrenceDaysOfWeek,
+      recurrenceDayOfMonth: template.recurrenceDayOfMonth,
+      recurrenceMonth: template.recurrenceMonth,
+      metadata: template.metadata,
     }
   }
 

@@ -115,37 +115,6 @@ type SortField = 'name' | 'date' | 'size'
 type SortDir = 'asc' | 'desc'
 type InfoCategory = 'IDENTITY' | 'BANKING' | 'PERSONAL' | 'OTHER'
 
-async function decryptBufferClientSide(
-  encryptedArrayBuffer: ArrayBuffer,
-  keyHex: string,
-  ivHex: string,
-  tagHex: string
-): Promise<ArrayBuffer> {
-  const rawKey = new Uint8Array(keyHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-  const cryptoKey = await window.crypto.subtle.importKey(
-    "raw",
-    rawKey,
-    { name: "AES-GCM" },
-    false,
-    ["decrypt"]
-  );
-
-  const iv = new Uint8Array(ivHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-  const tag = new Uint8Array(tagHex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-
-  const combined = new Uint8Array(encryptedArrayBuffer.byteLength + tag.byteLength);
-  combined.set(new Uint8Array(encryptedArrayBuffer), 0);
-  combined.set(tag, encryptedArrayBuffer.byteLength);
-
-  const decrypted = await window.crypto.subtle.decrypt(
-    { name: "AES-GCM", iv, tagLength: 128 },
-    cryptoKey,
-    combined
-  );
-
-  return decrypted;
-}
-
 import { useSearchParams } from 'next/navigation'
 
 // --- Main Component -----------------------------------------------------------
@@ -156,7 +125,6 @@ export function VaultPanel() {
   const targetFolderId = searchParams?.get('folderId')
 
   // --- State --------------------------------------------------------
-  const [vaultKey, setVaultKey] = useState<string | null>(null)
   const [items, setItems] = useState<VaultItem[]>([])
   const [_breadcrumbs, setBreadcrumbs] = useState<VaultBreadcrumb[]>([{ id: null, name: 'Vault' }])
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(() => targetFolderId || null)
@@ -1002,40 +970,16 @@ export function VaultPanel() {
     setErrorMessage(null)
     
     try {
-      let key = vaultKey
-      if (!key) {
-        const { getVaultKeyAction } = await import('@/app/actions/vault')
-        const res = await getVaultKeyAction()
-        if (res.success && res.key) {
-          key = res.key
-          setVaultKey(res.key)
-        } else {
-          throw new Error(res.error || 'Could not retrieve encryption key.')
-        }
-      }
-
-      // Fetch the raw encrypted bytes from the API
+      // Fetch the decrypted file directly from the secure server API
       const response = await fetch(`/api/vault/download/${item.id}`)
       if (!response.ok) {
-        throw new Error('Failed to download encrypted file.')
+        throw new Error('Failed to download file.')
       }
 
-      const ivHex = response.headers.get('x-iv-hex')
-      const tagHex = response.headers.get('x-tag-hex')
-      
-      if (!ivHex || !tagHex) {
-        throw new Error('Missing encryption metadata headers.')
-      }
-
-      const encryptedBuffer = await response.arrayBuffer()
-
-      // Decrypt client-side
-      const decryptedBuffer = await decryptBufferClientSide(encryptedBuffer, key, ivHex, tagHex)
+      const blob = await response.blob()
 
       // Download file in browser
-      const blob = new Blob([decryptedBuffer], { type: 'application/octet-stream' })
       const url = URL.createObjectURL(blob)
-      
       const link = document.createElement('a')
       link.href = url
       link.download = item.name
@@ -1050,12 +994,12 @@ export function VaultPanel() {
 
       // Log Audit Log
       logVaultAuditAction('VAULT_DOCUMENT_DOWNLOADED', item.id, 'VAULT_DOCUMENT')
-      notify.success('File decrypted and downloaded successfully')
+      notify.success('File downloaded successfully')
     } catch (error) {
-      console.error('Download/decryption error:', error)
-      notify.error(error instanceof Error ? error.message : 'Failed to download and decrypt file')
+      console.error('Download error:', error)
+      notify.error(error instanceof Error ? error.message : 'Failed to download file')
     }
-  }, [vaultKey])
+  }, [])
 
   // (filteredItems and toggleSort removed â€” the new layout uses categoryItems computed below)
 

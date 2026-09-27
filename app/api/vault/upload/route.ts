@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { SessionService } from '@/lib/services/SessionService'
+import { AuthorizationService } from '@/lib/services/AuthorizationService'
+import { StorageService } from '@/lib/services/StorageService'
 import { db } from '@/lib/db'
 import {
   encryptTitle,
@@ -9,19 +11,19 @@ import {
 } from '@/lib/vault-crypto'
 import { normalizeSearchName, resolveMimeGroup, resolveExtension } from '@/app/actions/vault'
 import { randomUUID } from 'crypto'
-import path from 'path'
-import fs from 'fs/promises'
-
-function getVaultDir(userId: string): string {
-  return path.join(process.cwd(), 'uploads', 'vault', userId)
-}
 
 export async function POST(request: NextRequest) {
   try {
-    // ─── Authenticate ─────────────────────────────────────────────────
+    // ─── Authenticate & Authorize Module Access ───────────────────────
     const user = await SessionService.resolveAuthFromRequest(request)
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
+    try {
+      await AuthorizationService.assertUserModuleAccess(user, 'documents')
+    } catch {
+      return NextResponse.json({ error: 'Access denied to Vault module' }, { status: 403 })
     }
 
     // ─── Parse multipart form data ────────────────────────────────────
@@ -62,15 +64,7 @@ export async function POST(request: NextRequest) {
     if (documentType) metadata.documentType = documentType
     if (associateWithInfoField) metadata.associateWithInfoField = associateWithInfoField
 
-    if (!file.name || file.name.trim().length === 0) {
-      return NextResponse.json({ error: 'Invalid file name' }, { status: 400 })
-    }
-
-    // ─── Validate file size ───────────────────────────────────────────
-    if (file.size === 0) {
-      return NextResponse.json({ error: 'Empty files are not allowed' }, { status: 400 })
-    }
-
+    // ─── Validate file ────────────────────────────────────────────────
     if (file.size > VAULT_MAX_FILE_SIZE) {
       return NextResponse.json(
         { error: `File too large. Maximum size is ${VAULT_MAX_FILE_SIZE / (1024 * 1024)} MB` },
@@ -78,65 +72,50 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ─── Validate parent folder ownership ─────────────────────────────
+    if (file.size === 0) {
+      return NextResponse.json({ error: 'File is empty' }, { status: 400 })
+    }
+
+    // ─── Validate parent folder if specified ──────────────────────────
     if (parentId) {
       const parent = await db.secureDocument.findFirst({
-        where: { id: parentId, userId: user.id, isFolder: true, deletedAt: null },
-        select: { id: true },
+        where: {
+          id: parentId,
+          userId: user.id,
+          isFolder: true,
+          deletedAt: null,
+        },
       })
       if (!parent) {
         return NextResponse.json({ error: 'Parent folder not found' }, { status: 404 })
       }
     }
 
-    // ─── Resolve metadata (no decryption needed later for listing) ────
-    const mimeType = file.type || 'application/octet-stream'
-    const mimeGroup = await resolveMimeGroup(mimeType)
-    const extension = await resolveExtension(file.name)
+    // ─── Read file buffer ─────────────────────────────────────────────
+    const rawBuffer = Buffer.from(await file.arrayBuffer())
+
+    // ─── Encrypt file buffer with AES-256-GCM ──────────────────────────
+    const { encryptedBuffer, iv, tag } = encryptBuffer(rawBuffer)
+
+    // ─── Encrypt filename and MIME type ───────────────────────────────
+    const encryptedName = encryptTitle(file.name)
+    const encryptedType = encryptMimeType(file.type || 'application/octet-stream')
+
+    // ─── Derive search token and file metadata ────────────────────────
     const searchName = await normalizeSearchName(file.name)
+    const extension = await resolveExtension(file.name)
+    const mimeGroup = await resolveMimeGroup(file.type || '')
 
-    // ─── Read file buffer & encrypt ───────────────────────────────────
-    let arrayBuffer: ArrayBuffer
-    try {
-      arrayBuffer = await file.arrayBuffer()
-    } catch (error) {
-      console.error('Failed to read file:', error)
-      return NextResponse.json({ error: 'Failed to read file data' }, { status: 500 })
-    }
-
-    const fileBuffer = Buffer.from(arrayBuffer)
-
-    let encryptedName: string
-    let encryptedType: string
-    let encryptedBuffer: Buffer
-    let iv: string
-    let tag: string
-
-    try {
-      encryptedName = encryptTitle(file.name)
-      encryptedType = encryptMimeType(mimeType)
-      const encryptionResult = encryptBuffer(fileBuffer)
-      encryptedBuffer = encryptionResult.encryptedBuffer
-      iv = encryptionResult.iv
-      tag = encryptionResult.tag
-    } catch (error) {
-      console.error('Encryption failed:', error)
-      return NextResponse.json({ error: 'Failed to encrypt file' }, { status: 500 })
-    }
-
-    // ─── Write encrypted file to disk ─────────────────────────────────
+    // ─── Save file to storage ─────────────────────────────────────────
     const storageKey = randomUUID()
-    const vaultDir = getVaultDir(user.id)
-    
     try {
-      await fs.mkdir(vaultDir, { recursive: true })
-      await fs.writeFile(path.join(vaultDir, `${storageKey}.enc`), encryptedBuffer)
+      await StorageService.saveVaultFile(user.id, storageKey, encryptedBuffer)
     } catch (error) {
-      console.error('Failed to write encrypted file:', error)
+      console.error('Failed to write encrypted file to storage:', error)
       return NextResponse.json({ error: 'Failed to store file' }, { status: 500 })
     }
 
-    // ─── Create database record ───────────────────────────────────────
+    // ─── Create database records transactionally ──────────────────────
     let doc
     try {
       doc = await db.secureDocument.create({
@@ -148,7 +127,7 @@ export async function POST(request: NextRequest) {
           mimeGroup,
           extension,
           storageKey,
-          storageProvider: 'local',
+          storageProvider: 'storage_service',
           iv,
           tag,
           fileSize: file.size,
@@ -157,10 +136,23 @@ export async function POST(request: NextRequest) {
           metadata: metadata,
         },
       })
+
+      // Database-backed attachment record
+      await db.attachment.create({
+        data: {
+          userId: user.id,
+          fileName: file.name,
+          fileKey: storageKey,
+          fileSize: file.size,
+          mimeType: file.type || 'application/octet-stream',
+          documentId: doc.id,
+        },
+      }).catch(attErr => console.warn('Attachment creation warning:', attErr))
+
     } catch (error) {
-      // Rollback: delete the file we just wrote
+      // Rollback: delete the stored file
       try {
-        await fs.unlink(path.join(vaultDir, `${storageKey}.enc`))
+        await StorageService.deleteVaultFile(user.id, storageKey)
       } catch {
         // Silent fail on cleanup
       }

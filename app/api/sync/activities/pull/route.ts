@@ -1,6 +1,7 @@
 /**
  * Activity Sync Pull Endpoint
- * Returns remote changes since last sync
+ * Returns remote changes since last sync, including deletion tombstones
+ * to eliminate offline resurrection bugs.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -14,32 +15,33 @@ export async function GET(request: NextRequest) {
     const user = await requireAuth()
     const { searchParams } = new URL(request.url)
     const since = parseInt(searchParams.get('since') || '0')
+    const isIncrementalSync = since > 0
 
     console.log(`[SyncAPI] Pulling changes for user ${user.id} since ${new Date(since).toISOString()}`)
 
     const operations: SyncOperation[] = []
 
-    // Get activity logs modified since last sync
+    // ─── Activity Logs ────────────────────────────────────────────────
+    // In incremental sync, we include soft-deleted records so clients delete their local copies
     const activityLogs = await db.activityLog.findMany({
       where: {
         userId: user.id,
-        deletedAt: null,
-        updatedAt: {
-          gt: new Date(since)
-        }
+        ...(isIncrementalSync
+          ? { updatedAt: { gt: new Date(since) } }
+          : { deletedAt: null }),
       },
       orderBy: {
         updatedAt: 'asc'
       }
     })
 
-    // Convert activity logs to sync operations
     for (const log of activityLogs) {
+      const isDeleted = log.deletedAt !== null
       const syncData = ActivitySyncAdapter.activityLogToSync(
         {
           id: log.id,
           activityId: log.activityId,
-          date: log.logDate.toISOString().split('T')[0], // Convert to YYYY-MM-DD
+          date: log.logDate.toISOString().split('T')[0],
           logDate: log.logDate,
           note: log.note,
           status: log.status,
@@ -52,8 +54,8 @@ export async function GET(request: NextRequest) {
       )
 
       operations.push({
-        id: `pull_${log.id}_${log.updatedAt.getTime()}`,
-        type: 'update', // Pulled operations are typically updates
+        id: `pull_${isDeleted ? 'del_' : ''}${log.id}_${log.updatedAt.getTime()}`,
+        type: isDeleted ? 'delete' : 'update',
         entityType: 'activityLog',
         entityId: log.id,
         data: syncData,
@@ -62,7 +64,7 @@ export async function GET(request: NextRequest) {
           entityType: 'activityLog',
           entityId: log.id,
           lastModified: log.updatedAt.getTime(),
-          version: 1, // This would be stored in sync metadata table
+          version: 1,
           syncStatus: 'synced',
           retryCount: 0,
           createdAt: log.createdAt.getTime(),
@@ -73,22 +75,21 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Get activity templates modified since last sync
+    // ─── Activity Templates ───────────────────────────────────────────
     const activityTemplates = await db.activityTemplate.findMany({
       where: {
         userId: user.id,
-        deletedAt: null,
-        updatedAt: {
-          gt: new Date(since)
-        }
+        ...(isIncrementalSync
+          ? { updatedAt: { gt: new Date(since) } }
+          : { deletedAt: null }),
       },
       orderBy: {
         updatedAt: 'asc'
       }
     })
 
-    // Convert activity templates to sync operations
     for (const template of activityTemplates) {
+      const isDeleted = template.deletedAt !== null
       const syncData = ActivitySyncAdapter.activityTemplateToSync(
         {
           id: template.id,
@@ -115,7 +116,7 @@ export async function GET(request: NextRequest) {
           targetDate: template.targetDate ? template.targetDate.toISOString().split('T')[0] : null,
           remindBeforeDays: template.remindBeforeDays,
           metadata: template.metadata,
-          tags: [], // Would need to fetch related tags
+          tags: [],
           createdAt: template.createdAt,
           updatedAt: template.updatedAt
         },
@@ -123,8 +124,8 @@ export async function GET(request: NextRequest) {
       )
 
       operations.push({
-        id: `pull_template_${template.id}_${template.updatedAt.getTime()}`,
-        type: 'update',
+        id: `pull_template_${isDeleted ? 'del_' : ''}${template.id}_${template.updatedAt.getTime()}`,
+        type: isDeleted ? 'delete' : 'update',
         entityType: 'activityTemplate',
         entityId: template.id,
         data: syncData,
