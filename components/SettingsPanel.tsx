@@ -18,6 +18,8 @@ import {
   saveDashboardConfigAction,
   saveUserAppearanceAction,
   saveWeeklyGoalAction,
+  getLoginSecuritySettingsAction,
+  saveLoginSecuritySettingsAction,
 } from '@/app/actions/settings'
 import { BackupService } from '@/lib/database/local/BackupService'
 import { useSearchParams } from 'next/navigation'
@@ -220,6 +222,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
   const [permissionsSuccess, setPermissionsSuccess] = useState<string | null>(null)
   const [auditSummary, setAuditSummary] = useState<import('@/lib/services/MigrationAuditService').MigrationAuditSummary | null>(null)
   const [auditLoading, setAuditLoading] = useState(false)
+  const [humanVerificationEnabled, setHumanVerificationEnabled] = useState(true)
+  const [savingHumanVerification, setSavingHumanVerification] = useState(false)
 
   const handleRunMigrationAudit = useCallback(async () => {
     setAuditLoading(true)
@@ -330,6 +334,11 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
       fetchConnection()
       fetchGuestPermissions()
       fetchUserSettings()
+      if (initialUserProfile?.isOwner !== false) {
+        getLoginSecuritySettingsAction().then(res => {
+          if (res.success) setHumanVerificationEnabled(res.humanVerificationEnabled)
+        })
+      }
     }, 0)
 
     const handleSettingsChanged = () => {
@@ -1640,6 +1649,48 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
 
           {activeSection === 'admin' && userProfile?.isOwner !== false && (
             <div className="space-y-6 animate-fade-in">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4.5 h-4.5 text-[var(--color-primary)]" />
+                      <span className="text-xs font-black text-[var(--color-text-main)] uppercase tracking-wider">
+                        Login Security
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                      Owner Control
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardBody>
+                  <div className="flex items-center justify-between gap-4 p-3 bg-slate-50 dark:bg-zinc-900/30 border border-slate-100 dark:border-zinc-850 rounded-xl">
+                    <div>
+                      <div className="text-xs font-bold text-[var(--color-text-main)]">Require “I&apos;m not a robot” verification</div>
+                      <div className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
+                        Require the security check before passcode/password login or signup. This setting is enforced server-side.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const next = !humanVerificationEnabled
+                        setHumanVerificationEnabled(next)
+                        setSavingHumanVerification(true)
+                        const res = await saveLoginSecuritySettingsAction(next)
+                        if (!res.success) setHumanVerificationEnabled(!next)
+                        setSavingHumanVerification(false)
+                      }}
+                      disabled={savingHumanVerification}
+                      aria-label="Toggle human verification"
+                      className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 ${humanVerificationEnabled ? 'bg-[var(--color-primary)]' : 'bg-slate-200 dark:bg-zinc-800'}`}
+                    >
+                      <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ${humanVerificationEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                </CardBody>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
