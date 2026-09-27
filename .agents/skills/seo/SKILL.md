@@ -15,7 +15,7 @@ Search engine optimization based on Lighthouse SEO audits and Google Search guid
 
 When a rendered page is available:
 
-1. Run live Lighthouse SEO and Agentic Browsing checks when that capability is available; with Chrome DevTools MCP, use `lighthouse_audit`. Use the results to localize rendered-page failures.
+1. Run live Lighthouse SEO and Agentic Browsing checks when that capability is available; when Lighthouse/browser tooling is available, run the relevant audit. Use the results to localize rendered-page failures.
 2. Inspect signals Lighthouse cannot establish on its own: response headers, redirects, `robots.txt`, sitemap coverage, canonical consistency across page templates, structured-data eligibility, and Search Console evidence when the user provides access.
 3. Separate technical crawl/index findings from content quality and authority. Do not invent ranking-factor weights or promise ranking changes.
 4. Fix the source and re-run the same checks. For indexation or ranking outcomes, report that search-engine validation remains pending.
@@ -27,7 +27,7 @@ If live tools are unavailable, use category-specific Lighthouse CLI output plus 
 | Crawl and index controls | Technical configuration and consistency |
 | Rendered metadata and semantics | Presence, validity, and page-template issues |
 | Structured data | Syntax and eligibility signals, not guaranteed rich results |
-| Core Web Vitals | Link to measured field/lab evidence from the Core Web Vitals skill |
+| Core Web Vitals | Use measured field/lab evidence when available |
 | Content usefulness and authority | Review quality, but do not assign synthetic ranking percentages |
 
 ---
