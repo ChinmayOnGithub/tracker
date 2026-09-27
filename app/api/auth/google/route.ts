@@ -10,8 +10,10 @@ export async function GET(request: Request) {
   const source = searchParams.get('source')
 
   const clientId = env.GOOGLE_CLIENT_ID
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
-  const redirectUri = `${siteUrl}${'/api/auth/callback/google'}`
+  // Always derive the OAuth origin from the actual request host so the redirect URI
+  // used to start OAuth exactly matches the one used by the callback.
+  const siteUrl = new URL(request.url).origin
+  const redirectUri = new URL('/api/auth/callback/google', siteUrl).toString()
 
   if (!clientId || clientId === 'test-client-id') {
     logger.error('OAuthInitiator', 'Google OAuth client ID is not configured')
