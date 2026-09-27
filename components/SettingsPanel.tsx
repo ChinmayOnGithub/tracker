@@ -669,6 +669,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
                 { id: 'billing', label: 'Financial', description: 'Plan and subscription', icon: CreditCard },
               ]}
               onSelect={(id) => { setActiveSection(id as typeof activeSection); setMobileSettingsHub(false) }}
+              canShowOwnerOnly={userProfile?.isOwner !== false}
             />
 
             <MobileSettingsGroup
@@ -1871,6 +1872,7 @@ function MobileSettingsGroup({
   title,
   items,
   onSelect,
+  canShowOwnerOnly = true,
 }: {
   title: string
   items: Array<{
@@ -1881,8 +1883,9 @@ function MobileSettingsGroup({
     ownerOnly?: boolean
   }>
   onSelect: (id: string) => void
+  canShowOwnerOnly?: boolean
 }) {
-  const visible = items
+  const visible = items.filter(item => !item.ownerOnly || canShowOwnerOnly)
   if (!visible.length) return null
 
   return (
