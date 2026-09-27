@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Button, Input, Modal } from '@/design-system'
+import { Button, Input } from '@/design-system'
 import {
   verifyPinAction,
   registerUserAction,
@@ -35,12 +35,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
   const [turnstileSiteKey, setTurnstileSiteKey] = useState('1x00000000000000000000AA')
   const [humanVerificationLoading, setHumanVerificationLoading] = useState(true)
 
-  // Placeholder modal dialog
-  const [placeholderDialog, setPlaceholderDialog] = useState<{
-    isOpen: boolean
-    title: string
-    message: string
-  } | null>(null)
+
 
   const { toggleTheme, isDark } = useTheme()
   const pinInputRef = useRef<HTMLInputElement>(null)
@@ -196,9 +191,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
     [isRegisterMode, isAuthLoading, usernameInput, enteredPin, onAuthenticated]
   )
 
-  const openPlaceholder = (title: string, message: string) => {
-    setPlaceholderDialog({ isOpen: true, title, message })
-  }
+
 
   return (
     <main className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex items-center justify-center px-4 py-8 sm:px-6 relative transition-colors">
@@ -292,39 +285,6 @@ export const AuthView: React.FC<AuthViewProps> = ({
             </svg>
             Continue with Google
           </a>
-
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => openPlaceholder(
-                'Outlook Login',
-                'Microsoft / Outlook authentication is planned for a future release.'
-              )}
-              className="h-10 w-full border border-[var(--border)] rounded-xl bg-[var(--surface)] hover:bg-[var(--accent)] text-[var(--foreground)] flex items-center justify-center gap-2 text-xs font-medium transition"
-            >
-              <span className="grid h-3.5 w-3.5 grid-cols-2 gap-[1px]" aria-hidden="true">
-                <span className="bg-[#f25022]" />
-                <span className="bg-[#7fba00]" />
-                <span className="bg-[#00a4ef]" />
-                <span className="bg-[#ffb900]" />
-              </span>
-              Outlook
-            </button>
-
-            <button
-              type="button"
-              onClick={() => openPlaceholder(
-                'Company SSO',
-                'SAML 2.0 / OIDC enterprise single sign-on is reserved for enterprise workspaces.'
-              )}
-              className="h-10 w-full border border-[var(--border)] rounded-xl bg-[var(--surface)] hover:bg-[var(--accent)] text-[var(--foreground)] flex items-center justify-center gap-2 text-xs font-medium transition"
-            >
-              <svg className="h-3.5 w-3.5 text-[var(--muted-foreground)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-                <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5M8 10h1M15 10h1M8 13h1M15 13h1" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              SSO
-            </button>
-          </div>
         </div>
 
         {/* Divider */}
@@ -401,28 +361,10 @@ export const AuthView: React.FC<AuthViewProps> = ({
           </Button>
         </form>
 
-        {/* Recovery Link */}
+        {/* Recovery Note */}
         <div className="mt-4 flex items-center justify-between text-xs text-[var(--muted-foreground)]">
-          <button
-            type="button"
-            onClick={() => openPlaceholder(
-              'Password recovery',
-              'Password recovery will send a secure reset link to your verified email.'
-            )}
-            className="hover:text-[var(--foreground)] transition"
-          >
-            Forgot password?
-          </button>
-          <button
-            type="button"
-            onClick={() => openPlaceholder(
-              'Password recovery',
-              'Self-service password recovery is enabled for accounts with verified email addresses.'
-            )}
-            className="text-[var(--primary)] hover:underline"
-          >
-            Need help?
-          </button>
+          <span>Forgot your password?</span>
+          <span>Contact workspace admin</span>
         </div>
 
         {/* Turnstile Container */}
@@ -452,28 +394,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
         </div>
       )}
 
-      {/* Informational Dialog */}
-      {placeholderDialog && (
-        <Modal
-          isOpen={placeholderDialog.isOpen}
-          onClose={() => setPlaceholderDialog(null)}
-          title={placeholderDialog.title}
-          size="sm"
-        >
-          <div className="space-y-4 text-sm text-[var(--muted-foreground)]">
-            <p className="leading-relaxed">{placeholderDialog.message}</p>
-            <div className="flex justify-end">
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setPlaceholderDialog(null)}
-              >
-                Understood
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+
     </main>
   )
 }

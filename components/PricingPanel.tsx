@@ -32,6 +32,7 @@ export const PricingPanel: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [infoMessage, setInfoMessage] = useState<string | null>(null)
   const [scriptLoaded, setScriptLoaded] = useState(false)
+  const [paymentsConfigured, setPaymentsConfigured] = useState(true)
 
   // Fetch billing state to identify current plan and promo eligibility
   useEffect(() => {
@@ -47,6 +48,9 @@ export const PricingPanel: React.FC = () => {
           // Pre-select interval tab matching user's current billing interval
           if (res.data.subscription?.billingInterval === 'annual') {
             setInterval('annual')
+          }
+          if (res.data.paymentsConfigured !== undefined) {
+            setPaymentsConfigured(res.data.paymentsConfigured)
           }
         }
       } catch (err) {
@@ -439,21 +443,31 @@ export const PricingPanel: React.FC = () => {
                 {getProCtaLabel()}
               </Button>
             ) : (
-              <Button
-                variant="primary"
-                className="w-full font-semibold"
-                disabled={actionLoading || loading}
-                onClick={() => handleSubscribe(interval === 'annual' ? 'PRO_ANNUAL' : 'PRO_MONTHLY')}
-              >
-                {actionLoading ? (
-                  'Starting Checkout...'
-                ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    {getProCtaLabel()}
-                    <ArrowRight className="w-4 h-4" />
-                  </span>
+              <>
+                {!paymentsConfigured && (
+                  <div className="mb-3 p-2.5 rounded-[var(--radius-md)] bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                    <Info className="w-3.5 h-3.5 shrink-0" />
+                    <span>Paid subscriptions are in preview. Upgrades opening soon.</span>
+                  </div>
                 )}
-              </Button>
+                <Button
+                  variant="primary"
+                  className="w-full font-semibold"
+                  disabled={actionLoading || loading || !paymentsConfigured}
+                  onClick={() => handleSubscribe(interval === 'annual' ? 'PRO_ANNUAL' : 'PRO_MONTHLY')}
+                >
+                  {actionLoading ? (
+                    'Starting Checkout...'
+                  ) : !paymentsConfigured ? (
+                    'Upgrades Opening Soon'
+                  ) : (
+                    <span className="flex items-center justify-center gap-2">
+                      {getProCtaLabel()}
+                      <ArrowRight className="w-4 h-4" />
+                    </span>
+                  )}
+                </Button>
+              </>
             )}
           </div>
         </Card>

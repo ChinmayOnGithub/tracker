@@ -15,7 +15,7 @@ const HUMAN_CHALLENGE_MAX_AGE_MS = 10 * 60 * 1000
 const CLOUDFLARE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
 const DEV_TURNSTILE_SECRET_PASS = '1x0000000000000000000000000000000AA'
 
-async function verifyTurnstileToken(token: string): Promise<boolean> {
+export async function verifyTurnstileToken(token: string): Promise<boolean> {
   if (!token) return false
 
   const secretKey =
@@ -23,8 +23,8 @@ async function verifyTurnstileToken(token: string): Promise<boolean> {
     (process.env.NODE_ENV !== 'production' ? DEV_TURNSTILE_SECRET_PASS : '')
 
   if (!secretKey) {
-    console.warn('[Turnstile] Missing CLOUDFLARE_TURNSTILE_SECRET_KEY. Allowing pass to prevent lockout.')
-    return true
+    console.error('[Turnstile] Missing CLOUDFLARE_TURNSTILE_SECRET_KEY while human verification is enabled. Rejecting.')
+    return false
   }
 
   // If using Cloudflare's standard test pass token in development, allow immediate success
@@ -63,9 +63,14 @@ export async function getLoginSecuritySettingsAction(): Promise<{
     process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY ||
     process.env.CLOUDFLARE_TURNSTILE_SITE_KEY
 
+  const configuredSecretKey = process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY
   const isProduction = process.env.NODE_ENV === 'production'
-  // If in production and no real site key is configured (or dummy key was placed), turn off challenge to prevent broken verification loops
-  const hasRealKey = Boolean(configuredSiteKey && !configuredSiteKey.startsWith('1x00000000000000000000AA'))
+
+  const hasRealSiteKey = Boolean(configuredSiteKey && !configuredSiteKey.startsWith('1x00000000000000000000AA'))
+  const hasRealSecretKey = Boolean(configuredSecretKey && !configuredSecretKey.startsWith('1x00000000000000000000'))
+  // In production, BOTH site key and secret key must be present for human verification to be safely enabled.
+  const hasCompleteProductionConfig = hasRealSiteKey && hasRealSecretKey
+
   const turnstileSiteKey = configuredSiteKey || '1x00000000000000000000AA'
 
   try {
@@ -77,9 +82,9 @@ export async function getLoginSecuritySettingsAction(): Promise<{
       : null
     const config = (setting?.config as { humanVerificationEnabled?: boolean } | null) || {}
 
-    // In production without real Cloudflare Turnstile keys, auto-disable to protect login availability
+    // In production without complete Turnstile keys, auto-disable to protect login availability
     const shouldEnable = isProduction
-      ? Boolean(hasRealKey && config.humanVerificationEnabled !== false)
+      ? Boolean(hasCompleteProductionConfig && config.humanVerificationEnabled !== false)
       : config.humanVerificationEnabled !== false
 
     return {
@@ -90,7 +95,7 @@ export async function getLoginSecuritySettingsAction(): Promise<{
   } catch {
     return {
       success: true,
-      humanVerificationEnabled: isProduction ? hasRealKey : true,
+      humanVerificationEnabled: isProduction ? hasCompleteProductionConfig : true,
       turnstileSiteKey,
     }
   }

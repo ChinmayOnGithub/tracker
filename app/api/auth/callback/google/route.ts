@@ -114,15 +114,15 @@ async function verifyGoogleIdToken(idToken: string): Promise<Record<string, unkn
   }
 }
 
+import { getCanonicalOrigin } from '@/lib/url'
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
   const error = searchParams.get('error')
   const stateFromGoogle = searchParams.get('state')
 
-  // Use the same origin Google redirected back to. This prevents redirect_uri_mismatch
-  // when NEXT_PUBLIC_SITE_URL differs from the public hostname.
-  const siteUrl = new URL(request.url).origin
+  const siteUrl = getCanonicalOrigin(request)
 
   if (error || !code) {
     logger.error('OAuthCallback', 'OAuth error or missing code', { error, hasCode: !!code })

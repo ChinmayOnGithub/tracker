@@ -76,3 +76,39 @@ function validateEnv(): Env {
 }
 
 export const env = validateEnv()
+
+/**
+ * Returns whether Google OAuth is fully configured with production-ready credentials.
+ */
+export function isGoogleConfigured(): boolean {
+  return Boolean(
+    env.GOOGLE_CLIENT_ID &&
+    env.GOOGLE_CLIENT_SECRET &&
+    !env.GOOGLE_CLIENT_ID.includes('test-client-id')
+  )
+}
+
+/**
+ * Returns whether Razorpay payments are fully configured.
+ */
+export function isRazorpayConfigured(): boolean {
+  return Boolean(
+    (env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID) &&
+    env.RAZORPAY_KEY_SECRET &&
+    !env.RAZORPAY_KEY_ID?.includes('placeholder')
+  )
+}
+
+/**
+ * Returns whether Cloudflare Turnstile bot detection is fully configured.
+ */
+export function isTurnstileConfigured(): boolean {
+  const siteKey =
+    process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY ||
+    process.env.CLOUDFLARE_TURNSTILE_SITE_KEY
+  const secretKey = process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY
+
+  const hasRealSite = Boolean(siteKey && !siteKey.startsWith('1x00000000000000000000AA'))
+  const hasRealSecret = Boolean(secretKey && !secretKey.startsWith('1x00000000000000000000'))
+  return hasRealSite && hasRealSecret
+}

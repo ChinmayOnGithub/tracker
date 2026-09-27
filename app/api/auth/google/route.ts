@@ -5,14 +5,14 @@ import { env } from '@/lib/env'
 import { GOOGLE_OAUTH, COOKIES } from '@/lib/constants'
 import { logger } from '@/lib/logger'
 
+import { getCanonicalOrigin } from '@/lib/url'
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const source = searchParams.get('source')
 
   const clientId = env.GOOGLE_CLIENT_ID
-  // Always derive the OAuth origin from the actual request host so the redirect URI
-  // used to start OAuth exactly matches the one used by the callback.
-  const siteUrl = new URL(request.url).origin
+  const siteUrl = getCanonicalOrigin(request)
   const redirectUri = new URL('/api/auth/callback/google', siteUrl).toString()
 
   if (!clientId || clientId === 'test-client-id') {

@@ -13,11 +13,11 @@ function safeReturnTo(value: string | null): string {
   return value
 }
 
+import { getCanonicalOrigin } from '@/lib/url'
+
 export async function GET(request: Request) {
   const user = await SessionService.getSessionUser()
-  const siteUrlUrl = new URL(env.NEXT_PUBLIC_SITE_URL)
-  if (process.env.NODE_ENV === 'production') siteUrlUrl.protocol = 'https:'
-  const siteUrl = siteUrlUrl.origin
+  const siteUrl = getCanonicalOrigin(request)
 
   if (!user) {
     return NextResponse.redirect(`${siteUrl}/?error=calendar-auth-required`)

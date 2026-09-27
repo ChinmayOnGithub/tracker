@@ -8,9 +8,12 @@ import { PlanId, SafeCheckoutPayload, UserEntitlements } from '@/lib/billing/typ
 import { getIntroductoryOfferId } from '@/lib/billing/plans'
 import { logger } from '@/lib/logger'
 
+import { isRazorpayConfigured } from '@/lib/env'
+
 export interface BillingSummary {
   plan: PlanId
   isEligibleForIntro: boolean
+  paymentsConfigured?: boolean
   entitlements: UserEntitlements
   subscription: {
     id: string
@@ -68,12 +71,14 @@ export async function getBillingSummaryAction(): Promise<{
     ])
 
     const hasConfiguredOffer = !!getIntroductoryOfferId()
+    const paymentsConfigured = isRazorpayConfigured()
 
     return {
       success: true,
       data: {
         plan: entitlements.plan,
         isEligibleForIntro: eligibleForIntro && hasConfiguredOffer,
+        paymentsConfigured,
         entitlements,
         subscription: sub
           ? {

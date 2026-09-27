@@ -4,6 +4,7 @@ import { ICalendarProvider, CalendarEventInput as LibCalendarEventInput, ParsedC
 import { GoogleCalendarService, CalendarEventInput } from '../services/GoogleCalendarService'
 import { db } from '@/lib/db'
 import { logger } from '@/lib/logger'
+import { getCanonicalOrigin } from '@/lib/url'
 
 interface GoogleEventPayload {
   id: string
@@ -106,7 +107,7 @@ export class GoogleCalendarProvider implements CalendarProvider, ICalendarProvid
 
   async watch(userId: string): Promise<WatchChannel> {
     const channelId = crypto.randomUUID()
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    const siteUrl = getCanonicalOrigin()
     const address = `${siteUrl}/api/sync/calendar`
 
     const { resourceId, expiration } = await GoogleCalendarService.watchEvents(userId, channelId, address)
