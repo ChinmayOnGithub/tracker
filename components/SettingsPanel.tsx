@@ -358,7 +358,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
       clearTimeout(timer)
       window.removeEventListener('personal_settings_changed', handleSettingsChanged)
     }
-  }, [fetchProfile, fetchConnection, fetchGuestPermissions, fetchUserSettings])
+  }, [fetchProfile, fetchConnection, fetchGuestPermissions, fetchUserSettings, initialUserProfile?.isOwner])
 
   const handleToggleGuestPermission = async (moduleKey: string) => {
     const updated = {
