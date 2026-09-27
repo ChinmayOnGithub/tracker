@@ -120,7 +120,7 @@ export async function registerUserAction(usernameInput: string, secret: string):
     }
 
     await SessionService.setSessionCookie(result.token)
-    (await cookies()).delete(HUMAN_VERIFIED_COOKIE)
+    ;(await cookies()).delete(HUMAN_VERIFIED_COOKIE)
     const onboarding = await OnboardingService.getState(result.user.id)
     return { success: true, user: result.user, onboardingRequired: onboarding?.status !== 'COMPLETED' }
   } catch (error) {
