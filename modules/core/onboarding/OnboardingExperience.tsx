@@ -215,29 +215,29 @@ export function OnboardingExperience({ initialState, username }: Props) {
 
   return (
     <main
-      className="min-h-screen bg-[#f9fafb] p-3 text-slate-900 sm:p-6 flex items-center justify-center"
+      className="min-h-screen bg-slate-50 dark:bg-zinc-950 p-3 text-slate-900 dark:text-zinc-100 sm:p-6 flex items-center justify-center transition-colors"
       style={{
         '--onboarding-rose': '#e11d48',
         '--onboarding-rose-soft': '#fff1f2',
       } as React.CSSProperties}
     >
-      <div className="w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-xl">
+      <div className="w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200/90 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl transition-colors">
         <div className="grid lg:grid-cols-[240px_1fr]">
           {/* Minimalist Sidebar */}
-          <aside className="border-b border-slate-100 bg-slate-50/70 p-5 lg:border-b-0 lg:border-r lg:p-6">
+          <aside className="border-b border-slate-100 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-900/60 p-5 lg:border-b-0 lg:border-r lg:p-6 transition-colors">
             <div className="flex items-center gap-2.5">
-              <div className="grid h-8 w-8 place-items-center rounded-xl bg-slate-950 text-white shadow-sm">
+              <div className="grid h-8 w-8 place-items-center rounded-xl bg-slate-950 dark:bg-zinc-800 text-white shadow-sm">
                 <Layers3 className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-sm font-bold tracking-tight">tracker</p>
-                <p className="text-[10px] text-slate-400">Quick setup</p>
+                <p className="text-sm font-bold tracking-tight text-slate-900 dark:text-zinc-100">tracker</p>
+                <p className="text-[10px] text-slate-400 dark:text-zinc-500">Quick setup</p>
               </div>
             </div>
 
             <div className="mt-6 hidden lg:block">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-rose-600">Step {step + 1} of {TOTAL_STEPS + 1}</p>
-              <h2 className="mt-1 text-base font-bold tracking-tight text-slate-800">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">Step {step + 1} of {TOTAL_STEPS + 1}</p>
+              <h2 className="mt-1 text-base font-bold tracking-tight text-slate-800 dark:text-zinc-200">
                 {STEPS[step]?.[0]}
               </h2>
             </div>
@@ -247,13 +247,13 @@ export function OnboardingExperience({ initialState, username }: Props) {
                 const active = index === step
                 const done = index < step
                 return (
-                  <div key={label} className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition-colors ${active ? 'bg-white shadow-sm ring-1 ring-slate-200' : ''}`}>
-                    <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${done ? 'bg-emerald-500 text-white' : active ? 'bg-slate-950 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                  <div key={label} className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition-colors ${active ? 'bg-white dark:bg-zinc-800 shadow-sm ring-1 ring-slate-200 dark:ring-zinc-700' : ''}`}>
+                    <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${done ? 'bg-emerald-500 text-white' : active ? 'bg-slate-950 dark:bg-zinc-100 dark:text-zinc-900 text-white' : 'bg-slate-200 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400'}`}>
                       {done ? <Check className="h-3 w-3" /> : index + 1}
                     </span>
                     <div className="min-w-0">
-                      <p className={`text-xs font-semibold ${active ? 'text-slate-900' : 'text-slate-500'}`}>{label}</p>
-                      <p className="truncate text-[10px] text-slate-400">{hint}</p>
+                      <p className={`text-xs font-semibold ${active ? 'text-slate-900 dark:text-zinc-100' : 'text-slate-500 dark:text-zinc-400'}`}>{label}</p>
+                      <p className="truncate text-[10px] text-slate-400 dark:text-zinc-500">{hint}</p>
                     </div>
                   </div>
                 )
@@ -263,24 +263,24 @@ export function OnboardingExperience({ initialState, username }: Props) {
             <div className="mt-3 flex items-center gap-2 lg:hidden">
               <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
                 {STEPS.map(([label], index) => (
-                  <span key={label} className={`h-1 flex-1 rounded-full ${index <= step ? 'bg-rose-600' : 'bg-slate-200'}`} />
+                  <span key={label} className={`h-1 flex-1 rounded-full ${index <= step ? 'bg-rose-600 dark:bg-rose-500' : 'bg-slate-200 dark:bg-zinc-800'}`} />
                 ))}
               </div>
-              <span className="shrink-0 text-[10px] font-semibold text-slate-400">{step + 1}/{STEPS.length}</span>
+              <span className="shrink-0 text-[10px] font-semibold text-slate-400 dark:text-zinc-500">{step + 1}/{STEPS.length}</span>
             </div>
           </aside>
 
           {/* Main Content Area */}
-          <section className="flex flex-col bg-white">
-            <header className="flex items-center justify-between border-b border-slate-100 px-6 py-3">
-              <span className="text-xs font-semibold text-slate-500">
-                Welcome, <strong className="text-slate-900">{username}</strong>
+          <section className="flex flex-col bg-white dark:bg-zinc-900 transition-colors">
+            <header className="flex items-center justify-between border-b border-slate-100 dark:border-zinc-800 px-6 py-3">
+              <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400">
+                Welcome, <strong className="text-slate-900 dark:text-zinc-100">{username}</strong>
               </span>
               <div className="flex items-center gap-2">
-                <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full rounded-full bg-rose-600 transition-all duration-300" style={{ width: `${Math.max(progress, 15)}%` }} />
+                <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100 dark:bg-zinc-800">
+                  <div className="h-full rounded-full bg-rose-600 dark:bg-rose-500 transition-all duration-300" style={{ width: `${Math.max(progress, 15)}%` }} />
                 </div>
-                <span className="text-[10px] font-bold text-slate-400">{progress}%</span>
+                <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500">{progress}%</span>
               </div>
             </header>
 
@@ -321,15 +321,15 @@ export function OnboardingExperience({ initialState, username }: Props) {
                     <TimeSelect label="Workday Ends" value={state.workEndTime} onChange={(v) => update('workEndTime', v)} />
                   </div>
 
-                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                  <div className="mt-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/60 dark:bg-zinc-800/40 p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <div className="grid h-10 w-10 place-items-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
-                          <CalendarDays className="h-5 w-5 text-rose-600" />
+                        <div className="grid h-10 w-10 place-items-center rounded-xl bg-white dark:bg-zinc-800 shadow-sm ring-1 ring-slate-200 dark:ring-zinc-700">
+                          <CalendarDays className="h-5 w-5 text-rose-600 dark:text-rose-400" />
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-slate-900">Google Calendar</p>
-                          <p className="text-[11px] text-slate-500">
+                          <p className="text-xs font-bold text-slate-900 dark:text-zinc-100">Google Calendar</p>
+                          <p className="text-[11px] text-slate-500 dark:text-zinc-400">
                             {calendarDiscovery?.connected
                               ? `Connected (${calendarDiscovery.eventCount} events)`
                               : 'Keep meetings and tasks aligned automatically'}
@@ -338,14 +338,14 @@ export function OnboardingExperience({ initialState, username }: Props) {
                       </div>
 
                       {calendarDiscovery?.connected ? (
-                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-bold text-emerald-700">
+                        <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-3 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
                           Connected
                         </span>
                       ) : (
                         <button
                           type="button"
                           onClick={connectCalendar}
-                          className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          className="rounded-xl border border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700"
                         >
                           Connect
                         </button>
@@ -367,9 +367,9 @@ export function OnboardingExperience({ initialState, username }: Props) {
                     maxLength={200}
                     rows={4}
                     placeholder="e.g., Complete project proposal, finish client review..."
-                    className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50/50 p-4 text-sm outline-none transition focus:border-rose-500 focus:bg-white focus:ring-4 focus:ring-rose-100"
+                    className="w-full resize-none rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-800/40 p-4 text-sm text-slate-900 dark:text-zinc-100 outline-none transition focus:border-rose-500 focus:bg-white dark:focus:bg-zinc-800 focus:ring-4 focus:ring-rose-100 dark:focus:ring-rose-950/40"
                   />
-                  <div className="mt-2 flex justify-between text-[11px] text-slate-400">
+                  <div className="mt-2 flex justify-between text-[11px] text-slate-400 dark:text-zinc-500">
                     <span>Leave blank to skip</span>
                     <span>{state.firstDayObjective.length}/200</span>
                   </div>
@@ -382,50 +382,50 @@ export function OnboardingExperience({ initialState, username }: Props) {
                   title="You're ready to start"
                   description="Here is your setup summary. You can adjust settings anytime."
                 >
-                  <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
+                  <div className="space-y-3 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/60 dark:bg-zinc-800/40 p-5">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-zinc-700/60">
                       <div>
-                        <p className="text-xs font-bold text-slate-900">Work Hours</p>
-                        <p className="text-[11px] text-slate-500">{formatTime(state.workStartTime)} — {formatTime(state.workEndTime)}</p>
+                        <p className="text-xs font-bold text-slate-900 dark:text-zinc-100">Work Hours</p>
+                        <p className="text-[11px] text-slate-500 dark:text-zinc-400">{formatTime(state.workStartTime)} — {formatTime(state.workEndTime)}</p>
                       </div>
-                      <Clock3 className="h-4 w-4 text-slate-400" />
+                      <Clock3 className="h-4 w-4 text-slate-400 dark:text-zinc-500" />
                     </div>
 
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-zinc-700/60">
                       <div>
-                        <p className="text-xs font-bold text-slate-900">Focus Areas</p>
-                        <p className="text-[11px] text-slate-500">
+                        <p className="text-xs font-bold text-slate-900 dark:text-zinc-100">Focus Areas</p>
+                        <p className="text-[11px] text-slate-500 dark:text-zinc-400">
                           {selectedFocusLabels.length > 0 ? selectedFocusLabels.join(', ') : 'None selected'}
                         </p>
                       </div>
-                      <Target className="h-4 w-4 text-slate-400" />
+                      <Target className="h-4 w-4 text-slate-400 dark:text-zinc-500" />
                     </div>
 
                     {state.firstDayObjective.trim() ? (
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-xs font-bold text-slate-900">Today&apos;s Priority</p>
-                          <p className="text-[11px] text-slate-600 truncate max-w-sm">{state.firstDayObjective}</p>
+                          <p className="text-xs font-bold text-slate-900 dark:text-zinc-100">Today&apos;s Priority</p>
+                          <p className="text-[11px] text-slate-600 dark:text-zinc-300 truncate max-w-sm">{state.firstDayObjective}</p>
                         </div>
                         <Sparkles className="h-4 w-4 text-rose-500" />
                       </div>
                     ) : (
-                      <p className="text-[11px] text-slate-400 italic">No first-day goal set (clean start).</p>
+                      <p className="text-[11px] text-slate-400 dark:text-zinc-500 italic">No first-day goal set (clean start).</p>
                     )}
                   </div>
 
                   {/* Theme / Appearance Selection */}
-                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
-                    <p className="text-xs font-bold text-slate-900">Workspace Appearance</p>
-                    <p className="text-[11px] text-slate-500 mb-3">Choose how tracker looks for your daily sessions.</p>
+                  <div className="mt-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/60 dark:bg-zinc-800/40 p-4">
+                    <p className="text-xs font-bold text-slate-900 dark:text-zinc-100">Workspace Appearance</p>
+                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 mb-3">Choose how tracker looks for your daily sessions.</p>
                     <div className="grid grid-cols-3 gap-2">
                       <button
                         type="button"
                         onClick={() => handleThemeChange('light')}
                         className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition ${
                           currentTheme === 'light'
-                            ? 'border-rose-500 bg-white text-rose-600 shadow-sm ring-1 ring-rose-200'
-                            : 'border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300'
+                            ? 'border-rose-500 bg-white dark:bg-zinc-800 text-rose-600 dark:text-rose-400 shadow-sm ring-1 ring-rose-200 dark:ring-rose-900/50'
+                            : 'border-slate-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-800/80 text-slate-600 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-zinc-600'
                         }`}
                       >
                         <Sun className="h-4 w-4" />
@@ -437,8 +437,8 @@ export function OnboardingExperience({ initialState, username }: Props) {
                         onClick={() => handleThemeChange('dark')}
                         className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition ${
                           currentTheme === 'dark'
-                            ? 'border-rose-500 bg-white text-rose-600 shadow-sm ring-1 ring-rose-200'
-                            : 'border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300'
+                            ? 'border-rose-500 bg-white dark:bg-zinc-800 text-rose-600 dark:text-rose-400 shadow-sm ring-1 ring-rose-200 dark:ring-rose-900/50'
+                            : 'border-slate-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-800/80 text-slate-600 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-zinc-600'
                         }`}
                       >
                         <Moon className="h-4 w-4" />
@@ -450,8 +450,8 @@ export function OnboardingExperience({ initialState, username }: Props) {
                         onClick={() => handleThemeChange('system')}
                         className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition ${
                           currentTheme === 'system'
-                            ? 'border-rose-500 bg-white text-rose-600 shadow-sm ring-1 ring-rose-200'
-                            : 'border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300'
+                            ? 'border-rose-500 bg-white dark:bg-zinc-800 text-rose-600 dark:text-rose-400 shadow-sm ring-1 ring-rose-200 dark:ring-rose-900/50'
+                            : 'border-slate-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-800/80 text-slate-600 dark:text-zinc-300 hover:border-slate-300 dark:hover:border-zinc-600'
                         }`}
                       >
                         <Laptop className="h-4 w-4" />
@@ -530,8 +530,8 @@ export function OnboardingExperience({ initialState, username }: Props) {
 function Step({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
     <div>
-      <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">{title}</h1>
-      <p className="mt-1 text-xs text-slate-500">{description}</p>
+      <h1 className="text-xl font-bold tracking-tight text-slate-950 dark:text-zinc-50 sm:text-2xl">{title}</h1>
+      <p className="mt-1 text-xs text-slate-500 dark:text-zinc-400">{description}</p>
       <div className="mt-5">{children}</div>
     </div>
   )
@@ -543,32 +543,34 @@ function ChoiceRow({ selected, onClick, icon, title, description }: { selected: 
       type="button"
       onClick={onClick}
       className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition ${
-        selected ? 'border-rose-300 bg-rose-50/60 shadow-xs' : 'border-slate-200 bg-white hover:border-slate-300'
+        selected
+          ? 'border-rose-300 dark:border-rose-900/60 bg-rose-50/60 dark:bg-rose-950/20 shadow-xs'
+          : 'border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-850 hover:border-slate-300 dark:hover:border-zinc-700'
       }`}
     >
-      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${selected ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${selected ? 'bg-rose-600 dark:bg-rose-500 text-white' : 'bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400'}`}>
         {selected ? <Check className="h-4 w-4" /> : icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-xs font-bold text-slate-900">{title}</span>
-        <span className="block text-[10px] text-slate-400 truncate">{description}</span>
+        <span className="block text-xs font-bold text-slate-900 dark:text-zinc-100">{title}</span>
+        <span className="block text-[10px] text-slate-400 dark:text-zinc-500 truncate">{description}</span>
       </span>
-      <span className={`h-4 w-4 rounded-full border ${selected ? 'border-rose-600 bg-rose-600' : 'border-slate-300'}`} />
+      <span className={`h-4 w-4 rounded-full border ${selected ? 'border-rose-600 bg-rose-600 dark:border-rose-500 dark:bg-rose-500' : 'border-slate-300 dark:border-zinc-700'}`} />
     </button>
   )
 }
 
 function TimeSelect({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
-    <label className="block rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
-      <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+    <label className="block rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-850 p-3 shadow-xs">
+      <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full bg-transparent text-sm font-bold text-slate-800 outline-none"
+        className="mt-1 w-full bg-transparent text-sm font-bold text-slate-800 dark:text-zinc-200 outline-none"
       >
         {TIME_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
+          <option key={option.value} value={option.value} className="bg-white dark:bg-zinc-900 text-slate-900 dark:text-zinc-100">
             {option.label}
           </option>
         ))}
