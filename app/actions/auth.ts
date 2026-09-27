@@ -13,7 +13,6 @@ const HUMAN_CHALLENGE_COOKIE = 'tracker_human_challenge'
 const HUMAN_CHALLENGE_MAX_AGE_MS = 10 * 60 * 1000
 
 function signHumanChallenge(timestamp: number, nonce: string): string {
-  const crypto = require('crypto') as typeof import('crypto')
   const payload = `${timestamp}.${nonce}`
   const signature = crypto.createHmac('sha256', process.env.AUTH_SECRET || 'dev-secret').update(payload).digest('hex')
   return `${payload}.${signature}`
