@@ -27,11 +27,11 @@ Use the best capability already available; do not block the audit on optional se
 
 | Need | Preferred route | Fallback |
 |------|-----------------|----------|
-| Performance and Core Web Vitals | Record a browser performance trace and analyze focused insights; with Chrome DevTools MCP, use `performance_start_trace` then `performance_analyze_insight` | Lighthouse CLI or PageSpeed Insights lab data |
+| Performance and Core Web Vitals | Record a browser performance trace and analyze focused insights; with available browser tooling, use `performance_start_trace` then `performance_analyze_insight` | Lighthouse CLI or PageSpeed Insights lab data |
 | Real-user performance | CrUX values included in current DevTools trace summaries | PageSpeed Insights/CrUX Vis; direct CrUX API only when a key is already available or automation is requested |
-| Accessibility, SEO, Best Practices, Agentic Browsing | Run a live Lighthouse audit; with Chrome DevTools MCP, use `lighthouse_audit` | Category-specific Lighthouse CLI audits plus manual checks |
+| Accessibility, SEO, Best Practices, Agentic Browsing | Run a live Lighthouse audit; when Lighthouse/browser tooling is available, run the relevant audit | Category-specific Lighthouse CLI audits plus manual checks |
 | Rendered semantics and interaction | Inspect the accessibility tree and exercise the UI; with Chrome DevTools MCP, use `take_snapshot` and focused `evaluate_script` | Browser/manual testing |
-| Source smoke test | `scripts/analyze.sh <path>` | Direct source inspection |
+| Source smoke test | direct source inspection | Direct source inspection |
 
 Chrome DevTools MCP's `lighthouse_audit` intentionally excludes performance. Its navigation mode reloads the page; use snapshot mode when preserving the current authenticated or user-created state matters. The static analyzer is a fast smoke test, not a substitute for a rendered-page audit.
 
