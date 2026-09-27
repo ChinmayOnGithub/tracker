@@ -10,6 +10,7 @@ import crypto from 'crypto'
 
 const LOGIN_SECURITY_MODULE = 'LOGIN_SECURITY'
 const HUMAN_CHALLENGE_COOKIE = 'tracker_human_challenge'
+const HUMAN_VERIFIED_COOKIE = 'tracker_human_verified'
 const HUMAN_CHALLENGE_MAX_AGE_MS = 10 * 60 * 1000
 
 function signHumanChallenge(timestamp: number, nonce: string): string {
@@ -74,6 +75,13 @@ export async function verifyHumanChallengeAction(token: string): Promise<{ succe
       return { success: false, error: 'Complete the security check before logging in.' }
     }
     cookieStore.delete(HUMAN_CHALLENGE_COOKIE)
+    cookieStore.set(HUMAN_VERIFIED_COOKIE, '1', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: Math.floor(HUMAN_CHALLENGE_MAX_AGE_MS / 1000),
+      path: '/',
+    })
     return { success: true }
   } catch {
     return { success: false, error: 'Security verification failed.' }
@@ -101,9 +109,9 @@ export async function registerUserAction(usernameInput: string, secret: string, 
   try {
     const security = await getLoginSecuritySettingsAction()
     if (security.humanVerificationEnabled) {
-      if (!humanChallengeToken) return { success: false, error: 'Complete the security check before signing up.' }
-      const verification = await verifyHumanChallengeAction(humanChallengeToken)
-      if (!verification.success) return { success: false, error: verification.error }
+      const { cookies } = await import('next/headers')
+      const verified = (await cookies()).get(HUMAN_VERIFIED_COOKIE)?.value === '1'
+      if (!verified) return { success: false, error: 'Complete the security check before signing up.' }
     }
     const result = await AuthService.register(usernameInput, secret)
     if (!result.success) {
@@ -133,9 +141,9 @@ export async function verifyPinAction(usernameInput: string, secret: string, hum
   try {
     const security = await getLoginSecuritySettingsAction()
     if (security.humanVerificationEnabled) {
-      if (!humanChallengeToken) return { success: false, error: 'Complete the security check before logging in.' }
-      const verification = await verifyHumanChallengeAction(humanChallengeToken)
-      if (!verification.success) return { success: false, error: verification.error }
+      const { cookies } = await import('next/headers')
+      const verified = (await cookies()).get(HUMAN_VERIFIED_COOKIE)?.value === '1'
+      if (!verified) return { success: false, error: 'Complete the security check before logging in.' }
     }
     const result = await AuthService.login(usernameInput, secret)
     if (!result.success) {
