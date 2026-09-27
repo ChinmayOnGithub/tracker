@@ -31,7 +31,12 @@ function verifyHumanChallengeToken(token: string): boolean {
 
 export async function getLoginSecuritySettingsAction(): Promise<{ success: boolean; humanVerificationEnabled: boolean }> {
   try {
-    const setting = await db.userSetting.findFirst({ where: { module: LOGIN_SECURITY_MODULE } })
+    const owner = await AuthorizationService.getCanonicalOwner()
+    const setting = owner
+      ? await db.userSetting.findUnique({
+          where: { userId_module: { userId: owner.id, module: LOGIN_SECURITY_MODULE } },
+        })
+      : null
     const config = (setting?.config as { humanVerificationEnabled?: boolean } | null) || {}
     return { success: true, humanVerificationEnabled: config.humanVerificationEnabled !== false }
   } catch {
