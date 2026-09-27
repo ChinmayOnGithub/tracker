@@ -38,8 +38,8 @@ Layer 5: Persistent State (Multi-Step / Cross-Session)
 ```
 
 ### Source of Truth Precedence
-1. **SPEC.md & INVARIANTS.md**: Non-negotiable product scope and system invariants.
-2. **Personal Defaults**: `.agents/rules/` and existing Tracker design documentation.
+1. **SPEC.md & Tracker AI Constitution**: Non-negotiable product scope, laws, and system invariants.
+2. **Tracker Rules & Design**: `.agents/rules/`, `design-system/`, and established UI patterns.
 3. **Project Architecture**: `docs/02-architecture/` and `docs/08-decisions/`.
 4. **Skills**: Reusable methodology. Skills never override project truth.
 5. **Memory & Plans**: Evolving state records. They must never contradict explicit project decisions.
@@ -60,7 +60,7 @@ Layer 5: Persistent State (Multi-Step / Cross-Session)
 Audit context health periodically or after major architecture changes:
 
 1. **Token Footprint Audit**:
-   - Run `npm run audit-context` (or `node .agents/scripts/audit-context.mjs`).
+   - Inspect `AGENTS.md`, active rules, loaded skills, and task-specific documents for unnecessary context. Use existing repository scripts only when they are actually present.
    - Verify that always-loaded files remain lightweight (<60 lines).
    - Ensure individual skills remain focused (under 5,000 words).
 2. **Completeness vs Over-Engineering**:
