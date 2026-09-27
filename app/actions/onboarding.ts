@@ -97,10 +97,7 @@ export async function completeOnboardingAction(input: OnboardingState): Promise<
     const workdayError = validateWorkday(parsed.data)
     if (workdayError) return { success: false, error: workdayError }
 
-    if (!parsed.data.firstDayObjective.trim()) {
-      return { success: false, error: 'Give your first day one clear objective.' }
-    }
-
+    // When firstDayObjective is empty (skipped), createFirstDayPlan will create a plan from focus areas or default welcome activity
     const plan = await OnboardingService.createFirstDayPlan(user.id, parsed.data)
     const completedState: OnboardingState = {
       ...plan.state,

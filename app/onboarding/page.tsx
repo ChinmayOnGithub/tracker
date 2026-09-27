@@ -3,6 +3,8 @@ import { SessionService } from '@/lib/services/SessionService'
 import { OnboardingService } from '@/lib/services/OnboardingService'
 import { OnboardingExperience } from '@/modules/core/onboarding/OnboardingExperience'
 
+export const dynamic = 'force-dynamic'
+
 export default async function OnboardingPage() {
   const user = await SessionService.getSessionUser()
   if (!user) redirect('/')

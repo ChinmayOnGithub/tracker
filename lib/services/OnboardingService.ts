@@ -158,6 +158,18 @@ function activityBlueprints(state: OnboardingState) {
     })
   }
 
+  // If user skipped objective and selected no focus areas, add a lightweight initial task
+  if (blueprints.length === 0) {
+    blueprints.push({
+      name: 'Plan your day',
+      category: 'work',
+      duration: 15,
+      priority: 'MEDIUM',
+      icon: 'Sparkles',
+      notes: 'Welcome to your workspace.',
+    })
+  }
+
   return blueprints
 }
 
@@ -264,10 +276,6 @@ export class OnboardingService {
     activityIds: string[]
     activities: Array<{ id: string; name: string; scheduledTime: string | null; estimatedDuration: number; category: string }>
   }> {
-    if (!state.firstDayObjective.trim()) {
-      throw new Error('A first-day objective is required before generating the plan.')
-    }
-
     if (state.firstPlanActivityId) {
       const existing = await db.activityTemplate.findFirst({
         where: { id: state.firstPlanActivityId, userId, deletedAt: null },

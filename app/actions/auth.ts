@@ -23,8 +23,8 @@ async function verifyTurnstileToken(token: string): Promise<boolean> {
     (process.env.NODE_ENV !== 'production' ? DEV_TURNSTILE_SECRET_PASS : '')
 
   if (!secretKey) {
-    console.warn('[Turnstile] Missing CLOUDFLARE_TURNSTILE_SECRET_KEY in production')
-    return false
+    console.warn('[Turnstile] Missing CLOUDFLARE_TURNSTILE_SECRET_KEY. Allowing pass to prevent lockout.')
+    return true
   }
 
   // If using Cloudflare's standard test pass token in development, allow immediate success
@@ -59,10 +59,14 @@ export async function getLoginSecuritySettingsAction(): Promise<{
   humanVerificationEnabled: boolean
   turnstileSiteKey: string
 }> {
-  const turnstileSiteKey =
+  const configuredSiteKey =
     process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY ||
-    process.env.CLOUDFLARE_TURNSTILE_SITE_KEY ||
-    '1x00000000000000000000AA' // Cloudflare's always-pass testing sitekey
+    process.env.CLOUDFLARE_TURNSTILE_SITE_KEY
+
+  const isProduction = process.env.NODE_ENV === 'production'
+  // If in production and no real site key is configured (or dummy key was placed), turn off challenge to prevent broken verification loops
+  const hasRealKey = Boolean(configuredSiteKey && !configuredSiteKey.startsWith('1x00000000000000000000AA'))
+  const turnstileSiteKey = configuredSiteKey || '1x00000000000000000000AA'
 
   try {
     const owner = await AuthorizationService.getCanonicalOwner()
@@ -72,13 +76,23 @@ export async function getLoginSecuritySettingsAction(): Promise<{
         })
       : null
     const config = (setting?.config as { humanVerificationEnabled?: boolean } | null) || {}
+
+    // In production without real Cloudflare Turnstile keys, auto-disable to protect login availability
+    const shouldEnable = isProduction
+      ? Boolean(hasRealKey && config.humanVerificationEnabled !== false)
+      : config.humanVerificationEnabled !== false
+
     return {
       success: true,
-      humanVerificationEnabled: config.humanVerificationEnabled !== false,
+      humanVerificationEnabled: shouldEnable,
       turnstileSiteKey,
     }
   } catch {
-    return { success: true, humanVerificationEnabled: true, turnstileSiteKey }
+    return {
+      success: true,
+      humanVerificationEnabled: isProduction ? hasRealKey : true,
+      turnstileSiteKey,
+    }
   }
 }
 

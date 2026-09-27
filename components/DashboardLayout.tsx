@@ -192,15 +192,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
             } else {
               setRobotChecked(false)
               setAuthError(result.error || 'Security verification failed. Please try again.')
-              if (turnstileWidgetIdRef.current) {
-                turnstile.reset(turnstileWidgetIdRef.current)
-              }
             }
           },
           'error-callback': () => {
             if (cancelled) return
             setRobotChecked(false)
-            setAuthError('Cloudflare verification encountered an issue.')
+            setAuthError('Security verification encountered a network issue.')
           },
           'expired-callback': () => {
             if (cancelled) return

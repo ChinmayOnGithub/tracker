@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3,
-  Layers3, Rocket, Sparkles, Target,
+  Layers3, Laptop, Moon, Rocket, Sparkles, Sun, Target,
 } from 'lucide-react'
 import type { OnboardingState } from '@/lib/services/OnboardingService'
 import {
@@ -55,6 +55,25 @@ export function OnboardingExperience({ initialState, username }: Props) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [calendarDiscovery, setCalendarDiscovery] = useState<CalendarDiscovery | null>(null)
+  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark' | 'system'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('theme') as 'light' | 'dark' | 'system') || 'system'
+    }
+    return 'system'
+  })
+
+  const handleThemeChange = (theme: 'light' | 'dark' | 'system') => {
+    setCurrentTheme(theme)
+    localStorage.setItem('theme', theme)
+    document.cookie = `theme=${theme}; path=/; max-age=31536000; SameSite=Lax`
+
+    const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    if (isDark) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -393,6 +412,52 @@ export function OnboardingExperience({ initialState, username }: Props) {
                     ) : (
                       <p className="text-[11px] text-slate-400 italic">No first-day goal set (clean start).</p>
                     )}
+                  </div>
+
+                  {/* Theme / Appearance Selection */}
+                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                    <p className="text-xs font-bold text-slate-900">Workspace Appearance</p>
+                    <p className="text-[11px] text-slate-500 mb-3">Choose how tracker looks for your daily sessions.</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleThemeChange('light')}
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition ${
+                          currentTheme === 'light'
+                            ? 'border-rose-500 bg-white text-rose-600 shadow-sm ring-1 ring-rose-200'
+                            : 'border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        <Sun className="h-4 w-4" />
+                        <span>Light</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleThemeChange('dark')}
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition ${
+                          currentTheme === 'dark'
+                            ? 'border-rose-500 bg-white text-rose-600 shadow-sm ring-1 ring-rose-200'
+                            : 'border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        <Moon className="h-4 w-4" />
+                        <span>Dark</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleThemeChange('system')}
+                        className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border p-2.5 text-xs font-semibold transition ${
+                          currentTheme === 'system'
+                            ? 'border-rose-500 bg-white text-rose-600 shadow-sm ring-1 ring-rose-200'
+                            : 'border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300'
+                        }`}
+                      >
+                        <Laptop className="h-4 w-4" />
+                        <span>System</span>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="mt-4 flex items-center gap-2 text-xs font-medium text-emerald-600">
