@@ -7,6 +7,7 @@ import { CredentialService } from '@/lib/services/CredentialService'
 import { AuthorizationService } from '@/lib/services/AuthorizationService'
 import { OnboardingService } from '@/lib/services/OnboardingService'
 import crypto from 'crypto'
+import { cookies } from 'next/headers'
 
 const LOGIN_SECURITY_MODULE = 'LOGIN_SECURITY'
 const HUMAN_CHALLENGE_COOKIE = 'tracker_human_challenge'
@@ -119,7 +120,7 @@ export async function registerUserAction(usernameInput: string, secret: string, 
     }
 
     await SessionService.setSessionCookie(result.token)
-    if ((await import('next/headers')).cookies) (await (await import('next/headers')).cookies()).delete(HUMAN_VERIFIED_COOKIE)
+    (await cookies()).delete(HUMAN_VERIFIED_COOKIE)
     const onboarding = await OnboardingService.getState(result.user.id)
     return { success: true, user: result.user, onboardingRequired: onboarding?.status !== 'COMPLETED' }
   } catch (error) {
