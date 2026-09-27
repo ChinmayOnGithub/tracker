@@ -35,3 +35,25 @@ You MUST read and strictly adhere to the **AI Constitution** in [AI Constitution
 * **Clean Event Mocks**: Do not use `jest.clearAllMocks()` or `vi.clearAllMocks()` in `beforeEach` hooks in Bun tests as it causes reference errors. Instead, reset the mock call history manually by casting the mocked function to `{ mock?: { calls: unknown[][] } }` and setting its call list length to 0 (e.g., `(ActivityService.logActivity as { mock?: { calls: unknown[][] } })?.mock?.calls.length = 0`).
 * **No Duplicate Implementations**: Never add duplicate methods (like `persistQueue` or `getStats`) to classes. Retain only one fully featured implementation, typically at the bottom of the module file.
 <!-- END:tracker-system-guidelines -->
+
+
+## AI Skill Routing
+
+Use the on-demand skills under `.agents/skills/` instead of loading the whole AI methodology into context.
+
+- Repository understanding: `project-analysis`, `project-audit`, `context-engineering`
+- Requirements/domain: `grilling`, `domain-modeling`, `to-spec`, `to-tickets`
+- Planning/orchestration: `planning-with-files`, `orchestration`, `project-memory`
+- Architecture/backend: `system-design-first-principles`, `backend-design`, `api-design`, `database-design`, `data-modeling`
+- Implementation quality: `test-driven-development`, `debugger`, `simplification`, `refactoring`, `repository-cleanup`
+- Review/security: `code-review`, `pr-code-review`, `threat-model`, `security-review`, `dependency-audit`
+- Operations: `observability-review`, `deployment-review`, `incident-review`, `performance-optimization`
+- UI/web: `design-systems-frontend-architecture`, `ui-visual-composition`, `ux-usability-foundations`, `ux-writing-content-design`, `accessibility-inclusive-design`, `tailwind-css`, `web-quality`, `seo`
+- Workflow: `git-workflow`, `documentation-and-adrs`, `why-we-do-this`, `retrospective`
+
+Tracker-native skills remain authoritative for Tracker-specific behavior: `tracker-core` and `tracker-qa`.
+
+### Context Rule
+Load only the skill(s) required by the current task. Generic skills provide methodology only and must never override `SPEC.md`, the Tracker AI Constitution, architecture decisions, or `.agents/rules/`.
+
+See `docs/07-ai/EXTERNAL_SKILLS.md` for provenance and `docs/07-ai/AI_WORKFLOW.md` for the development lifecycle.
