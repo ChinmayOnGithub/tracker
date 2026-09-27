@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3,
   Layers3, ListTodo, Rocket, Sparkles, Target,
@@ -73,6 +73,9 @@ const STEPS = [
 
 export function OnboardingExperience({ initialState, username }: Props) {
   const [state, setState] = useState<OnboardingState>(initialState)
+  // Snapshot the last successfully persisted state so Skip discards only edits
+  // made on the current optional step instead of carrying them forward.
+  const committedStateRef = useRef<OnboardingState>(initialState)
   const [step, setStep] = useState(Math.min(initialState.currentStep, TOTAL_STEPS))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -164,6 +167,7 @@ export function OnboardingExperience({ initialState, username }: Props) {
       return false
     }
 
+    committedStateRef.current = result.state
     setState(result.state)
     setStep(nextStep)
     return true
@@ -204,28 +208,42 @@ export function OnboardingExperience({ initialState, username }: Props) {
 
   const skip = async () => {
     setError('')
-    const nextState = { ...state }
-    if (step === 5 && !nextState.planningStyle) nextState.planningStyle = 'focused'
-    if (step === 6 && !nextState.firstDayObjective.trim()) {
-      nextState.firstDayObjective = 'Plan my day around my priorities'
+    const committed = committedStateRef.current
+    // Skip means "don't use anything I changed on this page". Restore the
+    // last saved value for fields owned by the current optional step.
+    const nextState: OnboardingState = { ...state }
+    if (step === 1) nextState.focusAreas = committed.focusAreas
+    if (step === 2) nextState.taskSources = committed.taskSources
+    if (step === 3) nextState.calendarProvider = committed.calendarProvider
+    if (step === 4) {
+      nextState.workStartTime = committed.workStartTime
+      nextState.workEndTime = committed.workEndTime
     }
-    const previousState = state
-    // Persist the skipped step exactly like a normal step so refresh/re-entry is safe.
-    setState(nextState)
+    if (step === 5) {
+      nextState.planningStyle = committed.planningStyle
+      nextState.dailyCapacity = committed.dailyCapacity
+    }
+    if (step === 6) nextState.firstDayObjective = committed.firstDayObjective
+
+    const nextStep = Math.min(step + 1, TOTAL_STEPS)
+    setSaving(true)
     const result = await saveOnboardingStateAction({
       ...nextState,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || nextState.timezone || 'UTC',
       status: 'IN_PROGRESS',
-      currentStep: Math.min(step + 1, TOTAL_STEPS),
-      completedSteps: Array.from(new Set([...nextState.completedSteps, step])),
+      currentStep: nextStep,
+      completedSteps: Array.from(new Set([...committed.completedSteps, step])),
     })
+    setSaving(false)
+
     if (!result.success || !result.state) {
-      setState(previousState)
       setError(result.error || 'Could not save this step.')
       return
     }
+
+    committedStateRef.current = result.state
     setState(result.state)
-    setStep(Math.min(step + 1, TOTAL_STEPS))
+    setStep(nextStep)
   }
 
   const connectCalendar = () => {
