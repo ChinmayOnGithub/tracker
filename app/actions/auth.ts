@@ -6,32 +6,64 @@ import { SessionService } from '@/lib/services/SessionService'
 import { CredentialService } from '@/lib/services/CredentialService'
 import { AuthorizationService } from '@/lib/services/AuthorizationService'
 import { OnboardingService } from '@/lib/services/OnboardingService'
-import crypto from 'crypto'
 import { cookies } from 'next/headers'
 
 const LOGIN_SECURITY_MODULE = 'LOGIN_SECURITY'
-const HUMAN_CHALLENGE_COOKIE = 'tracker_human_challenge'
 const HUMAN_VERIFIED_COOKIE = 'tracker_human_verified'
 const HUMAN_CHALLENGE_MAX_AGE_MS = 10 * 60 * 1000
 
-function signHumanChallenge(timestamp: number, nonce: string): string {
-  const payload = `${timestamp}.${nonce}`
-  const signature = crypto.createHmac('sha256', process.env.AUTH_SECRET || 'dev-secret').update(payload).digest('hex')
-  return `${payload}.${signature}`
+const CLOUDFLARE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
+const DEV_TURNSTILE_SECRET_PASS = '1x0000000000000000000000000000000AA'
+
+async function verifyTurnstileToken(token: string): Promise<boolean> {
+  if (!token) return false
+
+  const secretKey =
+    process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY ||
+    (process.env.NODE_ENV !== 'production' ? DEV_TURNSTILE_SECRET_PASS : '')
+
+  if (!secretKey) {
+    console.warn('[Turnstile] Missing CLOUDFLARE_TURNSTILE_SECRET_KEY in production')
+    return false
+  }
+
+  // If using Cloudflare's standard test pass token in development, allow immediate success
+  if (token === 'XXXX.DUMMY.TOKEN.XXXX' || token.startsWith('dummy-')) {
+    return process.env.NODE_ENV !== 'production'
+  }
+
+  try {
+    const formData = new URLSearchParams()
+    formData.append('secret', secretKey)
+    formData.append('response', token)
+
+    const response = await fetch(CLOUDFLARE_VERIFY_URL, {
+      method: 'POST',
+      body: formData,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    })
+
+    const outcome = (await response.json()) as { success?: boolean; 'error-codes'?: string[] }
+    if (!outcome.success) {
+      console.warn('[Turnstile] Verification failed:', outcome['error-codes'])
+    }
+    return Boolean(outcome.success)
+  } catch (err) {
+    console.error('[Turnstile] Error verifying token with Cloudflare:', err)
+    return false
+  }
 }
 
-function verifyHumanChallengeToken(token: string): boolean {
-  const parts = token.split('.')
-  if (parts.length !== 3) return false
-  const [timestampRaw, nonce, signature] = parts
-  const timestamp = Number(timestampRaw)
-  if (!Number.isFinite(timestamp) || !nonce || !signature) return false
-  if (Date.now() - timestamp < 700 || Date.now() - timestamp > HUMAN_CHALLENGE_MAX_AGE_MS) return false
-  const expected = signHumanChallenge(timestamp, nonce)
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected.split('.').at(-1)!))
-}
+export async function getLoginSecuritySettingsAction(): Promise<{
+  success: boolean
+  humanVerificationEnabled: boolean
+  turnstileSiteKey: string
+}> {
+  const turnstileSiteKey =
+    process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY ||
+    process.env.CLOUDFLARE_TURNSTILE_SITE_KEY ||
+    '1x00000000000000000000AA' // Cloudflare's always-pass testing sitekey
 
-export async function getLoginSecuritySettingsAction(): Promise<{ success: boolean; humanVerificationEnabled: boolean }> {
   try {
     const owner = await AuthorizationService.getCanonicalOwner()
     const setting = owner
@@ -40,42 +72,29 @@ export async function getLoginSecuritySettingsAction(): Promise<{ success: boole
         })
       : null
     const config = (setting?.config as { humanVerificationEnabled?: boolean } | null) || {}
-    return { success: true, humanVerificationEnabled: config.humanVerificationEnabled !== false }
+    return {
+      success: true,
+      humanVerificationEnabled: config.humanVerificationEnabled !== false,
+      turnstileSiteKey,
+    }
   } catch {
-    return { success: true, humanVerificationEnabled: true }
+    return { success: true, humanVerificationEnabled: true, turnstileSiteKey }
   }
 }
 
 export async function issueHumanChallengeAction(): Promise<{ success: boolean; token?: string; error?: string }> {
-  try {
-    const crypto = await import('crypto')
-    const timestamp = Date.now()
-    const nonce = crypto.randomBytes(16).toString('hex')
-    const token = signHumanChallenge(timestamp, nonce)
-    const { cookies } = await import('next/headers')
-    const cookieStore = await cookies()
-    cookieStore.set(HUMAN_CHALLENGE_COOKIE, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: Math.floor(HUMAN_CHALLENGE_MAX_AGE_MS / 1000),
-      path: '/',
-    })
-    return { success: true, token }
-  } catch {
-    return { success: false, error: 'Could not start security verification.' }
-  }
+  // Retained for backward compatibility
+  return { success: true, token: 'ready' }
 }
 
 export async function verifyHumanChallengeAction(token: string): Promise<{ success: boolean; error?: string }> {
   try {
+    const isValid = await verifyTurnstileToken(token)
+    if (!isValid) {
+      return { success: false, error: 'Cloudflare security check failed. Please try again.' }
+    }
     const { cookies } = await import('next/headers')
     const cookieStore = await cookies()
-    const stored = cookieStore.get(HUMAN_CHALLENGE_COOKIE)?.value
-    if (!stored || stored !== token || !verifyHumanChallengeToken(token)) {
-      return { success: false, error: 'Complete the security check before logging in.' }
-    }
-    cookieStore.delete(HUMAN_CHALLENGE_COOKIE)
     cookieStore.set(HUMAN_VERIFIED_COOKIE, '1', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

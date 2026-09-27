@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Clock3,
-  Layers3, ListTodo, Rocket, Sparkles, Target,
+  Layers3, Rocket, Sparkles, Target,
 } from 'lucide-react'
 import type { OnboardingState } from '@/lib/services/OnboardingService'
 import {
@@ -23,33 +23,15 @@ interface CalendarDiscovery {
   events: Array<{ id: string; title: string; start: string; end: string }>
 }
 
-const TOTAL_STEPS = 7
+const TOTAL_STEPS = 3
 
 const FOCUS_AREAS = [
-  ['Work', 'work', 'Projects, deadlines and career'],
-  ['Learning', 'learning', 'Study, skills and growth'],
-  ['Personal', 'personal', 'Home, relationships and life'],
-  ['Health', 'health', 'Movement, food and wellbeing'],
-  ['Life admin', 'life-admin', 'Errands, money and paperwork'],
-  ['Creative', 'creative', 'Writing, design and side projects'],
-]
-
-const TASK_SOURCES = [
-  ['Google Tasks', 'google-tasks'],
-  ['Todoist', 'todoist'],
-  ['Notion', 'notion'],
-  ['Linear', 'linear'],
-  ['GitHub', 'github'],
-  ['Jira', 'jira'],
-  ['Trello', 'trello'],
-  ['ClickUp', 'clickup'],
-  ['Outlook', 'outlook'],
-]
-
-const PLANNING_STYLES = [
-  ['Focused', 'focused', 'A short list. Protect deep work.'],
-  ['Structured', 'structured', 'Plan the day before you start.'],
-  ['Flexible', 'flexible', 'Keep direction and adapt as you go.'],
+  ['Work & Career', 'work', 'Projects, focus time, and deliverables'],
+  ['Learning', 'learning', 'Study, reading, and personal growth'],
+  ['Health & Fitness', 'health', 'Workouts, nutrition, and recovery'],
+  ['Life Admin', 'life-admin', 'Finances, planning, and errands'],
+  ['Personal', 'personal', 'Family, relationships, and downtime'],
+  ['Creative', 'creative', 'Writing, design, and side projects'],
 ]
 
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
@@ -61,14 +43,10 @@ const TIME_OPTIONS = Array.from({ length: 48 }, (_, index) => {
 })
 
 const STEPS = [
-  ['Start', 'A little context'],
-  ['Focus', 'What matters'],
-  ['Work', 'Where work lives'],
-  ['Calendar', 'Protect your time'],
-  ['Rhythm', 'Your workday'],
-  ['Planning', 'Your style'],
-  ['Mission', 'Your first outcome'],
-  ['Ready', 'Your starting day'],
+  ['Focus', 'What matters right now'],
+  ['Schedule', 'Your hours & calendar'],
+  ['Priority', 'Your main goal for today'],
+  ['Ready', 'Review your day'],
 ]
 
 export function OnboardingExperience({ initialState, username }: Props) {
@@ -112,18 +90,12 @@ export function OnboardingExperience({ initialState, username }: Props) {
     else if (state.focusAreas.length < 3) update('focusAreas', [...state.focusAreas, value])
   }
 
-  const toggleSource = (value: string) => {
-    update('taskSources', state.taskSources.includes(value)
-      ? state.taskSources.filter((item) => item !== value)
-      : [...state.taskSources, value])
-  }
-
   const validate = () => {
-    if (step === 1 && state.focusAreas.length === 0) {
-      setError('Pick at least one area. This changes the activities Tracker creates for you.')
+    if (step === 0 && state.focusAreas.length === 0) {
+      setError('Choose at least one focus area to tailor your workspace.')
       return false
     }
-    if (step === 4) {
+    if (step === 1) {
       const start = timeToMinutes(state.workStartTime)
       const end = timeToMinutes(state.workEndTime)
       if (end <= start) {
@@ -131,17 +103,9 @@ export function OnboardingExperience({ initialState, username }: Props) {
         return false
       }
       if (end - start < 60) {
-        setError('Give yourself at least one hour in the workday window.')
+        setError('Workday window should be at least one hour.')
         return false
       }
-    }
-    if (step === 5 && !state.planningStyle) {
-      setError('Choose the planning style that feels most natural.')
-      return false
-    }
-    if (step === 6 && !state.firstDayObjective.trim()) {
-      setError('Give your first day one clear outcome.')
-      return false
     }
     return true
   }
@@ -202,30 +166,28 @@ export function OnboardingExperience({ initialState, username }: Props) {
     setStep((current) => Math.max(0, current - 1))
   }
 
+  // The Skip button strictly advances to the next step without forcing any synthetic data or activities
   const skip = async () => {
     setError('')
     const nextState = { ...state }
-    if (step === 5 && !nextState.planningStyle) nextState.planningStyle = 'focused'
-    if (step === 6 && !nextState.firstDayObjective.trim()) {
-      nextState.firstDayObjective = 'Plan my day around my priorities'
-    }
-    const previousState = state
-    // Persist the skipped step exactly like a normal step so refresh/re-entry is safe.
-    setState(nextState)
+    const nextStep = Math.min(step + 1, TOTAL_STEPS)
+
+    setSaving(true)
     const result = await saveOnboardingStateAction({
       ...nextState,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || nextState.timezone || 'UTC',
       status: 'IN_PROGRESS',
-      currentStep: Math.min(step + 1, TOTAL_STEPS),
+      currentStep: nextStep,
       completedSteps: Array.from(new Set([...nextState.completedSteps, step])),
     })
+    setSaving(false)
+
     if (!result.success || !result.state) {
-      setState(previousState)
-      setError(result.error || 'Could not save this step.')
+      setError(result.error || 'Could not skip this step.')
       return
     }
     setState(result.state)
-    setStep(Math.min(step + 1, TOTAL_STEPS))
+    setStep(nextStep)
   }
 
   const connectCalendar = () => {
@@ -234,309 +196,264 @@ export function OnboardingExperience({ initialState, username }: Props) {
 
   return (
     <main
-      className="h-[100svh] overflow-hidden bg-[#f8f7f8] px-2 py-2 text-slate-950 sm:px-4 sm:py-4"
+      className="min-h-screen bg-[#f9fafb] p-3 text-slate-900 sm:p-6 flex items-center justify-center"
       style={{
         '--onboarding-rose': '#e11d48',
-        '--onboarding-rose-dark': '#be123c',
         '--onboarding-rose-soft': '#fff1f2',
       } as React.CSSProperties}
     >
-      <div className="mx-auto h-full min-h-0 max-w-5xl overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_20px_70px_-35px_rgba(15,23,42,0.35)] sm:h-full">
-        <div className="grid h-full min-h-0 lg:grid-cols-[260px_1fr]">
-          <aside className="relative max-h-[92px] overflow-hidden border-b border-slate-200 bg-gradient-to-br from-rose-50 via-white to-white p-3 sm:p-4 lg:max-h-none lg:p-7 lg:border-b-0 lg:border-r">
-            <div className="absolute -right-14 -top-14 h-40 w-40 rounded-full bg-rose-200/30 blur-3xl" />
-            <div className="relative flex h-full flex-col">
-              <div className="flex items-center gap-2.5">
-                <div className="grid h-9 w-9 place-items-center rounded-xl bg-slate-950 text-white shadow-lg">
-                  <Layers3 className="h-4 w-4" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold tracking-tight">tracker</p>
-                  <p className="text-[10px] text-slate-500">Personal operating system</p>
-                </div>
+      <div className="w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200/90 bg-white shadow-xl">
+        <div className="grid lg:grid-cols-[240px_1fr]">
+          {/* Minimalist Sidebar */}
+          <aside className="border-b border-slate-100 bg-slate-50/70 p-5 lg:border-b-0 lg:border-r lg:p-6">
+            <div className="flex items-center gap-2.5">
+              <div className="grid h-8 w-8 place-items-center rounded-xl bg-slate-950 text-white shadow-sm">
+                <Layers3 className="h-4 w-4" />
               </div>
-
-              <div className="mt-7 hidden lg:block">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-rose-600">Setup</p>
-                <h2 className="mt-2 text-xl font-bold tracking-tight">Let’s make your first day feel like yours.</h2>
-                <p className="mt-2 text-xs leading-5 text-slate-500">
-                  Every answer changes what Tracker prepares. Nothing here replaces or deletes your existing data.
-                </p>
+              <div>
+                <p className="text-sm font-bold tracking-tight">tracker</p>
+                <p className="text-[10px] text-slate-400">Quick setup</p>
               </div>
+            </div>
 
-              <div className="mt-5 hidden space-y-1.5 lg:block">
-                {STEPS.map(([label, hint], index) => {
-                  const active = index === step
-                  const done = index < step
-                  return (
-                    <div key={label} className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 ${active ? 'bg-white shadow-sm ring-1 ring-slate-200' : ''}`}>
-                      <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-bold ${done ? 'bg-rose-600 text-white' : active ? 'bg-slate-950 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                        {done ? <Check className="h-3.5 w-3.5" /> : index + 1}
-                      </span>
-                      <div className="min-w-0">
-                        <p className={`text-xs font-semibold ${active ? 'text-slate-950' : 'text-slate-500'}`}>{label}</p>
-                        <p className="truncate text-[10px] text-slate-400">{hint}</p>
-                      </div>
+            <div className="mt-6 hidden lg:block">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-rose-600">Step {step + 1} of {TOTAL_STEPS + 1}</p>
+              <h2 className="mt-1 text-base font-bold tracking-tight text-slate-800">
+                {STEPS[step]?.[0]}
+              </h2>
+            </div>
+
+            <div className="mt-4 hidden space-y-1 lg:block">
+              {STEPS.map(([label, hint], index) => {
+                const active = index === step
+                const done = index < step
+                return (
+                  <div key={label} className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition-colors ${active ? 'bg-white shadow-sm ring-1 ring-slate-200' : ''}`}>
+                    <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full text-[10px] font-bold ${done ? 'bg-emerald-500 text-white' : active ? 'bg-slate-950 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                      {done ? <Check className="h-3 w-3" /> : index + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className={`text-xs font-semibold ${active ? 'text-slate-900' : 'text-slate-500'}`}>{label}</p>
+                      <p className="truncate text-[10px] text-slate-400">{hint}</p>
                     </div>
-                  )
-                })}
-              </div>
+                  </div>
+                )
+              })}
+            </div>
 
-              <div className="mt-3 flex items-center gap-2 lg:hidden">
-                <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-                  {STEPS.map(([label], index) => (
-                    <span key={label} aria-label={label} className={`h-1.5 flex-1 rounded-full ${index <= step ? 'bg-rose-600' : 'bg-slate-200'}`} />
-                  ))}
-                </div>
-                <span className="shrink-0 text-[10px] font-semibold text-slate-400">{step + 1}/{STEPS.length}</span>
+            <div className="mt-3 flex items-center gap-2 lg:hidden">
+              <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+                {STEPS.map(([label], index) => (
+                  <span key={label} className={`h-1 flex-1 rounded-full ${index <= step ? 'bg-rose-600' : 'bg-slate-200'}`} />
+                ))}
               </div>
-              <div className="mt-auto hidden rounded-2xl border border-rose-100 bg-white/80 p-3.5 lg:block">
-                <div className="flex items-center gap-2">
-                  <Check className="h-3.5 w-3.5 text-rose-600" />
-                  <p className="text-[11px] font-semibold">Existing data stays untouched</p>
-                </div>
-                <p className="mt-1.5 text-[10px] leading-4 text-slate-500">Onboarding only adds the new starter activities it creates.</p>
-              </div>
+              <span className="shrink-0 text-[10px] font-semibold text-slate-400">{step + 1}/{STEPS.length}</span>
             </div>
           </aside>
 
-          <section className="flex h-full min-h-0 flex-col bg-white">
-            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5 sm:px-8 sm:py-4">
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-rose-600">{STEPS[step][0]}</p>
-                <p className="mt-0.5 truncate text-xs text-slate-500">{STEPS[step][1]}</p>
-              </div>
+          {/* Main Content Area */}
+          <section className="flex flex-col bg-white">
+            <header className="flex items-center justify-between border-b border-slate-100 px-6 py-3">
+              <span className="text-xs font-semibold text-slate-500">
+                Welcome, <strong className="text-slate-900">{username}</strong>
+              </span>
               <div className="flex items-center gap-2">
-                <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100 sm:w-28">
-                  <div className="h-full rounded-full bg-rose-600 transition-all duration-300" style={{ width: `${Math.max(progress, 8)}%` }} />
+                <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-rose-600 transition-all duration-300" style={{ width: `${Math.max(progress, 15)}%` }} />
                 </div>
-                <span className="text-[10px] font-semibold text-slate-400">{step + 1}/{TOTAL_STEPS + 1}</span>
+                <span className="text-[10px] font-bold text-slate-400">{progress}%</span>
               </div>
             </header>
 
-            <div className="flex min-h-0 flex-1 items-center overflow-hidden px-4 py-2.5 sm:px-10 sm:py-6">
-              <div className="mx-auto w-full max-w-2xl min-h-0">
-                {step === 0 && (
-                  <Step title={`Hi ${username}. Let’s build your starting day.`} description="A few choices are enough. Tracker will use them to prepare useful activities instead of giving you a generic checklist.">
-                    <div className="relative overflow-hidden rounded-[22px] border border-slate-200 bg-gradient-to-br from-slate-950 to-slate-800 p-5 text-white shadow-xl sm:p-7">
-                      <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full bg-rose-500/30 blur-2xl" />
-                      <div className="relative">
-                        <div className="flex items-center justify-between">
-                          <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-semibold">SETUP QUEST</span>
-                          <Sparkles className="h-4 w-4 text-rose-300" />
-                        </div>
-                        <p className="mt-12 max-w-sm text-2xl font-bold tracking-tight">Turn your answers into a day you can actually use.</p>
-                        <div className="mt-5 flex flex-wrap gap-2 text-[10px] text-white/70">
-                          <span className="rounded-full bg-white/10 px-2.5 py-1">Focus</span>
-                          <span className="rounded-full bg-white/10 px-2.5 py-1">Calendar</span>
-                          <span className="rounded-full bg-white/10 px-2.5 py-1">Capacity</span>
-                          <span className="rounded-full bg-white/10 px-2.5 py-1">Activities</span>
-                        </div>
-                      </div>
-                    </div>
-                  </Step>
-                )}
+            <div className="flex-1 p-6 sm:p-8">
+              {/* Step 0: Focus Areas */}
+              {step === 0 && (
+                <Step
+                  title="What do you want to focus on?"
+                  description="Choose up to three priorities. We'll tune your daily templates to match."
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {FOCUS_AREAS.map(([label, value, hint]) => (
+                      <ChoiceRow
+                        key={value}
+                        selected={state.focusAreas.includes(value)}
+                        onClick={() => toggleFocus(value)}
+                        icon={<Target className="h-4 w-4" />}
+                        title={label}
+                        description={hint}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+                    <span>Select 1 to 3 areas</span>
+                    <span className="font-semibold text-rose-600">{state.focusAreas.length}/3 selected</span>
+                  </div>
+                </Step>
+              )}
 
-                {step === 1 && (
-                  <Step title="What do you want Tracker to help with first?" description="Pick up to three. These choices directly influence the starter activities created at the end.">
-                    <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
-                      {FOCUS_AREAS.map(([label, value, hint]) => (
-                        <ChoiceRow key={value} selected={state.focusAreas.includes(value)} onClick={() => toggleFocus(value)} icon={<Target className="h-4 w-4" />} title={label} description={hint} />
-                      ))}
-                    </div>
-                    <div className="mt-4 flex items-center justify-between text-[11px]">
-                      <span className="text-slate-400">Up to 3 areas</span>
-                      <span className="font-semibold text-rose-600">{state.focusAreas.length}/3 selected</span>
-                    </div>
-                  </Step>
-                )}
+              {/* Step 1: Schedule & Google Calendar */}
+              {step === 1 && (
+                <Step
+                  title="Workday window & Calendar"
+                  description="Set your standard schedule and optionally sync Google Calendar."
+                >
+                  <div className="grid grid-cols-2 gap-3">
+                    <TimeSelect label="Workday Starts" value={state.workStartTime} onChange={(v) => update('workStartTime', v)} />
+                    <TimeSelect label="Workday Ends" value={state.workEndTime} onChange={(v) => update('workEndTime', v)} />
+                  </div>
 
-                {step === 2 && (
-                  <Step title="Where does your work already live?" description="This helps Tracker create a relevant first action. Connections are not made just by selecting an item.">
-                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
-                      {TASK_SOURCES.map(([label, value]) => (
-                        <ChoiceTile key={value} selected={state.taskSources.includes(value)} onClick={() => toggleSource(value)} label={label} icon={<SourceIcon source={value} />} />
-                      ))}
-                    </div>
-                    <p className="mt-4 text-[11px] text-slate-400">You can skip this. Tracker will not invent an integration connection.</p>
-                  </Step>
-                )}
-
-                {step === 3 && (
-                  <Step title="Should Tracker plan around your calendar?" description="Connect Google Calendar only if you want your first activities placed around real commitments.">
-                    <button
-                      type="button"
-                      onClick={connectCalendar}
-                      className={`group w-full rounded-[20px] border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-lg ${calendarDiscovery?.connected ? 'border-emerald-200 bg-emerald-50/60' : 'border-slate-200 bg-white shadow-sm'}`}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200">
+                  <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="grid h-10 w-10 place-items-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
                           <CalendarDays className="h-5 w-5 text-rose-600" />
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-bold">Google Calendar</p>
-                          <p className="mt-0.5 text-xs text-slate-500">
-                            {calendarDiscovery?.connected ? `Connected · ${calendarDiscovery.eventCount} upcoming events found` : 'Import commitments and protect those times.'}
+                        <div>
+                          <p className="text-xs font-bold text-slate-900">Google Calendar</p>
+                          <p className="text-[11px] text-slate-500">
+                            {calendarDiscovery?.connected
+                              ? `Connected (${calendarDiscovery.eventCount} events)`
+                              : 'Keep meetings and tasks aligned automatically'}
                           </p>
                         </div>
-                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${calendarDiscovery?.connected ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                          {calendarDiscovery?.connected ? 'Connected' : 'Connect'}
+                      </div>
+
+                      {calendarDiscovery?.connected ? (
+                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-bold text-emerald-700">
+                          Connected
                         </span>
-                      </div>
-                    </button>
-
-                    {calendarDiscovery?.connected && calendarDiscovery.events.length > 0 && (
-                      <div className="mt-3 overflow-hidden rounded-[18px] border border-slate-200">
-                        {calendarDiscovery.events.slice(0, 2).map((event) => (
-                          <div key={event.id} className="flex items-center gap-2 border-b border-slate-100 px-3 py-2 last:border-b-0">
-                            <div className="h-7 w-1 rounded-full bg-rose-400" />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-semibold">{event.title}</p>
-                              <p className="mt-0.5 text-[10px] text-slate-400">{formatCalendarTime(event.start)}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <button type="button" onClick={() => update('calendarProvider', null)} className="mt-3 text-[11px] font-semibold text-slate-400 hover:text-slate-700">
-                      Continue without a calendar
-                    </button>
-                  </Step>
-                )}
-
-                {step === 4 && (
-                  <Step title="What does a normal workday look like?" description="Tracker uses this window when it finds room for the starter activities. Your time zone is detected from this device.">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <TimeSelect label="Start" value={state.workStartTime} onChange={(value) => update('workStartTime', value)} />
-                      <TimeSelect label="Finish" value={state.workEndTime} onChange={(value) => update('workEndTime', value)} />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={connectCalendar}
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Connect
+                        </button>
+                      )}
                     </div>
-                    <div className="mt-4 rounded-[18px] border border-rose-100 bg-rose-50/60 p-4">
-                      <div className="flex items-center gap-2">
-                        <Clock3 className="h-4 w-4 text-rose-600" />
-                        <span className="text-xs font-bold">Planning window</span>
-                      </div>
-                      <p className="mt-2 text-xl font-bold tracking-tight">{formatTime(state.workStartTime)} — {formatTime(state.workEndTime)}</p>
-                      <p className="mt-1 text-[10px] text-slate-500">{Intl.DateTimeFormat().resolvedOptions().timeZone || state.timezone}</p>
-                    </div>
-                  </Step>
-                )}
+                  </div>
+                </Step>
+              )}
 
-                {step === 5 && (
-                  <Step title="How should Tracker shape the day?" description="This changes the duration and number of starter activities. It is a planning preference, not a productivity score.">
-                    <div className="space-y-2">
-                      {PLANNING_STYLES.map(([label, value, hint]) => (
-                        <ChoiceRow key={value} selected={state.planningStyle === value} onClick={() => update('planningStyle', value)} icon={<Sparkles className="h-4 w-4" />} title={label} description={hint} />
-                      ))}
+              {/* Step 2: Main Objective */}
+              {step === 2 && (
+                <Step
+                  title="What is your main goal for today?"
+                  description="One clear priority makes any day productive. (Optional - skip if you prefer an empty slate)"
+                >
+                  <textarea
+                    value={state.firstDayObjective}
+                    onChange={(e) => update('firstDayObjective', e.target.value)}
+                    maxLength={200}
+                    rows={4}
+                    placeholder="e.g., Complete project proposal, finish client review..."
+                    className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50/50 p-4 text-sm outline-none transition focus:border-rose-500 focus:bg-white focus:ring-4 focus:ring-rose-100"
+                  />
+                  <div className="mt-2 flex justify-between text-[11px] text-slate-400">
+                    <span>Leave blank to skip</span>
+                    <span>{state.firstDayObjective.length}/200</span>
+                  </div>
+                </Step>
+              )}
+
+              {/* Step 3: Ready Screen */}
+              {step === 3 && (
+                <Step
+                  title="You're ready to start"
+                  description="Here is your setup summary. You can adjust settings anytime."
+                >
+                  <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/60 p-5">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">Work Hours</p>
+                        <p className="text-[11px] text-slate-500">{formatTime(state.workStartTime)} — {formatTime(state.workEndTime)}</p>
+                      </div>
+                      <Clock3 className="h-4 w-4 text-slate-400" />
                     </div>
-                    <div className="mt-5">
-                      <div className="flex items-end justify-between">
+
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">Focus Areas</p>
+                        <p className="text-[11px] text-slate-500">
+                          {selectedFocusLabels.length > 0 ? selectedFocusLabels.join(', ') : 'None selected'}
+                        </p>
+                      </div>
+                      <Target className="h-4 w-4 text-slate-400" />
+                    </div>
+
+                    {state.firstDayObjective.trim() ? (
+                      <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-bold">Daily capacity</p>
-                          <p className="mt-0.5 text-[11px] text-slate-400">How much focused work feels realistic?</p>
+                          <p className="text-xs font-bold text-slate-900">Today&apos;s Priority</p>
+                          <p className="text-[11px] text-slate-600 truncate max-w-sm">{state.firstDayObjective}</p>
                         </div>
-                        <span className="text-lg font-bold text-rose-600">{state.dailyCapacity}h</span>
+                        <Sparkles className="h-4 w-4 text-rose-500" />
                       </div>
-                      <input
-                        aria-label="Daily capacity"
-                        type="range"
-                        min="2"
-                        max="10"
-                        step="1"
-                        value={state.dailyCapacity}
-                        onChange={(event) => update('dailyCapacity', Number(event.target.value))}
-                        className="mt-4 w-full accent-rose-600"
-                      />
-                      <div className="flex justify-between text-[10px] text-slate-400"><span>2h</span><span>10h</span></div>
-                    </div>
-                  </Step>
-                )}
-
-                {step === 6 && (
-                  <Step title="What would make today a good day?" description="Write one concrete outcome. Tracker will keep this as your main activity and add smaller activities around the priorities you selected.">
-                    <textarea
-                      value={state.firstDayObjective}
-                      onChange={(event) => update('firstDayObjective', event.target.value)}
-                      maxLength={1000}
-                      rows={5}
-                      autoFocus
-                      placeholder="Ship the API integration, finish my portfolio update, study Java for two hours…"
-                      className="w-full resize-none rounded-[20px] border border-slate-200 bg-slate-50/50 p-4 text-sm leading-6 outline-none transition focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-100"
-                    />
-                    <div className="mt-2 flex justify-between text-[10px] text-slate-400">
-                      <span>Concrete beats ambitious.</span><span>{state.firstDayObjective.length}/1000</span>
-                    </div>
-                    <div className="mt-5 flex flex-wrap gap-2">
-                      {selectedFocusLabels.map((label) => (
-                        <span key={label} className="rounded-full bg-rose-50 px-3 py-1.5 text-[10px] font-semibold text-rose-700">{label}</span>
-                      ))}
-                    </div>
-                  </Step>
-                )}
-
-                {step === 7 && (
-                  <Step title="Here’s what Tracker will add." description="Nothing is replaced. These are new one-time activities generated from this onboarding run.">
-                    <div className="rounded-[22px] border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
-                      <div className="mb-4 flex items-center justify-between">
-                        <div>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-rose-600">YOUR STARTING DAY</p>
-                          <p className="mt-1 text-sm font-bold">Built around your choices</p>
-                        </div>
-                        <div className="grid h-9 w-9 place-items-center rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
-                          <Rocket className="h-4 w-4 text-rose-600" />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <PreviewActivity icon={<Target />} title={state.firstDayObjective || 'Your main outcome'} meta={`${state.dailyCapacity}h capacity · ${state.planningStyle || 'focused'} planning`} primary />
-                        {state.focusAreas.slice(1, 3).map((focus) => {
-                          const item = FOCUS_AREAS.find((entry) => entry[1] === focus)
-                          return <PreviewActivity key={focus} icon={<Sparkles />} title={item?.[0] || focus} meta="A supporting activity based on your focus" />
-                        })}
-                        {state.taskSources[0] && (
-                          <PreviewActivity icon={<ListTodo />} title={`Review your ${sourceLabel(state.taskSources[0])} queue`} meta="Added from your selected work source" />
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-3 flex items-center gap-2 rounded-[16px] bg-emerald-50 px-3.5 py-3 text-[11px] font-semibold text-emerald-700">
-                      <CheckCircle2 className="h-4 w-4 shrink-0" />
-                      Existing activities and other Tracker data stay untouched.
-                    </div>
-                  </Step>
-                )}
-
-                {error && <p className="mt-4 rounded-xl bg-rose-50 px-3 py-2.5 text-xs font-medium text-rose-700" role="alert">{error}</p>}
-
-                <footer className="mt-3 flex shrink-0 items-center justify-between gap-2 sm:mt-5">
-                  <button type="button" onClick={back} disabled={step === 0 || saving} className="inline-flex h-10 items-center gap-1 rounded-xl px-2.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 disabled:invisible">
-                    <ArrowLeft className="h-4 w-4" /> Back
-                  </button>
-
-                  <div className="flex items-center gap-1.5">
-                    {step > 0 && step < TOTAL_STEPS && (
-                      <button type="button" onClick={skip} disabled={saving} className="inline-flex h-10 items-center rounded-xl px-3 text-xs font-semibold text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50">
-                        Skip
-                      </button>
-                    )}
-                    {step < TOTAL_STEPS ? (
-                      <button type="button" onClick={continueStep} disabled={saving} className="inline-flex h-10 items-center gap-2 rounded-xl bg-slate-950 px-4 text-xs font-bold text-white shadow-lg shadow-slate-950/15 transition hover:-translate-y-0.5 hover:bg-rose-600 disabled:opacity-60">
-                        {saving ? 'Saving…' : step === 0 ? 'Start setup' : 'Continue'}
-                        <ArrowRight className="h-4 w-4" />
-                      </button>
                     ) : (
-                      <button type="button" onClick={finish} disabled={saving} className="inline-flex h-10 items-center gap-2 rounded-xl bg-rose-600 px-4 text-xs font-bold text-white shadow-lg shadow-rose-600/20 transition hover:-translate-y-0.5 hover:bg-rose-700 disabled:opacity-60">
-                        {saving ? 'Building…' : 'Build my day'}
-                        <Rocket className="h-4 w-4" />
-                      </button>
+                      <p className="text-[11px] text-slate-400 italic">No first-day goal set (clean start).</p>
                     )}
                   </div>
-                </footer>
 
-                <p className="mt-2 flex items-center justify-center gap-1.5 text-[9px] text-slate-400 sm:mt-5">
-                  <Check className="h-3 w-3" /> Progress saves as you go
+                  <div className="mt-4 flex items-center gap-2 text-xs font-medium text-emerald-600">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    Ready to build your workspace.
+                  </div>
+                </Step>
+              )}
+
+              {error && (
+                <p className="mt-4 rounded-xl bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-700" role="alert">
+                  {error}
                 </p>
-              </div>
+              )}
+
+              {/* Navigation Footer */}
+              <footer className="mt-8 flex items-center justify-between gap-3 border-t border-slate-100 pt-5">
+                <button
+                  type="button"
+                  onClick={back}
+                  disabled={step === 0 || saving}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold text-slate-500 hover:bg-slate-100 disabled:invisible"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back
+                </button>
+
+                <div className="flex items-center gap-2">
+                  {step < TOTAL_STEPS && (
+                    <button
+                      type="button"
+                      onClick={skip}
+                      disabled={saving}
+                      className="inline-flex h-9 items-center rounded-xl px-3 text-xs font-semibold text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50"
+                    >
+                      Skip
+                    </button>
+                  )}
+
+                  {step < TOTAL_STEPS ? (
+                    <button
+                      type="button"
+                      onClick={continueStep}
+                      disabled={saving}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-slate-950 px-4 text-xs font-bold text-white shadow-sm hover:bg-rose-600 disabled:opacity-50 transition"
+                    >
+                      {saving ? 'Saving…' : 'Continue'}
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={finish}
+                      disabled={saving}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-rose-600 px-5 text-xs font-bold text-white shadow-sm hover:bg-rose-700 disabled:opacity-50 transition"
+                    >
+                      {saving ? 'Finishing…' : 'Get Started'}
+                      <Rocket className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </footer>
             </div>
           </section>
         </div>
@@ -548,65 +465,50 @@ export function OnboardingExperience({ initialState, username }: Props) {
 function Step({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
     <div>
-      <h1 className="max-w-xl text-[23px] font-bold leading-[1.08] tracking-[-0.035em] text-slate-950 sm:text-4xl">{title}</h1>
-      <p className="mt-2 max-w-xl text-xs leading-5 sm:mt-3 sm:text-sm sm:leading-6 text-slate-500">{description}</p>
-      <div className="mt-4 sm:mt-7">{children}</div>
+      <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">{title}</h1>
+      <p className="mt-1 text-xs text-slate-500">{description}</p>
+      <div className="mt-5">{children}</div>
     </div>
   )
 }
 
 function ChoiceRow({ selected, onClick, icon, title, description }: { selected: boolean; onClick: () => void; icon: React.ReactNode; title: string; description: string }) {
   return (
-    <button type="button" onClick={onClick} className={`group flex w-full items-center gap-3 rounded-[16px] border p-2.5 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-md ${selected ? 'border-rose-300 bg-rose-50/70 shadow-sm' : 'border-slate-200 bg-white'}`}>
-      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${selected ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{selected ? <Check className="h-4 w-4" /> : icon}</span>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition ${
+        selected ? 'border-rose-300 bg-rose-50/60 shadow-xs' : 'border-slate-200 bg-white hover:border-slate-300'
+      }`}
+    >
+      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-xl ${selected ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+        {selected ? <Check className="h-4 w-4" /> : icon}
+      </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-xs font-bold">{title}</span>
-        <span className="mt-0.5 block text-[10px] leading-4 text-slate-400">{description}</span>
+        <span className="block text-xs font-bold text-slate-900">{title}</span>
+        <span className="block text-[10px] text-slate-400 truncate">{description}</span>
       </span>
       <span className={`h-4 w-4 rounded-full border ${selected ? 'border-rose-600 bg-rose-600' : 'border-slate-300'}`} />
     </button>
   )
 }
 
-function SourceIcon({ source }: { source: string }) {
-  if (source === 'github') {
-    return <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true"><path d="M12 .6A11.4 11.4 0 0 0 8.4 23c.57.1.78-.25.78-.55v-2.16c-3.17.69-3.84-1.34-3.84-1.34-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.25 3.33.96.1-.74.4-1.25.72-1.54-2.53-.29-5.19-1.27-5.19-5.66 0-1.25.45-2.27 1.18-3.07-.12-.29-.51-1.46.11-3.03 0 0 .96-.31 3.15 1.17A10.9 10.9 0 0 1 12 6.2c.97 0 1.94.13 2.85.39 2.18-1.48 3.14-1.17 3.14-1.17.63 1.57.24 2.74.12 3.03.73.8 1.17 1.82 1.17 3.07 0 4.4-2.67 5.36-5.21 5.65.41.36.77 1.06.77 2.14v3.14c0 .31.2.66.79.55A11.4 11.4 0 0 0 12 .6Z"/></svg>
-  }
-  if (source === 'outlook') {
-    return <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true"><path fill="#0078d4" d="M2.5 5.5 13 4v16L2.5 18.5v-13Z"/><path fill="#106ebe" d="M13 4h8.5v16H13z"/><path fill="#fff" d="M5 9.2c1.4 0 2.5 1.1 2.5 2.8S6.4 14.8 5 14.8 2.5 13.7 2.5 12 3.6 9.2 5 9.2Zm0 1.4c-.6 0-1 .5-1 1.4s.4 1.4 1 1.4 1-.5 1-1.4-.4-1.4-1-1.4Z"/></svg>
-  }
-  return <ListTodo className="h-4 w-4" />
-}
-
-function ChoiceTile({ selected, onClick, label, icon }: { selected: boolean; onClick: () => void; label: string; icon: React.ReactNode }) {
-  return (
-    <button type="button" onClick={onClick} className={`flex min-h-14 items-center gap-2 rounded-[14px] border px-2.5 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${selected ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-700'}`}>
-      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${selected ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{selected ? <Check className="h-3.5 w-3.5" /> : icon}</span>
-      <span className="text-[11px] font-semibold">{label}</span>
-    </button>
-  )
-}
-
 function TimeSelect({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
-    <label className="block rounded-[18px] border border-slate-200 bg-white p-3.5 shadow-sm">
-      <span className="block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="mt-2 w-full bg-transparent text-base font-bold outline-none">
-        {TIME_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+    <label className="block rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
+      <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="mt-1 w-full bg-transparent text-sm font-bold text-slate-800 outline-none"
+      >
+        {TIME_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
       </select>
     </label>
-  )
-}
-
-function PreviewActivity({ icon, title, meta, primary = false }: { icon: React.ReactNode; title: string; meta: string; primary?: boolean }) {
-  return (
-    <div className={`flex items-center gap-3 rounded-[16px] border bg-white p-3 shadow-sm ${primary ? 'border-rose-200' : 'border-slate-200'}`}>
-      <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${primary ? 'bg-rose-600 text-white' : 'bg-rose-50 text-rose-600'}`}>{icon}</div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-bold">{title}</p>
-        <p className="mt-0.5 truncate text-[10px] text-slate-400">{meta}</p>
-      </div>
-    </div>
   )
 }
 
@@ -618,23 +520,4 @@ function timeToMinutes(value: string) {
 function formatTime(value: string) {
   const [hour, minute] = value.split(':').map(Number)
   return `${hour % 12 || 12}:${String(minute).padStart(2, '0')} ${hour < 12 ? 'AM' : 'PM'}`
-}
-
-function formatCalendarTime(value: string) {
-  return new Date(value).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-}
-
-function sourceLabel(value: string) {
-  const labels: Record<string, string> = {
-    'google-tasks': 'Google Tasks',
-    todoist: 'Todoist',
-    notion: 'Notion',
-    linear: 'Linear',
-    github: 'GitHub',
-    jira: 'Jira',
-    trello: 'Trello',
-    clickup: 'ClickUp',
-    outlook: 'Outlook',
-  }
-  return labels[value] || value
 }

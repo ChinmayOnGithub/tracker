@@ -6,7 +6,7 @@ import {
   User, Palette, Calendar, Layout, Bell, RefreshCw, Lock, 
   Settings2, Database, Shield, CheckCircle2, AlertCircle, 
   Trash2, Key, Check, Sparkles, ShieldCheck, CreditCard,
-  Blocks, Mail, FileText, MessageSquare, GitBranch, Clock
+  Blocks, Clock
 } from 'lucide-react'
 import { SettingsBillingSection } from './SettingsBillingSection'
 import { checkGoogleConnection, disconnectGoogleAccount } from '@/modules/sync/google-calendar/actions'
@@ -1193,8 +1193,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
                         [
                           { id: 'all', label: 'All Apps' },
                           { id: 'connected', label: 'Connected' },
-                          { id: 'calendar', label: 'Calendar & Mail' },
-                          { id: 'workspace', label: 'Workspace' },
                         ] as const
                       ).map(cat => (
                         <button
@@ -1301,174 +1299,6 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
                           Connect Google Calendar
                         </Button>
                       )}
-                    </CardFooter>
-                  </Card>
-                )}
-
-                {/* 2. Google Account & Gmail */}
-                {shouldShowApp('gmail') && (
-                  <Card className="flex flex-col justify-between border-[var(--color-border)] opacity-90">
-                    <CardBody className="p-5 space-y-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center">
-                            <Mail className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-[var(--color-text-main)]">Google Account & Gmail</h4>
-                            <span className="text-[11px] text-[var(--color-text-muted)]">Communication & Identity</span>
-                          </div>
-                        </div>
-                        <Badge variant="muted" size="sm">Coming Soon</Badge>
-                      </div>
-
-                      <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
-                        Direct email-to-task conversion, automated daily digests, and meeting reminder extraction straight to your daily journal.
-                      </p>
-
-                      <div className="space-y-1.5 pt-1 text-[11px] text-[var(--color-text-muted)]">
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                          <span>Direct Gmail action items into Tracker tasks</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                          <span>Morning briefing email digest</span>
-                        </div>
-                      </div>
-                    </CardBody>
-
-                    <CardFooter className="px-5 py-3.5 bg-slate-50/50 dark:bg-zinc-900/30 border-t border-[var(--color-border)] flex items-center justify-between">
-                      <span className="text-[11px] text-[var(--color-text-muted)]">In Pipeline</span>
-                      <Button variant="outline" size="sm" disabled className="opacity-60 cursor-not-allowed">
-                        Coming Soon
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                )}
-
-                {/* 3. Notion */}
-                {shouldShowApp('notion') && (
-                  <Card className="flex flex-col justify-between border-[var(--color-border)] opacity-90">
-                    <CardBody className="p-5 space-y-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-zinc-500/10 border border-zinc-500/20 text-zinc-700 dark:text-zinc-300 flex items-center justify-center">
-                            <FileText className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-[var(--color-text-main)]">Notion Workspace</h4>
-                            <span className="text-[11px] text-[var(--color-text-muted)]">Workspace & Notes</span>
-                          </div>
-                        </div>
-                        <Badge variant="muted" size="sm">Coming Soon</Badge>
-                      </div>
-
-                      <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
-                        Two-way database synchronization between Notion databases and Tracker notes, tasks, and journal reflection archives.
-                      </p>
-
-                      <div className="space-y-1.5 pt-1 text-[11px] text-[var(--color-text-muted)]">
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                          <span>Sync Notion databases to habit logs</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                          <span>Automatic weekly journal page export</span>
-                        </div>
-                      </div>
-                    </CardBody>
-
-                    <CardFooter className="px-5 py-3.5 bg-slate-50/50 dark:bg-zinc-900/30 border-t border-[var(--color-border)] flex items-center justify-between">
-                      <span className="text-[11px] text-[var(--color-text-muted)]">In Pipeline</span>
-                      <Button variant="outline" size="sm" disabled className="opacity-60 cursor-not-allowed">
-                        Coming Soon
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                )}
-
-                {/* 4. Slack */}
-                {shouldShowApp('slack') && (
-                  <Card className="flex flex-col justify-between border-[var(--color-border)] opacity-90">
-                    <CardBody className="p-5 space-y-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                            <MessageSquare className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-[var(--color-text-main)]">Slack</h4>
-                            <span className="text-[11px] text-[var(--color-text-muted)]">Team Productivity</span>
-                          </div>
-                        </div>
-                        <Badge variant="muted" size="sm">Coming Soon</Badge>
-                      </div>
-
-                      <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
-                        Quick habit logging from slash commands (/tracker done), standup notifications, and automatic time-off status syncing.
-                      </p>
-
-                      <div className="space-y-1.5 pt-1 text-[11px] text-[var(--color-text-muted)]">
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                          <span>/tracker check-in commands</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                          <span>Team PTO away status synchronization</span>
-                        </div>
-                      </div>
-                    </CardBody>
-
-                    <CardFooter className="px-5 py-3.5 bg-slate-50/50 dark:bg-zinc-900/30 border-t border-[var(--color-border)] flex items-center justify-between">
-                      <span className="text-[11px] text-[var(--color-text-muted)]">In Pipeline</span>
-                      <Button variant="outline" size="sm" disabled className="opacity-60 cursor-not-allowed">
-                        Coming Soon
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                )}
-
-                {/* 5. GitHub */}
-                {shouldShowApp('github') && (
-                  <Card className="flex flex-col justify-between border-[var(--color-border)] opacity-90">
-                    <CardBody className="p-5 space-y-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                            <GitBranch className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <h4 className="text-sm font-bold text-[var(--color-text-main)]">GitHub</h4>
-                            <span className="text-[11px] text-[var(--color-text-muted)]">Developer Activity</span>
-                          </div>
-                        </div>
-                        <Badge variant="muted" size="sm">Coming Soon</Badge>
-                      </div>
-
-                      <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
-                        Track GitHub pull request reviews, commit streaks, and issue milestones automatically in your developer habit metrics.
-                      </p>
-
-                      <div className="space-y-1.5 pt-1 text-[11px] text-[var(--color-text-muted)]">
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                          <span>Commit streaks linked to daily activity goals</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                          <span>PR review notifications</span>
-                        </div>
-                      </div>
-                    </CardBody>
-
-                    <CardFooter className="px-5 py-3.5 bg-slate-50/50 dark:bg-zinc-900/30 border-t border-[var(--color-border)] flex items-center justify-between">
-                      <span className="text-[11px] text-[var(--color-text-muted)]">In Pipeline</span>
-                      <Button variant="outline" size="sm" disabled className="opacity-60 cursor-not-allowed">
-                        Coming Soon
-                      </Button>
                     </CardFooter>
                   </Card>
                 )}
