@@ -6,6 +6,75 @@ import { SessionService } from '@/lib/services/SessionService'
 import { CredentialService } from '@/lib/services/CredentialService'
 import { AuthorizationService } from '@/lib/services/AuthorizationService'
 import { OnboardingService } from '@/lib/services/OnboardingService'
+import crypto from 'crypto'
+
+const LOGIN_SECURITY_MODULE = 'LOGIN_SECURITY'
+const HUMAN_CHALLENGE_COOKIE = 'tracker_human_challenge'
+const HUMAN_CHALLENGE_MAX_AGE_MS = 10 * 60 * 1000
+
+function signHumanChallenge(timestamp: number, nonce: string): string {
+  const crypto = require('crypto') as typeof import('crypto')
+  const payload = `${timestamp}.${nonce}`
+  const signature = crypto.createHmac('sha256', process.env.AUTH_SECRET || 'dev-secret').update(payload).digest('hex')
+  return `${payload}.${signature}`
+}
+
+function verifyHumanChallengeToken(token: string): boolean {
+  const parts = token.split('.')
+  if (parts.length !== 3) return false
+  const [timestampRaw, nonce, signature] = parts
+  const timestamp = Number(timestampRaw)
+  if (!Number.isFinite(timestamp) || !nonce || !signature) return false
+  if (Date.now() - timestamp < 700 || Date.now() - timestamp > HUMAN_CHALLENGE_MAX_AGE_MS) return false
+  const expected = signHumanChallenge(timestamp, nonce)
+  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected.split('.').at(-1)!))
+}
+
+export async function getLoginSecuritySettingsAction(): Promise<{ success: boolean; humanVerificationEnabled: boolean }> {
+  try {
+    const setting = await db.userSetting.findFirst({ where: { module: LOGIN_SECURITY_MODULE } })
+    const config = (setting?.config as { humanVerificationEnabled?: boolean } | null) || {}
+    return { success: true, humanVerificationEnabled: config.humanVerificationEnabled !== false }
+  } catch {
+    return { success: true, humanVerificationEnabled: true }
+  }
+}
+
+export async function issueHumanChallengeAction(): Promise<{ success: boolean; token?: string; error?: string }> {
+  try {
+    const crypto = await import('crypto')
+    const timestamp = Date.now()
+    const nonce = crypto.randomBytes(16).toString('hex')
+    const token = signHumanChallenge(timestamp, nonce)
+    const { cookies } = await import('next/headers')
+    const cookieStore = await cookies()
+    cookieStore.set(HUMAN_CHALLENGE_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: Math.floor(HUMAN_CHALLENGE_MAX_AGE_MS / 1000),
+      path: '/',
+    })
+    return { success: true, token }
+  } catch {
+    return { success: false, error: 'Could not start security verification.' }
+  }
+}
+
+export async function verifyHumanChallengeAction(token: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { cookies } = await import('next/headers')
+    const cookieStore = await cookies()
+    const stored = cookieStore.get(HUMAN_CHALLENGE_COOKIE)?.value
+    if (!stored || stored !== token || !verifyHumanChallengeToken(token)) {
+      return { success: false, error: 'Complete the security check before logging in.' }
+    }
+    cookieStore.delete(HUMAN_CHALLENGE_COOKIE)
+    return { success: true }
+  } catch {
+    return { success: false, error: 'Security verification failed.' }
+  }
+}
 
 /**
  * Retrieves the currently logged-in user from the signed session token cookie.
@@ -19,13 +88,19 @@ export async function getLoggedUser(): Promise<{ id: string; username: string; e
  * Registers a new user with a unique username and a secure password (minimum 8 characters).
  * Server Action adapter delegating to AuthService.
  */
-export async function registerUserAction(usernameInput: string, secret: string): Promise<{
+export async function registerUserAction(usernameInput: string, secret: string, humanChallengeToken?: string): Promise<{
   success: boolean
   error?: string
   user?: { id: string; username: string }
   onboardingRequired?: boolean
 }> {
   try {
+    const security = await getLoginSecuritySettingsAction()
+    if (security.humanVerificationEnabled) {
+      if (!humanChallengeToken) return { success: false, error: 'Complete the security check before signing up.' }
+      const verification = await verifyHumanChallengeAction(humanChallengeToken)
+      if (!verification.success) return { success: false, error: verification.error }
+    }
     const result = await AuthService.register(usernameInput, secret)
     if (!result.success) {
       return { success: false, error: result.error }
@@ -44,7 +119,7 @@ export async function registerUserAction(usernameInput: string, secret: string):
  * Verifies credentials (password or legacy PIN) and sets session cookie.
  * Server Action adapter delegating to AuthService.
  */
-export async function verifyPinAction(usernameInput: string, secret: string): Promise<{
+export async function verifyPinAction(usernameInput: string, secret: string, humanChallengeToken?: string): Promise<{
   success: boolean
   error?: string
   user?: { id: string; username: string }
@@ -52,6 +127,12 @@ export async function verifyPinAction(usernameInput: string, secret: string): Pr
   onboardingRequired?: boolean
 }> {
   try {
+    const security = await getLoginSecuritySettingsAction()
+    if (security.humanVerificationEnabled) {
+      if (!humanChallengeToken) return { success: false, error: 'Complete the security check before logging in.' }
+      const verification = await verifyHumanChallengeAction(humanChallengeToken)
+      if (!verification.success) return { success: false, error: verification.error }
+    }
     const result = await AuthService.login(usernameInput, secret)
     if (!result.success) {
       return { success: false, error: result.error }
