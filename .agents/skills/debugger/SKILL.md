@@ -2,7 +2,7 @@
 name: debugger
 description: Hypothesis-driven debugging skill for diagnosing issues in the codebase. Use when the user reports a bug, unexpected behavior, error, or issue they cannot understand. Triggers on phrases like "debug", "why is this happening", "not working", "investigate", "figure out why", "bug", "issue", "problem", "error", or any description of unexpected application behavior.
 license: MIT
-compatibility: Requires a centralized logger with agent-prefixed logging support and .agent.debug.log file output capability.
+compatibility: Use Tracker's existing logger infrastructure when instrumentation is appropriate. Do not invent a logger path; inspect `lib/logger.ts` first.
 metadata:
   author: AIGIS Solutions
   version: "1.0.0"
@@ -46,7 +46,7 @@ Generate **at least 3 hypotheses** for the root cause. Format:
 Insert debug statements using the centralized logger with `[Agent]` prefix:
 
 ```typescript
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 
 // Create an agent logger for debugging
 const agentLogger = logger.agent('Debugger');
@@ -69,7 +69,7 @@ agentLogger.warn('Unexpected condition', { condition });
 After instrumenting, clear the agent debug log:
 
 ```bash
-echo "" > .agent.debug.log
+Use the repository's supported logging mechanism and never commit temporary debug output.
 ```
 
 Then ask the user:
@@ -105,10 +105,10 @@ For each hypothesis, determine:
 
 ## Agent Logger Usage
 
-The centralized logger at `@/utils/logger` supports agent-prefixed logging:
+The centralized logger at `@/lib/logger` supports agent-prefixed logging:
 
 ```typescript
-import { logger } from '@/utils/logger';
+import { logger } from '@/lib/logger';
 
 // Method 1: Create a named agent logger
 const agentLogger = logger.agent('Debugger');
