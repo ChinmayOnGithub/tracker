@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { ActivityTemplate } from '@/types'
-import { verifyPinAction, registerUserAction, logoutAction } from '@/app/actions/auth'
+import { verifyPinAction, registerUserAction, logoutAction, getLoginSecuritySettingsAction, issueHumanChallengeAction, verifyHumanChallengeAction } from '@/app/actions/auth'
 import { writeQueue } from '@/lib/store/write-queue'
 import { requestDeduplicator } from '@/lib/store/requestDeduplicator'
 import { ShieldAlert } from 'lucide-react'
@@ -132,7 +132,40 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   const [authError, setAuthError] = useState('')
   const [isAuthLoading, setIsAuthLoading] = useState(false)
   const [robotChecked, setRobotChecked] = useState(false)
+  const [humanVerificationEnabled, setHumanVerificationEnabled] = useState(true)
+  const [humanChallengeToken, setHumanChallengeToken] = useState<string | null>(null)
+  const [humanVerificationLoading, setHumanVerificationLoading] = useState(true)
   const pinInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const loadHumanVerification = async () => {
+      const settings = await getLoginSecuritySettingsAction()
+      if (cancelled) return
+      const enabled = settings.success ? settings.humanVerificationEnabled : true
+      setHumanVerificationEnabled(enabled)
+      if (enabled) {
+        const challenge = await issueHumanChallengeAction()
+        if (!cancelled && challenge.success && challenge.token) setHumanChallengeToken(challenge.token)
+      }
+      setHumanVerificationLoading(false)
+    }
+    loadHumanVerification().catch(() => setHumanVerificationLoading(false))
+    return () => { cancelled = true }
+  }, [])
+
+  const handleHumanVerification = useCallback(async () => {
+    if (!humanVerificationEnabled || robotChecked || humanVerificationLoading || !humanChallengeToken) return
+    const result = await verifyHumanChallengeAction(humanChallengeToken)
+    if (result.success) {
+      setRobotChecked(true)
+    } else {
+      setRobotChecked(false)
+      setAuthError(result.error || 'Complete the security check before continuing.')
+      const challenge = await issueHumanChallengeAction()
+      if (challenge.success && challenge.token) setHumanChallengeToken(challenge.token)
+    }
+  }, [humanVerificationEnabled, robotChecked, humanVerificationLoading, humanChallengeToken])
 
   // Fetch guest permissions for non-owner accounts only if missing or upon settings change
   const isOwner = user?.username === 'admin' || user?.isOwner === true
@@ -463,7 +496,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
       if (res.success) {
         setIsAuthenticated(true)
         if (res.user) setUser(res.user)
-        window.location.replace('/')
+        window.location.replace(res.onboardingRequired ? '/onboarding' : '/')
       } else {
         setIsAuthLoading(false)
         setAuthError(res.error || 'Incorrect username or password/PIN')
@@ -554,6 +587,11 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   setIsRegisterMode(false)
                   setAuthError('')
                   setEnteredPin('')
+                  setRobotChecked(false)
+                  setHumanChallengeToken(null)
+                  issueHumanChallengeAction().then(challenge => {
+                    if (challenge.success && challenge.token) setHumanChallengeToken(challenge.token)
+                  })
                 }}
                 className={`h-14 text-[18px] font-medium transition-colors border-b-2 -mb-px ${
                   !isRegisterMode
@@ -671,9 +709,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     const val = e.target.value
                     setEnteredPin(val)
                     setAuthError('')
-                    if (!isRegisterMode && /^\d{4}$/.test(val) && usernameInput.trim().length > 0) {
-                      handleAuthSubmit(usernameInput, val)
-                    }
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
@@ -704,7 +739,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                   isAuthLoading ||
                   !usernameInput.trim() ||
                   !enteredPin ||
-                  !robotChecked
+                  (humanVerificationEnabled && (!robotChecked || humanVerificationLoading))
                 }
                 className="h-[58px] w-full rounded-[6px] bg-[#d3d3d3] text-white text-[17px] font-normal transition-colors disabled:cursor-not-allowed enabled:bg-zinc-700 enabled:hover:bg-zinc-800"
               >
@@ -735,28 +770,26 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setRobotChecked(prev => !prev)}
-              disabled={isAuthLoading}
-              className="mt-12 w-full max-w-[420px] mx-auto border border-zinc-300 bg-zinc-50 rounded-[4px] px-4 py-4 flex items-center justify-between text-left hover:bg-zinc-100 transition-colors"
-              aria-pressed={robotChecked}
-            >
-              <span className="flex items-center gap-3">
-                <span className={`h-7 w-7 border border-zinc-400 bg-white rounded-sm flex items-center justify-center transition-colors ${
-                  robotChecked ? 'bg-emerald-500 border-emerald-500 text-white' : 'text-transparent'
-                }`}>
-                  ✓
+            {humanVerificationEnabled && (
+              <button
+                type="button"
+                onClick={handleHumanVerification}
+                disabled={isAuthLoading || humanVerificationLoading || robotChecked}
+                className="mt-12 w-full max-w-[420px] mx-auto border border-zinc-300 bg-zinc-50 rounded-[4px] px-4 py-4 flex items-center justify-between text-left hover:bg-zinc-100 transition-colors disabled:cursor-not-allowed"
+                aria-pressed={robotChecked}
+              >
+                <span className="flex items-center gap-3">
+                  <span className={`h-7 w-7 border border-zinc-400 bg-white rounded-sm flex items-center justify-center transition-colors ${robotChecked ? 'bg-emerald-500 border-emerald-500 text-white' : 'text-transparent'}`}>
+                    ✓
+                  </span>
+                  <span>
+                    <span className="block text-[15px] text-zinc-700">I&apos;m not a robot</span>
+                    <span className="block text-[11px] text-zinc-400 mt-0.5">{humanVerificationLoading ? 'Preparing security check…' : robotChecked ? 'Verified' : 'Click to verify'}</span>
+                  </span>
                 </span>
-                <span>
-                  <span className="block text-[15px] text-zinc-700">I&apos;m not a robot</span>
-                  <span className="block text-[11px] text-zinc-400 mt-0.5">Security check placeholder</span>
-                </span>
-              </span>
-              <span className="text-[10px] text-zinc-400 font-medium text-right">
-                CAPTCHA<br/>PLACEHOLDER
-              </span>
-            </button>
+                <span className="text-[10px] text-zinc-400 font-medium text-right">SECURITY<br/>CHECK</span>
+              </button>
+            )}
           </section>
         </div>
 

@@ -192,7 +192,7 @@ describe('SyncedActivityService - Memory Leaks', () => {
       })
 
       // Subscribe to events
-      const unsubscribe = SyncedActivityService.onSyncEvent('sync:completed', () => {})
+      const unsubscribe = SyncedActivityService.onSyncEvent(userId, 'sync:completed', () => {})
 
       // Shutdown should not leave dangling listeners
       await SyncedActivityService.shutdown(userId)
@@ -216,7 +216,7 @@ describe('SyncedActivityService - Memory Leaks', () => {
 
       // Create many subscriptions
       const unsubscribers = Array.from({ length: 100 }, () =>
-        SyncedActivityService.onSyncEvent('sync:completed', () => {})
+        SyncedActivityService.onSyncEvent(userId, 'sync:completed', () => {})
       )
 
       // Cleanup

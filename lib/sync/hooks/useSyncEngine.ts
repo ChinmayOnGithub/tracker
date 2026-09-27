@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { SyncedActivityService } from '@/lib/services/SyncedActivityService'
 
 interface SyncStats {
@@ -58,14 +58,13 @@ export function useSyncEngine(userId: string): SyncHookReturn {
   })
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null)
   
-  // Fixed: Guard against React Strict Mode double initialization
-  const [isInitialized, setIsInitialized] = useState(false)
+  // Track the active user rather than using a component-wide boolean. A boolean
+  // guard can prevent initialization when the authenticated user changes.
+  const initializedUserRef = useRef<string | null>(null)
 
   // Initialize sync engine and set up event listeners
   useEffect(() => {
-    // Prevent double initialization in React Strict Mode
-    if (isInitialized) return
-    
+    let cancelled = false
     let unsubscribeCallbacks: Array<() => void> = []
 
     const updateSyncStats = () => {
@@ -78,7 +77,10 @@ export function useSyncEngine(userId: string): SyncHookReturn {
       try {
         await SyncedActivityService.initialize(userId)
 
+        if (cancelled) return
+
         const unsubscribeNetworkStatus = SyncedActivityService.onSyncEvent(
+          userId,
           'network:statusChanged',
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (data: any) => {
@@ -89,6 +91,7 @@ export function useSyncEngine(userId: string): SyncHookReturn {
         )
 
         const unsubscribeSyncStarted = SyncedActivityService.onSyncEvent(
+          userId,
           'sync:started',
           () => {
             setIsSyncing(true)
@@ -96,6 +99,7 @@ export function useSyncEngine(userId: string): SyncHookReturn {
         )
 
         const unsubscribeSyncCompleted = SyncedActivityService.onSyncEvent(
+          userId,
           'sync:completed',
           () => {
             setIsSyncing(false)
@@ -105,6 +109,7 @@ export function useSyncEngine(userId: string): SyncHookReturn {
         )
 
         const unsubscribeSyncFailed = SyncedActivityService.onSyncEvent(
+          userId,
           'sync:failed',
           (error) => {
             setIsSyncing(false)
@@ -119,10 +124,10 @@ export function useSyncEngine(userId: string): SyncHookReturn {
           unsubscribeSyncFailed
         ]
 
+        initializedUserRef.current = userId
         updateSyncStats()
-        setIsInitialized(true)
       } catch (error) {
-        console.error('[useSyncEngine] Failed to initialize:', error)
+        if (!cancelled) console.error('[useSyncEngine] Failed to initialize:', error)
       }
     }
 
@@ -132,13 +137,14 @@ export function useSyncEngine(userId: string): SyncHookReturn {
     const statsInterval = setInterval(updateSyncStats, 5000) // Update every 5 seconds
 
     return () => {
-      // Cleanup subscriptions
+      cancelled = true
+      if (initializedUserRef.current === userId) initializedUserRef.current = null
       unsubscribeCallbacks.forEach(unsubscribe => unsubscribe())
       if (statsInterval) {
         clearInterval(statsInterval)
       }
     }
-  }, [userId, isInitialized])
+  }, [userId])
 
   // Force sync operation
   const forceSync = useCallback(async () => {

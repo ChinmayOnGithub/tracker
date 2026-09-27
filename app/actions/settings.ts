@@ -230,3 +230,38 @@ export async function saveWeeklyGoalAction(weeklyGoal: number): Promise<{ succes
     return { success: false, error: 'Database error saving weekly goal' }
   }
 }
+
+
+const LOGIN_SECURITY_MODULE = 'LOGIN_SECURITY'
+
+export async function getLoginSecuritySettingsAction(): Promise<{ success: boolean; humanVerificationEnabled: boolean; error?: string }> {
+  try {
+    const loggedUser = await getLoggedUser()
+    if (!loggedUser) return { success: false, humanVerificationEnabled: true, error: 'Unauthorized' }
+    if (!canAccess(loggedUser, 'settings.manage')) return { success: false, humanVerificationEnabled: true, error: 'Forbidden' }
+    const setting = await db.userSetting.findUnique({
+      where: { userId_module: { userId: loggedUser.id, module: LOGIN_SECURITY_MODULE } },
+    })
+    const config = (setting?.config as { humanVerificationEnabled?: boolean } | null) || {}
+    return { success: true, humanVerificationEnabled: config.humanVerificationEnabled !== false }
+  } catch {
+    return { success: false, humanVerificationEnabled: true, error: 'Database error' }
+  }
+}
+
+export async function saveLoginSecuritySettingsAction(enabled: boolean): Promise<{ success: boolean; error?: string }> {
+  try {
+    const loggedUser = await getLoggedUser()
+    if (!loggedUser) return { success: false, error: 'Unauthorized' }
+    if (!canAccess(loggedUser, 'settings.manage')) return { success: false, error: 'Forbidden: Owner access required' }
+    await db.userSetting.upsert({
+      where: { userId_module: { userId: loggedUser.id, module: LOGIN_SECURITY_MODULE } },
+      update: { config: { humanVerificationEnabled: enabled } },
+      create: { userId: loggedUser.id, module: LOGIN_SECURITY_MODULE, config: { humanVerificationEnabled: enabled } },
+    })
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to save login security settings:', error)
+    return { success: false, error: 'Database error saving login security settings' }
+  }
+}

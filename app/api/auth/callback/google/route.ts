@@ -120,9 +120,9 @@ export async function GET(request: Request) {
   const error = searchParams.get('error')
   const stateFromGoogle = searchParams.get('state')
 
-  const siteUrlUrl = new URL(env.NEXT_PUBLIC_SITE_URL)
-  if (process.env.NODE_ENV === 'production') siteUrlUrl.protocol = 'https:'
-  const siteUrl = siteUrlUrl.origin
+  // Use the same origin Google redirected back to. This prevents redirect_uri_mismatch
+  // when NEXT_PUBLIC_SITE_URL differs from the public hostname.
+  const siteUrl = new URL(request.url).origin
 
   if (error || !code) {
     logger.error('OAuthCallback', 'OAuth error or missing code', { error, hasCode: !!code })
@@ -237,10 +237,6 @@ export async function GET(request: Request) {
       })
       logger.info('OAuthCallback', 'Linked Google ID to existing user', { userId: user.id })
     }
-
-    // Development rollout: every successful Google login re-enters the gamified onboarding,
-    // including existing users who have completed it before.
-    await OnboardingService.resetForDevelopmentLogin(user.id)
 
     const picture = payload.picture as string | undefined
     if (picture) {
