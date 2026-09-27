@@ -7,7 +7,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   suffix?: React.ReactNode
 }
 
-export const Input: React.FC<InputProps> = React.forwardRef<HTMLInputElement, InputProps>(({
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(({
   label,
   error,
   helperText,
@@ -53,7 +53,7 @@ interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement
   error?: string
 }
 
-export const Textarea: React.FC<TextareaProps> = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({
+export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({
   label,
   error,
   className = '',
@@ -92,7 +92,7 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   options: Array<{ value: string; label: string }>
 }
 
-export const Select: React.FC<SelectProps> = React.forwardRef<HTMLSelectElement, SelectProps>(({
+export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({
   label,
   error,
   options,

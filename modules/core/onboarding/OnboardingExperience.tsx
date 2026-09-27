@@ -49,31 +49,15 @@ const STEPS = [
   ['Ready', 'Review your day'],
 ]
 
+import { useTheme } from '@/lib/theme'
+
 export function OnboardingExperience({ initialState, username }: Props) {
   const [state, setState] = useState<OnboardingState>(initialState)
   const [step, setStep] = useState(Math.min(initialState.currentStep, TOTAL_STEPS))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [calendarDiscovery, setCalendarDiscovery] = useState<CalendarDiscovery | null>(null)
-  const [currentTheme, setCurrentTheme] = useState<'light' | 'dark' | 'system'>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('theme') as 'light' | 'dark' | 'system') || 'system'
-    }
-    return 'system'
-  })
-
-  const handleThemeChange = (theme: 'light' | 'dark' | 'system') => {
-    setCurrentTheme(theme)
-    localStorage.setItem('theme', theme)
-    document.cookie = `theme=${theme}; path=/; max-age=31536000; SameSite=Lax`
-
-    const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
-    if (isDark) {
-      document.documentElement.classList.add('dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-    }
-  }
+  const { theme: currentTheme, setTheme: handleThemeChange, isDark } = useTheme()
 
   useEffect(() => {
     let active = true
@@ -276,11 +260,23 @@ export function OnboardingExperience({ initialState, username }: Props) {
               <span className="text-xs font-semibold text-slate-500 dark:text-zinc-400">
                 Welcome, <strong className="text-slate-900 dark:text-zinc-100">{username}</strong>
               </span>
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100 dark:bg-zinc-800">
-                  <div className="h-full rounded-full bg-rose-600 dark:bg-rose-500 transition-all duration-300" style={{ width: `${Math.max(progress, 15)}%` }} />
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleThemeChange(isDark ? 'light' : 'dark')}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-700 transition"
+                  title={`Live theme toggle: Currently ${currentTheme} (${isDark ? 'Dark' : 'Light'})`}
+                  aria-label="Toggle theme live"
+                >
+                  {isDark ? <Sun className="h-3.5 w-3.5 text-amber-400" /> : <Moon className="h-3.5 w-3.5 text-slate-600" />}
+                  <span className="capitalize hidden sm:inline">{currentTheme}</span>
+                </button>
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 w-16 sm:w-20 overflow-hidden rounded-full bg-slate-100 dark:bg-zinc-800">
+                    <div className="h-full rounded-full bg-rose-600 dark:bg-rose-500 transition-all duration-300" style={{ width: `${Math.max(progress, 15)}%` }} />
+                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500">{progress}%</span>
                 </div>
-                <span className="text-[10px] font-bold text-slate-400 dark:text-zinc-500">{progress}%</span>
               </div>
             </header>
 
@@ -416,9 +412,17 @@ export function OnboardingExperience({ initialState, username }: Props) {
 
                   {/* Theme / Appearance Selection */}
                   <div className="mt-5 rounded-2xl border border-slate-200 dark:border-zinc-800 bg-slate-50/60 dark:bg-zinc-800/40 p-4">
-                    <p className="text-xs font-bold text-slate-900 dark:text-zinc-100">Workspace Appearance</p>
-                    <p className="text-[11px] text-slate-500 dark:text-zinc-400 mb-3">Choose how tracker looks for your daily sessions.</p>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="text-xs font-bold text-slate-900 dark:text-zinc-100">Workspace Appearance</p>
+                        <p className="text-[11px] text-slate-500 dark:text-zinc-400">Live preview of your daily dashboard in this theme.</p>
+                      </div>
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-zinc-700 text-slate-700 dark:text-zinc-300">
+                        {isDark ? 'Dark Mode' : 'Light Mode'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 mb-4">
                       <button
                         type="button"
                         onClick={() => handleThemeChange('light')}
@@ -457,6 +461,41 @@ export function OnboardingExperience({ initialState, username }: Props) {
                         <Laptop className="h-4 w-4" />
                         <span>System</span>
                       </button>
+                    </div>
+
+                    {/* Live Realistic Dashboard Sample Preview */}
+                    <div className="rounded-xl border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-3 shadow-xs transition-colors">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-zinc-800 text-[10px] font-bold text-slate-400 dark:text-zinc-500 uppercase tracking-wider">
+                        <span>Live Today View Sample</span>
+                        <span>09:30 AM — Workday</span>
+                      </div>
+                      <div className="mt-2.5 space-y-2">
+                        <div className="flex items-center justify-between rounded-lg bg-slate-50 dark:bg-zinc-800/60 border border-slate-200/80 dark:border-zinc-700/60 p-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <span className="grid h-5 w-5 place-items-center rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[11px] font-bold">✓</span>
+                            <div>
+                              <p className="text-xs font-semibold text-slate-900 dark:text-zinc-100">
+                                {state.firstDayObjective.trim() ? state.firstDayObjective : 'Review daily priorities'}
+                              </p>
+                              <p className="text-[10px] text-slate-400 dark:text-zinc-400">Scheduled: {formatTime(state.workStartTime)} (High energy)</p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Done</span>
+                        </div>
+
+                        <div className="flex items-center justify-between rounded-lg bg-slate-50 dark:bg-zinc-800/60 border border-slate-200/80 dark:border-zinc-700/60 p-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <span className="h-4 w-4 rounded border border-slate-300 dark:border-zinc-600" />
+                            <div>
+                              <p className="text-xs font-semibold text-slate-900 dark:text-zinc-100">
+                                {selectedFocusLabels[0] ? `Focus session: ${selectedFocusLabels[0]}` : 'Work session'}
+                              </p>
+                              <p className="text-[10px] text-slate-400 dark:text-zinc-400">Focus block: 45 min</p>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 dark:bg-zinc-700 text-slate-700 dark:text-zinc-300">Upcoming</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
