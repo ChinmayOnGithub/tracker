@@ -2045,7 +2045,7 @@ function MobileSettingsGroup({
     id: string
     label: string
     description: string
-    icon: React.ComponentType<{ size?: number; className?: string }>
+    icon: React.ElementType
     ownerOnly?: boolean
   }>
   onSelect: (id: string) => void
