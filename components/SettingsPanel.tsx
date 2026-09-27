@@ -6,7 +6,7 @@ import {
   User, Palette, Calendar, Layout, Bell, RefreshCw, Lock, 
   Settings2, Database, Shield, CheckCircle2, AlertCircle, 
   Trash2, Key, Check, Sparkles, ShieldCheck, CreditCard,
-  Blocks, Mail, FileText, MessageSquare, GitBranch, Clock
+  Blocks, Mail, FileText, MessageSquare, GitBranch, Clock, ChevronRight
 } from 'lucide-react'
 import { SettingsBillingSection } from './SettingsBillingSection'
 import { checkGoogleConnection, disconnectGoogleAccount } from '@/modules/sync/google-calendar/actions'
@@ -68,10 +68,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
   const [activeSection, setActiveSection] = useState<'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave' | 'admin' | 'billing'>(() => {
     return resolveInitialTab(tabParam)
   })
+  // Mobile uses a settings hub first, then drills into one section at a time.
+  const [mobileSettingsHub, setMobileSettingsHub] = useState(() => !tabParam)
 
   if (tabParam && tabParam !== prevTabParam) {
     setPrevTabParam(tabParam)
     setActiveSection(resolveInitialTab(tabParam))
+    setMobileSettingsHub(false)
   }
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
@@ -614,14 +617,110 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
 
   return (
     <div className="space-y-[var(--spacing-6)]">
-      <PageHeader
-        title="Personalization Center"
-        description="Configure modules, accent styling, dashboard preferences, and security options for your Life Operating System."
-      />
+      <div className="hidden lg:block">
+        <PageHeader
+          title="Personalization Center"
+          description="Configure modules, accent styling, dashboard preferences, and security options for your Life Operating System."
+        />
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-[var(--spacing-6)] items-start">
+      {/* Mobile Settings Hub */}
+      <div className="lg:hidden">
+        {mobileSettingsHub ? (
+          <div className="space-y-5">
+            <div className="pt-1">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--color-primary)]">Settings Hub</p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-[var(--color-text-main)]">Settings & Support</h1>
+              <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">Manage your account, preferences, connections and security.</p>
+            </div>
+
+            {userProfile && (
+              <button
+                type="button"
+                onClick={() => { setActiveSection('profile'); setMobileSettingsHub(false) }}
+                className="flex w-full items-center gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-3 text-left shadow-[0_8px_24px_-20px_rgba(15,23,42,0.5)]"
+              >
+                {userProfile.avatarUrl ? (
+                  <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-[var(--color-border)]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={userProfile.avatarUrl} alt="" className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                ) : (
+                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--color-primary)] text-sm font-bold text-white">
+                    {(userProfile.username || 'U').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-[var(--color-text-main)]">{displayName || userProfile.username}</p>
+                  <p className="truncate text-[10px] text-[var(--color-text-muted)]">{userProfile.email || `@${userProfile.username}`}</p>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
+              </button>
+            )}
+
+            <MobileSettingsGroup
+              title="Account"
+              items={[
+                { id: 'profile', label: 'Account', description: 'Profile, locale and identity', icon: User },
+                { id: 'billing', label: 'Financial', description: 'Plan and subscription', icon: CreditCard },
+              ]}
+              onSelect={(id) => { setActiveSection(id as typeof activeSection); setMobileSettingsHub(false) }}
+            />
+
+            <MobileSettingsGroup
+              title="Personalization"
+              items={[
+                { id: 'appearance', label: 'Customization', description: 'Theme, accent and motion', icon: Palette },
+                { id: 'dashboard', label: 'Dashboard', description: 'Widgets and module visibility', icon: Layout, ownerOnly: true },
+                { id: 'notifications', label: 'Notifications', description: 'Alerts and daily summaries', icon: Bell },
+              ]}
+              onSelect={(id) => { setActiveSection(id as typeof activeSection); setMobileSettingsHub(false) }}
+            />
+
+            <MobileSettingsGroup
+              title="Workspace"
+              items={[
+                { id: 'calendar', label: 'Calendar', description: 'Views, work hours and planning', icon: Calendar, ownerOnly: true },
+                { id: 'leave', label: 'Time Off', description: 'Leave types and weekly goals', icon: Calendar, ownerOnly: true },
+                { id: 'integrations', label: 'Apps & Integrations', description: 'Google Calendar and connected apps', icon: Blocks },
+              ]}
+              onSelect={(id) => { setActiveSection(id as typeof activeSection); setMobileSettingsHub(false) }}
+            />
+
+            <MobileSettingsGroup
+              title="Security & Data"
+              items={[
+                { id: 'security', label: 'Security', description: 'Passcode and sessions', icon: Lock },
+                { id: 'backup', label: 'Backup & Recovery', description: 'Export and restore your data', icon: Database, ownerOnly: true },
+                { id: 'advanced', label: 'Advanced', description: 'Diagnostics and developer options', icon: Settings2, ownerOnly: true },
+                ...(userProfile?.isOwner !== false ? [{ id: 'admin', label: 'Guest Access Admin', description: 'Owner controls for shared access', icon: ShieldCheck, ownerOnly: true }] : []),
+              ]}
+              onSelect={(id) => { setActiveSection(id as typeof activeSection); setMobileSettingsHub(false) }}
+            />
+          </div>
+        ) : (
+          <div className="mb-4 flex items-center gap-2 border-b border-[var(--color-border)] pb-3">
+            <button
+              type="button"
+              onClick={() => setMobileSettingsHub(true)}
+              className="grid h-9 w-9 place-items-center rounded-xl text-[var(--color-text-muted)] hover:bg-[var(--color-accent)]"
+              aria-label="Back to settings hub"
+            >
+              <ChevronRight className="h-4 w-4 rotate-180" />
+            </button>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--color-primary)]">Settings</p>
+              <h1 className="truncate text-base font-bold text-[var(--color-text-main)]">
+                {activeSection === 'billing' ? 'Billing & Plans' : activeSection === 'integrations' ? 'Apps & Integrations' : activeSection.charAt(0).toUpperCase() + activeSection.slice(1)}
+              </h1>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className={`${mobileSettingsHub ? 'hidden lg:grid' : 'grid'} grid-cols-1 lg:grid-cols-[220px_1fr] gap-[var(--spacing-6)] items-start`}>
         {/* Navigation Sidebar */}
-        <div className="flex lg:flex-col overflow-x-auto lg:overflow-x-visible gap-1.5 p-1 bg-[var(--surface-muted)] rounded-[var(--radius-lg)] lg:bg-transparent lg:p-0">
+        <div className="hidden lg:flex lg:flex-col overflow-x-visible gap-1.5 p-1 bg-transparent">
           {(
             userProfile?.isOwner !== false
               ? [
@@ -1930,5 +2029,53 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
         </div>
       </div>
     </div>
+  )
+}
+
+
+function MobileSettingsGroup({
+  title,
+  items,
+  onSelect,
+}: {
+  title: string
+  items: Array<{
+    id: string
+    label: string
+    description: string
+    icon: React.ComponentType<{ size?: number; className?: string }>
+    ownerOnly?: boolean
+  }>
+  onSelect: (id: string) => void
+}) {
+  const visible = items
+  if (!visible.length) return null
+
+  return (
+    <section>
+      <p className="mb-2 px-1 text-[10px] font-semibold text-[var(--color-text-muted)]">{title}</p>
+      <div className="overflow-hidden rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg-surface)]">
+        {visible.map((item, index) => {
+          const Icon = item.icon
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onSelect(item.id)}
+              className={`flex w-full items-center gap-3 px-3.5 py-3.5 text-left transition-colors active:bg-[var(--color-accent)] ${index ? 'border-t border-[var(--color-border)]/70' : ''}`}
+            >
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--color-accent)] text-[var(--color-text-muted)]">
+                <Icon size={16} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-[var(--color-text-main)]">{item.label}</span>
+                <span className="mt-0.5 block truncate text-[10px] text-[var(--color-text-muted)]">{item.description}</span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
+            </button>
+          )
+        })}
+      </div>
+    </section>
   )
 }
