@@ -36,6 +36,22 @@ describe('Production Boundary Hardening (#75)', () => {
       }
     })
 
+    it('normalizes a legacy HTTP production site URL to HTTPS for OAuth', () => {
+      const origEnv = process.env.NODE_ENV
+      const origSiteUrl = process.env.NEXT_PUBLIC_SITE_URL
+      try {
+        ;(process.env as Record<string, string | undefined>).NODE_ENV = 'production'
+        process.env.NEXT_PUBLIC_SITE_URL = 'http://tracker.chinmaypatil.com'
+
+        const req = new Request('http://internal-cluster:3000/api/auth/google')
+        const origin = getCanonicalOrigin(req)
+        expect(origin).toBe('https://tracker.chinmaypatil.com')
+      } finally {
+        ;(process.env as Record<string, string | undefined>).NODE_ENV = origEnv
+        process.env.NEXT_PUBLIC_SITE_URL = origSiteUrl
+      }
+    })
+
     it('allows dynamic host in development for local multi-port testing', () => {
       const origEnv = process.env.NODE_ENV
       try {
