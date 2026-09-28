@@ -19,9 +19,17 @@ export function getCanonicalOrigin(request?: Request): string {
   // to prevent host header injection or spoofed OAuth callback targets.
   if (isProduction && configured && !configured.includes('localhost')) {
     const url = new URL(configured)
-    if (url.protocol !== 'https:') {
-      throw new Error('NEXT_PUBLIC_SITE_URL must use HTTPS in production.')
+
+    // Vercel terminates TLS before the application. A legacy production
+    // NEXT_PUBLIC_SITE_URL may still be stored as http://, but OAuth must
+    // always use the public HTTPS origin. Normalize it instead of crashing
+    // the login route.
+    if (url.protocol === 'http:') {
+      url.protocol = 'https:'
+    } else if (url.protocol !== 'https:') {
+      throw new Error('NEXT_PUBLIC_SITE_URL must use HTTPS or HTTP in production.')
     }
+
     return url.origin
   }
 
