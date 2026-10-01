@@ -35,6 +35,19 @@ class WriteQueue {
 
   public add(item: Omit<QueueItem, 'retries'>) {
     const queueItem: QueueItem = { ...item, retries: 0 };
+
+    // Deduplicate: If an item with the same dedupKey is in the queue, remove the older one.
+    // If it is currently running, we let it run, but the new one will run right after.
+    const existingIndex = this.queue.findIndex(q => q.dedupKey === queueItem.dedupKey);
+    if (existingIndex !== -1) {
+      this.queue.splice(existingIndex, 1);
+    }
+
+    this.queue.push(queueItem);
+    this.notify();
+    this.processNext();
+  }
+
   /**
    * Queue a write and wait until it has actually succeeded or permanently failed.
    * This is used by destructive/reversible flows that must not continue before
@@ -55,20 +68,6 @@ class WriteQueue {
         },
       })
     })
-  }
-
-
-
-    // Deduplicate: If an item with the same dedupKey is in the queue, remove the older one.
-    // If it is currently running, we let it run, but the new one will run right after.
-    const existingIndex = this.queue.findIndex(q => q.dedupKey === queueItem.dedupKey);
-    if (existingIndex !== -1) {
-      this.queue.splice(existingIndex, 1);
-    }
-
-    this.queue.push(queueItem);
-    this.notify();
-    this.processNext();
   }
 
   private async processNext() {
