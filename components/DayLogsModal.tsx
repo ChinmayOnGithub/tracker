@@ -322,6 +322,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   })
 
   const [showConfig, setShowConfig] = useState(false)
+  const [workSaveError, setWorkSaveError] = useState<string | null>(null)
 
   const toggleConfig = (key: keyof typeof config) => {
     const updated = { ...config, [key]: !config[key] }
@@ -339,13 +340,14 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
 
   const handleSaveWorkPresence = async () => {
     if (!workTemplateId || isLoggingWork) return
+    setWorkSaveError(null)
     setIsLoggingWork(true)
     try {
       const computedHours = workStatus === 'office'
         ? computeOfficeHours(inTime, outTime)
         : workStatus === 'wfh' ? wfhHours : 0
 
-      await logWorkPresenceAction({
+      const result = await logWorkPresenceAction({
         templateId: workTemplateId,
         date: dateStr,
         status: workStatus,
@@ -355,10 +357,25 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
         sessionState: 'completed',
         accumulatedSeconds: Math.round(computedHours * 3600),
       })
+
+      if (
+        typeof result === 'object' &&
+        result !== null &&
+        'success' in result &&
+        result.success === false
+      ) {
+        throw new Error(
+          'error' in result && typeof result.error === 'string'
+            ? result.error
+            : 'Failed to save work presence.'
+        )
+      }
+
       invalidateCache(dateStr)
       setIsEditingWork(false)
     } catch (err) {
       console.error('Failed to log work presence:', err)
+      setWorkSaveError(err instanceof Error ? err.message : 'Failed to save work presence.')
     } finally {
       setIsLoggingWork(false)
     }
@@ -892,6 +909,12 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                             className="w-full h-1.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg appearance-none cursor-pointer accent-emerald-500"
                           />
                         </div>
+                      )}
+
+                      {workSaveError && (
+                        <p role="alert" className="text-[10px] font-semibold text-rose-500">
+                          {workSaveError}
+                        </p>
                       )}
 
                       {/* Action Buttons */}
