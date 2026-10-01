@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import crypto from 'crypto'
 import { env } from '@/lib/env'
 import { GOOGLE_OAUTH, COOKIES } from '@/lib/constants'
@@ -46,7 +45,6 @@ export async function GET(request: Request) {
   })
 
   const response = NextResponse.redirect(googleAuthUrl.toString())
-  const cookieStore = await cookies()
 
   const cookieOptions = {
     maxAge: 10 * 60,
@@ -59,9 +57,6 @@ export async function GET(request: Request) {
   response.cookies.set(COOKIES.GOOGLE_AUTH_STATE, state, cookieOptions)
   response.cookies.set(COOKIES.GOOGLE_AUTH_CODE_VERIFIER, codeVerifier, cookieOptions)
 
-  cookieStore.set(COOKIES.GOOGLE_AUTH_STATE, state, cookieOptions)
-  cookieStore.set(COOKIES.GOOGLE_AUTH_CODE_VERIFIER, codeVerifier, cookieOptions)
-
   if (source === 'mobile') {
     const mobileOpts = {
       maxAge: 5 * 60,
@@ -71,7 +66,6 @@ export async function GET(request: Request) {
       sameSite: 'lax' as const,
     }
     response.cookies.set(COOKIES.AUTH_SOURCE, 'mobile', mobileOpts)
-    cookieStore.set(COOKIES.AUTH_SOURCE, 'mobile', mobileOpts)
   }
 
   return response

@@ -278,13 +278,12 @@ export async function GET(request: Request) {
       path: '/'
     }
 
-    cookieStore.set(COOKIES.SESSION_TOKEN, sessionToken, sessionCookieOpts)
-
     if (isMobile) {
-      cookieStore.delete(COOKIES.AUTH_SOURCE)
       const mobileRedirect = NextResponse.redirect(`tracker://auth-callback?token=${sessionToken}&username=${encodeURIComponent(user.username)}`)
       mobileRedirect.cookies.set(COOKIES.SESSION_TOKEN, sessionToken, sessionCookieOpts)
       mobileRedirect.cookies.delete(COOKIES.AUTH_SOURCE)
+      mobileRedirect.cookies.delete(COOKIES.GOOGLE_AUTH_STATE)
+      mobileRedirect.cookies.delete(COOKIES.GOOGLE_AUTH_CODE_VERIFIER)
       return mobileRedirect
     }
 
@@ -298,6 +297,8 @@ export async function GET(request: Request) {
     const targetUrl = onboarding?.status !== 'COMPLETED' ? `${siteUrl}/onboarding` : siteUrl
     const response = NextResponse.redirect(targetUrl)
     response.cookies.set(COOKIES.SESSION_TOKEN, sessionToken, sessionCookieOpts)
+    response.cookies.delete(COOKIES.GOOGLE_AUTH_STATE)
+    response.cookies.delete(COOKIES.GOOGLE_AUTH_CODE_VERIFIER)
 
     return response
   } catch (err) {

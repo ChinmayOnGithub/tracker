@@ -9,12 +9,17 @@ export interface EmailMessage {
 
 export interface EmailProvider {
   name: string
+  isConfigured(): boolean
   send(message: EmailMessage): Promise<boolean>
 }
 
 export class MockEmailProvider implements EmailProvider {
   name = 'MOCK'
   public sentEmails: EmailMessage[] = []
+
+  isConfigured(): boolean {
+    return true
+  }
 
   async send(message: EmailMessage): Promise<boolean> {
     this.sentEmails.push(message)
@@ -30,21 +35,98 @@ export class MockEmailProvider implements EmailProvider {
 export class ConsoleEmailProvider implements EmailProvider {
   name = 'CONSOLE'
 
+  isConfigured(): boolean {
+    return process.env.NODE_ENV !== 'production'
+  }
+
   async send(message: EmailMessage): Promise<boolean> {
-    logger.info('EmailService', `Email sent to ${message.to}: ${message.subject}`)
+    logger.info('EmailService', `[DevEmail] Simulated dispatch to ${message.to}: ${message.subject}`)
     return true
   }
 }
 
-let activeProvider: EmailProvider =
-  process.env.NODE_ENV === 'test' ? new MockEmailProvider() : new ConsoleEmailProvider()
+export class UnconfiguredEmailProvider implements EmailProvider {
+  name = 'UNCONFIGURED'
+
+  isConfigured(): boolean {
+    return false
+  }
+
+  async send(message: EmailMessage): Promise<boolean> {
+    const domain = message.to.includes('@') ? message.to.split('@')[1] : 'unknown'
+    logger.warn('EmailService', 'Email provider is not configured. Email was not delivered.', {
+      toDomain: domain,
+      subject: message.subject
+    })
+    return false
+  }
+}
+
+export class ResendEmailProvider implements EmailProvider {
+  name = 'RESEND'
+  private apiKey: string
+  private fromEmail: string
+
+  constructor(apiKey: string, fromEmail = process.env.EMAIL_FROM || 'Tracker OS <noreply@tracker.local>') {
+    this.apiKey = apiKey
+    this.fromEmail = fromEmail
+  }
+
+  isConfigured(): boolean {
+    return Boolean(this.apiKey)
+  }
+
+  async send(message: EmailMessage): Promise<boolean> {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: this.fromEmail,
+          to: message.to,
+          subject: message.subject,
+          html: message.html,
+          text: message.text
+        })
+      })
+      if (!res.ok) {
+        const errorText = await res.text()
+        logger.error('EmailService', 'Resend API error:', { status: res.status, error: errorText })
+        return false
+      }
+      return true
+    } catch (err) {
+      logger.error('EmailService', 'Failed to send email via Resend:', { error: String(err) })
+      return false
+    }
+  }
+}
+
+function resolveDefaultProvider(): EmailProvider {
+  if (process.env.NODE_ENV === 'test') {
+    return new MockEmailProvider()
+  }
+  const resendKey = process.env.RESEND_API_KEY
+  if (resendKey) {
+    return new ResendEmailProvider(resendKey)
+  }
+  if (process.env.NODE_ENV === 'production') {
+    return new UnconfiguredEmailProvider()
+  }
+  return new ConsoleEmailProvider()
+}
+
+let activeProvider: EmailProvider = resolveDefaultProvider()
 
 export class EmailService {
   /**
    * Sets the active email provider. Used in tests and production integrations.
    */
   public static setProvider(provider: EmailProvider | null): void {
-    activeProvider = provider || (process.env.NODE_ENV === 'test' ? new MockEmailProvider() : new ConsoleEmailProvider())
+    activeProvider = provider || resolveDefaultProvider()
   }
 
   /**
@@ -55,19 +137,27 @@ export class EmailService {
   }
 
   /**
+   * Returns whether a real email delivery provider is configured.
+   */
+  public static isConfigured(): boolean {
+    return activeProvider.isConfigured()
+  }
+
+  /**
    * Sends an email via the active provider.
    */
   public static async sendEmail(message: EmailMessage): Promise<boolean> {
     try {
       return await activeProvider.send(message)
     } catch (err) {
-      logger.error('EmailService', 'Failed to send email:', { to: message.to, error: String(err) })
+      logger.error('EmailService', 'Failed to send email:', { error: String(err) })
       return false
     }
   }
 
   /**
    * Sends a password reset email with canonical token link.
+   * Does NOT log the raw token or the full URL containing the raw token.
    */
   public static async sendPasswordResetEmail(to: string, resetUrl: string): Promise<boolean> {
     const subject = 'Reset your Tracker OS password'

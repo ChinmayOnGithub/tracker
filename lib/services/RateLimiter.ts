@@ -8,6 +8,7 @@ export interface RateLimitResult {
 
 export interface RateLimitOptions {
   failClosed?: boolean
+  increment?: boolean
 }
 
 export interface RateLimiter {
@@ -50,6 +51,7 @@ export class DatabaseRateLimiter implements RateLimiter {
     const now = new Date()
     const windowMs = windowSeconds * 1000
     const shouldFailClosed = options?.failClosed ?? isSecuritySensitiveKey(key)
+    const shouldIncrement = options?.increment ?? true
 
     try {
       const executeInTx = typeof this.dbClient.$transaction === 'function'
@@ -57,10 +59,45 @@ export class DatabaseRateLimiter implements RateLimiter {
         : (cb: (tx: RateLimitTx) => Promise<RateLimitResult>) => cb(this.dbClient as unknown as RateLimitTx)
 
       return await executeInTx(async (tx: RateLimitTx) => {
+        // Concurrency safety: acquire PostgreSQL advisory lock on key if supported
+        const rawClient = tx as unknown as { $executeRaw?: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown> }
+        if (typeof rawClient.$executeRaw === 'function') {
+          try {
+            await rawClient.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('rate-limit:' || ${key}))`
+          } catch {
+            // Non-fatal if advisory lock not supported in mock environment
+          }
+        }
+
         const record = await tx.rateLimit.findUnique({
           where: { key }
         })
 
+        // 1. If checking only (no increment): inspect state without mutating counter
+        if (!shouldIncrement) {
+          if (!record || record.resetAt <= now) {
+            return {
+              allowed: true,
+              remaining: limit,
+              retryAfterSeconds: 0
+            }
+          }
+          if (record.count >= limit) {
+            const retryAfterSeconds = Math.max(1, Math.ceil((record.resetAt.getTime() - now.getTime()) / 1000))
+            return {
+              allowed: false,
+              remaining: 0,
+              retryAfterSeconds
+            }
+          }
+          return {
+            allowed: true,
+            remaining: Math.max(0, limit - record.count),
+            retryAfterSeconds: 0
+          }
+        }
+
+        // 2. Incremental check: update or initialize window
         if (!record || record.resetAt <= now) {
           const resetAt = new Date(now.getTime() + windowMs)
           await tx.rateLimit.upsert({
@@ -142,21 +179,43 @@ export class DatabaseRateLimiter implements RateLimiter {
 export const rateLimiter = new DatabaseRateLimiter()
 
 /**
- * Extracts a normalized, sanitized client IP address from a Request or Headers.
+ * Extracts a normalized, sanitized client IP address from a Request, Headers, or ReadonlyHeaders object.
  */
-export function getClientIp(input: Request | Headers): string {
-  const headers = 'headers' in input ? input.headers : input
+export function getClientIp(input?: unknown): string {
+  if (!input) return '127.0.0.1'
+
+  const getHeader = (name: string): string | null => {
+    try {
+      const target = input as Record<string, unknown>
+      if (typeof (input as { get?: unknown }).get === 'function') {
+        return (input as { get: (n: string) => string | null }).get(name)
+      }
+      if (target.headers && typeof (target.headers as { get?: unknown }).get === 'function') {
+        return (target.headers as { get: (n: string) => string | null }).get(name)
+      }
+      if (target.headers && typeof target.headers === 'object') {
+        const h = target.headers as Record<string, string>
+        return h[name] || h[name.toLowerCase()] || null
+      }
+      if (typeof target === 'object') {
+        return (target[name] as string) || (target[name.toLowerCase()] as string) || null
+      }
+    } catch {
+      return null
+    }
+    return null
+  }
 
   // Cloudflare Connecting IP is set directly by Cloudflare edge
-  const cfIp = headers.get('cf-connecting-ip')
+  const cfIp = getHeader('cf-connecting-ip')
   if (cfIp) return cfIp.trim()
 
   // Standard reverse proxy Real IP
-  const realIp = headers.get('x-real-ip')
+  const realIp = getHeader('x-real-ip')
   if (realIp) return realIp.trim()
 
   // X-Forwarded-For: client, proxy1, proxy2...
-  const forwardedFor = headers.get('x-forwarded-for')
+  const forwardedFor = getHeader('x-forwarded-for')
   if (forwardedFor) {
     const first = forwardedFor.split(',')[0]
     if (first) return first.trim()

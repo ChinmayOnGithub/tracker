@@ -4,7 +4,8 @@ import { SessionService } from '@/lib/services/SessionService'
 import { rateLimiter } from '@/lib/services/RateLimiter'
 import { z } from 'zod'
 
-const MAX_SYNC_BYTES = 2 * 1024 * 1024 // 2 MB
+const MAX_SYNC_BYTES = 2 * 1024 * 1024 // 2 MB inbound payload
+const MAX_SYNC_RESPONSE_BYTES = 1.5 * 1024 * 1024 // 1.5 MB outbound response cap
 const MAX_RECORDS_PER_ENTITY = 500
 const MAX_TOTAL_RECORDS = 1500
 
@@ -55,8 +56,15 @@ const SyncItemIdentifierSchema = z.union([
   })
 ])
 
+// Composite cursor for deterministic pagination: { updatedAt: ISO string, id: string }
+const SyncCursorSchema = z.object({
+  updatedAt: z.string(),
+  id: z.string()
+})
+
 const SyncRequestSchema = z.object({
   lastSyncedAt: z.string().nullable().optional(),
+  cursor: z.string().nullable().optional(), // composite cursor (base64-encoded JSON)
   limit: z.number().int().min(1).max(200).optional().default(100),
   localChanges: z.object({
     logs: z.array(SyncLogSchema).max(MAX_RECORDS_PER_ENTITY).default([]),
@@ -544,31 +552,59 @@ export async function POST(request: Request) {
         update: { revision: { increment: 1n } }
       })
 
-      // 6. Fetch authoritative updates since lastSyncedAt (including soft-deleted tombstones)
+      // 6. Parse composite cursor for deterministic pagination
+      const rawCursor = (parseResult.data as { cursor?: string | null }).cursor
+      let compositeCursor: { updatedAt: Date; id: string } | null = null
+      if (rawCursor) {
+        try {
+          const decoded = JSON.parse(Buffer.from(rawCursor, 'base64').toString('utf8'))
+          const parsed = SyncCursorSchema.safeParse(decoded)
+          if (parsed.success) {
+            compositeCursor = { updatedAt: new Date(parsed.data.updatedAt), id: parsed.data.id }
+          }
+        } catch {
+          // Invalid cursor — treat as first page
+        }
+      } else if (lastSyncedAt) {
+        // Backwards-compat: treat lastSyncedAt as a cursor with empty id (will fetch all after that time)
+        compositeCursor = { updatedAt: new Date(lastSyncedAt), id: '' }
+      }
+
       const pageLimit = limit || 100
-      const syncFilter = lastSyncedAt
-        ? { updatedAt: { gt: new Date(lastSyncedAt) } }
-        : { deletedAt: null }
+
+      // Build composite cursor filter: (updatedAt > cursor.updatedAt) OR (updatedAt = cursor.updatedAt AND id > cursor.id)
+      const buildCursorFilter = (cursor: { updatedAt: Date; id: string } | null) => {
+        if (!cursor) return {}
+        return {
+          OR: [
+            { updatedAt: { gt: cursor.updatedAt } },
+            { updatedAt: cursor.updatedAt, id: { gt: cursor.id } }
+          ]
+        }
+      }
+
+      const cursorFilter = buildCursorFilter(compositeCursor)
+      const baseFilter = compositeCursor ? cursorFilter : { deletedAt: null }
 
       const dbTemplates = await tx.activityTemplate.findMany({
-        where: { userId, ...syncFilter },
-        orderBy: { updatedAt: 'asc' },
+        where: { userId, ...baseFilter },
+        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
         take: pageLimit + 1
       })
       const hasMoreTemplates = dbTemplates.length > pageLimit
       const pageTemplates = hasMoreTemplates ? dbTemplates.slice(0, pageLimit) : dbTemplates
 
       const dbLogs = await tx.activityLog.findMany({
-        where: { userId, ...syncFilter },
-        orderBy: { updatedAt: 'asc' },
+        where: { userId, ...baseFilter },
+        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
         take: pageLimit + 1
       })
       const hasMoreLogs = dbLogs.length > pageLimit
       const pageLogs = hasMoreLogs ? dbLogs.slice(0, pageLimit) : dbLogs
 
       const dbNotes = await tx.note.findMany({
-        where: { userId, ...syncFilter },
-        orderBy: { updatedAt: 'asc' },
+        where: { userId, ...baseFilter },
+        orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
         take: pageLimit + 1
       })
       const hasMoreNotes = dbNotes.length > pageLimit
@@ -576,33 +612,39 @@ export async function POST(request: Request) {
 
       const hasMore = hasMoreTemplates || hasMoreLogs || hasMoreNotes
 
+      // Build deterministic composite nextCursor from max (updatedAt, id) across all paged entities
       let nextCursor: string | null = null
       if (hasMore) {
-        const allDates = [
-          ...pageTemplates.map(t => t.updatedAt),
-          ...pageLogs.map(l => l.updatedAt),
-          ...pageNotes.map(n => n.updatedAt)
-        ].filter(Boolean) as Date[]
-        if (allDates.length > 0) {
-          const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())))
-          nextCursor = maxDate.toISOString()
+        const allEntries = [
+          ...pageTemplates.map(t => ({ updatedAt: t.updatedAt, id: t.id })),
+          ...pageLogs.map(l => ({ updatedAt: l.updatedAt, id: l.id })),
+          ...pageNotes.map(n => ({ updatedAt: n.updatedAt, id: n.id }))
+        ].filter(e => e.updatedAt)
+        if (allEntries.length > 0) {
+          const last = allEntries.reduce((prev, cur) => {
+            const prevTime = prev.updatedAt.getTime()
+            const curTime = cur.updatedAt.getTime()
+            if (curTime > prevTime) return cur
+            if (curTime === prevTime && cur.id > prev.id) return cur
+            return prev
+          })
+          nextCursor = Buffer.from(JSON.stringify({ updatedAt: last.updatedAt.toISOString(), id: last.id })).toString('base64')
         }
       }
+
+      const mappedLogs = pageLogs.map(log => ({ ...log, date: log.logDate.toISOString().split('T')[0] }))
 
       return {
         cursor: syncCursor.revision.toString(),
         hasMore,
         nextCursor,
         templates: pageTemplates,
-        logs: pageLogs.map(log => ({
-          ...log,
-          date: log.logDate.toISOString().split('T')[0]
-        })),
+        logs: mappedLogs,
         notes: pageNotes
       }
     })
 
-    return NextResponse.json({
+    const responsePayload = {
       serverTime: new Date().toISOString(),
       cursor: result.cursor,
       hasMore: result.hasMore,
@@ -613,7 +655,24 @@ export async function POST(request: Request) {
         logs: result.logs,
         notes: result.notes
       }
-    })
+    }
+
+    // Byte-cap outbound response — if the serialized response is too large, return a truncated
+    // result that asks the client to re-sync with a tighter cursor
+    const serialized = JSON.stringify(responsePayload)
+    if (Buffer.byteLength(serialized, 'utf8') > MAX_SYNC_RESPONSE_BYTES) {
+      return NextResponse.json(
+        {
+          error: {
+            code: 'SYNC_RESPONSE_TOO_LARGE',
+            message: 'Server response too large. Reduce limit or use a more recent cursor.'
+          }
+        },
+        { status: 507 }
+      )
+    }
+
+    return NextResponse.json(responsePayload)
   } catch (err) {
     console.error('[MobileSync] Sync failed:', err)
     return NextResponse.json(

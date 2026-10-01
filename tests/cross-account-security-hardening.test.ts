@@ -478,9 +478,13 @@ describe('Step 5 / Issue #72: Cross-Account Security & Data Isolation Hardening'
     it('prevents User A from modifying or deleting User B link collections and tags', async () => {
       const origRequireOwnership = AuthorizationService.requireOwnership
       AuthorizationService.requireOwnership = mock((_model: string, _id: string) => {
-        // Simulates that id belongs to User B, so User A gets NotFoundError
-        throw new NotFoundError('Resource not found')
-      })
+        if (_id === 'coll-b' || _id === 'tag-b' || _id === 'link-b') {
+          // Simulates that id belongs to User B, so User A gets NotFoundError
+          throw new NotFoundError('Resource not found')
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return origRequireOwnership(_model as any, _id)
+      }) as unknown as typeof AuthorizationService.requireOwnership
 
       const origUpdateMany = db.linkCollection.updateMany
       db.linkCollection.updateMany = mock(() => Promise.resolve({ count: 0 })) as unknown as typeof db.linkCollection.updateMany

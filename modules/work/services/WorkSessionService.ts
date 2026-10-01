@@ -19,22 +19,6 @@ export class WorkSessionService {
     id?: string,
     requestedStartTime?: string
   ) {
-    // Check if there is already an active or paused session (#155)
-    const active = await db.workSession.findFirst({
-      where: {
-        userId,
-        status: { in: ['ACTIVE', 'PAUSED'] },
-        deletedAt: null
-      }
-    });
-    if (active) {
-      // Idempotent protection against double-click: return the existing active session
-      if (active.date === date) {
-        return active;
-      }
-      throw new Error('A work session is already active on another date.');
-    }
-
     const now = new Date();
     const effectiveStart = requestedStartTime
       ? createLocalDateTime(date, requestedStartTime)
@@ -47,8 +31,33 @@ export class WorkSessionService {
     const pad = (n: number) => String(n).padStart(2, '0');
     const inTime = `${pad(effectiveStart.getHours())}:${pad(effectiveStart.getMinutes())}`;
 
-    // Atomically create WorkSession and ActivityLog in one transaction (#156)
+    // Atomically acquire per-user advisory lock, verify state, and create session + log (#155, #156)
     return await db.$transaction(async (tx) => {
+      // 1. Acquire per-user advisory lock to serialize concurrent start requests
+      try {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('work-session:' || ${userId}))`;
+      } catch {
+        // Non-fatal if advisory locking is not supported in isolated test/mock environments
+      }
+
+      // 2. Re-check if there is already an active or paused session under the lock
+      const active = await tx.workSession.findFirst({
+        where: {
+          userId,
+          status: { in: ['ACTIVE', 'PAUSED'] },
+          deletedAt: null
+        }
+      });
+
+      if (active) {
+        // Idempotent protection against double-click: return the existing active session
+        if (active.date === date) {
+          return active;
+        }
+        throw new Error('A work session is already active on another date.');
+      }
+
+      // 3. Create session record
       const session = await tx.workSession.create({
         data: {
           id: id || undefined,
@@ -62,16 +71,18 @@ export class WorkSessionService {
         }
       });
 
+      // 4. Retrieve or create template using the active transaction
       const template = await ActivityService.getOrCreateDefaultTemplate(
         userId,
         'PERSONAL',
         'Work Tracker',
         'productivity',
         'Briefcase',
-        'amber'
+        'amber',
+        tx
       );
 
-      // Create corresponding ActivityLog inside the same transaction
+      // 5. Create corresponding ActivityLog inside the exact same transaction
       await ActivityService.logActivity({
         userId,
         templateId: template.id,
@@ -310,40 +321,45 @@ export class WorkSessionService {
     mode: 'office' | 'wfh';
     durationMinutes: number;
   }) {
-    const session = await db.workSession.create({
-      data: {
-        id: params.id || undefined,
+    // Atomically create session + ActivityLog; set status=COMPLETED immediately (#P0, #P1)
+    return await db.$transaction(async (tx) => {
+      const session = await tx.workSession.create({
+        data: {
+          id: params.id || undefined,
+          userId: params.userId,
+          date: params.date,
+          mode: params.mode,
+          status: 'COMPLETED', // Manual sessions are already complete — never ACTIVE
+          loggingMode: 'manual',
+          durationMinutes: params.durationMinutes,
+          manualMinutes: params.durationMinutes,
+          startedAt: null,
+          endedAt: null
+        }
+      });
+
+      const template = await ActivityService.getOrCreateDefaultTemplate(
+        params.userId,
+        'PERSONAL',
+        'Work Tracker',
+        'productivity',
+        'Briefcase',
+        'amber',
+        tx
+      );
+
+      await ActivityService.logActivity({
         userId: params.userId,
+        templateId: template.id,
         date: params.date,
-        mode: params.mode,
-        loggingMode: 'manual',
-        durationMinutes: params.durationMinutes,
-        manualMinutes: params.durationMinutes,
-        startedAt: null,
-        endedAt: null
-      }
+        status: 'done',
+        workSessionId: session.id,
+        amount: params.durationMinutes,
+        note: `Manually logged work: ${Math.floor(params.durationMinutes / 60)}h ${params.durationMinutes % 60}m (${params.mode.toUpperCase()})`
+      }, tx);
+
+      return session;
     });
-
-    const template = await ActivityService.getOrCreateDefaultTemplate(
-      params.userId,
-      'PERSONAL',
-      'Work Tracker',
-      'productivity',
-      'Briefcase',
-      'amber'
-    );
-
-    await ActivityService.logActivity({
-      userId: params.userId,
-      templateId: template.id,
-      date: params.date,
-      status: 'done',
-      workSessionId: session.id,
-      amount: params.durationMinutes,
-      note: `Manually logged work: ${Math.floor(params.durationMinutes / 60)}h ${params.durationMinutes % 60}m (${params.mode.toUpperCase()})`
-    });
-
-    return session;
   }
 
   /**

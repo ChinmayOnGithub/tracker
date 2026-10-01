@@ -258,16 +258,16 @@ export async function verifyPinAction(usernameInput: string, secret: string): Pr
     const clientIp = getClientIp(reqHeaders)
     const normalizedIdentifier = usernameInput.trim().toLowerCase()
 
-    // 1. IP-level rate limiting (fail closed)
+    // 1. IP-level rate limiting (fail closed) — increments on every request
     const ipLimit = await rateLimiter.check(`login:ip:${clientIp}`, 30, 60, { failClosed: true })
     if (!ipLimit.allowed) {
       return { success: false, error: `Too many login attempts. Please retry in ${ipLimit.retryAfterSeconds} seconds.` }
     }
 
-    // 2. Account-level rate limiting (fail closed)
-    const accountLimit = await rateLimiter.check(`login:account:${normalizedIdentifier}`, 5, 60, { failClosed: true })
-    if (!accountLimit.allowed) {
-      return { success: false, error: `Too many failed attempts for this account. Please retry in ${accountLimit.retryAfterSeconds} seconds.` }
+    // 2. Account-level rate limiting (fail closed) — check state WITHOUT incrementing yet
+    const accountLimitCheck = await rateLimiter.check(`login:account:${normalizedIdentifier}`, 5, 60, { failClosed: true, increment: false })
+    if (!accountLimitCheck.allowed) {
+      return { success: false, error: `Too many failed attempts for this account. Please retry in ${accountLimitCheck.retryAfterSeconds} seconds.` }
     }
 
     const security = await getLoginSecuritySettingsAction()
@@ -279,10 +279,12 @@ export async function verifyPinAction(usernameInput: string, secret: string): Pr
     }
     const result = await AuthService.login(usernameInput, secret)
     if (!result.success) {
+      // 3. Increment account rate limit counter only on credential failure
+      await rateLimiter.check(`login:account:${normalizedIdentifier}`, 5, 60, { failClosed: false })
       return { success: false, error: result.error }
     }
 
-    // Clear failed account counter on successful login
+    // 4. Clear failed account counter on successful login
     await rateLimiter.reset(`login:account:${normalizedIdentifier}`)
 
     await SessionService.setSessionCookie(result.token)
@@ -296,7 +298,7 @@ export async function verifyPinAction(usernameInput: string, secret: string): Pr
     }
   } catch (error) {
     console.error('[verifyPinAction] Login failed:', error)
-    return { success: false, error: 'Database error during login.' }
+    return { success: false, error: 'Authentication service is temporarily unavailable. Please try again shortly.' }
   }
 }
 

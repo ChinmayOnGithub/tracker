@@ -1,11 +1,6 @@
-const REQUIRED_ENV_VARS = [
+const CORE_REQUIRED_ENV_VARS = [
   'DATABASE_URL',
-  'DIRECT_URL',
-  'AUTH_SECRET',
-  'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
-  'GOOGLE_OAUTH_ENCRYPTION_KEY',
-  'NEXT_PUBLIC_SITE_URL'
+  'AUTH_SECRET'
 ] as const
 
 export interface Env {
@@ -31,21 +26,21 @@ export interface Env {
 function validateEnv(): Env {
   const isTest = process.env.NODE_ENV === 'test'
   const isBuild = process.env.NEXT_PHASE === 'phase-production-build'
-  const missing: string[] = []
+  const missingCore: string[] = []
 
-  for (const key of REQUIRED_ENV_VARS) {
+  for (const key of CORE_REQUIRED_ENV_VARS) {
     if (!process.env[key]) {
       if (!isTest && !isBuild) {
-        missing.push(key)
+        missingCore.push(key)
       }
     }
   }
 
-  if (missing.length > 0) {
-    const errorMsg = `❌ Missing required environment variables: ${missing.join(', ')}`
+  if (missingCore.length > 0) {
+    const errorMsg = `❌ Missing required core environment variables: ${missingCore.join(', ')}`
 
     if (process.env.NODE_ENV === 'production') {
-      // In production, crash immediately — never run with missing secrets
+      // In production, crash immediately on missing core secrets
       throw new Error(errorMsg)
     }
 
@@ -59,7 +54,7 @@ function validateEnv(): Env {
 
   return {
     DATABASE_URL: process.env.DATABASE_URL || 'postgresql://localhost:5432/test',
-    DIRECT_URL: process.env.DIRECT_URL || 'postgresql://localhost:5432/test',
+    DIRECT_URL: process.env.DIRECT_URL || process.env.DATABASE_URL || 'postgresql://localhost:5432/test',
     AUTH_SECRET: process.env.AUTH_SECRET || 'INSECURE-dev-fallback-auth-secret-do-not-deploy',
     GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || 'test-client-id',
     GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET || 'test-client-secret',
@@ -79,6 +74,62 @@ function validateEnv(): Env {
 }
 
 export const env = validateEnv()
+
+export interface ConfigHealthReport {
+  isCoreHealthy: boolean
+  missingCoreVars: string[]
+  features: {
+    googleOAuth: { configured: boolean; missingVars: string[] }
+    billing: { configured: boolean; missingVars: string[] }
+    turnstile: { configured: boolean; missingVars: string[] }
+    storage: { configured: boolean; missingVars: string[] }
+    vault: { configured: boolean; missingVars: string[] }
+  }
+}
+
+/**
+ * Authoritative production configuration health check.
+ * Clearly separates REQUIRED CORE CONFIG from OPTIONAL FEATURE CONFIG.
+ */
+export function getConfigurationHealth(): ConfigHealthReport {
+  const missingCore = CORE_REQUIRED_ENV_VARS.filter(key => !process.env[key])
+  
+  const googleMissing: string[] = []
+  if (!process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID.includes('test-client-id')) googleMissing.push('GOOGLE_CLIENT_ID')
+  if (!process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET.includes('test-client-secret')) googleMissing.push('GOOGLE_CLIENT_SECRET')
+  if (!process.env.GOOGLE_OAUTH_ENCRYPTION_KEY || process.env.GOOGLE_OAUTH_ENCRYPTION_KEY.includes('INSECURE')) googleMissing.push('GOOGLE_OAUTH_ENCRYPTION_KEY')
+
+  const billingMissing: string[] = []
+  if (!process.env.RAZORPAY_KEY_ID && !process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID) billingMissing.push('RAZORPAY_KEY_ID')
+  if (!process.env.RAZORPAY_KEY_SECRET) billingMissing.push('RAZORPAY_KEY_SECRET')
+  if (!process.env.RAZORPAY_WEBHOOK_SECRET) billingMissing.push('RAZORPAY_WEBHOOK_SECRET')
+  if (!process.env.RAZORPAY_PLAN_PRO_MONTHLY) billingMissing.push('RAZORPAY_PLAN_PRO_MONTHLY')
+  if (!process.env.RAZORPAY_PLAN_PRO_ANNUAL) billingMissing.push('RAZORPAY_PLAN_PRO_ANNUAL')
+
+  const turnstileMissing: string[] = []
+  if (!process.env.NEXT_PUBLIC_CLOUDFLARE_TURNSTILE_SITE_KEY && !process.env.CLOUDFLARE_TURNSTILE_SITE_KEY) turnstileMissing.push('CLOUDFLARE_TURNSTILE_SITE_KEY')
+  if (!process.env.CLOUDFLARE_TURNSTILE_SECRET_KEY) turnstileMissing.push('CLOUDFLARE_TURNSTILE_SECRET_KEY')
+
+  const storageMissing: string[] = []
+  if (!process.env.SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL) storageMissing.push('SUPABASE_URL')
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SECRET_KEY && !process.env.SUPABASE_ANON_KEY) storageMissing.push('SUPABASE_KEY')
+
+  const vaultMissing: string[] = []
+  if (!process.env.VAULT_ENCRYPTION_KEY) vaultMissing.push('VAULT_ENCRYPTION_KEY')
+  storageMissing.forEach(v => vaultMissing.push(v))
+
+  return {
+    isCoreHealthy: missingCore.length === 0,
+    missingCoreVars: missingCore,
+    features: {
+      googleOAuth: { configured: googleMissing.length === 0, missingVars: googleMissing },
+      billing: { configured: billingMissing.length === 0, missingVars: billingMissing },
+      turnstile: { configured: turnstileMissing.length === 0, missingVars: turnstileMissing },
+      storage: { configured: storageMissing.length === 0, missingVars: storageMissing },
+      vault: { configured: vaultMissing.length === 0, missingVars: vaultMissing }
+    }
+  }
+}
 
 /**
  * Returns whether Google OAuth is fully configured with production-ready credentials.

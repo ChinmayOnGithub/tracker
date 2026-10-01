@@ -5,18 +5,21 @@ import { BillingService } from '@/lib/services/BillingService'
 import { AuditService } from '@/lib/services/AuditService'
 import { db } from '@/lib/db'
 import { MockBillingProvider, setBillingProvider } from '@/lib/billing/providers'
+import { rateLimiter } from '@/lib/services/RateLimiter'
 
 describe('Admin Control Plane Foundation & Security Suite', () => {
   const testAdminKey = 'test_admin_secret_key'
   const targetUserId = 'usr_target_admin_test'
 
-  beforeEach(() => {
+  beforeEach(async () => {
     process.env.ADMIN_API_KEY = testAdminKey
     setBillingProvider(new MockBillingProvider())
+    await rateLimiter.reset('admin:auth:127.0.0.1')
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     setBillingProvider(null)
+    await rateLimiter.reset('admin:auth:127.0.0.1')
   })
 
   describe('1. Admin Authorization Boundary', () => {

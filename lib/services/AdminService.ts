@@ -90,7 +90,8 @@ export class AdminService {
   ): Promise<{ authorized: boolean; actor: string; error?: string }> {
     // 1. Strict rate limiting on admin authentication
     const ip = headersOrKey && typeof headersOrKey !== 'string' ? getClientIp(headersOrKey) : '127.0.0.1'
-    const rateLimit = await rateLimiter.check(`admin:auth:${ip}`, 10, 60, { failClosed: true })
+    const rateLimitKey = `admin:auth:${ip}`
+    const rateLimit = await rateLimiter.check(rateLimitKey, 10, 60, { failClosed: true, increment: false })
     if (!rateLimit.allowed) {
       return {
         authorized: false,
@@ -120,6 +121,7 @@ export class AdminService {
 
     // 2. Direct API Key check using constant-time comparison
     if (configuredKey && providedKey && timingSafeCompare(providedKey, configuredKey)) {
+      await rateLimiter.reset(rateLimitKey)
       return { authorized: true, actor: 'admin_api_key' }
     }
 
@@ -127,11 +129,15 @@ export class AdminService {
     try {
       const owner = await AuthorizationService.requireOwner()
       if (owner?.id) {
+        await rateLimiter.reset(rateLimitKey)
         return { authorized: true, actor: `owner:${owner.username}` }
       }
     } catch {
       // Not logged in as owner
     }
+
+    // Record failed attempt against rate limit
+    await rateLimiter.check(rateLimitKey, 10, 60, { failClosed: true, increment: true })
 
     return {
       authorized: false,
