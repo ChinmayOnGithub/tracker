@@ -21,6 +21,15 @@ interface WorkHoursWidgetProps {
 
 export type WorkSessionState = 'idle' | 'running' | 'paused' | 'completed'
 
+export function calculateLiveOfficeSessionSeconds(
+  sessionState: WorkSessionState,
+  currentElapsedSeconds: number,
+  accumulatedSeconds: number,
+): number {
+  if (sessionState !== 'running') return 0
+  return Math.max(0, Math.round(currentElapsedSeconds - accumulatedSeconds))
+}
+
 interface WorkFormState {
   status: 'office' | 'wfh' | 'cleared'
   mode: 'time' | 'manual'
@@ -168,11 +177,12 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   // communicates stable history (green) versus live work (blue).
   const currentOfficeSessionHours = useMemo(() => {
     if (formState.status !== 'office') return 0
-    if (formState.sessionState === 'running' || formState.sessionState === 'paused') {
-      return currentElapsedSeconds / 3600
-    }
-    return 0
-  }, [formState.status, formState.sessionState, currentElapsedSeconds])
+    return calculateLiveOfficeSessionSeconds(
+      formState.sessionState,
+      currentElapsedSeconds,
+      formState.accumulatedSeconds,
+    ) / 3600
+  }, [formState.status, formState.sessionState, currentElapsedSeconds, formState.accumulatedSeconds])
 
   const trackedOfficeHours = totalOfficeHours + currentOfficeSessionHours
   const completedBarWidth = weeklyGoal > 0
