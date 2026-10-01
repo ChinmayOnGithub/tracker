@@ -607,7 +607,9 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
 
   const handleResetSettings = () => {
     if (confirm('Are you sure you want to reset all configurations to their default settings?')) {
-      localStorage.clear()
+      for (const key of TRACKER_SETTINGS_STORAGE_KEYS) {
+        localStorage.removeItem(key)
+      }
       window.location.reload()
     }
   }
