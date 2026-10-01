@@ -75,6 +75,14 @@ describe('Issues #6, #13, #14: User Settings Authority & Persistence Hardening',
     expect(savedGoal).toBe(35)
   })
 
+  it('rejects invalid weekly goals at the server boundary', async () => {
+    const invalidValues = [0, -1, 169, Number.NaN, Number.POSITIVE_INFINITY]
+    for (const value of invalidValues) {
+      const result = await saveWeeklyGoalAction(value)
+      expect(result.success).toBe(false)
+    }
+  })
+
   it('Issue #14: Dashboard configuration saves and loads for authenticated account', async () => {
     mock.module('@/app/actions/auth', () => ({
       getLoggedUser: () => Promise.resolve({ id: userA, username: 'alice', accessLevel: 'OWNER' }),
@@ -110,15 +118,19 @@ describe('Issues #6, #13, #14: User Settings Authority & Persistence Hardening',
     expect(getRes.settings?.dashboard?.hidden).toEqual(['recentDocuments'])
   })
 
-  it('Issue #103: rejects invalid weekly goals at the server boundary', async () => {
+  it('Issue #102: rejects unknown dashboard widgets and invalid geometry', async () => {
     mock.module('@/app/actions/auth', () => ({
       getLoggedUser: () => Promise.resolve({ id: userA, username: 'alice', accessLevel: 'OWNER' }),
     }))
 
-    expect((await saveWeeklyGoalAction(0)).success).toBe(false)
-    expect((await saveWeeklyGoalAction(-1)).success).toBe(false)
-    expect((await saveWeeklyGoalAction(169)).success).toBe(false)
-    expect((await saveWeeklyGoalAction(Number.NaN)).success).toBe(false)
-    expect((await saveWeeklyGoalAction(40)).success).toBe(true)
+    const unknownWidget = await saveDashboardConfigAction({
+      items: [{ id: 'unknown-widget', x: 0, y: 0, w: 7, h: 4 }],
+    })
+    expect(unknownWidget.success).toBe(false)
+
+    const invalidWidth = await saveDashboardConfigAction({
+      items: [{ id: 'workHours', x: 0, y: 0, w: 20, h: 5 }],
+    })
+    expect(invalidWidth.success).toBe(false)
   })
 })
