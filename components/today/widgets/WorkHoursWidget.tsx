@@ -223,6 +223,14 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       }
     }
 
+    // Callers optimistically update formState before persistence. Capture the
+    // committed state from this render so every mutation path can roll back
+    // consistently when the server rejects the write.
+    const previousFormState = formState
+    const previousClearedLogId = clearedLogId
+    const previousLastClearedState = lastClearedState
+    const previousShowClearUndo = _showClearUndo
+
     setIsLoggingWork(true)
     setPendingAction(action)
     try {
@@ -265,6 +273,10 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       return true
     } catch (err) {
       console.error('Failed to log work presence:', err)
+      setFormState(previousFormState)
+      setClearedLogId(previousClearedLogId)
+      setLastClearedState(previousLastClearedState)
+      setShowClearUndo(previousShowClearUndo)
       setValidationError(err instanceof Error ? err.message : 'Failed to save presence records.')
       return false
     } finally {
