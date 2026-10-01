@@ -125,20 +125,19 @@ describe('Issues #6, #13, #14: User Settings Authority & Persistence Hardening',
     })
     expect(invalidWidth.success).toBe(false)
   })
-
   it('rejects a stale dashboard persistence revision', async () => {
     const userSetting = {
       id: 'setting-1',
-      userId: 'userA',
+      userId: userA,
       module: 'DASHBOARD',
-      config: {
-        version: 2,
-        revision: 7,
-        items: [],
-        hidden: [],
-      },
+      config: { version: 2, revision: 7, items: [], hidden: [] },
+      createdAt: new Date(),
+      updatedAt: new Date(),
     } as unknown as UserSetting
 
+    mock.module('@/app/actions/auth', () => ({
+      getLoggedUser: () => Promise.resolve({ id: userA, username: 'alice', accessLevel: 'OWNER' }),
+    }))
     db.userSetting.findUnique = mock(() => Promise.resolve(userSetting)) as unknown as typeof db.userSetting.findUnique
 
     const stale = await saveDashboardConfigAction({
