@@ -1165,7 +1165,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
       return { ...prev, logs: updatedLogs }
     })
 
-    writeQueue.add({
+    return writeQueue.addAndWait({
       id: `work-presence-${fields.templateId}-${Date.now()}`,
       dedupKey: `work-presence-${fields.templateId}-${fields.date}`,
       run: async () => {
