@@ -5,6 +5,8 @@ import { Palette, Check } from 'lucide-react'
 import { Popover, PopoverTrigger, PopoverContent } from '@/design-system'
 import { CalendarDataContext } from './DashboardLayout'
 import { getUserStorageItem, setUserStorageItem } from '@/lib/storage/userStorage'
+import { CalendarDataContext } from './DashboardLayout'
+import { getUserStorageItem, setUserStorageItem } from '@/lib/storage/userStorage'
 
 const ACCENT_COLORS = [
   { id: 'blue', label: 'Blue', color: 'bg-blue-500' },
@@ -31,6 +33,8 @@ const CORNER_RADII = [
 ] as const
 
 export const QuickAppearancePopover: React.FC<{ className?: string }> = ({ className = '' }) => {
+  const calendarContext = useContext(CalendarDataContext)
+  const currentUserId = calendarContext?.currentUser?.id ?? null
   const calendarContext = useContext(CalendarDataContext)
   const currentUserId = calendarContext?.currentUser?.id ?? null
   const [accent, setAccent] = useState(() => {
