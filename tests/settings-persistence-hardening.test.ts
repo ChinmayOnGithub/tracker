@@ -75,6 +75,14 @@ describe('Issues #6, #13, #14: User Settings Authority & Persistence Hardening',
     expect(savedGoal).toBe(35)
   })
 
+  it('rejects invalid weekly goals at the server boundary', async () => {
+    const invalidValues = [0, -1, 169, Number.NaN, Number.POSITIVE_INFINITY]
+    for (const value of invalidValues) {
+      const result = await saveWeeklyGoalAction(value)
+      expect(result.success).toBe(false)
+    }
+  })
+
   it('Issue #14: Dashboard configuration saves and loads for authenticated account', async () => {
     mock.module('@/app/actions/auth', () => ({
       getLoggedUser: () => Promise.resolve({ id: userA, username: 'alice', accessLevel: 'OWNER' }),
