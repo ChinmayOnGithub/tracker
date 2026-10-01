@@ -16,7 +16,7 @@ import { getTodayDateStr } from '@/lib/recurrence'
 import { CalendarCacheService } from '@/modules/calendar/services/CalendarCacheService'
 import { clearDayDtoCache } from './DayLogsModal'
 import { EntitlementProvider } from '@/lib/context/EntitlementContext'
-import { purgeUserStorage } from '@/lib/storage/userStorage'
+import { purgeUserStorage, getUserStorageItem, setUserStorageItem } from '@/lib/storage/userStorage'
 import { useTheme } from '@/lib/theme'
 import { AuthView } from '@/components/auth/AuthView'
 import type { UserEntitlements } from '@/lib/billing/types'
@@ -289,24 +289,24 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         if (res.success && res.settings?.appearance) {
           const app = res.settings.appearance
           let changed = false
-          const localAccent = localStorage.getItem('personal_accent_color')
+          const localAccent = getUserStorageItem(user?.id ?? null, 'personal_accent_color')
           if (app.accent && !localAccent) {
-            localStorage.setItem('personal_accent_color', app.accent)
+            setUserStorageItem(user?.id ?? null, 'personal_accent_color', app.accent)
             changed = true
           }
-          const localFontSize = localStorage.getItem('personal_font_size')
+          const localFontSize = getUserStorageItem(user?.id ?? null, 'personal_font_size')
           if (app.fontSize && !localFontSize) {
-            localStorage.setItem('personal_font_size', app.fontSize)
+            setUserStorageItem(user?.id ?? null, 'personal_font_size', app.fontSize)
             changed = true
           }
-          const localRounded = localStorage.getItem('personal_rounded_corners')
+          const localRounded = getUserStorageItem(user?.id ?? null, 'personal_rounded_corners')
           if (app.rounded && !localRounded) {
-            localStorage.setItem('personal_rounded_corners', app.rounded)
+            setUserStorageItem(user?.id ?? null, 'personal_rounded_corners', app.rounded)
             changed = true
           }
-          const localAnimations = localStorage.getItem('personal_animations')
+          const localAnimations = getUserStorageItem(user?.id ?? null, 'personal_animations')
           if (app.animations && !localAnimations) {
-            localStorage.setItem('personal_animations', app.animations)
+            setUserStorageItem(user?.id ?? null, 'personal_animations', app.animations)
             changed = true
           }
           if (changed) {
@@ -322,10 +322,10 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   }, [theme])
 
   const applyPersonalStyles = () => {
-    const accent = localStorage.getItem('personal_accent_color') || 'blue'
-    const fontSize = localStorage.getItem('personal_font_size') || 'md'
-    const rounded = localStorage.getItem('personal_rounded_corners') || 'md'
-    const animations = localStorage.getItem('personal_animations') || 'on'
+    const accent = getUserStorageItem(user?.id ?? null, 'personal_accent_color') || 'blue'
+    const fontSize = getUserStorageItem(user?.id ?? null, 'personal_font_size') || 'md'
+    const rounded = getUserStorageItem(user?.id ?? null, 'personal_rounded_corners') || 'md'
+    const animations = getUserStorageItem(user?.id ?? null, 'personal_animations') || 'on'
 
     const colors: Record<string, { primary: string; hover: string }> = {
       purple: { primary: '#a855f7', hover: '#9333ea' },
