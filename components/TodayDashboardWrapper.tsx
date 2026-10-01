@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useContext, useEffect, useMemo, useRef } from 'react'
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDataContext } from './DashboardLayout'
 import { TodayDashboard } from './TodayDashboard'
 import { ActivityLog, AnalyzedTemplate } from '@/types'
@@ -8,7 +8,7 @@ import { useStore, JournalEntry, LeaveRecord, LeaveAllowance, WeightRecord } fro
 import { useSearchParams } from 'next/navigation'
 import { getTodayDateStr, analyzeAllTemplatesIndexed } from '@/lib/recurrence'
 import { fetchDashboardDataAction, prefetchSecondaryDataAction } from '@/app/actions/queries'
-import { Skeleton } from '@/design-system'
+import { Skeleton, Button } from '@/design-system'
 import { DashboardConfig, LegacyDashboardConfig } from '@/lib/dashboard/types'
 import { requestDeduplicator } from '@/lib/store/requestDeduplicator'
 
@@ -41,6 +41,10 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
   // user sessions never coalesce into a shared in-flight promise (#57)
   const currentUserId = context?.currentUser?.id ?? 'guest'
 
+  const [initialLoadState, setInitialLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [initialLoadError, setInitialLoadError] = useState<string | null>(null)
+  const [retryAttempt, setRetryAttempt] = useState(0)
+
   // Loop-safe state ref to prevent useEffect infinite trigger loops
   const stateRef = useRef(state)
   useEffect(() => {
@@ -50,6 +54,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
   // Background fetch/revalidate logic (SWR) with Request Deduplication
   const dateCacheKey = `today:${todayStr}`
   const isValidating = !!state.cacheMetadata.isValidating[dateCacheKey]
+  const hasFetchedCurrentDate = (state.cacheMetadata.lastFetched[dateCacheKey] || 0) > 0
 
   useEffect(() => {
     let active = true
@@ -57,15 +62,22 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     const validating = stateRef.current.cacheMetadata.isValidating[dateCacheKey]
     const templatesLength = stateRef.current.templates.length
     const isStale = Date.now() - lastFetched > TODAY_TTL
+    const needsInitialFetch = lastFetched === 0
 
-    if (!validating && (isStale || templatesLength === 0)) {
+    if (!validating && (isStale || templatesLength === 0 || needsInitialFetch)) {
       const revalidate = async () => {
+        if (needsInitialFetch && active) {
+          setInitialLoadState('loading')
+          setInitialLoadError(null)
+        }
+
         setCacheMetadata(dateCacheKey, lastFetched, true) // set validation in progress
         try {
           // P0: In-flight deduplication prevents duplicate identical requests
           const res = await requestDeduplicator.dedupe(`dashboard:${todayStr}:${currentUserId}`, () =>
             fetchDashboardDataAction(todayStr)
           )
+
           if (active && res.success && res.data) {
             initialize({
               templates: res.data.templates,
@@ -76,6 +88,9 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
               weightRecords: res.data.weightRecords,
             })
             setCacheMetadata(dateCacheKey, Date.now(), false)
+
+            setInitialLoadState('ready')
+            setInitialLoadError(null)
 
             // P2: Speculative background prefetch for secondary domains after Today is hydrated
             const lastSecondaryFetched = stateRef.current.cacheMetadata.lastFetched['secondary_prefetch'] || 0
@@ -108,20 +123,32 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
             }
           } else if (active) {
             setCacheMetadata(dateCacheKey, lastFetched, false)
+            if (needsInitialFetch) {
+              setInitialLoadState('error')
+              setInitialLoadError(res.error || 'Failed to load your day.')
+            }
           }
         } catch (err) {
           console.error('[TodayDashboardWrapper] Background sync failed:', err)
           if (active) {
             setCacheMetadata(dateCacheKey, lastFetched, false)
+            if (needsInitialFetch) {
+              setInitialLoadState('error')
+              setInitialLoadError(err instanceof Error ? err.message : 'Failed to load your day.')
+            }
           }
         }
       }
       revalidate()
+    } else if (active && hasFetchedCurrentDate) {
+      setInitialLoadState('ready')
+      setInitialLoadError(null)
     }
+
     return () => {
       active = false
     }
-  }, [todayStr, dateCacheKey, initialize, setCacheMetadata, currentUserId])
+  }, [todayStr, dateCacheKey, initialize, setCacheMetadata, currentUserId, retryAttempt, hasFetchedCurrentDate])
 
   if (!context) {
     throw new Error('TodayDashboardWrapper must be rendered inside a DashboardLayout')
@@ -138,10 +165,42 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     return analyzeAllTemplatesIndexed(state.templates, state.logs, todayStr)
   }, [state.templates, state.logs, todayStr])
 
-  // Show a loading skeleton only on absolute cold first mount when IndexedDB is still hydrating
-  if (!state.isHydrated && state.templates.length === 0) {
+  // Never render an empty Today dashboard while its primary data is still loading.
+  // A legitimate empty day is rendered only after the server fetch succeeds.
+  if (initialLoadState === 'error' && !hasFetchedCurrentDate) {
     return (
-      <div className="p-8 space-y-6 max-w-5xl mx-auto">
+      <div className="p-8 max-w-2xl mx-auto">
+        <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-6 text-center">
+          <p className="text-sm font-semibold text-[var(--color-text-main)]">Could not load Today.</p>
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+            {initialLoadError || 'The dashboard data could not be fetched.'}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4"
+            onClick={() => {
+              setInitialLoadState('loading')
+              setInitialLoadError(null)
+              setRetryAttempt(attempt => attempt + 1)
+            }}
+          >
+            Retry
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (initialLoadState === 'loading' || !hasFetchedCurrentDate) {
+    return (
+      <div
+        className="p-8 space-y-6 max-w-5xl mx-auto"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+        aria-label="Loading Today dashboard"
+      >
         <div className="space-y-2">
           <Skeleton className="h-10 w-1/3 rounded-lg" />
           <Skeleton className="h-4 w-1/2 rounded-md" />
@@ -151,6 +210,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
           <Skeleton className="h-40 rounded-xl" />
         </div>
         <Skeleton className="h-72 w-full rounded-xl" />
+        <span className="sr-only">Loading your day data…</span>
       </div>
     )
   }
