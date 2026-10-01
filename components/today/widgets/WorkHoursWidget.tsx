@@ -197,6 +197,8 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     return `${h}h ${m}m ${s}s`
   }
 
+  const formatDecimalHours = (totalSec: number): string => `${(totalSec / 3600).toFixed(2)}h`
+
   const computeManualOrTimeHours = (inT: string, outT: string): number => {
     if (!inT || !outT) return 0
     const [inH, inM] = inT.split(':').map(Number)
@@ -471,7 +473,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                 </span>
               </div>
               <span className={`${isCompactHeight ? 'text-2xl' : 'text-3xl'} font-mono font-black text-[var(--color-primary)] tracking-tight tabular-nums`}>
-                {formatElapsedDisplay(currentElapsedSeconds)}
+                {formatDecimalHours(currentElapsedSeconds)}
               </span>
             </div>
 
@@ -518,7 +520,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                 Session Paused ({activeModeLabel})
               </span>
               <span className="text-2xl font-mono font-black text-[var(--color-text-muted)] tracking-tight">
-                {formatElapsedDisplay(formState.accumulatedSeconds)}
+                {formatDecimalHours(formState.accumulatedSeconds)}
               </span>
               <span className="text-[9px] text-[var(--color-text-muted)]">
                 Accumulated time preserved
