@@ -246,6 +246,10 @@ export async function saveUserAppearanceAction(appearance: {
 }
 
 export async function saveWeeklyGoalAction(weeklyGoal: number): Promise<{ success: boolean; error?: string }> {
+  const parsedGoal = z.number().finite().positive().max(168).safeParse(weeklyGoal)
+  if (!parsedGoal.success) {
+    return { success: false, error: 'Weekly goal must be a finite value between 0 and 168 hours.' }
+  }
   try {
     const loggedUser = await getLoggedUser()
     if (!loggedUser) {
