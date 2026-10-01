@@ -109,4 +109,16 @@ describe('Issues #6, #13, #14: User Settings Authority & Persistence Hardening',
     expect(getRes.settings?.dashboard?.order).toEqual(['weight', 'workHours', 'journal'])
     expect(getRes.settings?.dashboard?.hidden).toEqual(['recentDocuments'])
   })
+
+  it('Issue #103: rejects invalid weekly goals at the server boundary', async () => {
+    mock.module('@/app/actions/auth', () => ({
+      getLoggedUser: () => Promise.resolve({ id: userA, username: 'alice', accessLevel: 'OWNER' }),
+    }))
+
+    expect((await saveWeeklyGoalAction(0)).success).toBe(false)
+    expect((await saveWeeklyGoalAction(-1)).success).toBe(false)
+    expect((await saveWeeklyGoalAction(169)).success).toBe(false)
+    expect((await saveWeeklyGoalAction(Number.NaN)).success).toBe(false)
+    expect((await saveWeeklyGoalAction(40)).success).toBe(true)
+  })
 })
