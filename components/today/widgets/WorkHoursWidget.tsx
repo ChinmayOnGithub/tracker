@@ -233,6 +233,14 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       }
     }
 
+    // Callers optimistically update formState before persistence. Capture the
+    // committed state from this render so every mutation path can roll back
+    // consistently when the server rejects the write.
+    const previousFormState = formState
+    const previousClearedLogId = clearedLogId
+    const previousLastClearedState = lastClearedState
+    const previousShowClearUndo = _showClearUndo
+
     setIsLoggingWork(true)
     setPendingAction(action)
     try {
@@ -275,6 +283,10 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       return true
     } catch (err) {
       console.error('Failed to log work presence:', err)
+      setFormState(previousFormState)
+      setClearedLogId(previousClearedLogId)
+      setLastClearedState(previousLastClearedState)
+      setShowClearUndo(previousShowClearUndo)
       setValidationError(err instanceof Error ? err.message : 'Failed to save presence records.')
       return false
     } finally {
@@ -290,13 +302,14 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
 
     const now = new Date()
     const nowTime = getLocalTimeStr()
-    const effectiveInTime = formState.inTime || nowTime
+    const isNewSession = formState.sessionState === 'completed'
+    const effectiveInTime = isNewSession ? nowTime : (formState.inTime || nowTime)
     let effectiveStart: Date
 
     try {
-      effectiveStart = formState.inTime
-        ? createLocalDateTime(todayStr, effectiveInTime)
-        : now
+      effectiveStart = isNewSession
+        ? now
+        : (formState.inTime ? createLocalDateTime(todayStr, effectiveInTime) : now)
     } catch (err) {
       setValidationError(err instanceof Error ? err.message : 'Invalid start time')
       return
@@ -315,8 +328,8 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       inTime: effectiveInTime,
       outTime: '',
       currentSegmentStartedAt: effectiveStart.toISOString(),
-      // If starting fresh from IDLE, accumulatedSeconds is preserved if restarting same day or 0
-      accumulatedSeconds: formState.sessionState === 'completed' ? formState.accumulatedSeconds : 0,
+      // A completed session is a new session; never carry its old duration/start time forward.
+      accumulatedSeconds: isNewSession ? 0 : formState.accumulatedSeconds,
     }
     setFormState(updated)
     await handleSaveWorkPresence(updated, 'start')
