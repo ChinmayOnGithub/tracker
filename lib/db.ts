@@ -18,7 +18,6 @@ import { PrismaClient } from '@prisma/client'
 // OPTION B: PRODUCTION POSTGRESQL
 // ==========================================
 import { PrismaPg } from '@prisma/adapter-pg'
-import { Pool } from 'pg'
 
 // List of models supporting soft-deletion (contain `deletedAt` field)
 const SOFT_DELETABLE_MODELS = new Set([
@@ -44,8 +43,7 @@ const prismaClientSingleton = () => {
   if (!connectionString) {
     throw new Error("DATABASE_URL env variable is not set")
   }
-  const pool = new Pool({ connectionString })
-  const adapter = new PrismaPg(pool)
+  const adapter = new PrismaPg({ connectionString })
   const client = new PrismaClient({ adapter })
 
   return client.$extends({
