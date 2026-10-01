@@ -190,15 +190,24 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     return `${hh}:${mm}`
   }
 
+  // Display precision is separate from storage precision: live sessions show exact seconds,
+  // while completed/weekly summaries show decimal hours.
+  const formatElapsedDisplay = (totalSec: number): string => {
+    const h = Math.floor(totalSec / 3600)
+    const m = Math.floor((totalSec % 3600) / 60)
+    const s = totalSec % 60
+    return `${h}h ${m}m ${s}s`
+  }
+
   const formatDecimalHours = (totalSec: number): string => `${(totalSec / 3600).toFixed(2)}h`
 
-  const computeManualOrTimeHours = (inT: string, outT: string): number => {
+  const computeDurationSeconds = (inT: string, outT: string): number => {
     if (!inT || !outT) return 0
     const [inH, inM] = inT.split(':').map(Number)
     const [outH, outM] = outT.split(':').map(Number)
-    let diffMins = (outH * 60 + outM) - (inH * 60 + inM)
-    if (diffMins < 0) diffMins += 24 * 60
-    return parseFloat((diffMins / 60).toFixed(2))
+    let diffSeconds = ((outH * 60 + outM) - (inH * 60 + inM)) * 60
+    if (diffSeconds < 0) diffSeconds += 24 * 60 * 60
+    return diffSeconds
   }
 
   const handleSaveWorkPresence = useCallback(async (stateToSave: WorkFormState, action: 'start' | 'pause' | 'resume' | 'finish' | 'save' | 'clear' = 'save'): Promise<boolean> => {
@@ -222,16 +231,17 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
         setClearedLogId(null)
         setLastClearedState(null)
       }
-      let computedHours = 0
+      let computedSeconds = 0
       if (stateToSave.status !== 'cleared') {
         if (stateToSave.mode === 'manual') {
-          computedHours = stateToSave.manualHours
+          computedSeconds = Math.round(stateToSave.manualHours * 3600)
         } else if (stateToSave.sessionState === 'completed' && stateToSave.outTime && stateToSave.inTime && !stateToSave.accumulatedSeconds) {
-          computedHours = computeManualOrTimeHours(stateToSave.inTime, stateToSave.outTime)
+          computedSeconds = computeDurationSeconds(stateToSave.inTime, stateToSave.outTime)
         } else {
-          computedHours = parseFloat((stateToSave.accumulatedSeconds / 3600).toFixed(2))
+          computedSeconds = Math.max(0, Math.round(stateToSave.accumulatedSeconds))
         }
       }
+      const computedHours = computedSeconds / 3600
 
       const result = await logWorkPresenceAction({
         templateId: workTemplateId,
@@ -243,7 +253,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
         loggingMode: stateToSave.status !== 'cleared' ? stateToSave.mode : null,
         manualHours: stateToSave.status !== 'cleared' && stateToSave.mode === 'manual' ? stateToSave.manualHours : null,
         sessionState: stateToSave.status !== 'cleared' ? stateToSave.sessionState : null,
-        accumulatedSeconds: stateToSave.accumulatedSeconds,
+        accumulatedSeconds: computedSeconds,
         currentSegmentStartedAt: stateToSave.currentSegmentStartedAt,
       })
 
@@ -466,7 +476,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                 </span>
               </div>
               <span className={`${isCompactHeight ? 'text-2xl' : 'text-3xl'} font-mono font-black text-[var(--color-primary)] tracking-tight tabular-nums`}>
-                {formatDecimalHours(currentElapsedSeconds)}
+                {formatElapsedDisplay(currentElapsedSeconds)}
               </span>
             </div>
 
@@ -513,7 +523,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                 Session Paused ({activeModeLabel})
               </span>
               <span className="text-2xl font-mono font-black text-[var(--color-text-muted)] tracking-tight">
-                {formatDecimalHours(formState.accumulatedSeconds)}
+                {formatElapsedDisplay(formState.accumulatedSeconds)}
               </span>
               <span className="text-[9px] text-[var(--color-text-muted)]">
                 Accumulated time preserved
@@ -721,11 +731,11 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                   <Button
                     onClick={() => {
                       if (isEditingTimes && formState.mode === 'time' && formState.inTime && formState.outTime) {
-                        const computedHrs = computeManualOrTimeHours(formState.inTime, formState.outTime)
+                        const computedSeconds = computeDurationSeconds(formState.inTime, formState.outTime)
                         const updated: WorkFormState = {
                           ...formState,
                           sessionState: 'completed',
-                          accumulatedSeconds: Math.round(computedHrs * 3600),
+                          accumulatedSeconds: computedSeconds,
                         }
                         setFormState(updated)
                         handleSaveWorkPresence(updated, 'save')
