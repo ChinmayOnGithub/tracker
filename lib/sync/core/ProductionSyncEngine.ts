@@ -10,7 +10,10 @@ import {
   SyncMetadata,
   SyncEventMap,
   SyncMetrics,
-  SyncLogger
+  SyncLogger,
+  SyncBatch,
+  StorageProvider,
+  NetworkAdapter
 } from '../types'
 
 import { SyncQueue } from '../queue/SyncQueue'
@@ -59,18 +62,18 @@ export class ProductionSyncEngine extends EventEmitter<SyncEventMap> {
     timeout: 60000 // 1 minute
   }
 
-  constructor(config: SyncEngineConfig) {
+  constructor(config: Partial<SyncEngineConfig> & { storageProvider: StorageProvider; networkAdapter: NetworkAdapter }) {
     super()
     
     this.config = this.validateAndNormalizeConfig(config)
     this.logger = config.logger || new ProductionSyncLogger()
     
     // Initialize components
-    this.syncQueue = new SyncQueue(config.storageProvider, {
-      retryConfig: config.retryConfig,
-      maxQueueSize: config.maxQueueSize,
-      maxConcurrentOperations: config.maxConcurrentBatches,
-      persistenceEnabled: config.queuePersistence,
+    this.syncQueue = new SyncQueue(this.config.storageProvider, {
+      retryConfig: this.config.retryConfig,
+      maxQueueSize: this.config.maxQueueSize,
+      maxConcurrentOperations: this.config.maxConcurrentBatches,
+      persistenceEnabled: this.config.queuePersistence,
       logger: this.logger
     })
     
@@ -397,7 +400,7 @@ export class ProductionSyncEngine extends EventEmitter<SyncEventMap> {
 
   // Helper methods and configuration
 
-  private validateAndNormalizeConfig(config: SyncEngineConfig): SyncEngineConfig {
+  private validateAndNormalizeConfig(config: Partial<SyncEngineConfig> & { storageProvider: StorageProvider; networkAdapter: NetworkAdapter }): SyncEngineConfig {
     // Set defaults and validate configuration
     const normalized: SyncEngineConfig = {
       batchSize: config.batchSize || 50,
@@ -614,21 +617,113 @@ export class ProductionSyncEngine extends EventEmitter<SyncEventMap> {
     return (metadata?.version || 0) + 1
   }
 
-  // Stub methods - these would be implemented based on specific needs
-  private async processPendingOperations(_entityType: string, _operations: unknown[], _batchId: string): Promise<void> {
-    // Implementation would process operations through network adapter
+  private async processPendingOperations(entityType: string, operations: SyncOperation[], batchId: string): Promise<void> {
+    const priority = this.getEntityPriority(entityType)
+    const batch: SyncBatch = {
+      id: batchId,
+      operations,
+      priority,
+      createdAt: Date.now(),
+      maxSize: this.config.batchSize,
+      timeoutMs: this.config.batchTimeoutMs
+    }
+
+    const results = await this.config.networkAdapter.push(batch)
+
+    for (const result of results) {
+      if (result.success) {
+        await this.syncQueue.dequeue(result.operation.id)
+
+        const storageKey = `${result.operation.entityType}:${result.operation.entityId}`
+        const meta = await this.config.storageProvider.getMetadata(storageKey)
+        if (meta) {
+          const resolvedVer = typeof result.resolvedData === 'object' && result.resolvedData !== null && 'version' in result.resolvedData
+            ? Number((result.resolvedData as { version: unknown }).version)
+            : meta.version
+
+          await this.config.storageProvider.setMetadata(storageKey, {
+            ...meta,
+            syncStatus: 'synced',
+            version: resolvedVer || meta.version,
+            lastModified: Date.now(),
+            updatedAt: Date.now()
+          })
+        }
+      } else {
+        this.logger.warn('ProductionSyncEngine operation failed in batch', {
+          operationId: result.operation.id,
+          error: result.error
+        })
+        if (!result.error?.retryable) {
+          await this.syncQueue.dequeue(result.operation.id)
+        }
+      }
+    }
   }
 
-  private async pullRemoteChanges(_entityType: string, _batchId: string): Promise<void> {
-    // Implementation would pull from network adapter
+  private async pullRemoteChanges(entityType: string, _batchId: string): Promise<void> {
+    const manager = this.entityManagers.get(entityType)
+    const lastSyncTime = manager?.lastSyncTime || 0
+
+    const remoteOperations = await this.config.networkAdapter.pull(entityType, lastSyncTime, this.config.batchSize)
+    if (!remoteOperations || remoteOperations.length === 0) return
+
+    for (const op of remoteOperations) {
+      const storageKey = `${op.entityType}:${op.entityId}`
+      const localData = await this.config.storageProvider.get(storageKey)
+      const localMeta = await this.config.storageProvider.getMetadata(storageKey)
+
+      if (this.config.enableConflictResolution && localMeta && localMeta.syncStatus === 'pending') {
+        const conflictContext = {
+          localData,
+          remoteData: op.data,
+          localMetadata: localMeta,
+          remoteMetadata: op.metadata,
+          entityType: op.entityType,
+          entityId: op.entityId
+        }
+        const resolutionResult = await this.conflictResolver.resolve(conflictContext)
+        this.emit('sync:conflict', { conflict: conflictContext, resolutionStrategy: resolutionResult.resolution })
+
+        if (resolutionResult.resolution === 'remote' || resolutionResult.resolution === 'merge') {
+          if (op.type === 'delete') {
+            await this.config.storageProvider.delete(storageKey)
+          } else {
+            await this.config.storageProvider.set(storageKey, resolutionResult.data ?? op.data)
+          }
+          await this.config.storageProvider.setMetadata(storageKey, {
+            ...op.metadata,
+            syncStatus: 'synced'
+          })
+        }
+      } else {
+        if (op.type === 'delete') {
+          await this.config.storageProvider.delete(storageKey)
+        } else {
+          await this.config.storageProvider.set(storageKey, op.data)
+        }
+        await this.config.storageProvider.setMetadata(storageKey, {
+          ...op.metadata,
+          syncStatus: 'synced'
+        })
+      }
+    }
   }
 
-  private async rollbackOptimisticUpdate(_entityType: string, _entityId: string): Promise<void> {
-    // Implementation would revert local changes
+  private async rollbackOptimisticUpdate(entityType: string, entityId: string): Promise<void> {
+    const storageKey = `${entityType}:${entityId}`
+    const meta = await this.config.storageProvider.getMetadata(storageKey)
+    if (meta && meta.syncStatus === 'pending') {
+      await this.config.storageProvider.delete(storageKey)
+      this.logger.debug('ProductionSyncEngine rolled back optimistic update', { entityType, entityId })
+    }
   }
 
-  private async waitForOperationsToComplete(_timeoutMs: number): Promise<void> {
-    // Implementation would wait for current operations to finish
+  private async waitForOperationsToComplete(timeoutMs: number): Promise<void> {
+    const startTime = Date.now()
+    while (this.syncQueue.getProcessingCount() > 0 && (Date.now() - startTime) < timeoutMs) {
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
   }
 
   private handleSyncFailure(entityType: string, error: Error, batchId: string): void {

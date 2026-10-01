@@ -49,6 +49,160 @@ describe('Leave Domain Correctness & Validations', () => {
       }
     })
 
+    describe('Issue #139: totalDays Validation Against Date Range', () => {
+      it('rejects totalDays exceeding single-day duration', () => {
+        const parsed = createLeaveSchema.safeParse({
+          leaveType: 'SICK',
+          startDate: '2026-09-01',
+          endDate: '2026-09-01',
+          totalDays: 1.5,
+        })
+        expect(parsed.success).toBe(false)
+        if (!parsed.success) {
+          expect(parsed.error.issues.some(i => i.message.includes('Total days cannot exceed'))).toBe(true)
+        }
+
+        const parsed2 = createLeaveSchema.safeParse({
+          leaveType: 'SICK',
+          startDate: '2026-09-01',
+          endDate: '2026-09-01',
+          totalDays: 5,
+        })
+        expect(parsed2.success).toBe(false)
+      })
+
+      it('rejects totalDays exceeding multi-day duration', () => {
+        const parsed = createLeaveSchema.safeParse({
+          leaveType: 'PTO',
+          startDate: '2026-09-01',
+          endDate: '2026-09-03', // 3 calendar days
+          totalDays: 3.5,
+        })
+        expect(parsed.success).toBe(false)
+        if (!parsed.success) {
+          expect(parsed.error.issues.some(i => i.message.includes('Total days cannot exceed'))).toBe(true)
+        }
+
+        const parsedExcessive = createLeaveSchema.safeParse({
+          leaveType: 'PTO',
+          startDate: '2026-09-01',
+          endDate: '2026-09-03',
+          totalDays: 10,
+        })
+        expect(parsedExcessive.success).toBe(false)
+      })
+
+      it('accepts partial days within multi-day span', () => {
+        const parsed = createLeaveSchema.safeParse({
+          leaveType: 'PTO',
+          startDate: '2026-09-01',
+          endDate: '2026-09-03', // 3 days
+          totalDays: 2.5,
+        })
+        expect(parsed.success).toBe(true)
+      })
+
+      it('rejects invalid fractions not aligned with half-day steps', () => {
+        const testFractions = [0.3, 1.25, 2.7, 0.1]
+        for (const totalDays of testFractions) {
+          const parsed = createLeaveSchema.safeParse({
+            leaveType: 'CASUAL',
+            startDate: '2026-09-01',
+            endDate: '2026-09-05',
+            totalDays,
+          })
+          expect(parsed.success).toBe(false)
+          if (!parsed.success) {
+            expect(parsed.error.issues.some(i => i.message.includes('whole or half day increment'))).toBe(true)
+          }
+        }
+      })
+
+      it('rejects zero or negative totalDays', () => {
+        const zeroParsed = createLeaveSchema.safeParse({
+          leaveType: 'CASUAL',
+          startDate: '2026-09-01',
+          endDate: '2026-09-01',
+          totalDays: 0,
+        })
+        expect(zeroParsed.success).toBe(false)
+
+        const negParsed = createLeaveSchema.safeParse({
+          leaveType: 'CASUAL',
+          startDate: '2026-09-01',
+          endDate: '2026-09-01',
+          totalDays: -1,
+        })
+        expect(negParsed.success).toBe(false)
+      })
+
+      it('validates HALF_DAY leaveType rules strictly', () => {
+        // Valid HALF_DAY: single day, 0.5
+        const valid = createLeaveSchema.safeParse({
+          leaveType: 'HALF_DAY',
+          startDate: '2026-09-02',
+          endDate: '2026-09-02',
+          totalDays: 0.5,
+        })
+        expect(valid.success).toBe(true)
+
+        // Invalid: HALF_DAY with totalDays = 1
+        const invalidDays = createLeaveSchema.safeParse({
+          leaveType: 'HALF_DAY',
+          startDate: '2026-09-02',
+          endDate: '2026-09-02',
+          totalDays: 1,
+        })
+        expect(invalidDays.success).toBe(false)
+
+        // Invalid: HALF_DAY spanning multiple days
+        const invalidSpan = createLeaveSchema.safeParse({
+          leaveType: 'HALF_DAY',
+          startDate: '2026-09-02',
+          endDate: '2026-09-03',
+          totalDays: 0.5,
+        })
+        expect(invalidSpan.success).toBe(false)
+      })
+
+      it('accurately validates date boundaries across months, years, and leap years', () => {
+        // Month boundary: Jan 31 to Feb 2 = 3 days
+        const monthBoundary = createLeaveSchema.safeParse({
+          leaveType: 'PTO',
+          startDate: '2026-01-31',
+          endDate: '2026-02-02',
+          totalDays: 3,
+        })
+        expect(monthBoundary.success).toBe(true)
+
+        const monthBoundaryExcessive = createLeaveSchema.safeParse({
+          leaveType: 'PTO',
+          startDate: '2026-01-31',
+          endDate: '2026-02-02',
+          totalDays: 3.5,
+        })
+        expect(monthBoundaryExcessive.success).toBe(false)
+
+        // Year boundary: Dec 31 to Jan 2 = 3 days
+        const yearBoundary = createLeaveSchema.safeParse({
+          leaveType: 'PTO',
+          startDate: '2026-12-31',
+          endDate: '2027-01-02',
+          totalDays: 3,
+        })
+        expect(yearBoundary.success).toBe(true)
+
+        // Leap year boundary: 2028-02-28 to 2028-03-01 = 3 days (Feb 28, Feb 29, Mar 1)
+        const leapYearBoundary = createLeaveSchema.safeParse({
+          leaveType: 'PTO',
+          startDate: '2028-02-28',
+          endDate: '2028-03-01',
+          totalDays: 3,
+        })
+        expect(leapYearBoundary.success).toBe(true)
+      })
+    })
+
     it('should accept UUID string in updateLeaveStatusSchema without cuid failures', () => {
       const uuid = '550e8400-e29b-41d4-a716-446655440000'
       const parsed = updateLeaveStatusSchema.safeParse({

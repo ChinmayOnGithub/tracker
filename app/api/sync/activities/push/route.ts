@@ -86,52 +86,126 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        // 2. Check durable database-backed idempotency using dedicated SyncOperation model
-        const dbCached = await db.syncOperation.findUnique({
-          where: {
-            userId_clientRequestId: {
+        // 2. Atomically claim operation via database unique constraint (Issue #135)
+        let claimed = false
+        try {
+          await db.syncOperation.create({
+            data: {
               userId: user.id,
               clientRequestId: rawIdempotencyKey,
+              operationType: operation.type,
+              status: 'IN_PROGRESS',
             }
-          }
-        })
-
-        if (dbCached && dbCached.status === 'COMPLETED' && dbCached.responseJson) {
-          console.log(`[SyncAPI] Returning database-cached result for ${scopedKey}`)
-          const cachedResult = dbCached.responseJson as unknown as SyncResult
-          memoryIdempotencyCache.set(scopedKey, {
-            timestamp: Date.now(),
-            result: cachedResult
           })
-          results.push(cachedResult)
-          continue
+          claimed = true
+        } catch (err: unknown) {
+          const isUniqueViolation =
+            (err as { code?: string })?.code === 'P2002' ||
+            (err instanceof Error && err.message.toLowerCase().includes('unique constraint'))
+
+          if (!isUniqueViolation) {
+            throw err
+          }
         }
 
-        // 3. Execute operation
-        const result = await processOperation(operation, user.id)
-
-        // 4. Persist durable idempotency record in SyncOperation table
-        await db.syncOperation.upsert({
-          where: {
-            userId_clientRequestId: {
-              userId: user.id,
-              clientRequestId: rawIdempotencyKey
+        // If not claimed by this request, another concurrent or previous request already claimed it
+        if (!claimed) {
+          console.log(`[SyncAPI] Operation already claimed or executed for ${scopedKey}, retrieving existing result`)
+          let existing = await db.syncOperation.findUnique({
+            where: {
+              userId_clientRequestId: {
+                userId: user.id,
+                clientRequestId: rawIdempotencyKey,
+              }
             }
-          },
-          create: {
-            userId: user.id,
-            clientRequestId: rawIdempotencyKey,
-            operationType: operation.type,
-            status: result.success ? 'COMPLETED' : 'FAILED',
-            responseJson: result as unknown as Prisma.InputJsonValue,
-            completedAt: new Date()
-          },
-          update: {
-            status: result.success ? 'COMPLETED' : 'FAILED',
-            responseJson: result as unknown as Prisma.InputJsonValue,
-            completedAt: new Date()
+          })
+
+          // Wait up to 5s if currently in progress by concurrent request
+          let waited = 0
+          while (existing && existing.status === 'IN_PROGRESS' && waited < 5000) {
+            await new Promise((r) => setTimeout(r, 100))
+            waited += 100
+            existing = await db.syncOperation.findUnique({
+              where: {
+                userId_clientRequestId: {
+                  userId: user.id,
+                  clientRequestId: rawIdempotencyKey,
+                }
+              }
+            })
           }
-        }).catch(err => console.warn('[SyncAPI] Failed to record durable sync operation:', err))
+
+          if (existing && existing.status === 'COMPLETED' && existing.responseJson) {
+            const cachedResult = existing.responseJson as unknown as SyncResult
+            memoryIdempotencyCache.set(scopedKey, {
+              timestamp: Date.now(),
+              result: cachedResult,
+            })
+            results.push(cachedResult)
+            continue
+          }
+
+          if (existing && existing.status === 'FAILED' && existing.responseJson) {
+            const cachedResult = existing.responseJson as unknown as SyncResult
+            results.push(cachedResult)
+            continue
+          }
+
+          if (existing?.status === 'IN_PROGRESS') {
+            results.push({
+              operation,
+              success: false,
+              error: {
+                category: 'conflict',
+                code: 'OPERATION_IN_PROGRESS',
+                message: 'Concurrent duplicate operation is currently being processed',
+                retryable: true,
+              },
+              timing: {
+                queuedAt: operation.createdAt,
+                startedAt: Date.now(),
+                completedAt: Date.now(),
+                duration: 0,
+              },
+            })
+            continue
+          }
+        }
+
+        // 3. We hold the exclusive claim — execute the mutation
+        let result: SyncResult
+        try {
+          result = await processOperation(operation, user.id)
+
+          // 4. Update the claimed syncOperation row with completed status and result
+          await db.syncOperation.update({
+            where: {
+              userId_clientRequestId: {
+                userId: user.id,
+                clientRequestId: rawIdempotencyKey,
+              }
+            },
+            data: {
+              status: result.success ? 'COMPLETED' : 'FAILED',
+              responseJson: result as unknown as Prisma.InputJsonValue,
+              completedAt: new Date(),
+            }
+          }).catch((err) => console.warn('[SyncAPI] Failed to complete durable sync operation:', err))
+        } catch (execErr) {
+          await db.syncOperation.update({
+            where: {
+              userId_clientRequestId: {
+                userId: user.id,
+                clientRequestId: rawIdempotencyKey,
+              }
+            },
+            data: {
+              status: 'FAILED',
+              completedAt: new Date(),
+            }
+          }).catch(() => {})
+          throw execErr
+        }
 
         // 5. Update user's monotonic sync cursor on successful mutation
         if (result.success) {

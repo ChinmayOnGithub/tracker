@@ -1,5 +1,6 @@
 import { db } from '../db'
 import { analyzeRecurrence, isOccurrenceValidForDate, getTodayDateStr } from '../recurrence'
+import { zonedDateTimeToUTC } from '../dateUtils'
 import { ActivityTemplate, ActivityLog, TimelineItem, RecurrenceType, Priority } from '@/types'
 import { ParsedCalendarEvent } from '../providers'
 
@@ -87,8 +88,8 @@ export class TimelineService {
   }): Promise<TimelineItem[]> {
     const { userId, todayStr, calendarEvents } = params
 
-    // 1. Fetch templates, logs, and approved leaves for the day
-    const [templatesRaw, logsRaw, leaveRecords] = await Promise.all([
+    // 1. Fetch templates, logs, approved leaves, and user timezone for the day
+    const [templatesRaw, logsRaw, leaveRecords, generalSetting] = await Promise.all([
       db.activityTemplate.findMany({
         where: { userId, isActive: true, deletedAt: null },
         include: { tags: true },
@@ -105,8 +106,19 @@ export class TimelineService {
           startDate: { lte: new Date(`${todayStr}T23:59:59.999Z`) },
           endDate: { gte: new Date(`${todayStr}T00:00:00.000Z`) }
         }
+      }),
+      db.userSetting.findUnique({
+        where: {
+          userId_module: {
+            userId,
+            module: 'GENERAL'
+          }
+        }
       })
     ])
+
+    const config = (generalSetting?.config || {}) as Record<string, unknown>
+    const userTimezone = (typeof config.timezone === 'string' && config.timezone) ? config.timezone : 'UTC'
 
     const templates = templatesRaw.map(t => ({
       ...t,
@@ -202,7 +214,7 @@ export class TimelineService {
       let end = new Date(`${todayStr}T23:59:59Z`)
 
       if (!isAllDay) {
-        start = new Date(`${todayStr}T${startTime}:00`)
+        start = zonedDateTimeToUTC(todayStr, startTime, userTimezone)
         const durationMins = template.estimatedDuration || 60
         end = new Date(start.getTime() + durationMins * 60 * 1000)
       }

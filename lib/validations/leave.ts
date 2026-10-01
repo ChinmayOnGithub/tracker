@@ -3,6 +3,16 @@ import { z } from 'zod'
 export const LEAVE_TYPES = ['CASUAL', 'SICK', 'PTO', 'COMP_OFF', 'HALF_DAY', 'WFH'] as const
 export const LEAVE_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as const
 
+export function calculateInclusiveDays(startDateStr: string, endDateStr: string): number {
+  const [sy, sm, sd] = startDateStr.split('-').map(Number)
+  const [ey, em, ed] = endDateStr.split('-').map(Number)
+  const startUtc = Date.UTC(sy, sm - 1, sd)
+  const endUtc = Date.UTC(ey, em - 1, ed)
+  if (isNaN(startUtc) || isNaN(endUtc)) return 0
+  const diffDays = Math.round((endUtc - startUtc) / (24 * 60 * 60 * 1000))
+  return diffDays + 1
+}
+
 export const createLeaveSchema = z
   .object({
     leaveType: z.enum(LEAVE_TYPES, {
@@ -21,8 +31,29 @@ export const createLeaveSchema = z
     status: z.enum(LEAVE_STATUSES).optional(),
   })
   .refine(
-    (data) => new Date(data.startDate) <= new Date(data.endDate),
+    (data) => calculateInclusiveDays(data.startDate, data.endDate) >= 1,
     { message: 'End date must be on or after start date', path: ['endDate'] }
+  )
+  .refine(
+    (data) => (data.totalDays * 2) % 1 === 0,
+    { message: 'Total days must be a whole or half day increment (e.g. 0.5, 1, 1.5)', path: ['totalDays'] }
+  )
+  .refine(
+    (data) => {
+      if (data.leaveType === 'HALF_DAY') {
+        return data.startDate === data.endDate && data.totalDays === 0.5
+      }
+      return true
+    },
+    { message: 'HALF_DAY leave must be on a single date with totalDays = 0.5', path: ['totalDays'] }
+  )
+  .refine(
+    (data) => {
+      const span = calculateInclusiveDays(data.startDate, data.endDate)
+      if (span < 1) return true
+      return data.totalDays <= span
+    },
+    { message: 'Total days cannot exceed the date range duration', path: ['totalDays'] }
   )
 
 export const updateLeaveStatusSchema = z.object({

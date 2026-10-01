@@ -149,10 +149,132 @@ export function daysFromToday(n: number): string {
 }
 
 /**
- * Constructs a local Date object from a YYYY-MM-DD calendar date and HH:mm time.
- * Adheres to Tracker's canonical local date/time policy.
+ * Converts a wall-clock date and time in an explicit IANA timezone into a UTC Date instant.
+ * Canonical implementation for Issue #134 and #25.
  */
-export function createLocalDateTime(dateStr: string, timeStr: string): Date {
+export function zonedDateTimeToUTC(dateStr: string, timeStr: string, timeZone: string = 'UTC'): Date {
+  if (!dateStr || !timeStr) {
+    throw new Error(`dateStr and timeStr are required. Received dateStr: "${dateStr}", timeStr: "${timeStr}"`)
+  }
+
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim())
+  if (!dateMatch) {
+    throw new Error(`Invalid date format: "${dateStr}". Expected YYYY-MM-DD`)
+  }
+
+  const timeMatch = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(timeStr.trim())
+  if (!timeMatch) {
+    throw new Error(`Invalid time format: "${timeStr}". Expected HH:mm`)
+  }
+
+  const year = parseInt(dateMatch[1], 10)
+  const month = parseInt(dateMatch[2], 10)
+  const day = parseInt(dateMatch[3], 10)
+  const hours = parseInt(timeMatch[1], 10)
+  const minutes = parseInt(timeMatch[2], 10)
+  const seconds = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0
+
+  if (month < 1 || month > 12) {
+    throw new Error(`Invalid month: ${month}. Must be between 1 and 12.`)
+  }
+  if (day < 1 || day > 31) {
+    throw new Error(`Invalid day: ${day}. Must be between 1 and 31.`)
+  }
+  if (hours < 0 || hours > 23) {
+    throw new Error(`Invalid hours: ${hours}. Must be between 0 and 23.`)
+  }
+  if (minutes < 0 || minutes > 59) {
+    throw new Error(`Invalid minutes: ${minutes}. Must be between 0 and 59.`)
+  }
+  if (seconds < 0 || seconds > 59) {
+    throw new Error(`Invalid seconds: ${seconds}. Must be between 0 and 59.`)
+  }
+
+  const tz = timeZone || 'UTC'
+
+  // Fast path for UTC
+  if (tz.toUpperCase() === 'UTC' || tz.toUpperCase() === 'ETC/UTC') {
+    return new Date(Date.UTC(year, month - 1, day, hours, minutes, seconds, 0))
+  }
+
+  // 1. Initial guess as UTC
+  let guessUtc = Date.UTC(year, month - 1, day, hours, minutes, seconds, 0)
+
+  // 2. Converge in target timezone
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(guessUtc)
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      hourCycle: 'h23'
+    })
+
+    const parts = formatter.formatToParts(d)
+    const p: Record<string, number> = {}
+    for (const part of parts) {
+      if (part.type !== 'literal') {
+        p[part.type] = parseInt(part.value, 10)
+      }
+    }
+
+    const actualHour = p.hour === 24 ? 0 : p.hour
+    const actualAsUtc = Date.UTC(p.year, p.month - 1, p.day, actualHour, p.minute, p.second, 0)
+    const targetAsUtc = Date.UTC(year, month - 1, day, hours, minutes, seconds, 0)
+    const diff = targetAsUtc - actualAsUtc
+    if (diff === 0) break
+    guessUtc += diff
+  }
+
+  return new Date(guessUtc)
+}
+
+/**
+ * Converts a UTC Date instant into local calendar date (YYYY-MM-DD) and time (HH:mm) in the specified IANA timezone.
+ * Canonical reverse implementation for Issue #134 and #25.
+ */
+export function utcToZonedDateTime(instant: Date | string, timeZone: string = 'UTC'): { dateStr: string; timeStr: string } {
+  const d = typeof instant === 'string' ? new Date(instant) : instant
+  if (isNaN(d.getTime())) {
+    throw new Error(`Invalid instant provided: ${String(instant)}`)
+  }
+
+  const tz = timeZone || 'UTC'
+
+  const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+
+  const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  })
+
+  return {
+    dateStr: dateFormatter.format(d),
+    timeStr: timeFormatter.format(d)
+  }
+}
+
+/**
+ * Constructs a local Date object from a YYYY-MM-DD calendar date and HH:mm time.
+ * If timeZone is provided, delegates to zonedDateTimeToUTC.
+ * Otherwise uses local system environment.
+ */
+export function createLocalDateTime(dateStr: string, timeStr: string, timeZone?: string): Date {
+  if (timeZone) {
+    return zonedDateTimeToUTC(dateStr, timeStr, timeZone)
+  }
+
   if (!dateStr || !timeStr) {
     throw new Error(`dateStr and timeStr are required. Received dateStr: "${dateStr}", timeStr: "${timeStr}"`)
   }

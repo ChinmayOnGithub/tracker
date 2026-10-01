@@ -8,7 +8,9 @@ import {
   toLocalDateStr,
   addUTCDays,
   addUTCMonths,
-  diffUTCDays
+  diffUTCDays,
+  zonedDateTimeToUTC,
+  utcToZonedDateTime
 } from '@/lib/dateUtils'
 
 describe('Canonical Date/Time Policy (#25)', () => {
@@ -128,6 +130,85 @@ describe('Canonical Date/Time Policy (#25)', () => {
 
       expect(isSameDayInTimezone(t1, t2, 'Asia/Tokyo')).toBe(true)
       expect(isSameDayInTimezone(t1, t3, 'Asia/Tokyo')).toBe(false)
+    })
+  })
+
+  describe('Canonical Timezone Conversion: zonedDateTimeToUTC & utcToZonedDateTime (#134, #25)', () => {
+    it('converts UTC local time to UTC instant with exact matching', () => {
+      const utcInstant = zonedDateTimeToUTC('2026-09-20', '09:00', 'UTC')
+      expect(utcInstant.toISOString()).toBe('2026-09-20T09:00:00.000Z')
+
+      const roundTrip = utcToZonedDateTime(utcInstant, 'UTC')
+      expect(roundTrip.dateStr).toBe('2026-09-20')
+      expect(roundTrip.timeStr).toBe('09:00')
+    })
+
+    it('converts Asia/Kolkata (+05:30) local time to exact UTC instant', () => {
+      // 09:00 AM IST = 03:30 AM UTC
+      const utcInstant = zonedDateTimeToUTC('2026-09-20', '09:00', 'Asia/Kolkata')
+      expect(utcInstant.toISOString()).toBe('2026-09-20T03:30:00.000Z')
+
+      const roundTrip = utcToZonedDateTime(utcInstant, 'Asia/Kolkata')
+      expect(roundTrip.dateStr).toBe('2026-09-20')
+      expect(roundTrip.timeStr).toBe('09:00')
+    })
+
+    it('converts Asia/Tokyo (+09:00) local time to exact UTC instant', () => {
+      // 09:00 AM JST = 00:00 AM UTC
+      const utcInstant = zonedDateTimeToUTC('2026-09-20', '09:00', 'Asia/Tokyo')
+      expect(utcInstant.toISOString()).toBe('2026-09-20T00:00:00.000Z')
+
+      const roundTrip = utcToZonedDateTime(utcInstant, 'Asia/Tokyo')
+      expect(roundTrip.dateStr).toBe('2026-09-20')
+      expect(roundTrip.timeStr).toBe('09:00')
+    })
+
+    it('handles America/New_York across summer EDT (-4) and winter EST (-5)', () => {
+      // July 1 (EDT: UTC-4): 09:00 EDT = 13:00 UTC
+      const summerInstant = zonedDateTimeToUTC('2026-07-01', '09:00', 'America/New_York')
+      expect(summerInstant.toISOString()).toBe('2026-07-01T13:00:00.000Z')
+      const summerRoundTrip = utcToZonedDateTime(summerInstant, 'America/New_York')
+      expect(summerRoundTrip.dateStr).toBe('2026-07-01')
+      expect(summerRoundTrip.timeStr).toBe('09:00')
+
+      // December 1 (EST: UTC-5): 09:00 EST = 14:00 UTC
+      const winterInstant = zonedDateTimeToUTC('2026-12-01', '09:00', 'America/New_York')
+      expect(winterInstant.toISOString()).toBe('2026-12-01T14:00:00.000Z')
+      const winterRoundTrip = utcToZonedDateTime(winterInstant, 'America/New_York')
+      expect(winterRoundTrip.dateStr).toBe('2026-12-01')
+      expect(winterRoundTrip.timeStr).toBe('09:00')
+    })
+
+    it('preserves calendar date when crossing day boundaries into UTC', () => {
+      // 02:00 AM in Tokyo (+9) on Sept 21 is 17:00 UTC on Sept 20
+      const instant = zonedDateTimeToUTC('2026-09-21', '02:00', 'Asia/Tokyo')
+      expect(instant.toISOString()).toBe('2026-09-20T17:00:00.000Z')
+
+      // But formatted back in Asia/Tokyo, it remains Sept 21 02:00
+      const roundTrip = utcToZonedDateTime(instant, 'Asia/Tokyo')
+      expect(roundTrip.dateStr).toBe('2026-09-21')
+      expect(roundTrip.timeStr).toBe('02:00')
+    })
+
+    it('correctly handles midnight 00:00 and late night 23:59', () => {
+      const midnight = zonedDateTimeToUTC('2026-09-20', '00:00', 'Asia/Kolkata')
+      // Sept 20 00:00 IST is Sept 19 18:30 UTC
+      expect(midnight.toISOString()).toBe('2026-09-19T18:30:00.000Z')
+      const roundTripMidnight = utcToZonedDateTime(midnight, 'Asia/Kolkata')
+      expect(roundTripMidnight.dateStr).toBe('2026-09-20')
+      expect(roundTripMidnight.timeStr).toBe('00:00')
+
+      const lateNight = zonedDateTimeToUTC('2026-09-20', '23:59', 'Asia/Kolkata')
+      // Sept 20 23:59 IST is Sept 20 18:29 UTC
+      expect(lateNight.toISOString()).toBe('2026-09-20T18:29:00.000Z')
+      const roundTripLate = utcToZonedDateTime(lateNight, 'Asia/Kolkata')
+      expect(roundTripLate.dateStr).toBe('2026-09-20')
+      expect(roundTripLate.timeStr).toBe('23:59')
+    })
+
+    it('createLocalDateTime accepts optional timeZone parameter and delegates properly', () => {
+      const kolkataDt = createLocalDateTime('2026-09-20', '09:00', 'Asia/Kolkata')
+      expect(kolkataDt.toISOString()).toBe('2026-09-20T03:30:00.000Z')
     })
   })
 })

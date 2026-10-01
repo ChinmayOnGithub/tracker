@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { ActivityTemplate, CalendarProvider } from '@prisma/client'
 import { providerRegistry } from '@/lib/providers'
 import { logger } from '@/lib/logger'
+import { zonedDateTimeToUTC, utcToZonedDateTime } from '@/lib/dateUtils'
 
 // Strongly-typed event payloads
 export interface EventPayloadMap {
@@ -139,14 +140,15 @@ async function syncActivityToCalendar(template: ActivityTemplate, userId: string
       startPayload = { date: targetDateStr }
       endPayload = { date: targetDateStr }
     } else {
-      const localStartStr = `${targetDateStr}T${startTime}:00`
+      const utcStart = zonedDateTimeToUTC(targetDateStr, startTime, timeZone)
       const durationMs = (template.estimatedDuration || 60) * 60 * 1000
-      const utcStart = new Date(`${targetDateStr}T${startTime}:00Z`)
       const utcEnd = new Date(utcStart.getTime() + durationMs)
-      const localEndStr = utcEnd.toISOString().replace('Z', '').substring(0, 19)
-      
-      startPayload = { dateTime: localStartStr, timeZone }
-      endPayload = { dateTime: localEndStr, timeZone }
+
+      const { dateStr: localStartDate, timeStr: localStartTime } = utcToZonedDateTime(utcStart, timeZone)
+      const { dateStr: localEndDate, timeStr: localEndTime } = utcToZonedDateTime(utcEnd, timeZone)
+
+      startPayload = { dateTime: `${localStartDate}T${localStartTime}:00`, timeZone }
+      endPayload = { dateTime: `${localEndDate}T${localEndTime}:00`, timeZone }
     }
 
     // Recurrence mapping rules

@@ -63,12 +63,14 @@ export async function createLeaveRequest(data: {
     return { success: false, error: message }
   }
 
+  const validated = parsed.data
+
   try {
     const user = await requireModuleAccess('leave')
 
     // Check for overlapping active leave in the same range
-    const startUtc = new Date(`${data.startDate}T00:00:00.000Z`)
-    const endUtc = new Date(`${data.endDate}T23:59:59.999Z`)
+    const startUtc = new Date(`${validated.startDate}T00:00:00.000Z`)
+    const endUtc = new Date(`${validated.endDate}T23:59:59.999Z`)
 
     const existingOverlap = await db.leaveRecord.findFirst({
       where: {
@@ -92,18 +94,18 @@ export async function createLeaveRequest(data: {
     const record = await db.leaveRecord.create({
       data: {
         userId: user.id,
-        leaveType: data.leaveType,
-        startDate: new Date(`${data.startDate}T00:00:00.000Z`),
-        endDate: new Date(`${data.endDate}T00:00:00.000Z`),
-        totalDays: data.totalDays,
-        notes: data.notes ?? null,
-        status: data.status ?? LeaveStatus.APPROVED,
+        leaveType: validated.leaveType,
+        startDate: new Date(`${validated.startDate}T00:00:00.000Z`),
+        endDate: new Date(`${validated.endDate}T00:00:00.000Z`),
+        totalDays: validated.totalDays,
+        notes: validated.notes ?? null,
+        status: validated.status ?? LeaveStatus.APPROVED,
       },
     })
 
     // Log this leave activity to ActivityLog for each date in the range
-    const start = new Date(`${data.startDate}T12:00:00.000Z`)
-    const end = new Date(`${data.endDate}T12:00:00.000Z`)
+    const start = new Date(`${validated.startDate}T12:00:00.000Z`)
+    const end = new Date(`${validated.endDate}T12:00:00.000Z`)
     const dates: string[] = []
     const curr = new Date(start)
     while (curr <= end) {
