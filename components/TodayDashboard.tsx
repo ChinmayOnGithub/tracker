@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useStore } from '@/lib/store/store'
 import { saveDashboardConfigAction } from '@/app/actions/settings'
+import { restoreWorkPresence } from '@/app/actions/log'
 import { useRouter } from 'next/navigation'
 import { TodayHeader } from './today/TodayHeader'
 import { TodayTasks } from './today/TodayTasks'
@@ -459,6 +460,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
                   logs={logs}
                   weeklyGoal={weeklyGoal}
                   logWorkPresenceAction={logWorkPresenceAction}
+                  restoreWorkPresenceAction={restoreWorkPresence}
                   gridW={w}
                   gridH={h}
                 />
