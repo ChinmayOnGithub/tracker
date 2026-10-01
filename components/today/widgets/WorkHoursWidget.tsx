@@ -157,6 +157,24 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   const remainingHours = Math.max(0, weeklyGoal - totalOfficeHours)
   const isGoalMet = totalOfficeHours >= weeklyGoal
 
+  // Keep completed office time separate from the active session so the bar
+  // communicates stable history (green) versus live work (blue).
+  const currentOfficeSessionHours = useMemo(() => {
+    if (formState.status !== 'office') return 0
+    if (formState.sessionState === 'running' || formState.sessionState === 'paused') {
+      return currentElapsedSeconds / 3600
+    }
+    return 0
+  }, [formState.status, formState.sessionState, currentElapsedSeconds])
+
+  const trackedOfficeHours = totalOfficeHours + currentOfficeSessionHours
+  const completedBarWidth = weeklyGoal > 0
+    ? Math.min(100, (totalOfficeHours / weeklyGoal) * 100)
+    : 0
+  const currentBarWidth = weeklyGoal > 0
+    ? Math.min(Math.max(0, 100 - completedBarWidth), (currentOfficeSessionHours / weeklyGoal) * 100)
+    : 0
+
   const getLocalTimeStr = () => {
     const now = new Date()
     const hh = String(now.getHours()).padStart(2, '0')
@@ -187,7 +205,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     const [outH, outM] = outT.split(':').map(Number)
     let diffMins = (outH * 60 + outM) - (inH * 60 + inM)
     if (diffMins < 0) diffMins += 24 * 60
-    return parseFloat((diffMins / 60).toFixed(1))
+    return parseFloat((diffMins / 60).toFixed(2))
   }
 
   const handleSaveWorkPresence = useCallback(async (stateToSave: WorkFormState, action: 'start' | 'pause' | 'resume' | 'finish' | 'save' | 'clear' = 'save'): Promise<boolean> => {
@@ -218,7 +236,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
         } else if (stateToSave.sessionState === 'completed' && stateToSave.outTime && stateToSave.inTime && !stateToSave.accumulatedSeconds) {
           computedHours = computeManualOrTimeHours(stateToSave.inTime, stateToSave.outTime)
         } else {
-          computedHours = parseFloat((stateToSave.accumulatedSeconds / 3600).toFixed(1))
+          computedHours = parseFloat((stateToSave.accumulatedSeconds / 3600).toFixed(2))
         }
       }
 
@@ -415,6 +433,10 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       </CardHeader>
 
       <CardBody className={isCompactHeight ? 'space-y-2 py-1' : 'space-y-3'}>
+        {/*
+          Temporarily hidden while the restore flow is being fixed.
+          Keep the handler/state intact so Undo can be re-enabled without rebuilding the recovery path.
+
         {showClearUndo && lastClearedState && (
           <div
             role="status"
@@ -436,6 +458,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
             </Button>
           </div>
         )}
+        */}
         {/* RUNNING STATE */}
         {formState.sessionState === 'running' && !isEditingTimes && (
           <div className={isCompactHeight ? 'space-y-2' : 'space-y-3'}>
@@ -449,7 +472,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                   {formState.inTime ? `Started at ${formState.inTime}` : 'In progress'}
                 </span>
               </div>
-              <span className={`${isCompactHeight ? 'text-xl' : 'text-2xl'} font-mono font-black text-[var(--color-primary)] tracking-tight`}>
+              <span className={`${isCompactHeight ? 'text-2xl' : 'text-3xl'} font-mono font-black text-[var(--color-primary)] tracking-tight tabular-nums`}>
                 {formatElapsedDisplay(currentElapsedSeconds)}
               </span>
             </div>
@@ -545,8 +568,8 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
               <span className="text-[9px] uppercase tracking-wider font-extrabold text-emerald-600 dark:text-emerald-400">
                 Completed Day ({activeModeLabel})
               </span>
-              <span className="text-2xl font-mono font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
-                {(formState.accumulatedSeconds / 3600).toFixed(1)}h
+              <span className="text-3xl font-mono font-black text-emerald-600 dark:text-emerald-400 tracking-tight tabular-nums">
+                {(formState.accumulatedSeconds / 3600).toFixed(2)}h
               </span>
               {formState.inTime && formState.outTime && (
                 <span className="text-[9px] text-[var(--color-text-muted)]">
@@ -685,7 +708,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                       label="Total Hours Worked"
                       min="0"
                       max="24"
-                      step="0.5"
+                      step="0.01"
                       value={formState.manualHours}
                       onChange={(e) => setFormState(prev => ({ ...prev, manualHours: parseFloat(e.target.value) || 0 }))}
                       className="text-xs"
@@ -770,28 +793,60 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
         />
 
         {/* Weekly Progress Grid */}
-        <div className="border-t border-[var(--color-border)]/50 pt-3 space-y-2">
+        <div className="border-t border-[var(--color-border)]/50 pt-3 space-y-2.5">
           <div className="flex items-center justify-between text-[10px] font-bold text-[var(--color-text-muted)]">
             <span>Weekly Office Presence</span>
-            <span className="font-mono text-[var(--color-text-main)]">
-              {totalOfficeHours}h / {weeklyGoal}h
+            <span className="font-mono text-[var(--color-text-main)] tabular-nums">
+              {trackedOfficeHours.toFixed(2)}h / {weeklyGoal.toFixed(2)}h
             </span>
           </div>
-          <div className="w-full h-1.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-full overflow-hidden">
+
+          <div
+            className="relative w-full h-3 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-full overflow-hidden"
+            aria-label={currentOfficeSessionHours > 0
+              ? `Completed office time: ${totalOfficeHours.toFixed(2)} hours. Current office session: ${currentOfficeSessionHours.toFixed(2)} hours.`
+              : `Completed office time: ${totalOfficeHours.toFixed(2)} hours.`}
+          >
             <div
-              className={`h-full transition-all duration-500 rounded-full ${isGoalMet ? 'bg-emerald-500' : 'bg-blue-500'}`}
-              style={{ width: `${Math.min(100, (totalOfficeHours / weeklyGoal) * 100)}%` }}
+              className="absolute inset-y-0 left-0 bg-emerald-500 rounded-l-full transition-[width] duration-700 ease-out"
+              style={{ width: `${completedBarWidth}%` }}
             />
-          </div>
-          <div className="flex justify-between items-center text-[9px] font-semibold text-[var(--color-text-muted)]">
-            <span>
-              {isGoalMet ? '🎉 Weekly Goal Met!' : `${remainingHours.toFixed(1)}h remaining`}
-            </span>
-            {totalWfhHours > 0 && (
-              <span>WFH: <span className="font-mono text-[var(--color-text-main)]">{totalWfhHours}h</span></span>
+            {currentOfficeSessionHours > 0 && (
+              <div
+                className="absolute inset-y-0 bg-blue-500 transition-[width] duration-1000 linear animate-pulse"
+                style={{
+                  left: `${completedBarWidth}%`,
+                  width: `${currentBarWidth}%`,
+                }}
+              />
             )}
           </div>
+
+          <div className="flex items-center justify-between text-[9px] font-semibold text-[var(--color-text-muted)]">
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                Completed
+              </span>
+              {currentOfficeSessionHours > 0 && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                  Current
+                </span>
+              )}
+            </div>
+            <span className="font-mono tabular-nums">
+              {isGoalMet ? '🎉 Weekly Goal Met!' : `${Math.max(0, weeklyGoal - trackedOfficeHours).toFixed(2)}h remaining`}
+            </span>
+          </div>
+
+          {totalWfhHours > 0 && (
+            <div className="text-right text-[9px] font-semibold text-[var(--color-text-muted)]">
+              WFH: <span className="font-mono text-[var(--color-text-main)] tabular-nums">{totalWfhHours.toFixed(2)}h</span>
+            </div>
+          )}
         </div>
+
       </CardBody>
     </Card>
   )
