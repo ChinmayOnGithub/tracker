@@ -2,6 +2,8 @@ import { db } from '../db'
 import { eventBus } from '../events'
 import { Prisma } from '@prisma/client'
 
+type TransactionalDbClient = Omit<typeof db, '$extends' | '$transaction' | '$disconnect' | '$connect' | '$on' | '$use'>
+
 export class ActivityService {
   /**
    * Log an activity occurrence. This is the single writer to ActivityLog.
@@ -169,7 +171,7 @@ export class ActivityService {
   /**
    * soft delete an activity log entry
    */
-  static async deleteLog(userId: string, logId: string, client: Prisma.TransactionClient | typeof db = db) {
+  static async deleteLog(userId: string, logId: string, client: TransactionalDbClient = db) {
     const existing = await client.activityLog.findUnique({ where: { id: logId } })
     if (!existing || existing.userId !== userId) {
       throw new Error('Log record not found or unauthorized')
