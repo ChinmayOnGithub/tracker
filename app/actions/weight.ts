@@ -94,15 +94,27 @@ export async function logWeight(date: string, weight: number, notes?: string | n
   }
 }
 
+const MAX_WEIGHT_HISTORY_DAYS = 730
+ 
 /**
  * Fetch the last N weight records for the current user, newest first.
  */
 export async function getWeightHistory(days = 90) {
   try {
     const user = await requireModuleAccess('weight')
+    const numDays = Number(days)
+
+    if (isNaN(numDays) || !Number.isInteger(numDays) || numDays <= 0) {
+      return { success: false, error: 'Days must be a positive integer', records: [] }
+    }
+
+    if (numDays > MAX_WEIGHT_HISTORY_DAYS) {
+      return { success: false, error: `Days cannot exceed maximum allowed history of ${MAX_WEIGHT_HISTORY_DAYS} days`, records: [] }
+    }
+
     const since = new Date()
     since.setUTCHours(0, 0, 0, 0)
-    since.setUTCDate(since.getUTCDate() - days)
+    since.setUTCDate(since.getUTCDate() - numDays)
 
     const records = await db.weightRecord.findMany({
       where: {

@@ -243,4 +243,82 @@ export class AuthService {
   public static async logout(): Promise<void> {
     await SessionService.invalidateSession()
   }
+
+  /**
+   * Looks up a user by identifier (email or username) for password reset.
+   * Enumeration-safe: the caller should always return the same generic response
+   * regardless of whether the user is found.
+   */
+  public static async findUserForPasswordReset(
+    identifier: string
+  ): Promise<{ id: string; username: string; email: string | null } | null> {
+    const normalized = identifier.trim().toLowerCase()
+    return db.user.findFirst({
+      where: { OR: [{ username: normalized }, { email: normalized }] },
+      select: { id: true, username: true, email: true }
+    })
+  }
+
+  /**
+   * Creates a new password reset token for the given user and invalidates previous ones.
+   */
+  public static async createPasswordResetToken(userId: string): Promise<string> {
+    // Invalidate previous outstanding tokens for this user
+    await db.passwordResetToken.updateMany({
+      where: { userId, usedAt: null },
+      data: { usedAt: new Date() }
+    })
+
+    const crypto = await import('crypto')
+    const rawToken = crypto.randomBytes(32).toString('hex')
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000) // 30 minutes
+
+    await db.passwordResetToken.create({
+      data: { userId, tokenHash, expiresAt }
+    })
+
+    return rawToken
+  }
+
+  /**
+   * Validates and atomically consumes a password reset token, then updates the password.
+   */
+  public static async consumePasswordResetToken(
+    rawToken: string,
+    newPassword: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const crypto = await import('crypto')
+    const tokenHash = crypto.createHash('sha256').update(rawToken.trim()).digest('hex')
+
+    return db.$transaction(async (tx) => {
+      const now = new Date()
+      const tokenRecord = await tx.passwordResetToken.findFirst({
+        where: { tokenHash, usedAt: null, expiresAt: { gt: now } },
+        include: { user: true }
+      })
+
+      if (!tokenRecord || !tokenRecord.user) {
+        return { success: false, error: 'Invalid or expired password reset link. Please request a new one.' }
+      }
+
+      const updateResult = await tx.passwordResetToken.updateMany({
+        where: { id: tokenRecord.id, usedAt: null },
+        data: { usedAt: now }
+      })
+
+      if (updateResult.count !== 1) {
+        return { success: false, error: 'This password reset link has already been used.' }
+      }
+
+      const newHash = await CredentialService.hashPassword(newPassword, tokenRecord.user.username)
+
+      await tx.user.update({
+        where: { id: tokenRecord.userId },
+        data: { passwordHash: newHash, sessionVersion: { increment: 1 } }
+      })
+
+      return { success: true }
+    })
+  }
 }

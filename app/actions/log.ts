@@ -9,7 +9,7 @@ import { ActivityService } from '@/lib/services/ActivityService'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import { SyncedActivityService } from '@/lib/services/SyncedActivityService'
 import { createLocalDateTime } from '@/lib/dateUtils'
-import { Prisma } from '@prisma/client'
+import { Prisma, ActivityTemplate } from '@prisma/client'
 
 async function acquireWorkTrackerLock(
   tx: Pick<typeof db, '$executeRaw'>,
@@ -175,11 +175,18 @@ export async function postponeOneTimeTask(
     const nextDayStr = nextDay.toISOString().split('T')[0]
 
     await db.$transaction(async (tx) => {
-      // 1. Mark the current-day log as 'postponed'
+      // 1. Mark the current-day log as 'postponed' (#158)
       if (existingLogId) {
         const existing = await tx.activityLog.findUnique({ where: { id: existingLogId } })
         if (!existing || existing.userId !== user.id) {
           throw new Error('Log record not found or unauthorized')
+        }
+        if (existing.activityId !== templateId) {
+          throw new Error('Log record does not match the specified template')
+        }
+        const logDateStr = existing.logDate.toISOString().split('T')[0]
+        if (logDateStr !== currentDate) {
+          throw new Error('Log record date does not match the postponement date')
         }
         await tx.activityLog.update({
           where: { id: existingLogId },
@@ -225,7 +232,23 @@ export async function unpostponeOneTimeTask(
     const { user } = await requireOwnership('activityTemplate', templateId)
 
     await db.$transaction(async (tx) => {
-      // 1. Soft-delete the postponed log
+      // 1. Validate complete log identity before deletion (#158)
+      const existing = await tx.activityLog.findUnique({ where: { id: logId } })
+      if (!existing || existing.userId !== user.id) {
+        throw new Error('Log record not found or unauthorized')
+      }
+      if (existing.activityId !== templateId) {
+        throw new Error('Log record does not match the specified template')
+      }
+      if (existing.status !== 'postponed') {
+        throw new Error('Log record status is not postponed')
+      }
+      const logDateStr = existing.logDate.toISOString().split('T')[0]
+      if (logDateStr !== originalDate) {
+        throw new Error('Log record date does not match the original date')
+      }
+
+      // Soft-delete the postponed log
       await ActivityService.deleteLog(user.id, logId, tx)
 
       // 2. Revert the template's targetDate
@@ -267,7 +290,12 @@ export async function logWorkPresence(data: {
   workSessionId?: string | null
 }) {
   try {
-    const { user } = await requireOwnership('activityTemplate', data.templateId)
+    const { user, record: template } = await requireOwnership<ActivityTemplate>('activityTemplate', data.templateId)
+
+    // Validate canonical Work Tracker template (#157)
+    if (template.name.toLowerCase() !== 'work tracker' || template.type !== 'PERSONAL') {
+      throw new Error('Invalid template: Work presence must use the canonical Work Tracker template.')
+    }
 
     const result = await db.$transaction(async (tx) => {
       await acquireWorkTrackerLock(tx, user.id, data.templateId, data.date)

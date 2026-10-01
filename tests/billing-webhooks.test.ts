@@ -181,10 +181,16 @@ describe('Billing Webhooks & Idempotent Processing Engine', () => {
     const originalFindUnique = db.billingWebhookEvent.findUnique
     const originalUpsertWebhook = db.billingWebhookEvent.upsert
     const originalUpdateWebhook = db.billingWebhookEvent.update
+    const originalCreateWebhook = db.billingWebhookEvent.create
+    const originalUpdateManyWebhook = db.billingWebhookEvent.updateMany
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.billingWebhookEvent as any).findUnique = async () => null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).create = async ({ data }: any) => ({ id: 'evt_unk', status: 'PROCESSING', ...data });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).updateMany = async () => ({ count: 1 });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.billingWebhookEvent as any).upsert = async () => ({ id: 'evt_unk', status: 'PENDING' });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -207,6 +213,10 @@ describe('Billing Webhooks & Idempotent Processing Engine', () => {
       (db.billingWebhookEvent as any).upsert = originalUpsertWebhook;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.billingWebhookEvent as any).update = originalUpdateWebhook;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).create = originalCreateWebhook;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).updateMany = originalUpdateManyWebhook;
     }
   })
 
@@ -214,6 +224,8 @@ describe('Billing Webhooks & Idempotent Processing Engine', () => {
     const originalFindUnique = db.billingWebhookEvent.findUnique
     const originalUpsertWebhook = db.billingWebhookEvent.upsert
     const originalUpdateWebhook = db.billingWebhookEvent.update
+    const originalCreateWebhook = db.billingWebhookEvent.create
+    const originalUpdateManyWebhook = db.billingWebhookEvent.updateMany
     const originalFindSub = db.subscription.findUnique
     const originalUpdateSub = db.subscription.update
     const originalUpdateCustomer = db.billingCustomer.update
@@ -228,6 +240,10 @@ describe('Billing Webhooks & Idempotent Processing Engine', () => {
       (AuditService as any).log = async () => ({ id: 'audit_charge' });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.billingWebhookEvent as any).findUnique = async () => null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).create = async ({ data }: any) => ({ id: 'evt_row_charge', status: 'PROCESSING', ...data });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).updateMany = async () => ({ count: 1 });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.billingWebhookEvent as any).upsert = async () => ({ id: 'evt_row_charge', status: 'PENDING' });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -320,6 +336,10 @@ describe('Billing Webhooks & Idempotent Processing Engine', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.billingWebhookEvent as any).update = originalUpdateWebhook;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).create = originalCreateWebhook;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).updateMany = originalUpdateManyWebhook;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.subscription as any).findUnique = originalFindSub;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.subscription as any).update = originalUpdateSub;
@@ -336,6 +356,8 @@ describe('Billing Webhooks & Idempotent Processing Engine', () => {
     const originalFindUnique = db.billingWebhookEvent.findUnique
     const originalUpsertWebhook = db.billingWebhookEvent.upsert
     const originalUpdateWebhook = db.billingWebhookEvent.update
+    const originalCreateWebhook = db.billingWebhookEvent.create
+    const originalUpdateManyWebhook = db.billingWebhookEvent.updateMany
     const originalFindSub = db.subscription.findUnique
     const originalUpdateSub = db.subscription.update
     const originalAuditLog = AuditService.log
@@ -349,6 +371,10 @@ describe('Billing Webhooks & Idempotent Processing Engine', () => {
       (AuditService as any).log = async () => ({ id: 'audit_cancel' });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.billingWebhookEvent as any).findUnique = async () => null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).create = async ({ data }: any) => ({ id: 'evt_cancel', status: 'PROCESSING', ...data });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).updateMany = async () => ({ count: 1 });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.billingWebhookEvent as any).upsert = async () => ({ id: 'evt_cancel', status: 'PENDING' });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -394,6 +420,10 @@ describe('Billing Webhooks & Idempotent Processing Engine', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.billingWebhookEvent as any).update = originalUpdateWebhook;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).create = originalCreateWebhook;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).updateMany = originalUpdateManyWebhook;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.subscription as any).findUnique = originalFindSub;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.subscription as any).update = originalUpdateSub;
@@ -406,6 +436,8 @@ describe('Billing Webhooks & Idempotent Processing Engine', () => {
     const originalFindUnique = db.billingWebhookEvent.findUnique
     const originalUpsertWebhook = db.billingWebhookEvent.upsert
     const originalUpdateWebhook = db.billingWebhookEvent.update
+    const originalCreateWebhook = db.billingWebhookEvent.create
+    const originalUpdateManyWebhook = db.billingWebhookEvent.updateMany
     const originalFindSub = db.subscription.findUnique
     const originalUpsertPayment = db.payment.upsert
     const originalAuditLog = AuditService.log
@@ -417,6 +449,10 @@ describe('Billing Webhooks & Idempotent Processing Engine', () => {
       (AuditService as any).log = async () => ({ id: 'audit_fail' });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.billingWebhookEvent as any).findUnique = async () => null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).create = async ({ data }: any) => ({ id: 'evt_fail', status: 'PROCESSING', ...data });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).updateMany = async () => ({ count: 1 });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.billingWebhookEvent as any).upsert = async () => ({ id: 'evt_fail', status: 'PENDING' });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -455,6 +491,10 @@ describe('Billing Webhooks & Idempotent Processing Engine', () => {
       (db.billingWebhookEvent as any).upsert = originalUpsertWebhook;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.billingWebhookEvent as any).update = originalUpdateWebhook;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).create = originalCreateWebhook;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.billingWebhookEvent as any).updateMany = originalUpdateManyWebhook;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (db.subscription as any).findUnique = originalFindSub;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

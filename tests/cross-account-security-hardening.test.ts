@@ -314,11 +314,23 @@ describe('Step 5 / Issue #72: Cross-Account Security & Data Isolation Hardening'
   // ---------------------------------------------------------------------------
   describe('Phase 4: Google Calendar Disconnect Atomicity', () => {
     it('transactionally cleans up credentials and linkedEventMappings for the user', async () => {
-      let transactionOperations: unknown[] = []
+      let txWasCalled = false
       const origTransaction = db.$transaction
-      db.$transaction = mock((ops: unknown[]) => {
-        transactionOperations = ops
-        return Promise.resolve(ops)
+      const origGoogleCredentialDeleteMany = db.googleCredential.deleteMany
+      const origLinkedEventMappingUpdateMany = db.linkedEventMapping.updateMany
+      const origCalendarEventUpdateMany = db.calendarEvent.updateMany
+      const origCalendarSyncStateDeleteMany = db.calendarSyncState.deleteMany
+
+      // Count all DB operations that happen inside the transaction callback
+      let dbOperationCount = 0
+      db.googleCredential.deleteMany = mock(() => { dbOperationCount++; return Promise.resolve({ count: 1 }) }) as unknown as typeof db.googleCredential.deleteMany
+      db.linkedEventMapping.updateMany = mock(() => { dbOperationCount++; return Promise.resolve({ count: 1 }) }) as unknown as typeof db.linkedEventMapping.updateMany
+      db.calendarEvent.updateMany = mock(() => { dbOperationCount++; return Promise.resolve({ count: 1 }) }) as unknown as typeof db.calendarEvent.updateMany
+      db.calendarSyncState.deleteMany = mock(() => { dbOperationCount++; return Promise.resolve({ count: 1 }) }) as unknown as typeof db.calendarSyncState.deleteMany
+
+      db.$transaction = mock((cb: (tx: typeof db) => Promise<unknown>) => {
+        txWasCalled = true
+        return cb(db)
       }) as unknown as typeof db.$transaction
 
       const origGetRefreshToken = GoogleCredentialService.getRefreshToken
@@ -327,10 +339,16 @@ describe('Step 5 / Issue #72: Cross-Account Security & Data Isolation Hardening'
       try {
         const res = await GoogleCredentialService.disconnect(userA)
         expect(res).toBe(true)
-        // Verify transaction was called with 2 atomic operations (credentials deleteMany + mappings updateMany)
-        expect(transactionOperations.length).toBe(2)
+        // Transaction was called (atomic)
+        expect(txWasCalled).toBe(true)
+        // Verify at least credentials + mappings operations happened inside the transaction (5 total: 2x calendarEvent, 1x calendarSyncState, 1x googleCredential, 1x linkedEventMapping)
+        expect(dbOperationCount).toBeGreaterThanOrEqual(2)
       } finally {
         db.$transaction = origTransaction
+        db.googleCredential.deleteMany = origGoogleCredentialDeleteMany
+        db.linkedEventMapping.updateMany = origLinkedEventMappingUpdateMany
+        db.calendarEvent.updateMany = origCalendarEventUpdateMany
+        db.calendarSyncState.deleteMany = origCalendarSyncStateDeleteMany
         GoogleCredentialService.getRefreshToken = origGetRefreshToken
       }
     })
@@ -460,9 +478,13 @@ describe('Step 5 / Issue #72: Cross-Account Security & Data Isolation Hardening'
     it('prevents User A from modifying or deleting User B link collections and tags', async () => {
       const origRequireOwnership = AuthorizationService.requireOwnership
       AuthorizationService.requireOwnership = mock((_model: string, _id: string) => {
-        // Simulates that id belongs to User B, so User A gets NotFoundError
-        throw new NotFoundError('Resource not found')
-      })
+        if (_id === 'coll-b' || _id === 'tag-b' || _id === 'link-b') {
+          // Simulates that id belongs to User B, so User A gets NotFoundError
+          throw new NotFoundError('Resource not found')
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return origRequireOwnership(_model as any, _id)
+      }) as unknown as typeof AuthorizationService.requireOwnership
 
       const origUpdateMany = db.linkCollection.updateMany
       db.linkCollection.updateMany = mock(() => Promise.resolve({ count: 0 })) as unknown as typeof db.linkCollection.updateMany

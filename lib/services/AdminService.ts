@@ -42,6 +42,20 @@ export interface AdminUserDetails {
   auditHistory: Awaited<ReturnType<typeof AuditService.getLogsForUser>>
 }
 
+import crypto from 'crypto'
+import { rateLimiter, getClientIp } from './RateLimiter'
+
+/**
+ * Constant-time comparison helper using fixed-length SHA-256 digests.
+ * Prevents timing attacks regardless of string lengths.
+ */
+export function timingSafeCompare(a: string, b: string): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false
+  const hashA = crypto.createHash('sha256').update(a).digest()
+  const hashB = crypto.createHash('sha256').update(b).digest()
+  return crypto.timingSafeEqual(hashA, hashB)
+}
+
 export class AdminService {
   private static readonly ACCOUNT_STATUS_MODULE = 'ACCOUNT_STATUS'
 
@@ -69,40 +83,61 @@ export class AdminService {
   /**
    * Verifies admin authentication and authorization.
    * Accepts explicit API key, Authorization Bearer token, or active Owner session.
+   * Strictly rate limited and uses constant-time comparison.
    */
   static async verifyAdminAuth(
-    headersOrKey?: Headers | string | null
+    headersOrKey?: Headers | Request | string | null
   ): Promise<{ authorized: boolean; actor: string; error?: string }> {
+    // 1. Strict rate limiting on admin authentication
+    const ip = headersOrKey && typeof headersOrKey !== 'string' ? getClientIp(headersOrKey) : '127.0.0.1'
+    const rateLimitKey = `admin:auth:${ip}`
+    const rateLimit = await rateLimiter.check(rateLimitKey, 10, 60, { failClosed: true, increment: false })
+    if (!rateLimit.allowed) {
+      return {
+        authorized: false,
+        actor: 'anonymous',
+        error: 'Too many admin authentication attempts. Please try again later.'
+      }
+    }
+
     const configuredKey = process.env.ADMIN_API_KEY || (process.env.NODE_ENV === 'test' ? 'test_admin_secret_key' : undefined)
 
     let providedKey: string | null = null
 
     if (typeof headersOrKey === 'string') {
       providedKey = headersOrKey
-    } else if (headersOrKey && typeof headersOrKey.get === 'function') {
-      providedKey = headersOrKey.get('x-admin-key')
-      if (!providedKey) {
-        const authHeader = headersOrKey.get('authorization')
-        if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
-          providedKey = authHeader.slice(7).trim()
+    } else if (headersOrKey) {
+      const hdrs = 'headers' in headersOrKey ? headersOrKey.headers : headersOrKey
+      if (typeof hdrs.get === 'function') {
+        providedKey = hdrs.get('x-admin-key')
+        if (!providedKey) {
+          const authHeader = hdrs.get('authorization')
+          if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
+            providedKey = authHeader.slice(7).trim()
+          }
         }
       }
     }
 
-    // 1. Direct API Key check
-    if (configuredKey && providedKey && providedKey === configuredKey) {
+    // 2. Direct API Key check using constant-time comparison
+    if (configuredKey && providedKey && timingSafeCompare(providedKey, configuredKey)) {
+      await rateLimiter.reset(rateLimitKey)
       return { authorized: true, actor: 'admin_api_key' }
     }
 
-    // 2. Owner user session fallback
+    // 3. Owner user session fallback
     try {
       const owner = await AuthorizationService.requireOwner()
       if (owner?.id) {
+        await rateLimiter.reset(rateLimitKey)
         return { authorized: true, actor: `owner:${owner.username}` }
       }
     } catch {
       // Not logged in as owner
     }
+
+    // Record failed attempt against rate limit
+    await rateLimiter.check(rateLimitKey, 10, 60, { failClosed: true, increment: true })
 
     return {
       authorized: false,

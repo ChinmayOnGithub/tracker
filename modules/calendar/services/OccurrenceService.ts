@@ -1,4 +1,5 @@
 import { CalendarEvent } from '@prisma/client'
+import { rrulestr } from 'rrule'
 
 export interface EventOccurrence {
   id: string // "event-id-occurrence-date"
@@ -57,52 +58,26 @@ export class OccurrenceService {
           })
         }
       } else {
-        // Simple recurrence parser (e.g., DAILY, WEEKLY, MONTHLY, YEARLY)
-        const current = new Date(event.start)
+        // Recurrence rule compliant with RFC 5545 (BYDAY, COUNT, UNTIL, INTERVAL, FREQ) (#161)
         let durationMs = event.end.getTime() - event.start.getTime()
         if (event.allDay && durationMs % 86400000 === 0) {
           durationMs -= 1
         }
 
-        // Fast-forward starting point if it starts far in the past to avoid hitting the 100-iteration limit
-        if (current < rangeStart) {
-          if (rrule.includes('FREQ=YEARLY')) {
-            const diffYears = rangeStart.getUTCFullYear() - current.getUTCFullYear()
-            if (diffYears > 1) {
-              current.setUTCFullYear(current.getUTCFullYear() + diffYears - 1)
-            }
-          } else if (rrule.includes('FREQ=MONTHLY')) {
-            const diffMonths = (rangeStart.getUTCFullYear() - current.getUTCFullYear()) * 12 + (rangeStart.getUTCMonth() - current.getUTCMonth())
-            if (diffMonths > 1) {
-              current.setUTCMonth(current.getUTCMonth() + diffMonths - 1)
-            }
-          } else if (rrule.includes('FREQ=WEEKLY')) {
-            const diffMs = rangeStart.getTime() - current.getTime()
-            const weeksToJump = Math.floor(diffMs / (7 * 24 * 60 * 60 * 1000))
-            if (weeksToJump > 1) {
-              current.setUTCDate(current.getUTCDate() + (weeksToJump - 1) * 7)
-            }
-          } else if (rrule.includes('FREQ=DAILY')) {
-            const diffMs = rangeStart.getTime() - current.getTime()
-            const daysToJump = Math.floor(diffMs / (24 * 60 * 60 * 1000))
-            if (daysToJump > 1) {
-              current.setUTCDate(current.getUTCDate() + (daysToJump - 1))
-            }
-          }
-        }
+        try {
+          const ruleString = rrule.trim().startsWith('RRULE:') ? rrule.trim() : `RRULE:${rrule.trim()}`
+          const rule = rrulestr(ruleString, { dtstart: event.start })
+          const dates = rule.between(rangeStart, rangeEnd, true)
 
-        // Loop up to rangeEnd or 100 iterations max to prevent infinite loops
-        let iterations = 0
-        while (current <= rangeEnd && iterations < 100) {
-          const occurrenceEnd = new Date(current.getTime() + durationMs)
-          
-          if (occurrenceEnd >= rangeStart) {
+          for (const occDate of dates) {
+            const occurrenceEnd = new Date(occDate.getTime() + durationMs)
+            const dateStr = occDate.toISOString().split('T')[0]
             occurrences.push({
-              id: `${event.id}-${current.toISOString().split('T')[0]}`,
+              id: `${event.id}-${dateStr}`,
               eventId: event.id,
               title: event.title,
               description: event.description,
-              start: new Date(current),
+              start: occDate,
               end: occurrenceEnd,
               allDay: event.allDay,
               type: event.type,
@@ -111,20 +86,24 @@ export class OccurrenceService {
               trackerArtifactType: event.trackerArtifactType,
             })
           }
-
-          if (rrule.includes('FREQ=DAILY')) {
-            current.setUTCDate(current.getUTCDate() + 1)
-          } else if (rrule.includes('FREQ=WEEKLY')) {
-            current.setUTCDate(current.getUTCDate() + 7)
-          } else if (rrule.includes('FREQ=MONTHLY')) {
-            current.setUTCMonth(current.getUTCMonth() + 1)
-          } else if (rrule.includes('FREQ=YEARLY')) {
-            current.setUTCFullYear(current.getUTCFullYear() + 1)
-          } else {
-            // Default increment if unsupported rule
-            current.setUTCDate(current.getUTCDate() + 1)
+        } catch (err) {
+          // Graceful fallback for non-standard or malformed rules
+          console.warn('[OccurrenceService] Failed to parse RRULE:', rrule, err)
+          if (event.start <= rangeEnd && event.end >= rangeStart) {
+            occurrences.push({
+              id: event.id,
+              eventId: event.id,
+              title: event.title,
+              description: event.description,
+              start: event.start,
+              end: event.end,
+              allDay: event.allDay,
+              type: event.type,
+              color: event.color,
+              trackerArtifactId: event.trackerArtifactId,
+              trackerArtifactType: event.trackerArtifactType,
+            })
           }
-          iterations++
         }
       }
     }

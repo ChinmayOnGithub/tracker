@@ -36,6 +36,19 @@ export const BILLING_CAPABILITIES: readonly BillingCapabilityDefinition[] = [
     description: 'Notes creation, rich formatting, and deep search history.',
     moduleLabel: 'Notes',
     href: '/notes'
+  },
+  {
+    key: 'advanced_vault',
+    name: 'Advanced Vault',
+    description: 'Higher storage limits and secure file operations.',
+    moduleLabel: 'Vault',
+    href: '/vault'
+  },
+  {
+    key: 'priority_sync',
+    name: 'Priority Sync',
+    description: 'Priority cloud sync and offline conflict resolution.',
+    moduleLabel: 'Sync'
   }
 ]
 

@@ -95,6 +95,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
   const [profileLoading, setProfileLoading] = useState(!initialUserProfile)
   const [userProfile, setUserProfile] = useState<UserProfileData | null>(initialUserProfile)
   const [pinInput, setPinInput] = useState('')
+  const [currentPasswordInput, setCurrentPasswordInput] = useState('')
   const [passcodeError, setPasscodeError] = useState<string | null>(null)
   const [passcodeSuccess, setPasscodeSuccess] = useState<string | null>(null)
   const [passcodeActionLoading, setPasscodeActionLoading] = useState(false)
@@ -524,11 +525,18 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
       setPasscodeError('Must be either a strong password (minimum 8 characters) or a 4-digit PIN.')
       return
     }
+
+    if (userProfile?.hasPasscode && !currentPasswordInput.trim()) {
+      setPasscodeError('Current password/PIN is required to update credentials.')
+      return
+    }
+
     setPasscodeActionLoading(true)
-    const res = await setPasscodeAction(secret)
+    const res = await setPasscodeAction(secret, currentPasswordInput)
     if (res.success) {
       setPasscodeSuccess(isPassword ? 'Password updated successfully!' : 'Passcode PIN updated successfully!')
       setPinInput('')
+      setCurrentPasswordInput('')
       await fetchProfile()
     } else {
       setPasscodeError(res.error || 'Failed to update passcode/password.')
@@ -543,9 +551,10 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
     setPasscodeError(null)
     setPasscodeSuccess(null)
     setPasscodeActionLoading(true)
-    const res = await setPasscodeAction(null)
+    const res = await setPasscodeAction(null, currentPasswordInput)
     if (res.success) {
       setPasscodeSuccess('Passcode login disabled.')
+      setCurrentPasswordInput('')
       await fetchProfile()
     } else {
       setPasscodeError(res.error || 'Failed to disable passcode.')
@@ -1468,8 +1477,23 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
                       </h4>
 
                       <form onSubmit={handleSetPasscode} className="space-y-3">
+                        {userProfile.hasPasscode && (
+                          <Input
+                            type="password"
+                            label="Current Password or PIN"
+                            placeholder="Enter current password or PIN"
+                            value={currentPasswordInput}
+                            onChange={e => {
+                              setPasscodeError(null)
+                              setPasscodeSuccess(null)
+                              setCurrentPasswordInput(e.target.value)
+                            }}
+                          />
+                        )}
+
                         <Input
                           type="password"
+                          label={userProfile.hasPasscode ? 'New Password or PIN' : 'Password or PIN'}
                           placeholder="Enter new password (min 8 chars) or 4-digit PIN"
                           value={pinInput}
                           onChange={e => {

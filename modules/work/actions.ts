@@ -47,6 +47,8 @@ export async function updateWorkSession(id: string, session: Partial<WorkSession
     let record;
     if (session.endedAt) {
       record = await WorkSessionService.stopSession(user.id, id);
+    } else {
+      record = await WorkSessionService.updateSession(user.id, id, session);
     }
     revalidatePath('/');
     return { success: true, data: record };

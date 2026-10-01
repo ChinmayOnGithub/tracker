@@ -157,12 +157,15 @@ describe('Issue #35: Backdated Work-Session Start Time & Timer Anchor', () => {
     const originalUpdate = db.workSession.update
     const originalLogActivity = ActivityService.logActivity
     const originalGetTemplate = ActivityService.getOrCreateDefaultTemplate
+    const originalTransaction = db.$transaction
 
     beforeEach(() => {
       db.workSession.findFirst = mock(() => Promise.resolve(null)) as unknown as typeof db.workSession.findFirst
       ActivityService.getOrCreateDefaultTemplate = mock(() =>
         Promise.resolve({ id: 'tmpl-work-1', name: 'Work Tracker' } as unknown as ActivityTemplate)
       ) as unknown as typeof ActivityService.getOrCreateDefaultTemplate
+      // Mock transaction to delegate to db mocks instead of hitting real DB
+      db.$transaction = mock((cb: (tx: typeof db) => Promise<unknown>) => cb(db)) as unknown as typeof db.$transaction
     })
 
     afterEach(() => {
@@ -171,6 +174,7 @@ describe('Issue #35: Backdated Work-Session Start Time & Timer Anchor', () => {
       db.workSession.update = originalUpdate
       ActivityService.logActivity = originalLogActivity
       ActivityService.getOrCreateDefaultTemplate = originalGetTemplate
+      db.$transaction = originalTransaction
     })
 
     it('WorkSessionService.startSession sets startedAt and currentSegmentStartedAt to requestedStartTime', async () => {
@@ -277,6 +281,7 @@ describe('Issue #35: Backdated Work-Session Start Time & Timer Anchor', () => {
           loggingMode: 'timer',
           manualMinutes: 0,
           deletedAt: null,
+          status: 'ACTIVE',   // Required for finishSession to calculate elapsed time
         } as unknown as WorkSession)
       ) as unknown as typeof db.workSession.findFirst
 

@@ -136,8 +136,56 @@ export class GoogleCredentialService {
     logger.info('GoogleCredentialService', 'Disconnecting Google account', { userId })
 
     try {
-      // Try to revoke the token at Google before deleting locally
+      // 1. Retrieve refresh token prior to local database cleanup
       const refreshToken = await this.getRefreshToken(userId)
+
+      // 2. Perform ALL local state transitions atomically (#163)
+      await db.$transaction(async (tx) => {
+        // Soft-delete purely external Google calendar events (trackerArtifactId is null)
+        await tx.calendarEvent.updateMany({
+          where: {
+            userId,
+            externalProvider: 'GOOGLE',
+            trackerArtifactId: null,
+            deletedAt: null,
+          },
+          data: { deletedAt: new Date() },
+        })
+
+        // Detach Google sync references from Tracker-owned calendar events (preserve Tracker event)
+        await tx.calendarEvent.updateMany({
+          where: {
+            userId,
+            externalProvider: 'GOOGLE',
+            trackerArtifactId: { not: null },
+            deletedAt: null,
+          },
+          data: {
+            externalId: null,
+            externalProvider: null,
+            etag: null,
+            externalMetadata: Prisma.DbNull,
+          },
+        })
+
+        // Clean Google calendar sync state tokens
+        await tx.calendarSyncState.deleteMany({
+          where: { userId, provider: 'google' },
+        })
+
+        // Remove Google credentials
+        await tx.googleCredential.deleteMany({
+          where: { userId },
+        })
+
+        // Soft-delete linked event mappings
+        await tx.linkedEventMapping.updateMany({
+          where: { userId, deletedAt: null },
+          data: { deletedAt: new Date() },
+        })
+      })
+
+      // 3. Revoke token at Google externally after local transaction succeeds
       if (refreshToken) {
         try {
           const revokeResponse = await fetch(GOOGLE_OAUTH.REVOKE_URI, {
@@ -145,7 +193,7 @@ export class GoogleCredentialService {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ token: refreshToken })
           })
-          
+
           if (revokeResponse.ok) {
             logger.info('GoogleCredentialService', 'Token revoked at Google successfully', { userId })
           } else {
@@ -155,7 +203,6 @@ export class GoogleCredentialService {
             })
           }
         } catch (revokeErr) {
-          // Log but don't fail — still delete the local credential
           logger.warn('GoogleCredentialService', 'Failed to revoke token at Google (network error)', {
             userId,
             error: revokeErr instanceof Error ? revokeErr.message : String(revokeErr)
@@ -163,49 +210,6 @@ export class GoogleCredentialService {
         }
       }
 
-      // Soft-delete purely external Google calendar events (trackerArtifactId is null)
-      await db.calendarEvent.updateMany({
-        where: {
-          userId,
-          externalProvider: 'GOOGLE',
-          trackerArtifactId: null,
-          deletedAt: null,
-        },
-        data: { deletedAt: new Date() },
-      })
-
-      // Detach Google sync references from Tracker-owned calendar events (preserve Tracker event)
-      await db.calendarEvent.updateMany({
-        where: {
-          userId,
-          externalProvider: 'GOOGLE',
-          trackerArtifactId: { not: null },
-          deletedAt: null,
-        },
-        data: {
-          externalId: null,
-          externalProvider: null,
-          etag: null,
-          externalMetadata: Prisma.DbNull,
-        },
-      })
-
-      // Clean Google calendar sync state tokens
-      await db.calendarSyncState.deleteMany({
-        where: { userId, provider: 'google' },
-      })
-
-      // Transactionally remove credentials and linked event mappings
-      await db.$transaction([
-        db.googleCredential.deleteMany({
-          where: { userId },
-        }),
-        db.linkedEventMapping.updateMany({
-          where: { userId, deletedAt: null },
-          data: { deletedAt: new Date() },
-        }),
-      ])
-      
       logger.info('GoogleCredentialService', 'Google credentials, mappings, and external events cleaned up safely from database', { userId })
       return true
     } catch (err) {

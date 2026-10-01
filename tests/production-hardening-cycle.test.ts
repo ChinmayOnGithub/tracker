@@ -7,6 +7,7 @@ import {
   getGuestPermissionsAction,
 } from '@/app/actions/settings'
 import { createNote } from '@/app/actions/note'
+import { AuthorizationService } from '@/lib/services/AuthorizationService'
 import { db } from '@/lib/db'
 import { Prisma, UserSetting, Note } from '@prisma/client'
 
@@ -93,10 +94,27 @@ describe('Tracker Production Hardening & Reliability Suite (#6, #13, #14, #15, #
   })
 
   it('Issue #24 & #30: Note creation uses idempotent upsert to prevent UniqueConstraintViolation', async () => {
-    mock.module('@/lib/auth-guards', () => ({
-      requireAuth: () => Promise.resolve({ id: userA, username: 'alice' }),
-      requireOwnership: () => Promise.resolve({ user: { id: userA, username: 'alice' } }),
-    }))
+    const origRequireAuth = AuthorizationService.requireAuth
+    const origRequireOwnership = AuthorizationService.requireOwnership
+    AuthorizationService.requireAuth = mock(() => Promise.resolve({
+      id: userA,
+      username: 'alice',
+      email: 'alice@example.com',
+      accessLevel: 'OWNER',
+      isPro: true,
+      role: 'USER',
+    })) as unknown as typeof AuthorizationService.requireAuth
+    AuthorizationService.requireOwnership = mock(<T = Record<string, unknown>>() => Promise.resolve({
+      user: {
+        id: userA,
+        username: 'alice',
+        email: 'alice@example.com',
+        accessLevel: 'OWNER',
+        isPro: true,
+        role: 'USER',
+      },
+      record: {} as T,
+    })) as unknown as typeof AuthorizationService.requireOwnership
 
     const { EntitlementService } = await import('@/lib/services/EntitlementService')
     const origHasFeature = EntitlementService.hasFeature
@@ -130,6 +148,8 @@ describe('Tracker Production Hardening & Reliability Suite (#6, #13, #14, #15, #
       expect(args.where.userId_date.date).toBe('2026-09-08')
     } finally {
       EntitlementService.hasFeature = origHasFeature
+      AuthorizationService.requireAuth = origRequireAuth
+      AuthorizationService.requireOwnership = origRequireOwnership
     }
   })
 
