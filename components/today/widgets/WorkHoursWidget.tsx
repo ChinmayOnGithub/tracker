@@ -183,7 +183,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     return parseFloat((diffMins / 60).toFixed(1))
   }
 
-  const handleSaveWorkPresence = useCallback(async (stateToSave: WorkFormState) => {
+  const handleSaveWorkPresence = useCallback(async (stateToSave: WorkFormState): Promise<boolean> => {
     if (!workTemplateId || isLoggingWork) return
     setValidationError(null)
 
@@ -209,7 +209,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
         }
       }
 
-      await logWorkPresenceAction({
+      const result = await logWorkPresenceAction({
         templateId: workTemplateId,
         date: todayStr,
         status: stateToSave.status,
@@ -222,10 +222,17 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
         accumulatedSeconds: stateToSave.accumulatedSeconds,
         currentSegmentStartedAt: stateToSave.currentSegmentStartedAt,
       })
+
+      if (typeof result === 'object' && result !== null && 'success' in result && result.success === false) {
+        throw new Error('Failed to save presence record.')
+      }
+
       setIsEditingTimes(false)
+      return true
     } catch (err) {
       console.error('Failed to log work presence:', err)
-      setValidationError('Failed to save presence records.')
+      setValidationError(err instanceof Error ? err.message : 'Failed to save presence records.')
+      return false
     } finally {
       setIsLoggingWork(false)
     }
@@ -323,6 +330,14 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   }
 
   const handleClearPresence = async () => {
+    const hasWorkRecord = formState.status !== 'cleared' || !!todayWorkLog
+    if (!hasWorkRecord || isLoggingWork) return
+
+    const confirmed = window.confirm(
+      "Clear today's work record? This will remove the office/WFH entry, including your recorded in-time, out-time, and hours from the tracker."
+    )
+    if (!confirmed) return
+
     const updated: WorkFormState = {
       status: 'cleared',
       mode: 'time',
@@ -333,8 +348,11 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       outTime: '',
       manualHours: 8.0,
     }
-    setFormState(updated)
-    await handleSaveWorkPresence(updated)
+
+    const saved = await handleSaveWorkPresence(updated)
+    if (saved) {
+      setFormState(updated)
+    }
   }
 
   const activeModeLabel = formState.status === 'office' ? 'Office' : 'WFH'
@@ -487,7 +505,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={handleClearPresence}
-                title="Clear today's work record"
+                title="Clear today's work record (confirmation required)"
                 className="text-rose-500 hover:text-rose-600"
               >
                 Clear
@@ -507,7 +525,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                   type="button"
                   onClick={() => {
                     if (status === 'cleared') {
-                      handleClearPresence()
+                      void handleClearPresence()
                     } else {
                       setFormState(prev => ({ ...prev, status }))
                     }
