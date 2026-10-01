@@ -290,13 +290,14 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
 
     const now = new Date()
     const nowTime = getLocalTimeStr()
-    const effectiveInTime = formState.inTime || nowTime
+    const isNewSession = formState.sessionState === 'completed'
+    const effectiveInTime = isNewSession ? nowTime : (formState.inTime || nowTime)
     let effectiveStart: Date
 
     try {
-      effectiveStart = formState.inTime
-        ? createLocalDateTime(todayStr, effectiveInTime)
-        : now
+      effectiveStart = isNewSession
+        ? now
+        : (formState.inTime ? createLocalDateTime(todayStr, effectiveInTime) : now)
     } catch (err) {
       setValidationError(err instanceof Error ? err.message : 'Invalid start time')
       return
@@ -315,8 +316,8 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       inTime: effectiveInTime,
       outTime: '',
       currentSegmentStartedAt: effectiveStart.toISOString(),
-      // If starting fresh from IDLE, accumulatedSeconds is preserved if restarting same day or 0
-      accumulatedSeconds: formState.sessionState === 'completed' ? formState.accumulatedSeconds : 0,
+      // A new live session starts with no elapsed time from the completed session.
+      accumulatedSeconds: isNewSession ? 0 : 0,
     }
     setFormState(updated)
     await handleSaveWorkPresence(updated, 'start')
