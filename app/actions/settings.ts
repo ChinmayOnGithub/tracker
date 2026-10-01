@@ -114,12 +114,7 @@ export async function saveDashboardConfigAction(config: {
     if (!loggedUser) return { success: false, error: 'Unauthorized' }
 
     const existing = await db.userSetting.findUnique({
-      where: {
-        userId_module: {
-          userId: loggedUser.id,
-          module: 'DASHBOARD',
-        },
-      },
+      where: { userId_module: { userId: loggedUser.id, module: 'DASHBOARD' } },
     })
 
     const existingConfig = (existing?.config as Record<string, unknown> | null) || {}
@@ -138,22 +133,11 @@ export async function saveDashboardConfigAction(config: {
 
     const nextRevision = currentRevision + 1
     const { revision: _ignoredRevision, ...configWithoutRevision } = config
-    const mergedConfig = {
-      ...existingConfig,
-      ...configWithoutRevision,
-      revision: nextRevision,
-    }
+    const mergedConfig = { ...existingConfig, ...configWithoutRevision, revision: nextRevision }
 
     await db.userSetting.upsert({
-      where: {
-        userId_module: {
-          userId: loggedUser.id,
-          module: 'DASHBOARD',
-        },
-      },
-      update: {
-        config: mergedConfig as unknown as Prisma.InputJsonValue,
-      },
+      where: { userId_module: { userId: loggedUser.id, module: 'DASHBOARD' } },
+      update: { config: mergedConfig as unknown as Prisma.InputJsonValue },
       create: {
         userId: loggedUser.id,
         module: 'DASHBOARD',
@@ -167,8 +151,6 @@ export async function saveDashboardConfigAction(config: {
     return { success: false, error: 'Database error while saving config.' }
   }
 }
-
-
 export async function getUserSettingsAction(): Promise<{
   success: boolean
   settings?: {
