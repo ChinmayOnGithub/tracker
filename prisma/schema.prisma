@@ -567,7 +567,8 @@ model WorkSession {
   mode            String       // "office" | "wfh"
   startedAt       DateTime?
   endedAt         DateTime?
-  durationMinutes Int          @default(0)
+  durationMinutes Int          @default(0) // Legacy minute precision; retained for compatibility
+  durationSeconds Int          @default(0)
   loggingMode     String       // "timer" | "manual"
   manualMinutes   Int          @default(0)
   createdAt       DateTime     @default(now())
