@@ -322,6 +322,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
   })
 
   const [showConfig, setShowConfig] = useState(false)
+  const [workSaveError, setWorkSaveError] = useState<string | null>(null)
 
   const toggleConfig = (key: keyof typeof config) => {
     const updated = { ...config, [key]: !config[key] }
@@ -329,21 +330,24 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
     localStorage.setItem('personal_day_sidebar_visibility', JSON.stringify(updated))
   }
 
-  const computeOfficeHours = (inT: string, outT: string): number => {
+  const computeOfficeDurationSeconds = (inT: string, outT: string): number => {
+    if (!inT || !outT) return 0
     const [inH, inM] = inT.split(':').map(Number)
     const [outH, outM] = outT.split(':').map(Number)
-    let diffMins = (outH * 60 + outM) - (inH * 60 + inM)
-    if (diffMins < 0) diffMins += 24 * 60
-    return parseFloat((diffMins / 60).toFixed(1))
+    let diffSeconds = ((outH * 60 + outM) - (inH * 60 + inM)) * 60
+    if (diffSeconds < 0) diffSeconds += 24 * 60 * 60
+    return diffSeconds
   }
 
   const handleSaveWorkPresence = async () => {
     if (!workTemplateId || isLoggingWork) return
     setIsLoggingWork(true)
+    setWorkSaveError(null)
     try {
-      const computedHours = workStatus === 'office'
-        ? computeOfficeHours(inTime, outTime)
-        : workStatus === 'wfh' ? wfhHours : 0
+      const accumulatedSeconds = workStatus === 'office'
+        ? computeOfficeDurationSeconds(inTime, outTime)
+        : workStatus === 'wfh' ? Math.max(0, Math.round(wfhHours * 3600)) : 0
+      const computedHours = accumulatedSeconds / 3600
 
       await logWorkPresenceAction({
         templateId: workTemplateId,
@@ -353,12 +357,13 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
         outTime: workStatus === 'office' ? outTime : null,
         hours: computedHours,
         sessionState: 'completed',
-        accumulatedSeconds: Math.round(computedHours * 3600),
+        accumulatedSeconds,
       })
       invalidateCache(dateStr)
       setIsEditingWork(false)
     } catch (err) {
       console.error('Failed to log work presence:', err)
+      setWorkSaveError(err instanceof Error ? err.message : 'Failed to save work presence.')
     } finally {
       setIsLoggingWork(false)
     }
@@ -870,7 +875,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                             </div>
                           </div>
                           <div className="text-[10px] text-right font-semibold text-[var(--color-text-muted)] pr-0.5">
-                            Calculated: <span className="text-[var(--color-text-main)] font-mono">{computeOfficeHours(inTime, outTime)}h</span>
+                            Calculated: <span className="text-[var(--color-text-main)] font-mono">{(computeOfficeDurationSeconds(inTime, outTime) / 3600).toFixed(2)}h</span>
                           </div>
                         </div>
                       )}
@@ -892,6 +897,12 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
                             className="w-full h-1.5 bg-[var(--color-bg-base)] border border-[var(--color-border)] rounded-lg appearance-none cursor-pointer accent-emerald-500"
                           />
                         </div>
+                      )}
+
+                      {workSaveError && (
+                        <p role="alert" className="text-[10px] font-semibold text-rose-500">
+                          {workSaveError}
+                        </p>
                       )}
 
                       {/* Action Buttons */}
