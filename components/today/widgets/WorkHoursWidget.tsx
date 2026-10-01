@@ -120,7 +120,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now())
   const [clearedLogId, setClearedLogId] = useState<string | null>(null)
   const [lastClearedState, setLastClearedState] = useState<WorkFormState | null>(null)
-  const [showClearUndo, setShowClearUndo] = useState(false)
+  const [_showClearUndo, setShowClearUndo] = useState(false)
 
   // Timer ticking for live display when RUNNING
   useEffect(() => {
@@ -389,7 +389,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     }
   }
 
-  const handleUndoClear = async () => {
+  const _handleUndoClear = async () => {
     if (!clearedLogId || !lastClearedState || isLoggingWork) return
 
     setValidationError(null)
