@@ -329,21 +329,23 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
     localStorage.setItem('personal_day_sidebar_visibility', JSON.stringify(updated))
   }
 
-  const computeOfficeHours = (inT: string, outT: string): number => {
+  const computeOfficeDurationSeconds = (inT: string, outT: string): number => {
+    if (!inT || !outT) return 0
     const [inH, inM] = inT.split(':').map(Number)
     const [outH, outM] = outT.split(':').map(Number)
-    let diffMins = (outH * 60 + outM) - (inH * 60 + inM)
-    if (diffMins < 0) diffMins += 24 * 60
-    return parseFloat((diffMins / 60).toFixed(1))
+    let diffSeconds = ((outH * 60 + outM) - (inH * 60 + inM)) * 60
+    if (diffSeconds < 0) diffSeconds += 24 * 60 * 60
+    return diffSeconds
   }
 
   const handleSaveWorkPresence = async () => {
     if (!workTemplateId || isLoggingWork) return
     setIsLoggingWork(true)
     try {
-      const computedHours = workStatus === 'office'
-        ? computeOfficeHours(inTime, outTime)
-        : workStatus === 'wfh' ? wfhHours : 0
+      const accumulatedSeconds = workStatus === 'office'
+        ? computeOfficeDurationSeconds(inTime, outTime)
+        : workStatus === 'wfh' ? Math.max(0, Math.round(wfhHours * 3600)) : 0
+      const computedHours = accumulatedSeconds / 3600
 
       await logWorkPresenceAction({
         templateId: workTemplateId,
@@ -353,7 +355,7 @@ export const DayLogsModal: React.FC<DayLogsModalProps> = ({
         outTime: workStatus === 'office' ? outTime : null,
         hours: computedHours,
         sessionState: 'completed',
-        accumulatedSeconds: Math.round(computedHours * 3600),
+        accumulatedSeconds,
       })
       invalidateCache(dateStr)
       setIsEditingWork(false)
