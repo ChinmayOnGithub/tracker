@@ -10,6 +10,7 @@ import {
 } from '@/app/actions/auth'
 import { useTheme } from '@/lib/theme'
 import { Sun, Moon } from 'lucide-react'
+import Link from 'next/link'
 
 interface AuthViewProps {
   onAuthenticated: (user: { id: string; username: string; email?: string | null; isOwner?: boolean }) => void
@@ -93,7 +94,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
           callback: async (token: string) => {
             if (cancelled) return
             setHumanVerificationLoading(true)
-            const result = await verifyHumanChallengeAction(token)
+            const flow = isRegisterMode ? 'SIGNUP' : 'LOGIN'
+            const result = await verifyHumanChallengeAction(token, flow)
             setHumanVerificationLoading(false)
             if (result.success) {
               setRobotChecked(true)
@@ -233,6 +235,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
               setIsRegisterMode(false)
               setAuthError('')
               setEnteredPin('')
+              setRobotChecked(false)
             }}
             className={`h-11 text-sm font-semibold transition-colors border-b-2 -mb-px ${
               !isRegisterMode
@@ -249,6 +252,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
               setIsRegisterMode(true)
               setAuthError('')
               setEnteredPin('')
+              setRobotChecked(false)
             }}
             className={`h-11 text-sm font-semibold transition-colors border-b-2 -mb-px ${
               isRegisterMode
@@ -361,11 +365,18 @@ export const AuthView: React.FC<AuthViewProps> = ({
           </Button>
         </form>
 
-        {/* Recovery Note */}
-        <div className="mt-4 flex items-center justify-between text-xs text-[var(--muted-foreground)]">
-          <span>Forgot your password?</span>
-          <span>Contact workspace admin</span>
-        </div>
+        {/* Self-Service Password Recovery (#194) */}
+        {!isRegisterMode && (
+          <div className="mt-4 flex items-center justify-between text-xs text-[var(--muted-foreground)]">
+            <span>Forgot your password?</span>
+            <Link
+              href="/reset-password"
+              className="text-[var(--color-primary)] hover:underline font-medium transition-colors"
+            >
+              Reset Password
+            </Link>
+          </div>
+        )}
 
         {/* Turnstile Container */}
         {humanVerificationEnabled && (

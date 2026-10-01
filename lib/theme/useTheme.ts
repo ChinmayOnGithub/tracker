@@ -57,7 +57,9 @@ export function applyTheme(mode: ThemeMode): boolean {
   }
 
   // Broadcast to other components in the same window
-  window.dispatchEvent(new CustomEvent(THEME_EVENT_NAME, { detail: { mode, isDark } }))
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new CustomEvent(THEME_EVENT_NAME, { detail: { mode, isDark } }))
+  }
 
   return isDark
 }

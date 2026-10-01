@@ -56,7 +56,13 @@ mock.module('../ActivityService', () => ({
       leaveRecordId: null,
       workSessionId: null
     })),
-    deleteLog: mock(() => Promise.resolve(undefined)),
+    deleteLog: mock(async (_uId?: string, logId?: string, client?: unknown) => {
+      const txClient = client as { activityLog?: { update?: (args: { where: { id: string }; data: { deletedAt: Date } }) => Promise<unknown> } }
+      if (txClient?.activityLog?.update && logId) {
+        await txClient.activityLog.update({ where: { id: logId }, data: { deletedAt: new Date() } })
+      }
+      return undefined
+    }),
     getOrCreateDefaultTemplate: mock(() => Promise.resolve({
       id: 'template-1',
       name: 'Test Template',

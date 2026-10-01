@@ -65,14 +65,20 @@ describe('billing capability presentation model', () => {
       'advanced_calendar',
       'advanced_journal',
       'unlimited_notes',
+      'advanced_vault',
+      'priority_sync',
     ])
   })
 
   test('reflects feature flags from entitlements without frontend isPro inference', () => {
     expect(getCapabilityValue(free, 'advanced_calendar')).toBe(false)
     expect(getCapabilityValue(free, 'unlimited_notes')).toBe(false)
+    expect(getCapabilityValue(free, 'advanced_vault')).toBe(false)
+    expect(getCapabilityValue(free, 'priority_sync')).toBe(false)
     expect(getCapabilityValue(pro, 'advanced_calendar')).toBe(true)
     expect(getCapabilityValue(pro, 'unlimited_notes')).toBe(true)
+    expect(getCapabilityValue(pro, 'advanced_vault')).toBe(true)
+    expect(getCapabilityValue(pro, 'priority_sync')).toBe(true)
   })
 
   test('maps every canonical capability to a real product surface', () => {
@@ -80,6 +86,7 @@ describe('billing capability presentation model', () => {
     expect(byKey.advanced_calendar.href).toBe('/calendar')
     expect(byKey.advanced_journal.href).toBe('/journal')
     expect(byKey.unlimited_notes.href).toBe('/notes')
+    expect(byKey.advanced_vault.href).toBe('/vault')
   })
 
   test('renders canonical capacity limits', () => {

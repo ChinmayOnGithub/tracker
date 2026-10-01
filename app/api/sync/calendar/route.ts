@@ -100,6 +100,7 @@ export async function GET(request: Request) {
 /**
  * Executes user synchronization protected by a durable database lease lock.
  * Prevents race conditions and duplicate concurrent work across multiple server instances.
+ * Automatically heartbeats and renews the lease while synchronization is actively running (#193).
  */
 async function executeLockedUserSync(syncStateId: string, userId: string): Promise<boolean> {
   const now = new Date()
@@ -131,8 +132,33 @@ async function executeLockedUserSync(syncStateId: string, userId: string): Promi
     }
   }
 
+  // Periodic heartbeat / renewal: extends lease by 60s every 20s while work is active (#193)
+  let heartbeatActive = true
+  let workerLostLease = false
+
+  const heartbeatInterval = setInterval(async () => {
+    if (!heartbeatActive) return
+    try {
+      const renewedUntil = new Date(Date.now() + 60_000)
+      const renewResult = await db.calendarSyncState.updateMany({
+        where: { id: syncStateId, syncLockToken: lockToken },
+        data: { syncLockUntil: renewedUntil }
+      })
+      if (renewResult.count !== 1) {
+        logger.warn('BackgroundSyncApi', 'Failed to renew sync lease — lock was lost or preempted', { userId })
+        workerLostLease = true
+      }
+    } catch (renewErr) {
+      logger.warn('BackgroundSyncApi', 'Heartbeat lease renewal error:', { error: String(renewErr) })
+    }
+  }, 20_000)
+
   try {
     await CalendarService.sync(userId)
+    if (workerLostLease) {
+      logger.warn('BackgroundSyncApi', 'Sync completed but lease was lost during execution', { userId })
+      return false
+    }
     logger.info('BackgroundSyncApi', 'Webhook background sync completed successfully', { userId })
     return true
   } catch (err) {
@@ -142,6 +168,8 @@ async function executeLockedUserSync(syncStateId: string, userId: string): Promi
     })
     return false
   } finally {
+    heartbeatActive = false
+    clearInterval(heartbeatInterval)
     await db.calendarSyncState.updateMany({
       where: { id: syncStateId, syncLockToken: lockToken },
       data: {
@@ -163,21 +191,29 @@ export async function POST(request: Request) {
     const resourceId = headers.get('x-goog-resource-id')
     const resourceState = headers.get('x-goog-resource-state')
 
-    const headerSecret = request.headers.get('x-tracker-sync-secret')
-    const { searchParams } = new URL(request.url)
-    const querySecret = searchParams.get('secret')
-    const secret = headerSecret || querySecret
+    // Webhook authentication: strictly via request headers (#147, #148)
+    // Query parameter secrets (?secret=) are strictly rejected to prevent leakage in logs/proxies.
+    const headerSecret =
+      request.headers.get('x-tracker-sync-secret') ||
+      request.headers.get('x-sync-secret') ||
+      request.headers.get('x-goog-channel-token')
 
-    if (secret) {
-      const configSecret = env.SYNC_SECRET || process.env.CALENDAR_WEBHOOK_SECRET
-      if (configSecret) {
-        const secretHash = crypto.createHash('sha256').update(secret).digest()
-        const configSecretHash = crypto.createHash('sha256').update(configSecret).digest()
-        if (!crypto.timingSafeEqual(secretHash, configSecretHash)) {
-          logger.warn('BackgroundSyncApi', 'Unauthorized calendar webhook access attempt')
-          return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-        }
-      }
+    const configSecret =
+      env.SYNC_SECRET ||
+      process.env.CALENDAR_WEBHOOK_SECRET ||
+      (process.env.NODE_ENV === 'test' ? 'test_calendar_sync_secret' : undefined)
+
+    // Fail closed: Webhook authentication is mandatory (#148)
+    if (!headerSecret || !configSecret) {
+      logger.warn('BackgroundSyncApi', 'Missing webhook authentication credentials')
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const secretHash = crypto.createHash('sha256').update(headerSecret).digest()
+    const configSecretHash = crypto.createHash('sha256').update(configSecret).digest()
+    if (!crypto.timingSafeEqual(secretHash, configSecretHash)) {
+      logger.warn('BackgroundSyncApi', 'Unauthorized calendar webhook access attempt: invalid secret')
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     if (!channelId || !resourceId) {

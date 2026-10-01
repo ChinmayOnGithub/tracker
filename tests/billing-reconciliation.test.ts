@@ -25,6 +25,8 @@ describe('Canonical Razorpay Billing Reconciliation Engine (Tests 1-12 & Inciden
   let origWebhookFindUnique: typeof db.billingWebhookEvent.findUnique
   let origWebhookUpsert: typeof db.billingWebhookEvent.upsert
   let origWebhookUpdate: typeof db.billingWebhookEvent.update
+  let origWebhookCreate: typeof db.billingWebhookEvent.create
+  let origWebhookUpdateMany: typeof db.billingWebhookEvent.updateMany
   let origCustomerUpdate: typeof db.billingCustomer.update
 
   // In-memory state for fidelity across multi-step reconciliation tests
@@ -70,6 +72,8 @@ describe('Canonical Razorpay Billing Reconciliation Engine (Tests 1-12 & Inciden
     origWebhookFindUnique = db.billingWebhookEvent.findUnique
     origWebhookUpsert = db.billingWebhookEvent.upsert
     origWebhookUpdate = db.billingWebhookEvent.update
+    origWebhookCreate = db.billingWebhookEvent.create
+    origWebhookUpdateMany = db.billingWebhookEvent.updateMany
     origCustomerUpdate = db.billingCustomer.update
 
     auditLogs = []
@@ -178,6 +182,30 @@ describe('Canonical Razorpay Billing Reconciliation Engine (Tests 1-12 & Inciden
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (db.billingWebhookEvent as any).create = async ({ data }: any) => {
+      const key = `${data.provider}_${data.providerEventId}`
+      if (webhookEventsState.has(key)) {
+        throw new Error('Unique constraint violation')
+      }
+      const record = { id: `evt_row_${Date.now()}_${Math.random()}`, ...data }
+      webhookEventsState.set(key, record)
+      return record
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (db.billingWebhookEvent as any).updateMany = async ({ where, data }: any) => {
+      let count = 0
+      for (const [k, v] of webhookEventsState.entries()) {
+        if (v.id === where.id) {
+          const updated = { ...v, ...data }
+          webhookEventsState.set(k, updated)
+          count++
+        }
+      }
+      return { count }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (db.billingWebhookEvent as any).update = async ({ where, data }: any) => {
       for (const [k, v] of webhookEventsState.entries()) {
         if (v.id === where.id) {
@@ -205,6 +233,8 @@ describe('Canonical Razorpay Billing Reconciliation Engine (Tests 1-12 & Inciden
     db.billingWebhookEvent.findUnique = origWebhookFindUnique
     db.billingWebhookEvent.upsert = origWebhookUpsert
     db.billingWebhookEvent.update = origWebhookUpdate
+    db.billingWebhookEvent.create = origWebhookCreate
+    db.billingWebhookEvent.updateMany = origWebhookUpdateMany
     db.billingCustomer.update = origCustomerUpdate
   })
 

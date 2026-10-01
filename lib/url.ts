@@ -6,34 +6,37 @@ import { env } from '@/lib/env'
  * same canonical host and protocol, preventing domain mismatch and redirect_uri_mismatch.
  *
  * Precedence:
- * 1. Production: Configured NEXT_PUBLIC_SITE_URL is authoritative to prevent host-header injection.
- * 2. Development/Test: Standard reverse-proxy headers from request (x-forwarded-host, x-forwarded-proto).
- * 3. Incoming request's parsed URL origin.
- * 4. Fallback default.
+ * 1. Production: Explicit configured canonical production origin (NEXT_PUBLIC_SITE_URL).
+ * 2. Production: Trusted platform-forwarded origin (e.g. VERCEL_URL for preview deployments).
+ * 3. Development/Test: Standard reverse-proxy headers from request (x-forwarded-host, x-forwarded-proto).
+ * 4. Development/Test: Incoming request's parsed URL origin.
+ * 5. Development/Test: Safe local default (http://localhost:3000).
  */
 export function getCanonicalOrigin(request?: Request): string {
   const isProduction = process.env.NODE_ENV === 'production'
-  const configured = process.env.NEXT_PUBLIC_SITE_URL || env.NEXT_PUBLIC_SITE_URL
+  const rawConfigured = process.env.NEXT_PUBLIC_SITE_URL || env.NEXT_PUBLIC_SITE_URL
 
-  // 1. In production, configured NEXT_PUBLIC_SITE_URL is strictly authoritative when configured
-  // to prevent host header injection or spoofed OAuth callback targets.
-  if (isProduction && configured && !configured.includes('localhost')) {
-    const url = new URL(configured)
-
-    // Vercel terminates TLS before the application. A legacy production
-    // NEXT_PUBLIC_SITE_URL may still be stored as http://, but OAuth must
-    // always use the public HTTPS origin. Normalize it instead of crashing
-    // the login route.
-    if (url.protocol === 'http:') {
-      url.protocol = 'https:'
-    } else if (url.protocol !== 'https:') {
-      throw new Error('NEXT_PUBLIC_SITE_URL must use HTTPS or HTTP in production.')
+  // 1. Explicit configured canonical production origin (authoritative in production)
+  if (rawConfigured && !rawConfigured.includes('localhost')) {
+    try {
+      const url = new URL(rawConfigured)
+      // Vercel terminates TLS before the application; OAuth must always use public HTTPS
+      if (url.protocol === 'http:' || isProduction) {
+        url.protocol = 'https:'
+      }
+      return url.origin
+    } catch {
+      // Invalid URL string
     }
-
-    return url.origin
   }
 
-  // 2. Evaluate request origin or forwarded headers (enforcing https in production)
+  // 2. Trusted platform preview environment (e.g. Vercel deployment preview)
+  if (isProduction && process.env.VERCEL_URL) {
+    const cleanHost = process.env.VERCEL_URL.replace(/^https?:\/\//, '')
+    return `https://${cleanHost}`
+  }
+
+  // 3. Evaluate request origin or forwarded headers (enforcing https in production)
   if (request) {
     const forwardedHost = request.headers.get('x-forwarded-host')
     const forwardedProto =
@@ -57,10 +60,10 @@ export function getCanonicalOrigin(request?: Request): string {
     }
   }
 
-  // 3. Fallback to configured URL in dev/test if available
-  if (configured && !configured.includes('localhost')) {
+  // 4. Fallback to configured dev URL or localhost default
+  if (rawConfigured) {
     try {
-      const url = new URL(configured)
+      const url = new URL(rawConfigured)
       return url.origin
     } catch {
       // Fall through

@@ -1,19 +1,16 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import crypto from 'crypto'
 import { env } from '@/lib/env'
 import { GOOGLE_OAUTH, COOKIES } from '@/lib/constants'
 import { logger } from '@/lib/logger'
-
+import { getCanonicalOrigin } from '@/lib/url'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const source = searchParams.get('source')
 
   const clientId = env.GOOGLE_CLIENT_ID
-  // Google OAuth redirect URIs are configured against the canonical public site URL.
-  // Do not derive this from the incoming Vercel/preview hostname.
-  const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL).origin
+  const siteUrl = getCanonicalOrigin(request)
   const redirectUri = `${siteUrl}/api/auth/callback/google`
 
   if (!clientId || clientId === 'test-client-id') {
@@ -48,32 +45,27 @@ export async function GET(request: Request) {
   })
 
   const response = NextResponse.redirect(googleAuthUrl.toString())
-  const cookieStore = await cookies()
 
-  cookieStore.set(COOKIES.GOOGLE_AUTH_STATE, state, {
+  const cookieOptions = {
     maxAge: 10 * 60,
     path: '/',
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-  })
+    sameSite: 'lax' as const,
+  }
 
-  cookieStore.set(COOKIES.GOOGLE_AUTH_CODE_VERIFIER, codeVerifier, {
-    maxAge: 10 * 60,
-    path: '/',
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-  })
+  response.cookies.set(COOKIES.GOOGLE_AUTH_STATE, state, cookieOptions)
+  response.cookies.set(COOKIES.GOOGLE_AUTH_CODE_VERIFIER, codeVerifier, cookieOptions)
 
   if (source === 'mobile') {
-    cookieStore.set(COOKIES.AUTH_SOURCE, 'mobile', {
+    const mobileOpts = {
       maxAge: 5 * 60,
       path: '/',
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-    })
+      sameSite: 'lax' as const,
+    }
+    response.cookies.set(COOKIES.AUTH_SOURCE, 'mobile', mobileOpts)
   }
 
   return response

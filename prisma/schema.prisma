@@ -118,6 +118,7 @@ model User {
   usageCounters     UsageCounter[]
   syncOperations    SyncOperation[]
   syncCursor        SyncCursor?
+  passwordResetTokens PasswordResetToken[]
 }
 
 model GoogleCredential {
@@ -565,6 +566,7 @@ model WorkSession {
   user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   date            String       // YYYY-MM-DD
   mode            String       // "office" | "wfh"
+  status          String       @default("ACTIVE") // "ACTIVE" | "PAUSED" | "COMPLETED"
   startedAt       DateTime?
   endedAt         DateTime?
   durationMinutes Int          @default(0) // Legacy minute precision; retained for compatibility
@@ -734,5 +736,32 @@ model RateLimit {
   updatedAt DateTime @updatedAt
 
   @@index([resetAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+}
+
+model HumanChallenge {
+  id         String    @id @default(uuid())
+  nonce      String    @unique
+  flow       String    // "LOGIN", "SIGNUP"
+  verifiedAt DateTime?
+  consumedAt DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+
+  @@index([nonce])
+  @@index([expiresAt])
 }
 

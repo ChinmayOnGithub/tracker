@@ -16,7 +16,7 @@ export interface WatchChannel {
 export interface CalendarProvider {
   createExternalEvent(event: CalendarEvent): Promise<string>
   updateExternalEvent(event: CalendarEvent): Promise<void>
-  deleteExternalEvent(externalId: string): Promise<void>
+  deleteExternalEvent(externalId: string, userId?: string): Promise<void>
   fullSync(userId: string): Promise<SyncResult>
   incrementalSync(userId: string, syncToken: string): Promise<SyncResult>
   watch(userId: string): Promise<WatchChannel>

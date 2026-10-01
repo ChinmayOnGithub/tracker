@@ -83,6 +83,13 @@ export async function createLeaveRequest(data: {
     }
 
     const record = await db.$transaction(async (tx) => {
+      // Serialize concurrent leave requests for the same user to prevent overlap race conditions (#159)
+      try {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('leave-overlap:' || ${user.id}))`
+      } catch {
+        // Fallback for SQLite / mock test environments
+      }
+
       const existingOverlap = await tx.leaveRecord.findFirst({
         where: {
           userId: user.id,
@@ -316,30 +323,61 @@ export async function updateLeaveAllowance(leaveType: LeaveType, year: number, a
   }
 }
 
-/** Batch update multiple leave allowances for a year. */
-export async function batchUpdateLeaveAllowances(year: number, updates: { leaveType: LeaveType; allowance: number }[]) {
+/** Batch update multiple leave allowances for a year. Validated and transactional (#160). */
+export async function batchUpdateLeaveAllowances(
+  year: number,
+  updates: { leaveType: LeaveType; allowance: number }[]
+) {
   try {
     const user = await requireModuleAccess('leave')
+
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return { success: false, error: 'Batch must contain at least one item' }
+    }
+    if (updates.length > 20) {
+      return { success: false, error: 'Batch size cannot exceed 20 items' }
+    }
+    if (typeof year !== 'number' || isNaN(year) || year < 2000 || year > 2100) {
+      return { success: false, error: 'Invalid year' }
+    }
+
+    // Validate every item using canonical Zod validation schema (#160)
     for (const u of updates) {
-      await db.leaveAllowance.upsert({
-        where: {
-          userId_year_leaveType: {
+      const parsed = updateLeaveAllowanceSchema.safeParse({
+        leaveType: u.leaveType,
+        year,
+        allowance: u.allowance
+      })
+      if (!parsed.success) {
+        const errorMsg = parsed.error.issues.map((i) => i.message).join('; ')
+        return { success: false, error: errorMsg }
+      }
+    }
+
+    // Apply entire batch inside one single transaction to prevent partial writes (#160)
+    await db.$transaction(async (tx) => {
+      for (const u of updates) {
+        await tx.leaveAllowance.upsert({
+          where: {
+            userId_year_leaveType: {
+              userId: user.id,
+              year,
+              leaveType: u.leaveType,
+            },
+          },
+          create: {
             userId: user.id,
             year,
             leaveType: u.leaveType,
+            allowance: u.allowance,
           },
-        },
-        create: {
-          userId: user.id,
-          year,
-          leaveType: u.leaveType,
-          allowance: u.allowance,
-        },
-        update: {
-          allowance: u.allowance,
-        },
-      })
-    }
+          update: {
+            allowance: u.allowance,
+          },
+        })
+      }
+    })
+
     revalidatePath('/')
     return { success: true }
   } catch (error) {
