@@ -798,7 +798,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
           onClose={() => setIsClearConfirmOpen(false)}
           onConfirm={() => void confirmClearPresence()}
           title="Clear today’s work record?"
-          description="This will remove today’s Office/WFH entry, including the recorded times and hours. You can use Undo immediately afterward to restore it."
+          description="This removes today’s Office/WFH entry, including the recorded times and hours. The current recovery control is disabled, so you will need to enter the session again manually."
           confirmText="Clear record"
           cancelText="Keep record"
           variant="danger"
