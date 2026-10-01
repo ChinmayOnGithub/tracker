@@ -3,6 +3,7 @@
 import React from 'react'
 import { ChevronLeft, ChevronRight, RefreshCw, Plus, Loader2 } from 'lucide-react'
 import { Button, IconButton } from '@/design-system'
+import { todayYMD } from '@/lib/dateUtils'
 
 import { CompactTodayPills } from './CompactTodayPills'
 
@@ -42,7 +43,7 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
   onOpenCustomize,
   isValidating = false,
 }) => {
-  const isCurrentToday = todayStr === new Date().toISOString().split('T')[0]
+  const isCurrentToday = todayStr === todayYMD()
 
   const navControls = (
     <div className="flex items-center gap-1.5">
