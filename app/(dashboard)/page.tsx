@@ -7,6 +7,7 @@ export default async function Page() {
   return (
     <TodayDashboardWrapper
       initialDashboardConfig={settings.success ? settings.settings?.dashboard ?? null : null}
+      initialWeeklyGoal={settings.success ? settings.settings?.weeklyGoal ?? null : null}
     />
   )
 }
