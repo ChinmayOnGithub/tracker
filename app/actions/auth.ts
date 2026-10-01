@@ -180,9 +180,14 @@ export async function verifyPinAction(usernameInput: string, secret: string): Pr
 }> {
   try {
     const { rateLimiter, getClientIp } = await import('@/lib/services/RateLimiter')
-    const { headers } = await import('next/headers')
-    const reqHeaders = await headers()
-    const clientIp = getClientIp(reqHeaders)
+    let clientIp = '127.0.0.1'
+    try {
+      const { headers } = await import('next/headers')
+      const reqHeaders = await headers()
+      clientIp = getClientIp(reqHeaders)
+    } catch {
+      // Fallback if headers scope is unavailable
+    }
     const normalizedIdentifier = usernameInput.trim().toLowerCase()
 
     // 1. IP-level rate limiting
