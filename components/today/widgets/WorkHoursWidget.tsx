@@ -154,8 +154,6 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       .reduce((sum, l) => sum + (l.amount ?? 0), 0)
   }, [weeklyWorkLogs])
 
-  const isGoalMet = trackedOfficeHours >= weeklyGoal
-
   // Keep completed office time separate from the active session so the bar
   // communicates stable history (green) versus live work (blue).
   const currentOfficeSessionHours = useMemo(() => {
@@ -173,6 +171,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   const currentBarWidth = weeklyGoal > 0
     ? Math.min(Math.max(0, 100 - completedBarWidth), (currentOfficeSessionHours / weeklyGoal) * 100)
     : 0
+  const isGoalMet = trackedOfficeHours >= weeklyGoal
 
   const getLocalTimeStr = () => {
     const now = new Date()
