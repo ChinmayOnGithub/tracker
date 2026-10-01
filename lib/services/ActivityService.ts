@@ -23,7 +23,7 @@ export class ActivityService {
     journalEntryId?: string | null
     workSessionId?: string | null
     },
-    client: Prisma.TransactionClient | typeof db = db,
+    client: TransactionalDbClient = db,
   ) {
     const { id, userId, templateId, date, status, note, amount, payload, weightRecordId, leaveRecordId, journalEntryId, workSessionId } = params
     const logDate = new Date(`${date}T12:00:00.000Z`)
