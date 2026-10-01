@@ -11,7 +11,8 @@ You MUST read and strictly adhere to the **AI Constitution** in [AI Constitution
 * [Voice & Tone Guidelines](file:///d:/github_projeccts/tracker/.agents/rules/voice-and-tone.md)
 * [Business Model & Product Principles](file:///d:/github_projeccts/tracker/.agents/rules/business-and-product.md)
 * [Engineering & Architecture Standards](file:///d:/github_projeccts/tracker/.agents/rules/engineering-standards.md)
-* Skills available: `tracker-core` ([SKILL.md](file:///d:/github_projeccts/tracker/.agents/skills/tracker-core/SKILL.md)) and `tracker-qa` ([SKILL.md](file:///d:/github_projeccts/tracker/.agents/skills/tracker-qa/SKILL.md)).
+* [Mobile Architecture & Standards](file:///d:/github_projeccts/tracker/.agents/rules/mobile-architecture-and-standards.md)
+* Skills available: `tracker-core` ([SKILL.md](file:///d:/github_projeccts/tracker/.agents/skills/tracker-core/SKILL.md)), `tracker-qa` ([SKILL.md](file:///d:/github_projeccts/tracker/.agents/skills/tracker-qa/SKILL.md)), and official `expo-*` skills under `.agents/skills/`.
 
 ### 1. Database Safety Safeguards (CRITICAL)
 * **Never** use hard delete queries (`delete` or `deleteMany`) on tables that support soft deletion (contain a `deletedAt` column). Use `update` or `updateMany` to set `deletedAt = new Date()`.
@@ -19,12 +20,17 @@ You MUST read and strictly adhere to the **AI Constitution** in [AI Constitution
 * The Prisma client in `lib/db.ts` contains query interceptors that will block hard deletes and unscoped deletes at runtime.
 
 ### 2. Styling Consistency (CRITICAL)
-* The UI styling is custom modern **Shadcn Style** powered by Tailwind CSS 4 and global custom tokens in `design-system/tokens.css`.
+* The UI styling is custom modern **Shadcn Style** powered by Tailwind CSS 4 and global custom tokens in `design-system/tokens.css` on Web.
 * **Prohibited**: Do not write raw `<button>` elements, custom cards with custom borders/shadows, or custom styled text inputs in module panel files.
-* **Mandatory**: You must import and reuse components from `@/design-system/components/*`:
-  * `<Button>`: Standardizes loading indicators, sizes (`sm`/`md`/`lg`), colors, and micro-hover scaling.
-  * `<Card>`, `<CardHeader>`, `<CardBody>`, `<CardFooter>`: Standardizes structural card panels, border shadows, padding, and dark/light borders.
-  * `<Input>`, `<Textarea>`, `<Select>`: Standardizes text boxes, error feedback blocks, focus rings, and input labels.
+* **Mandatory**: You must import and reuse components from `@/design-system/components/*` on Web, and `@/components/*` + semantic tokens from `@/theme/tokens` on Mobile.
+
+### 3. Mobile Engineering Standards (CRITICAL)
+* **Native Client, Not Second Product**: Reuse canonical server domain services (`AuthService`, `WorkSessionService`, `ActivityService`, `JournalService`). Do not duplicate business rules in React Native.
+* **SQLite as Cache & Outbox**: Persistent truth remains server-side. SQLite provides instant local render and optimistic `mutation_queue`.
+* **Universal Deletion Lifecycle**: `Delete` ➔ moved to `Bin` (`deletedAt != null`) ➔ `Restore` (`deletedAt = null`).
+* **Design System & Icons**: Standardized Lucide icons via `<TrackerIcon name="..." />` (`m/src/components/TrackerIcon.tsx`). Semantic tokens from `theme/tokens.ts`. Minimum 48px touch targets.
+* **Component Architecture**: Avoid God screens (>400 lines). Extract to `components/`, `hooks/`, `presentation/`.
+* **Verification Integrity**: Use exact statuses (`STATIC-VALIDATED`, `TEST-VALIDATED`, `RUNTIME-VALIDATED`). Never report Android tested without runtime execution.
 <!-- END:tracker-system-guidelines -->
 
 
