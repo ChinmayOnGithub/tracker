@@ -5,6 +5,43 @@ import { getLoggedUser } from '@/app/actions/auth'
 import { canAccess, getEffectiveGuestPermissions } from '@/lib/auth-guards'
 import { Prisma } from '@prisma/client'
 import { DashboardConfig, LegacyDashboardConfig } from '@/lib/dashboard/types'
+import { GRID_COLUMNS, WIDGET_REGISTRY } from '@/lib/dashboard/registry'
+import { z } from 'zod'
+
+const dashboardConfigUpdateSchema = z.object({
+  order: z.array(z.string().min(1)).max(100).optional(),
+  hidden: z.array(z.string().min(1)).max(100).optional(),
+  items: z.array(z.object({
+    id: z.string().min(1),
+    x: z.number().int().min(0),
+    y: z.number().int().min(0),
+    w: z.number().int().min(1).max(GRID_COLUMNS),
+    h: z.number().int().min(1).max(100),
+  })).max(100).optional(),
+  version: z.number().int().nonnegative().optional(),
+}).superRefine((config, ctx) => {
+  const seen = new Set<string>()
+  for (const [index, item] of (config.items ?? []).entries()) {
+    const definition = WIDGET_REGISTRY.find(widget => widget.id === item.id)
+    if (!definition) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'id'], message: 'Unknown dashboard widget.' })
+      continue
+    }
+    if (seen.has(item.id)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'id'], message: 'Duplicate dashboard widget.' })
+    }
+    seen.add(item.id)
+    if (item.x + item.w > GRID_COLUMNS) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'w'], message: 'Widget exceeds the dashboard grid.' })
+    }
+    if (item.w < definition.minW || item.w > definition.maxW) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'w'], message: 'Widget width is outside its allowed range.' })
+    }
+    if (item.h < definition.minH || item.h > definition.maxH) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items', index, 'h'], message: 'Widget height is outside its allowed range.' })
+    }
+  }
+})
 
 export async function getGuestPermissionsAction(): Promise<{
   success: boolean
@@ -60,6 +97,11 @@ export async function saveGuestPermissionsAction(permissions: Record<string, boo
 }
 
 export async function saveDashboardConfigAction(config: { order?: string[]; hidden?: string[]; items?: unknown[]; version?: number }): Promise<{ success: boolean; error?: string }> {
+  const parsed = dashboardConfigUpdateSchema.safeParse(config)
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message || 'Invalid dashboard configuration.' }
+  }
+
   try {
     const loggedUser = await getLoggedUser()
     if (!loggedUser) {

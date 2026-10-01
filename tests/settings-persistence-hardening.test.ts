@@ -109,4 +109,20 @@ describe('Issues #6, #13, #14: User Settings Authority & Persistence Hardening',
     expect(getRes.settings?.dashboard?.order).toEqual(['weight', 'workHours', 'journal'])
     expect(getRes.settings?.dashboard?.hidden).toEqual(['recentDocuments'])
   })
+
+  it('Issue #102: rejects unknown dashboard widgets and invalid geometry', async () => {
+    mock.module('@/app/actions/auth', () => ({
+      getLoggedUser: () => Promise.resolve({ id: userA, username: 'alice', accessLevel: 'OWNER' }),
+    }))
+
+    const unknownWidget = await saveDashboardConfigAction({
+      items: [{ id: 'unknown-widget', x: 0, y: 0, w: 7, h: 4 }],
+    })
+    expect(unknownWidget.success).toBe(false)
+
+    const invalidWidth = await saveDashboardConfigAction({
+      items: [{ id: 'workHours', x: 0, y: 0, w: 20, h: 5 }],
+    })
+    expect(invalidWidth.success).toBe(false)
+  })
 })
