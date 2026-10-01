@@ -72,7 +72,7 @@ function parseInitialWorkState(todayWorkLog: ActivityLog | null): WorkFormState 
   }
 
   return {
-    status: 'cleared',
+    status: 'office',
     mode: 'time',
     sessionState: 'idle',
     accumulatedSeconds: 0,
@@ -347,21 +347,22 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     )
     if (!confirmed) return
 
-    const updated: WorkFormState = {
-      status: 'cleared',
-      mode: 'time',
+    const previousState = formState
+    const clearedState: WorkFormState = {
+      ...previousState,
       sessionState: 'idle',
       accumulatedSeconds: 0,
       currentSegmentStartedAt: null,
       inTime: '',
       outTime: '',
-      manualHours: 8.0,
     }
 
-    const previousState = formState
-    const saved = await handleSaveWorkPresence(updated)
+    const saved = await handleSaveWorkPresence({
+      ...clearedState,
+      status: 'cleared',
+    })
     if (saved) {
-      setFormState(updated)
+      setFormState(clearedState)
       setLastClearedState(previousState)
       setClearedLogId(todayWorkLog?.id || null)
       setShowClearUndo(!!todayWorkLog?.id)
@@ -579,24 +580,18 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
           <div className="space-y-3">
             {/* Status Segmented Control */}
             <div className="flex bg-[var(--color-bg-base)] p-0.5 rounded-[var(--radius-lg)] border border-[var(--color-border)]">
-              {(['cleared', 'office', 'wfh'] as const).map((status) => (
+              {(['office', 'wfh'] as const).map((status) => (
                 <button
                   key={status}
                   type="button"
-                  onClick={() => {
-                    if (status === 'cleared') {
-                      void handleClearPresence()
-                    } else {
-                      setFormState(prev => ({ ...prev, status }))
-                    }
-                  }}
+                  onClick={() => setFormState(prev => ({ ...prev, status }))}
                   className={`flex-1 py-1.5 text-[10px] font-bold rounded-[var(--radius-md)] capitalize transition-all duration-150 cursor-pointer ${
                     formState.status === status
                       ? 'bg-[var(--color-bg-surface)] text-[var(--color-text-main)] shadow-xs border border-[var(--color-border)]'
                       : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]'
                   }`}
                 >
-                  {status === 'cleared' ? 'Clear' : status}
+                  {status === 'wfh' ? 'WFH' : 'Office'}
                 </button>
               ))}
             </div>

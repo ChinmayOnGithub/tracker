@@ -419,7 +419,7 @@ export async function restoreWorkPresence(logId: string) {
     })
 
     revalidatePath('/')
-    return { success: true }
+    return { success: true, log: deletedLog }
   } catch (error) {
     console.error('Failed to restore work presence:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
