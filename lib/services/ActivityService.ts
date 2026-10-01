@@ -2,11 +2,14 @@ import { db } from '../db'
 import { eventBus } from '../events'
 import { Prisma } from '@prisma/client'
 
+type TransactionalDbClient = Omit<typeof db, '$extends' | '$transaction' | '$disconnect' | '$connect' | '$on' | '$use'>
+
 export class ActivityService {
   /**
    * Log an activity occurrence. This is the single writer to ActivityLog.
    */
-  static async logActivity(params: {
+  static async logActivity(
+    params: {
     id?: string
     userId: string
     templateId: string
@@ -19,18 +22,20 @@ export class ActivityService {
     leaveRecordId?: string | null
     journalEntryId?: string | null
     workSessionId?: string | null
-  }) {
+    },
+    client: TransactionalDbClient = db,
+  ) {
     const { id, userId, templateId, date, status, note, amount, payload, weightRecordId, leaveRecordId, journalEntryId, workSessionId } = params
     const logDate = new Date(`${date}T12:00:00.000Z`)
 
     // First check if a log with this exact ID already exists
-    let existing = id ? await db.activityLog.findUnique({
+    let existing = id ? await client.activityLog.findUnique({
       where: { id }
     }) : null
 
     // Check for existing log for this date and template if not found by ID
     if (!existing) {
-      existing = await db.activityLog.findFirst({
+      existing = await client.activityLog.findFirst({
         where: {
           userId,
           activityId: templateId,
@@ -43,7 +48,7 @@ export class ActivityService {
     // If no existing log by date/template, but we have a journalEntryId, check if there's already a log for it
     if (!existing && journalEntryId) {
       console.log(`[ActivityService] Checking for existing log with journalEntryId: ${journalEntryId}`)
-      existing = await db.activityLog.findFirst({
+      existing = await client.activityLog.findFirst({
         where: {
           journalEntryId
           // Note: We don't filter by deletedAt here because journalEntryId is unique
@@ -62,7 +67,7 @@ export class ActivityService {
       if (existing.userId && existing.userId !== userId) {
         throw new Error('Log record not found or unauthorized')
       }
-      log = await db.activityLog.update({
+      log = await client.activityLog.update({
         where: { id: existing.id },
         data: {
           status,
@@ -77,7 +82,7 @@ export class ActivityService {
         }
       })
     } else {
-      log = await db.activityLog.create({
+      log = await client.activityLog.create({
         data: {
           id: id ?? undefined,
           userId,
@@ -166,8 +171,8 @@ export class ActivityService {
   /**
    * soft delete an activity log entry
    */
-  static async deleteLog(userId: string, logId: string) {
-    const existing = await db.activityLog.findUnique({ where: { id: logId } })
+  static async deleteLog(userId: string, logId: string, client: TransactionalDbClient = db) {
+    const existing = await client.activityLog.findUnique({ where: { id: logId } })
     if (!existing || existing.userId !== userId) {
       throw new Error('Log record not found or unauthorized')
     }
@@ -192,7 +197,7 @@ export class ActivityService {
       })
     }
     if (existing.workSessionId) {
-      await db.workSession.updateMany({
+      await client.workSession.updateMany({
         where: { id: existing.workSessionId, userId, deletedAt: null },
         data: { deletedAt: new Date() }
       })
@@ -200,7 +205,7 @@ export class ActivityService {
     // Journal entries are NOT deleted when activity log is deleted
     // They should persist independently
 
-    return await db.activityLog.update({
+    return await client.activityLog.update({
       where: { id: logId },
       data: { deletedAt: new Date() }
     })

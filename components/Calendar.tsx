@@ -12,6 +12,7 @@ import { updateCalendarEventAction } from '@/app/actions/calendar'
 import { getWeekDates } from '@/lib/recurrence'
 import { CalendarCacheService } from '@/modules/calendar/services/CalendarCacheService'
 import { CalendarDataContext } from './DashboardLayout'
+import { getUserStorageItem, setUserStorageItem } from '@/lib/storage/userStorage'
 import {
   calculateContentOffsetY,
   timeToPixelOffset,
@@ -55,6 +56,9 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [refreshVer, setRefreshVer] = useState(0)
   const [startOfWeekPref, setStartOfWeekPref] = useState<'monday' | 'sunday'>('sunday')
 
+  const calendarContext = React.useContext(CalendarDataContext)
+  const userId = calendarContext?.currentUser?.id || null
+
   // Current local time clock (ticking every 30s)
   const [currentTime, setCurrentTime] = useState(() => new Date())
   useEffect(() => {
@@ -77,19 +81,19 @@ export const Calendar: React.FC<CalendarProps> = ({
   
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const val = localStorage.getItem('calendar_default_view')
+      const val = getUserStorageItem(userId, 'calendar_default_view')
       if (val === 'month' || val === 'week') {
         setView(val)
       }
 
-      const weekStart = localStorage.getItem('calendar_start_of_week')
+      const weekStart = getUserStorageItem(userId, 'calendar_start_of_week')
       if (weekStart === 'monday') {
         setStartOfWeekPref('monday')
       }
     }
   }, [])
   const userTimezone = typeof window !== 'undefined'
-    ? localStorage.getItem('personal_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    ? getUserStorageItem(userId, 'personal_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
     : 'UTC'
   
   const year = currentDate.getFullYear()
@@ -169,9 +173,6 @@ export const Calendar: React.FC<CalendarProps> = ({
       const d = new Date(startOfWeekDate); d.setDate(startOfWeekDate.getDate() + i); return d
     })
   }, [startOfWeekDate])
-
-  const calendarContext = React.useContext(CalendarDataContext)
-  const userId = calendarContext?.currentUser?.id || 'anonymous'
 
   // Sync state with date/view changes using cache-first background-revalidation strategy
   useEffect(() => {
@@ -306,7 +307,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     const rangeLogs = logs.filter(l => l.activityId === workTemplateId && targetDates.includes(l.date))
     const officeHours = rangeLogs.filter(l => l.status === 'done').reduce((sum, l) => sum + (l.amount ?? 0), 0)
     const wfhHours = rangeLogs.filter(l => l.status === 'wfh').reduce((sum, l) => sum + (l.amount ?? 0), 0)
-    const weeklyGoal = typeof window !== 'undefined' ? Number(localStorage.getItem('personal_weekly_goal') || '27') : 27
+    const weeklyGoal = typeof window !== 'undefined' ? Number(getUserStorageItem(userId, 'personal_weekly_goal') || '27') : 27
     const remaining = Math.max(0, weeklyGoal - officeHours)
     const goalMet = officeHours >= weeklyGoal
     
@@ -618,7 +619,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                   type="button"
                   onClick={() => {
                     setView(v)
-                    localStorage.setItem('calendar_default_view', v)
+                    setUserStorageItem(userId, 'calendar_default_view', v)
                   }}
                   className={`h-9 flex-1 rounded-xl px-3 text-[11px] font-bold capitalize transition-all ${
                     view === v
@@ -682,7 +683,7 @@ export const Calendar: React.FC<CalendarProps> = ({
                   key={v}
                   onClick={() => {
                     setView(v)
-                    localStorage.setItem('calendar_default_view', v)
+                    setUserStorageItem(userId, 'calendar_default_view', v)
                   }}
                   className={`px-3.5 py-2.5 md:py-1.5 text-[11px] font-bold rounded-[var(--radius-sm)] transition-all duration-200 capitalize cursor-pointer border ${
                     view === v

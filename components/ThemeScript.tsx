@@ -1,4 +1,4 @@
-export default function ThemeScript() {
+export default function ThemeScript({ userId }: { userId?: string | null }) {
   const bootstrapScript = `
     (function() {
       try {
@@ -10,10 +10,12 @@ export default function ThemeScript() {
           document.documentElement.classList.remove('dark');
         }
 
-        var accent = localStorage.getItem('personal_accent_color') || 'blue';
-        var fontSize = localStorage.getItem('personal_font_size') || 'md';
-        var rounded = localStorage.getItem('personal_rounded_corners') || 'md';
-        var animations = localStorage.getItem('personal_animations') || 'on';
+        var authenticatedUserId = ${JSON.stringify(userId ?? null)};
+        var scopedPrefix = authenticatedUserId ? 'usr_store:u:' + authenticatedUserId + ':' : 'usr_store:guest:';
+        var accent = localStorage.getItem(scopedPrefix + 'personal_accent_color') || localStorage.getItem('personal_accent_color') || 'blue';
+        var fontSize = localStorage.getItem(scopedPrefix + 'personal_font_size') || localStorage.getItem('personal_font_size') || 'md';
+        var rounded = localStorage.getItem(scopedPrefix + 'personal_rounded_corners') || localStorage.getItem('personal_rounded_corners') || 'md';
+        var animations = localStorage.getItem(scopedPrefix + 'personal_animations') || localStorage.getItem('personal_animations') || 'on';
 
         var colors = {
           purple: { primary: '#a855f7', hover: '#9333ea' },

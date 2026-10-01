@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useContext } from 'react'
 import { Card, CardHeader, CardBody, CardFooter, Button, Skeleton, Select, Input, ConfirmDialog, Badge, SearchInput, PageHeader } from '@/design-system'
 import { 
   User, Palette, Calendar, Layout, Bell, RefreshCw, Lock, 
@@ -24,6 +24,8 @@ import {
 import { BackupService } from '@/lib/database/local/BackupService'
 import { useSearchParams } from 'next/navigation'
 import { OfflineDebugPanel } from './OfflineDebugPanel'
+import { getUserStorageItem, setUserStorageItem, removeUserStorageItem, purgeUserStorage } from '@/lib/storage/userStorage'
+import { CalendarDataContext } from './DashboardLayout'
 import { writeQueue } from '@/lib/store/write-queue'
 
 export interface UserProfileData {
@@ -52,6 +54,8 @@ const OWNER_ONLY_TABS = new Set([
 ])
 
 export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile = null }) => {
+  const calendarContext = useContext(CalendarDataContext)
+  const currentUserId = calendarContext?.currentUser?.id ?? null
   const searchParams = useSearchParams()
   const tabParam = searchParams?.get('tab') as 'profile' | 'appearance' | 'calendar' | 'dashboard' | 'notifications' | 'integrations' | 'security' | 'backup' | 'advanced' | 'leave' | 'admin' | 'billing' | null
 
@@ -98,42 +102,42 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
   const [importing, setImporting] = useState(false)
 
   // 1. Profile States
-  const [displayName, setDisplayName] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_display_name') || '' : '')
-  const [timezone, setTimezone] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_timezone') || 'Asia/Kolkata' : 'Asia/Kolkata')
-  const [country, setCountry] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_country') || 'India' : 'India')
-  const [dateFormat, setDateFormat] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_date_format') || 'YYYY-MM-DD' : 'YYYY-MM-DD')
-  const [timeFormat, setTimeFormat] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_time_format') || '24h' : '24h')
-  const [birthday, setBirthday] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_birthday') || '' : '')
+  const [displayName, setDisplayName] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_display_name') || '' : '')
+  const [timezone, setTimezone] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_timezone') || 'Asia/Kolkata' : 'Asia/Kolkata')
+  const [country, setCountry] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_country') || 'India' : 'India')
+  const [dateFormat, setDateFormat] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_date_format') || 'YYYY-MM-DD' : 'YYYY-MM-DD')
+  const [timeFormat, setTimeFormat] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_time_format') || '24h' : '24h')
+  const [birthday, setBirthday] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_birthday') || '' : '')
 
   // 2. Appearance States
-  const [accentColor, setAccentColor] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_accent_color') || 'blue' : 'blue')
-  const [fontSize, setFontSize] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_font_size') || 'md' : 'md')
-  const [roundedCorners, setRoundedCorners] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_rounded_corners') || 'md' : 'md')
-  const [animations, setAnimations] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_animations') || 'on' : 'on')
+  const [accentColor, setAccentColor] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_accent_color') || 'blue' : 'blue')
+  const [fontSize, setFontSize] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_font_size') || 'md' : 'md')
+  const [roundedCorners, setRoundedCorners] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_rounded_corners') || 'md' : 'md')
+  const [animations, setAnimations] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_animations') || 'on' : 'on')
 
   // 3. Calendar States
   const [defaultView, setDefaultView] = useState<'month' | 'week' | 'agenda'>(() => {
     if (typeof window !== 'undefined') {
-      const val = localStorage.getItem('calendar_default_view')
+      const val = getUserStorageItem(currentUserId, 'calendar_default_view')
       if (val === 'month' || val === 'week' || val === 'agenda') return val
     }
     return 'agenda'
   })
   const [startOfWeek, setStartOfWeek] = useState<'sunday' | 'monday'>(() => {
     if (typeof window !== 'undefined') {
-      const val = localStorage.getItem('calendar_start_of_week')
+      const val = getUserStorageItem(currentUserId, 'calendar_start_of_week')
       if (val === 'sunday' || val === 'monday') return val
     }
     return 'sunday'
   })
-  const [workingHoursStart, setWorkingHoursStart] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_working_hours_start') || '09:00' : '09:00')
-  const [workingHoursEnd, setWorkingHoursEnd] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_working_hours_end') || '18:00' : '18:00')
-  const [defaultTaskDuration, setDefaultTaskDuration] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_default_task_duration') || '30' : '30')
-  const [weeklyGoal, setWeeklyGoal] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_weekly_goal') || '27' : '27')
+  const [workingHoursStart, setWorkingHoursStart] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_working_hours_start') || '09:00' : '09:00')
+  const [workingHoursEnd, setWorkingHoursEnd] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_working_hours_end') || '18:00' : '18:00')
+  const [defaultTaskDuration, setDefaultTaskDuration] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_default_task_duration') || '30' : '30')
+  const [weeklyGoal, setWeeklyGoal] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_weekly_goal') || '27' : '27')
   const [enabledLeaveTypes, setEnabledLeaveTypes] = useState<string[]>(() => {
     const defaults = ['CASUAL', 'SICK', 'PTO', 'COMP_OFF']
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('personal_enabled_leave_types')
+      const saved = getUserStorageItem(currentUserId, 'personal_enabled_leave_types')
       if (saved) {
         try {
           return JSON.parse(saved)
@@ -154,7 +158,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
       recentDocuments: true,
     }
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('personal_dashboard_widgets')
+      const saved = getUserStorageItem(currentUserId, 'personal_dashboard_widgets')
       if (saved) {
         try {
           return { ...defaults, ...JSON.parse(saved) }
@@ -177,7 +181,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
       documents: true,
     }
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('personal_modules_visibility')
+      const saved = getUserStorageItem(currentUserId, 'personal_modules_visibility')
       if (saved) {
         try {
           return { ...defaults, ...JSON.parse(saved) }
@@ -195,16 +199,16 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
     }
     return true
   })
-  const [browserNotifications, setBrowserNotifications] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_browser_notifications') !== 'false' : true)
-  const [dailySummary, setDailySummary] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_daily_summary') === 'true' : false)
-  const [missedTaskAlerts, setMissedTaskAlerts] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_missed_task_alerts') !== 'false' : true)
+  const [browserNotifications, setBrowserNotifications] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_browser_notifications') !== 'false' : true)
+  const [dailySummary, setDailySummary] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_daily_summary') === 'true' : false)
+  const [missedTaskAlerts, setMissedTaskAlerts] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_missed_task_alerts') !== 'false' : true)
 
   // 7. Security States
-  const [sessionTimeout, setSessionTimeout] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_session_timeout') || '30' : '30')
+  const [sessionTimeout, setSessionTimeout] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_session_timeout') || '30' : '30')
 
   // 8. Advanced States
-  const [developerMode, setDeveloperMode] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_developer_mode') === 'true' : false)
-  const [experimentalFeatures, setExperimentalFeatures] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('personal_experimental_features') === 'true' : false)
+  const [developerMode, setDeveloperMode] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_developer_mode') === 'true' : false)
+  const [experimentalFeatures, setExperimentalFeatures] = useState(() => typeof window !== 'undefined' ? getUserStorageItem(currentUserId, 'personal_experimental_features') === 'true' : false)
 
   // 9. Admin Guest Permissions States
   const [guestPermissions, setGuestPermissions] = useState<Record<string, boolean>>({
@@ -288,24 +292,24 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
           const app = res.settings.appearance
           if (app.accent && !isLocalRevisionNewer('personal_accent_color')) {
             setAccentColor(app.accent)
-            localStorage.setItem('personal_accent_color', app.accent)
+            setUserStorageItem(currentUserId, 'personal_accent_color', app.accent)
           }
           if (app.fontSize && !isLocalRevisionNewer('personal_font_size')) {
             setFontSize(app.fontSize)
-            localStorage.setItem('personal_font_size', app.fontSize)
+            setUserStorageItem(currentUserId, 'personal_font_size', app.fontSize)
           }
           if (app.rounded && !isLocalRevisionNewer('personal_rounded_corners')) {
             setRoundedCorners(app.rounded)
-            localStorage.setItem('personal_rounded_corners', app.rounded)
+            setUserStorageItem(currentUserId, 'personal_rounded_corners', app.rounded)
           }
           if (app.animations && !isLocalRevisionNewer('personal_animations')) {
             setAnimations(app.animations)
-            localStorage.setItem('personal_animations', app.animations)
+            setUserStorageItem(currentUserId, 'personal_animations', app.animations)
           }
         }
         if (res.settings.weeklyGoal !== undefined && res.settings.weeklyGoal !== null && !isLocalRevisionNewer('personal_weekly_goal')) {
           setWeeklyGoal(String(res.settings.weeklyGoal))
-          localStorage.setItem('personal_weekly_goal', String(res.settings.weeklyGoal))
+          setUserStorageItem(currentUserId, 'personal_weekly_goal', String(res.settings.weeklyGoal))
         }
         if (res.settings.dashboard && !isLocalRevisionNewer('personal_dashboard_widgets')) {
           const cfg = res.settings.dashboard
@@ -315,7 +319,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
               for (const key of Object.keys(updated)) {
                 updated[key] = !cfg.hidden?.includes(key)
               }
-              localStorage.setItem('personal_dashboard_widgets', JSON.stringify(updated))
+              setUserStorageItem(currentUserId, 'personal_dashboard_widgets', JSON.stringify(updated))
               return updated
             })
           }
@@ -343,13 +347,13 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
 
     const handleSettingsChanged = () => {
       if (typeof window === 'undefined') return
-      const col = localStorage.getItem('personal_accent_color')
+      const col = getUserStorageItem(currentUserId, 'personal_accent_color')
       if (col) setAccentColor(prev => (col !== prev ? col : prev))
-      const fs = localStorage.getItem('personal_font_size')
+      const fs = getUserStorageItem(currentUserId, 'personal_font_size')
       if (fs) setFontSize(prev => (fs !== prev ? fs : prev))
-      const rc = localStorage.getItem('personal_rounded_corners')
+      const rc = getUserStorageItem(currentUserId, 'personal_rounded_corners')
       if (rc) setRoundedCorners(prev => (rc !== prev ? rc : prev))
-      const anim = localStorage.getItem('personal_animations')
+      const anim = getUserStorageItem(currentUserId, 'personal_animations')
       if (anim) setAnimations(prev => (anim !== prev ? anim : prev))
     }
 
@@ -430,7 +434,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
     recordLocalRevision('personal_dashboard_widgets')
     const updated = { ...widgetsVisibility, [widgetKey]: visible }
     setWidgetsVisibility(updated)
-    localStorage.setItem('personal_dashboard_widgets', JSON.stringify(updated))
+    setUserStorageItem(currentUserId, 'personal_dashboard_widgets', JSON.stringify(updated))
     window.dispatchEvent(new Event('personal_settings_changed'))
 
     // Synchronize to server authority (DASHBOARD module setting) via writeQueue
@@ -447,7 +451,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
   const saveModuleVisibility = (moduleKey: string, visible: boolean) => {
     const updated = { ...modulesVisibility, [moduleKey]: visible }
     setModulesVisibility(updated)
-    localStorage.setItem('personal_modules_visibility', JSON.stringify(updated))
+    setUserStorageItem(currentUserId, 'personal_modules_visibility', JSON.stringify(updated))
     window.dispatchEvent(new Event('personal_settings_changed'))
   }
 
@@ -607,7 +611,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
 
   const handleResetSettings = () => {
     if (confirm('Are you sure you want to reset all configurations to their default settings?')) {
-      localStorage.clear()
+      purgeUserStorage(currentUserId)
       window.location.reload()
     }
   }
@@ -970,7 +974,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
                             ? enabledLeaveTypes.filter(x => x !== item.key)
                             : [...enabledLeaveTypes, item.key]
                           setEnabledLeaveTypes(updated)
-                          localStorage.setItem('personal_enabled_leave_types', JSON.stringify(updated))
+                          setUserStorageItem(currentUserId, 'personal_enabled_leave_types', JSON.stringify(updated))
                           window.dispatchEvent(new Event('personal_settings_changed'))
                         }}
                         className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 cursor-pointer ${

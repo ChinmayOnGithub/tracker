@@ -40,6 +40,13 @@ if (typeof window === 'undefined') {
 }
 
 describe('Cross-Account Data Leakage Suite (#57)', () => {
+  it('migrates a legacy preference into the authenticated namespace without exposing it to another user', () => {
+    localStorage.setItem('personal_timezone', 'Asia/Kolkata')
+    expect(getUserStorageItem('user_alpha_123', 'personal_timezone')).toBe('Asia/Kolkata')
+    expect(getUserStorageItem('user_beta_456', 'personal_timezone')).toBeNull()
+    expect(localStorage.getItem('personal_timezone')).toBeNull()
+  })
+
   beforeEach(() => {
     mockStorage.clear()
     requestDeduplicator.clear()
