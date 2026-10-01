@@ -24,7 +24,7 @@ import {
 import { BackupService } from '@/lib/database/local/BackupService'
 import { useSearchParams } from 'next/navigation'
 import { OfflineDebugPanel } from './OfflineDebugPanel'
-import { getUserStorageItem, setUserStorageItem, removeUserStorageItem, purgeUserStorage } from '@/lib/storage/userStorage'
+import { getUserStorageItem, setUserStorageItem, purgeUserStorage } from '@/lib/storage/userStorage'
 import { CalendarDataContext } from './DashboardLayout'
 import { writeQueue } from '@/lib/store/write-queue'
 

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useContext } from 'react'
 import { Palette, Check } from 'lucide-react'
 import { Popover, PopoverTrigger, PopoverContent } from '@/design-system'
 import { CalendarDataContext } from './DashboardLayout'
-import { getUserStorageItem, setUserStorageItem } from '@/lib/storage/userStorage'
+import { getUserStorageItem } from '@/lib/storage/userStorage'
 
 const ACCENT_COLORS = [
   { id: 'blue', label: 'Blue', color: 'bg-blue-500' },

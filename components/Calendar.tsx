@@ -83,6 +83,7 @@ export const Calendar: React.FC<CalendarProps> = ({
     if (typeof window !== 'undefined') {
       const val = getUserStorageItem(userId, 'calendar_default_view')
       if (val === 'month' || val === 'week') {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setView(val)
       }
 

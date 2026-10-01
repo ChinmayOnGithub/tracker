@@ -209,7 +209,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     return `${h}h ${m}m ${s}s`
   }
 
-  const formatDecimalHours = (totalSec: number): string => `${(totalSec / 3600).toFixed(2)}h`
+  const _formatDecimalHours = (totalSec: number): string => `${(totalSec / 3600).toFixed(2)}h`
 
   const computeDurationSeconds = (inT: string, outT: string): number => {
     if (!inT || !outT) return 0
