@@ -114,15 +114,14 @@ async function verifyGoogleIdToken(idToken: string): Promise<Record<string, unkn
   }
 }
 
-import { getCanonicalOrigin } from '@/lib/url'
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
   const error = searchParams.get('error')
   const stateFromGoogle = searchParams.get('state')
 
-  const siteUrl = getCanonicalOrigin(request)
+  // Use the canonical public site URL that is registered with the Google OAuth client.
+  const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL).origin
 
   if (error || !code) {
     logger.error('OAuthCallback', 'OAuth error or missing code', { error, hasCode: !!code })
