@@ -385,7 +385,7 @@ export async function restoreWorkPresence(logId: string) {
       }
     }
 
-    await db.$transaction(async (tx) => {
+    const restoredLog = await db.$transaction(async (tx) => {
       if (deletedLog.workSessionId) {
         await tx.workSession.updateMany({
           where: {
@@ -412,10 +412,20 @@ export async function restoreWorkPresence(logId: string) {
       if (restored.count !== 1) {
         throw new Error('The work record changed before it could be restored.')
       }
+
+      const freshLog = await tx.activityLog.findUnique({
+        where: { id: deletedLog.id },
+      })
+
+      if (!freshLog) {
+        throw new Error('The restored work record could not be loaded.')
+      }
+
+      return freshLog
     })
 
     revalidatePath('/')
-    return { success: true, log: deletedLog }
+    return { success: true, log: restoredLog }
   } catch (error) {
     console.error('Failed to restore work presence:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
