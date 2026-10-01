@@ -121,9 +121,13 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   const [dashboardConfig, setDashboardConfig] = useState<DashboardConfig>(() =>
     migrateAndNormalizeDashboardConfig(initialDashboardConfig)
   )
-  const dashboardRevisionRef = useRef(
-    typeof initialDashboardConfig?.revision === 'number' ? initialDashboardConfig.revision : 0
-  )
+  const initialDashboardRevision =
+    initialDashboardConfig &&
+    'revision' in initialDashboardConfig &&
+    typeof initialDashboardConfig.revision === 'number'
+      ? initialDashboardConfig.revision
+      : 0
+  const dashboardRevisionRef = useRef(initialDashboardRevision)
 
   const [saveError, setSaveError] = useState(false)
   const [isEditingGrid, setIsEditingGrid] = useState(false)
