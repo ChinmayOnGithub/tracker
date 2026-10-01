@@ -4,6 +4,7 @@ import { db } from '@/lib/db'
 import { getLoggedUser } from '@/app/actions/auth'
 import { canAccess, getEffectiveGuestPermissions } from '@/lib/auth-guards'
 import { Prisma } from '@prisma/client'
+import { z } from 'zod'
 import { DashboardConfig, LegacyDashboardConfig } from '@/lib/dashboard/types'
 
 export async function getGuestPermissionsAction(): Promise<{
