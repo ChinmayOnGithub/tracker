@@ -89,10 +89,8 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
             })
             setCacheMetadata(dateCacheKey, Date.now(), false)
 
-            if (needsInitialFetch) {
-              setInitialLoadState('ready')
-              setInitialLoadError(null)
-            }
+            setInitialLoadState('ready')
+            setInitialLoadError(null)
 
             // P2: Speculative background prefetch for secondary domains after Today is hydrated
             const lastSecondaryFetched = stateRef.current.cacheMetadata.lastFetched['secondary_prefetch'] || 0
