@@ -53,6 +53,7 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [view, setView] = useState<'month' | 'week'>('month')
   const [settingsVer, setSettingsVer] = useState(0)
   const [refreshVer, setRefreshVer] = useState(0)
+  const [startOfWeekPref, setStartOfWeekPref] = useState<'monday' | 'sunday'>('sunday')
 
   // Current local time clock (ticking every 30s)
   const [currentTime, setCurrentTime] = useState(() => new Date())
@@ -78,12 +79,15 @@ export const Calendar: React.FC<CalendarProps> = ({
     if (typeof window !== 'undefined') {
       const val = localStorage.getItem('calendar_default_view')
       if (val === 'month' || val === 'week') {
-        setTimeout(() => setView(val), 0)
+        setView(val)
+      }
+
+      const weekStart = localStorage.getItem('calendar_start_of_week')
+      if (weekStart === 'monday') {
+        setStartOfWeekPref('monday')
       }
     }
   }, [])
-  
-  const startOfWeekPref = typeof window !== 'undefined' && localStorage.getItem('calendar_start_of_week') === 'monday' ? 'monday' : 'sunday'
   const userTimezone = typeof window !== 'undefined'
     ? localStorage.getItem('personal_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
     : 'UTC'
