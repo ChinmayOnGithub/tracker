@@ -56,6 +56,9 @@ export const Calendar: React.FC<CalendarProps> = ({
   const [refreshVer, setRefreshVer] = useState(0)
   const [startOfWeekPref, setStartOfWeekPref] = useState<'monday' | 'sunday'>('sunday')
 
+  const calendarContext = React.useContext(CalendarDataContext)
+  const userId = calendarContext?.currentUser?.id || null
+
   // Current local time clock (ticking every 30s)
   const [currentTime, setCurrentTime] = useState(() => new Date())
   useEffect(() => {
@@ -170,9 +173,6 @@ export const Calendar: React.FC<CalendarProps> = ({
       const d = new Date(startOfWeekDate); d.setDate(startOfWeekDate.getDate() + i); return d
     })
   }, [startOfWeekDate])
-
-  const calendarContext = React.useContext(CalendarDataContext)
-  const userId = calendarContext?.currentUser?.id || null
 
   // Sync state with date/view changes using cache-first background-revalidation strategy
   useEffect(() => {
