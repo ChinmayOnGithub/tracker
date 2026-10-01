@@ -135,6 +135,16 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     }
   }, [formState.sessionState])
 
+  // Calculate current elapsed seconds: accumulated duration + elapsed duration in current active segment
+  const currentElapsedSeconds = useMemo(() => {
+    if (formState.sessionState === 'running' && formState.currentSegmentStartedAt) {
+      const segmentStartMs = new Date(formState.currentSegmentStartedAt).getTime()
+      const segmentElapsedSec = Math.max(0, Math.floor((nowTimestamp - segmentStartMs) / 1000))
+      return formState.accumulatedSeconds + segmentElapsedSec
+    }
+    return formState.accumulatedSeconds
+  }, [formState.sessionState, formState.currentSegmentStartedAt, formState.accumulatedSeconds, nowTimestamp])
+
   // Stats calculation
   const weeklyWorkLogs = useMemo(() => {
     return workTemplateId
@@ -179,16 +189,6 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     const mm = String(now.getMinutes()).padStart(2, '0')
     return `${hh}:${mm}`
   }
-
-  // Calculate current elapsed seconds: accumulated duration + elapsed duration in current active segment
-  const currentElapsedSeconds = useMemo(() => {
-    if (formState.sessionState === 'running' && formState.currentSegmentStartedAt) {
-      const segmentStartMs = new Date(formState.currentSegmentStartedAt).getTime()
-      const segmentElapsedSec = Math.max(0, Math.floor((nowTimestamp - segmentStartMs) / 1000))
-      return formState.accumulatedSeconds + segmentElapsedSec
-    }
-    return formState.accumulatedSeconds
-  }, [formState.sessionState, formState.currentSegmentStartedAt, formState.accumulatedSeconds, nowTimestamp])
 
   const formatElapsedDisplay = (totalSec: number): string => {
     const h = Math.floor(totalSec / 3600)
