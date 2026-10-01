@@ -14,6 +14,7 @@ interface WorkHoursWidgetProps {
   logs: ActivityLog[]
   weeklyGoal: number
   logWorkPresenceAction: (data: unknown) => Promise<unknown>
+  restoreWorkPresenceAction: (logId: string) => Promise<unknown>
   gridW?: number
   gridH?: number
 }
@@ -96,6 +97,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   logs,
   weeklyGoal,
   logWorkPresenceAction,
+  restoreWorkPresenceAction,
   gridW: _gridW = 7,
   gridH = 5,
 }) => {
@@ -114,6 +116,9 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   const [isLoggingWork, setIsLoggingWork] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now())
+  const [clearedLogId, setClearedLogId] = useState<string | null>(null)
+  const [lastClearedState, setLastClearedState] = useState<WorkFormState | null>(null)
+  const [showClearUndo, setShowClearUndo] = useState(false)
 
   // Timer ticking for live display when RUNNING
   useEffect(() => {
@@ -183,21 +188,26 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     return parseFloat((diffMins / 60).toFixed(1))
   }
 
-  const handleSaveWorkPresence = useCallback(async (stateToSave: WorkFormState) => {
-    if (!workTemplateId || isLoggingWork) return
+  const handleSaveWorkPresence = useCallback(async (stateToSave: WorkFormState): Promise<boolean> => {
+    if (!workTemplateId || isLoggingWork) return false
     setValidationError(null)
 
     if (stateToSave.status !== 'cleared') {
       if (stateToSave.mode === 'manual') {
         if (isNaN(stateToSave.manualHours) || stateToSave.manualHours < 0 || stateToSave.manualHours > 24) {
           setValidationError('Please enter a valid number of hours between 0 and 24.')
-          return
+          return false
         }
       }
     }
 
     setIsLoggingWork(true)
     try {
+      if (stateToSave.status !== 'cleared') {
+        setShowClearUndo(false)
+        setClearedLogId(null)
+        setLastClearedState(null)
+      }
       let computedHours = 0
       if (stateToSave.status !== 'cleared') {
         if (stateToSave.mode === 'manual') {
@@ -209,7 +219,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
         }
       }
 
-      await logWorkPresenceAction({
+      const result = await logWorkPresenceAction({
         templateId: workTemplateId,
         date: todayStr,
         status: stateToSave.status,
@@ -222,10 +232,17 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
         accumulatedSeconds: stateToSave.accumulatedSeconds,
         currentSegmentStartedAt: stateToSave.currentSegmentStartedAt,
       })
+
+      if (typeof result === 'object' && result !== null && 'success' in result && result.success === false) {
+        throw new Error('Failed to save presence record.')
+      }
+
       setIsEditingTimes(false)
+      return true
     } catch (err) {
       console.error('Failed to log work presence:', err)
-      setValidationError('Failed to save presence records.')
+      setValidationError(err instanceof Error ? err.message : 'Failed to save presence records.')
+      return false
     } finally {
       setIsLoggingWork(false)
     }
@@ -323,6 +340,13 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   }
 
   const handleClearPresence = async () => {
+    if (formState.status === 'cleared' || isLoggingWork) return
+
+    const confirmed = window.confirm(
+      "Clear today's work record? This will remove the office/WFH entry, including your recorded in-time, out-time, and hours from the tracker."
+    )
+    if (!confirmed) return
+
     const updated: WorkFormState = {
       status: 'cleared',
       mode: 'time',
@@ -333,8 +357,42 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       outTime: '',
       manualHours: 8.0,
     }
-    setFormState(updated)
-    await handleSaveWorkPresence(updated)
+
+    const previousState = formState
+    const saved = await handleSaveWorkPresence(updated)
+    if (saved) {
+      setFormState(updated)
+      setLastClearedState(previousState)
+      setClearedLogId(todayWorkLog?.id || null)
+      setShowClearUndo(!!todayWorkLog?.id)
+    }
+  }
+
+  const handleUndoClear = async () => {
+    if (!clearedLogId || !lastClearedState || isLoggingWork) return
+
+    setValidationError(null)
+    setIsLoggingWork(true)
+    try {
+      const result = await restoreWorkPresenceAction(clearedLogId)
+      if (typeof result === 'object' && result !== null && 'success' in result && result.success === false) {
+        throw new Error(
+          'error' in result && typeof result.error === 'string'
+            ? result.error
+            : 'Failed to restore the cleared work record.'
+        )
+      }
+
+      setFormState(lastClearedState)
+      setShowClearUndo(false)
+      setClearedLogId(null)
+      setLastClearedState(null)
+    } catch (err) {
+      console.error('Failed to undo cleared work record:', err)
+      setValidationError(err instanceof Error ? err.message : 'Failed to restore the cleared work record.')
+    } finally {
+      setIsLoggingWork(false)
+    }
   }
 
   const activeModeLabel = formState.status === 'office' ? 'Office' : 'WFH'
@@ -350,6 +408,26 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       </CardHeader>
 
       <CardBody className={isCompactHeight ? 'space-y-2 py-1' : 'space-y-3'}>
+        {showClearUndo && lastClearedState && (
+          <div
+            role="status"
+            className="flex items-center justify-between gap-2 rounded-[var(--radius-lg)] border border-amber-500/30 bg-amber-50/60 px-3 py-2 dark:bg-amber-950/20"
+          >
+            <span className="text-[10px] font-semibold text-[var(--color-text-muted)]">
+              Work record cleared. You can restore the previous entry.
+            </span>
+            <Button
+              type="button"
+              onClick={() => void handleUndoClear()}
+              isLoading={isLoggingWork}
+              variant="outline"
+              size="sm"
+              className="shrink-0 text-xs font-bold"
+            >
+              Undo
+            </Button>
+          </div>
+        )}
         {/* RUNNING STATE */}
         {formState.sessionState === 'running' && !isEditingTimes && (
           <div className={isCompactHeight ? 'space-y-2' : 'space-y-3'}>
@@ -487,7 +565,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                 variant="outline"
                 size="sm"
                 onClick={handleClearPresence}
-                title="Clear today's work record"
+                title="Clear today's work record (confirmation required)"
                 className="text-rose-500 hover:text-rose-600"
               >
                 Clear
@@ -507,7 +585,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                   type="button"
                   onClick={() => {
                     if (status === 'cleared') {
-                      handleClearPresence()
+                      void handleClearPresence()
                     } else {
                       setFormState(prev => ({ ...prev, status }))
                     }

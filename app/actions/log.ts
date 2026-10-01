@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { revalidatePath } from 'next/cache'
 
 
-import { requireOwnership } from '@/lib/auth-guards'
+import { requireAuth, requireOwnership } from '@/lib/auth-guards'
 import { ActivityService } from '@/lib/services/ActivityService'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import { SyncedActivityService } from '@/lib/services/SyncedActivityService'
@@ -347,3 +347,82 @@ export async function logWorkPresence(data: {
   }
 }
 
+
+
+/**
+ * Restores a previously cleared Work Tracker record.
+ * The restore is conflict-safe: it will not overwrite a newer active
+ * record created for the same template/date after the clear.
+ */
+export async function restoreWorkPresence(logId: string) {
+  try {
+    const user = await requireAuth()
+
+    const deletedLog = await db.activityLog.findFirst({
+      where: {
+        id: logId,
+        userId: user.id,
+        deletedAt: { not: null },
+        activity: { name: 'Work Tracker', userId: user.id },
+      },
+    })
+
+    if (!deletedLog) {
+      return { success: false, error: 'The cleared work record could not be found.' }
+    }
+
+    const activeRecord = await db.activityLog.findFirst({
+      where: {
+        activityId: deletedLog.activityId,
+        logDate: deletedLog.logDate,
+        userId: user.id,
+        deletedAt: null,
+        id: { not: deletedLog.id },
+      },
+      select: { id: true },
+    })
+
+    if (activeRecord) {
+      return {
+        success: false,
+        error: 'A newer work record already exists for this date. Undo was not applied.',
+      }
+    }
+
+    await db.$transaction(async (tx) => {
+      if (deletedLog.workSessionId) {
+        await tx.workSession.updateMany({
+          where: {
+            id: deletedLog.workSessionId,
+            userId: user.id,
+            deletedAt: { not: null },
+          },
+          data: { deletedAt: null },
+        })
+      }
+
+      const restored = await tx.activityLog.updateMany({
+        where: {
+          id: deletedLog.id,
+          userId: user.id,
+          deletedAt: { not: null },
+        },
+        data: {
+          deletedAt: null,
+          version: { increment: 1 },
+        },
+      })
+
+      if (restored.count !== 1) {
+        throw new Error('The work record changed before it could be restored.')
+      }
+    })
+
+    revalidatePath('/')
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to restore work presence:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return { success: false, error: message }
+  }
+}
