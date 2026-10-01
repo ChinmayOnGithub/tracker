@@ -35,6 +35,29 @@ class WriteQueue {
 
   public add(item: Omit<QueueItem, 'retries'>) {
     const queueItem: QueueItem = { ...item, retries: 0 };
+  /**
+   * Queue a write and wait until it has actually succeeded or permanently failed.
+   * This is used by destructive/reversible flows that must not continue before
+   * the server-side mutation has completed.
+   */
+  public addAndWait(item: Omit<QueueItem, 'retries'>): Promise<{ success: boolean; error?: string; [key: string]: unknown }> {
+    return new Promise((resolve, reject) => {
+      this.add({
+        ...item,
+        run: async () => {
+          const result = await item.run()
+          if (result.success) resolve(result)
+          return result
+        },
+        rollback: () => {
+          item.rollback()
+          reject(new Error(`Write ${item.id} failed after retries.`))
+        },
+      })
+    })
+  }
+
+
 
     // Deduplicate: If an item with the same dedupKey is in the queue, remove the older one.
     // If it is currently running, we let it run, but the new one will run right after.
