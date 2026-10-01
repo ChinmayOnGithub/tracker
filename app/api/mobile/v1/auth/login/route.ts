@@ -2,10 +2,16 @@ import { apiSuccess, apiError } from '@/lib/api-response'
 import { AuthService } from '@/lib/services/AuthService'
 import { z } from 'zod'
 
-const loginSchema = z.object({
-  username: z.string().min(1, 'Username is required'),
-  pin: z.string().regex(/^\d{4}$/, 'PIN must be exactly 4 digits'),
-})
+const loginSchema = z
+  .object({
+    username: z.string().min(1, 'Username is required'),
+    password: z.string().min(1, 'Password is required').optional(),
+    pin: z.string().min(1, 'PIN is required').optional(),
+  })
+  .refine((data) => Boolean(data.password || data.pin), {
+    message: 'Password or PIN is required',
+    path: ['password'],
+  })
 
 export async function POST(request: Request) {
   try {
@@ -25,7 +31,8 @@ export async function POST(request: Request) {
       )
     }
 
-    const result = await AuthService.verifyCredentials(parsed.data.username, parsed.data.pin)
+    const secret = (parsed.data.password || parsed.data.pin || '').trim()
+    const result = await AuthService.login(parsed.data.username, secret)
     if (!result.success) {
       return apiError('UNAUTHENTICATED', result.error, 401)
     }
