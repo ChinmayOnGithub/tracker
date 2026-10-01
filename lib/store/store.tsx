@@ -167,6 +167,7 @@ interface StoreContextType {
   deleteActivityTemplatesAction: (ids: string[]) => Promise<void>
   reorderActivityTemplatesAction: (orderedIds: string[]) => Promise<void>
   logWorkPresenceAction: (fields: any) => Promise<unknown>
+  restoreWorkPresenceAction: (logId: string) => Promise<unknown>
   
   // Note Actions
   upsertNoteAction: (dateStr: string, content: string, title?: string | null, noteId?: string) => Promise<void>
@@ -1178,6 +1179,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
     })
   }
 
+  const restoreWorkPresenceAction = async (logId: string) => {
+    const { restoreWorkPresence } = await import('@/app/actions/log')
+    const result = await restoreWorkPresence(logId)
+
+    if (result.success && result.log) {
+      const restoredLog = {
+        ...result.log,
+        date: result.log.logDate.toISOString().split('T')[0],
+      }
+
+      setState(prev => {
+        const existingIndex = prev.logs.findIndex(log => log.id === restoredLog.id)
+        if (existingIndex === -1) {
+          return { ...prev, logs: [...prev.logs, restoredLog] }
+        }
+
+        const logs = [...prev.logs]
+        logs[existingIndex] = restoredLog
+        return { ...prev, logs }
+      })
+    }
+
+    return result
+  }
+
   const upsertNoteAction = async (dateStr: string, content: string, title?: string | null, noteId?: string) => {
     const previousNotes = [...state.notes]
     const finalId = noteId || `temp-note-${Date.now()}`
@@ -1797,6 +1823,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
       deleteActivityTemplatesAction,
       reorderActivityTemplatesAction,
       logWorkPresenceAction,
+      restoreWorkPresenceAction,
       upsertNoteAction,
       deleteNoteAction,
       updateLeaveAllowanceAction,
