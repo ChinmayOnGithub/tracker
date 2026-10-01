@@ -140,9 +140,6 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
         }
       }
       revalidate()
-    } else if (active && hasFetchedCurrentDate) {
-      setInitialLoadState('ready')
-      setInitialLoadError(null)
     }
 
     return () => {
@@ -192,7 +189,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     )
   }
 
-  if (initialLoadState === 'loading' || !hasFetchedCurrentDate) {
+  if (!hasFetchedCurrentDate || initialLoadState === 'loading' && !hasFetchedCurrentDate) {
     return (
       <div
         className="p-8 space-y-6 max-w-5xl mx-auto"

@@ -66,6 +66,21 @@ export async function saveDashboardConfigAction(config: { order?: string[]; hidd
       return { success: false, error: 'Unauthorized' }
     }
 
+    const existing = await db.userSetting.findUnique({
+      where: {
+        userId_module: {
+          userId: loggedUser.id,
+          module: 'DASHBOARD',
+        },
+      },
+    })
+
+    const existingConfig = (existing?.config as Record<string, unknown> | null) || {}
+    const mergedConfig = {
+      ...existingConfig,
+      ...config,
+    }
+
     await db.userSetting.upsert({
       where: {
         userId_module: {
@@ -74,12 +89,12 @@ export async function saveDashboardConfigAction(config: { order?: string[]; hidd
         },
       },
       update: {
-        config: config as unknown as Prisma.InputJsonValue,
+        config: mergedConfig as unknown as Prisma.InputJsonValue,
       },
       create: {
         userId: loggedUser.id,
         module: 'DASHBOARD',
-        config: config as unknown as Prisma.InputJsonValue,
+        config: mergedConfig as unknown as Prisma.InputJsonValue,
       },
     })
 

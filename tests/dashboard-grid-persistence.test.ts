@@ -59,6 +59,37 @@ describe('Dashboard Grid Persistence & Account Isolation Tests (Issue #14 & #17)
     expect(getRes.settings?.dashboard?.items?.length).toBe(3)
   })
 
+  it('merges partial visibility updates without destroying the saved layout', async () => {
+    mock.module('@/app/actions/auth', () => ({
+      getLoggedUser: () => Promise.resolve({ id: userA, username: 'alice', accessLevel: 'OWNER' }),
+    }))
+
+    db.userSetting.findUnique = mock(() => Promise.resolve({
+      id: 'dash-alice',
+      userId: userA,
+      module: 'DASHBOARD',
+      config: {
+        version: 2,
+        items: [{ id: 'tasks', x: 0, y: 0, w: 13, h: 8 }],
+        hidden: ['gfgPOTD'],
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })) as unknown as typeof db.userSetting.findUnique
+
+    let persistedConfig: unknown = null
+    db.userSetting.upsert = mock((args?: { update?: { config?: Prisma.InputJsonValue } }) => {
+      persistedConfig = args?.update?.config
+      return Promise.resolve({} as UserSetting)
+    }) as unknown as typeof db.userSetting.upsert
+
+    const saveRes = await saveDashboardConfigAction({ hidden: ['recentDocuments', 'gfgPOTD'] })
+    expect(saveRes.success).toBe(true)
+    expect((persistedConfig as DashboardConfig).version).toBe(2)
+    expect((persistedConfig as DashboardConfig).items).toHaveLength(1)
+    expect((persistedConfig as DashboardConfig).hidden).toEqual(['recentDocuments', 'gfgPOTD'])
+  })
+
   it('guarantees account isolation: User A settings do not leak to User B', async () => {
     // 1. User B logs in
     mock.module('@/app/actions/auth', () => ({

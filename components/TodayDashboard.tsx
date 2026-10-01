@@ -115,17 +115,12 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     return () => clearInterval(timer)
   }, [])
 
-  const [prevInitial, setPrevInitial] = useState(initialDashboardConfig)
+  // The server-provided dashboard configuration is the initial source of truth.
+  // Keeping it in the initial state avoids an effect that can overwrite local
+  // visibility changes during parent rerenders or Fast Refresh.
   const [dashboardConfig, setDashboardConfig] = useState<DashboardConfig>(() =>
     migrateAndNormalizeDashboardConfig(initialDashboardConfig)
   )
-
-  if (initialDashboardConfig !== prevInitial) {
-    setPrevInitial(initialDashboardConfig)
-    if (initialDashboardConfig) {
-      setDashboardConfig(migrateAndNormalizeDashboardConfig(initialDashboardConfig))
-    }
-  }
 
   const [saveError, setSaveError] = useState(false)
   const [isEditingGrid, setIsEditingGrid] = useState(false)
