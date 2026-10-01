@@ -281,6 +281,45 @@ export async function logWorkPresence(data: {
 
       // Ensure a linked WorkSession exists and is synchronized
       let wsId = data.workSessionId || existing?.workSessionId
+
+      if (wsId) {
+        const linkedSession = await db.workSession.findFirst({
+          where: {
+            id: wsId,
+            userId: user.id,
+            date: data.date,
+            deletedAt: null,
+          },
+          include: {
+            activityLog: {
+              select: {
+                activityId: true,
+                userId: true,
+                deletedAt: true,
+              },
+            },
+          },
+        })
+
+        if (!linkedSession) {
+          throw new Error('Work session not found or unauthorized.')
+        }
+
+        // A supplied session must either already belong to this Work Tracker
+        // log or be unlinked and explicitly reconciled by the server. Reject
+        // unrelated active sessions rather than trusting a stale client ID.
+        if (
+          linkedSession.activityLog &&
+          (
+            linkedSession.activityLog.activityId !== data.templateId ||
+            linkedSession.activityLog.userId !== user.id ||
+            linkedSession.activityLog.deletedAt !== null
+          )
+        ) {
+          throw new Error('Invalid work session for this Work Tracker record.')
+        }
+      }
+
       if (!wsId) {
         const ws = await db.workSession.create({
           data: {
