@@ -115,23 +115,12 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
     return () => clearInterval(timer)
   }, [])
 
+  // The server-provided dashboard configuration is the initial source of truth.
+  // Keeping it in the initial state avoids an effect that can overwrite local
+  // visibility changes during parent rerenders or Fast Refresh.
   const [dashboardConfig, setDashboardConfig] = useState<DashboardConfig>(() =>
     migrateAndNormalizeDashboardConfig(initialDashboardConfig)
   )
-  const appliedInitialConfigKeyRef = useRef<string | null>(null)
-  const initialConfigKey = JSON.stringify(initialDashboardConfig ?? null)
-
-  useEffect(() => {
-    // Server-provided dashboard configuration is authoritative on a new mount.
-    // Compare by value rather than object identity so parent rerenders/Fast Refresh
-    // cannot reset local changes back to the default layout.
-    if (appliedInitialConfigKeyRef.current === initialConfigKey) return
-    appliedInitialConfigKeyRef.current = initialConfigKey
-
-    if (initialDashboardConfig) {
-      setDashboardConfig(migrateAndNormalizeDashboardConfig(initialDashboardConfig))
-    }
-  }, [initialConfigKey, initialDashboardConfig])
 
   const [saveError, setSaveError] = useState(false)
   const [isEditingGrid, setIsEditingGrid] = useState(false)
