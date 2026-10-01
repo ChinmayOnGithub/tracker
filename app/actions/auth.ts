@@ -14,7 +14,7 @@ import { rateLimiter, getClientIp } from '@/lib/services/RateLimiter'
 
 const LOGIN_SECURITY_MODULE = 'LOGIN_SECURITY'
 const HUMAN_VERIFIED_COOKIE = 'tracker_human_verified'
-export const HUMAN_CHALLENGE_COOKIE = 'tracker_human_challenge'
+const HUMAN_CHALLENGE_COOKIE = 'tracker_human_challenge'
 const _HUMAN_CHALLENGE_MAX_AGE_MS = 10 * 60 * 1000
 
 const CLOUDFLARE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'

@@ -6,6 +6,7 @@ import { env } from '@/lib/env'
 import { COOKIES, GOOGLE_OAUTH } from '@/lib/constants'
 import { logger } from '@/lib/logger'
 import { OnboardingService } from '@/lib/services/OnboardingService'
+import { getCanonicalOrigin } from '@/lib/url'
 import crypto from 'crypto'
 
 interface GoogleJWK {
@@ -121,7 +122,7 @@ export async function GET(request: Request) {
   const stateFromGoogle = searchParams.get('state')
 
   // Use the canonical public site URL that is registered with the Google OAuth client.
-  const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL).origin
+  const siteUrl = getCanonicalOrigin(request)
 
   if (error || !code) {
     logger.error('OAuthCallback', 'OAuth error or missing code', { error, hasCode: !!code })
@@ -269,17 +270,22 @@ export async function GET(request: Request) {
     const isMobile = cookieStore.get(COOKIES.AUTH_SOURCE)?.value === 'mobile'
     const sessionToken = signSession(user.id, user.username, user.sessionVersion)
 
-    cookieStore.set(COOKIES.SESSION_TOKEN, sessionToken, {
+    const sessionCookieOpts = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'lax' as const,
       maxAge: 30 * 24 * 60 * 60,
       path: '/'
-    })
+    }
+
+    cookieStore.set(COOKIES.SESSION_TOKEN, sessionToken, sessionCookieOpts)
 
     if (isMobile) {
       cookieStore.delete(COOKIES.AUTH_SOURCE)
-      return NextResponse.redirect(`tracker://auth-callback?token=${sessionToken}&username=${encodeURIComponent(user.username)}`)
+      const mobileRedirect = NextResponse.redirect(`tracker://auth-callback?token=${sessionToken}&username=${encodeURIComponent(user.username)}`)
+      mobileRedirect.cookies.set(COOKIES.SESSION_TOKEN, sessionToken, sessionCookieOpts)
+      mobileRedirect.cookies.delete(COOKIES.AUTH_SOURCE)
+      return mobileRedirect
     }
 
     logger.info('OAuthCallback', 'Google authentication completed', {
@@ -289,7 +295,11 @@ export async function GET(request: Request) {
     })
 
     const onboarding = await OnboardingService.getState(user.id)
-    return NextResponse.redirect(onboarding?.status !== 'COMPLETED' ? `${siteUrl}/onboarding` : siteUrl)
+    const targetUrl = onboarding?.status !== 'COMPLETED' ? `${siteUrl}/onboarding` : siteUrl
+    const response = NextResponse.redirect(targetUrl)
+    response.cookies.set(COOKIES.SESSION_TOKEN, sessionToken, sessionCookieOpts)
+
+    return response
   } catch (err) {
     logger.error('OAuthCallback', 'Unhandled exception in OAuth callback', err)
     return NextResponse.redirect(`${siteUrl}/?error=google-callback-exception`)

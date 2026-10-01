@@ -94,7 +94,7 @@ export async function logWeight(date: string, weight: number, notes?: string | n
   }
 }
 
-export const MAX_WEIGHT_HISTORY_DAYS = 730
+const MAX_WEIGHT_HISTORY_DAYS = 730
  
 /**
  * Fetch the last N weight records for the current user, newest first.
