@@ -24,7 +24,7 @@ import {
 import { BackupService } from '@/lib/database/local/BackupService'
 import { useSearchParams } from 'next/navigation'
 import { OfflineDebugPanel } from './OfflineDebugPanel'
-import { getUserStorageItem, setUserStorageItem, removeUserStorageItem } from '@/lib/storage/userStorage'
+import { getUserStorageItem, setUserStorageItem, removeUserStorageItem, purgeUserStorage } from '@/lib/storage/userStorage'
 import { CalendarDataContext } from './DashboardLayout'
 import { getUserStorageItem, setUserStorageItem, removeUserStorageItem } from '@/lib/storage/userStorage'
 import { CalendarDataContext } from './DashboardLayout'
@@ -613,7 +613,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
 
   const handleResetSettings = () => {
     if (confirm('Are you sure you want to reset all configurations to their default settings?')) {
-      localStorage.clear()
+      purgeUserStorage(currentUserId)
       window.location.reload()
     }
   }
