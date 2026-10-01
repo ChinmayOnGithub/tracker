@@ -1,8 +1,10 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useContext } from 'react'
 import { Palette, Check } from 'lucide-react'
 import { Popover, PopoverTrigger, PopoverContent } from '@/design-system'
+import { CalendarDataContext } from './DashboardLayout'
+import { getUserStorageItem, setUserStorageItem } from '@/lib/storage/userStorage'
 
 const ACCENT_COLORS = [
   { id: 'blue', label: 'Blue', color: 'bg-blue-500' },
@@ -29,30 +31,32 @@ const CORNER_RADII = [
 ] as const
 
 export const QuickAppearancePopover: React.FC<{ className?: string }> = ({ className = '' }) => {
+  const calendarContext = useContext(CalendarDataContext)
+  const currentUserId = calendarContext?.currentUser?.id ?? null
   const [accent, setAccent] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('personal_accent_color') || 'blue'
+      return getUserStorageItem(currentUserId, 'personal_accent_color') || 'blue'
     }
     return 'blue'
   })
   const [fontSize, setFontSize] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('personal_font_size') || 'md'
+      return getUserStorageItem(currentUserId, 'personal_font_size') || 'md'
     }
     return 'md'
   })
   const [rounded, setRounded] = useState(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('personal_rounded_corners') || 'md'
+      return getUserStorageItem(currentUserId, 'personal_rounded_corners') || 'md'
     }
     return 'md'
   })
 
   useEffect(() => {
     const handleUpdate = () => {
-      setAccent(localStorage.getItem('personal_accent_color') || 'blue')
-      setFontSize(localStorage.getItem('personal_font_size') || 'md')
-      setRounded(localStorage.getItem('personal_rounded_corners') || 'md')
+      setAccent(getUserStorageItem(currentUserId, 'personal_accent_color') || 'blue')
+      setFontSize(getUserStorageItem(currentUserId, 'personal_font_size') || 'md')
+      setRounded(getUserStorageItem(currentUserId, 'personal_rounded_corners') || 'md')
     }
 
     window.addEventListener('personal_settings_changed', handleUpdate)
