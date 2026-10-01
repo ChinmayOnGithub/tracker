@@ -184,14 +184,14 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   }
 
   const handleSaveWorkPresence = useCallback(async (stateToSave: WorkFormState): Promise<boolean> => {
-    if (!workTemplateId || isLoggingWork) return
+    if (!workTemplateId || isLoggingWork) return false
     setValidationError(null)
 
     if (stateToSave.status !== 'cleared') {
       if (stateToSave.mode === 'manual') {
         if (isNaN(stateToSave.manualHours) || stateToSave.manualHours < 0 || stateToSave.manualHours > 24) {
           setValidationError('Please enter a valid number of hours between 0 and 24.')
-          return
+          return false
         }
       }
     }
