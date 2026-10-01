@@ -19,6 +19,7 @@ const dashboardConfigUpdateSchema = z.object({
     h: z.number().int().min(1).max(100),
   })).max(100).optional(),
   version: z.number().int().nonnegative().optional(),
+  revision: z.number().int().nonnegative().optional(),
 }).superRefine((config, ctx) => {
   const seen = new Set<string>()
   for (const [index, item] of (config.items ?? []).entries()) {
@@ -96,7 +97,13 @@ export async function saveGuestPermissionsAction(permissions: Record<string, boo
   }
 }
 
-export async function saveDashboardConfigAction(config: { order?: string[]; hidden?: string[]; items?: unknown[]; version?: number }): Promise<{ success: boolean; error?: string }> {
+export async function saveDashboardConfigAction(config: {
+  order?: string[]
+  hidden?: string[]
+  items?: unknown[]
+  version?: number
+  revision?: number
+}): Promise<{ success: boolean; error?: string; revision?: number }> {
   const parsed = dashboardConfigUpdateSchema.safeParse(config)
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0]?.message || 'Invalid dashboard configuration.' }
@@ -104,35 +111,33 @@ export async function saveDashboardConfigAction(config: { order?: string[]; hidd
 
   try {
     const loggedUser = await getLoggedUser()
-    if (!loggedUser) {
-      return { success: false, error: 'Unauthorized' }
-    }
+    if (!loggedUser) return { success: false, error: 'Unauthorized' }
 
     const existing = await db.userSetting.findUnique({
-      where: {
-        userId_module: {
-          userId: loggedUser.id,
-          module: 'DASHBOARD',
-        },
-      },
+      where: { userId_module: { userId: loggedUser.id, module: 'DASHBOARD' } },
     })
 
     const existingConfig = (existing?.config as Record<string, unknown> | null) || {}
-    const mergedConfig = {
-      ...existingConfig,
-      ...config,
+    const currentRevision = typeof existingConfig.revision === 'number' && Number.isInteger(existingConfig.revision)
+      ? existingConfig.revision
+      : 0
+    const expectedRevision = config.revision ?? currentRevision
+
+    if (expectedRevision !== currentRevision) {
+      return {
+        success: false,
+        error: 'Dashboard changed in another session. Reload before saving your changes.',
+        revision: currentRevision,
+      }
     }
 
+    const nextRevision = currentRevision + 1
+    const { revision: _ignoredRevision, ...configWithoutRevision } = config
+    const mergedConfig = { ...existingConfig, ...configWithoutRevision, revision: nextRevision }
+
     await db.userSetting.upsert({
-      where: {
-        userId_module: {
-          userId: loggedUser.id,
-          module: 'DASHBOARD',
-        },
-      },
-      update: {
-        config: mergedConfig as unknown as Prisma.InputJsonValue,
-      },
+      where: { userId_module: { userId: loggedUser.id, module: 'DASHBOARD' } },
+      update: { config: mergedConfig as unknown as Prisma.InputJsonValue },
       create: {
         userId: loggedUser.id,
         module: 'DASHBOARD',
@@ -140,13 +145,12 @@ export async function saveDashboardConfigAction(config: { order?: string[]; hidd
       },
     })
 
-    return { success: true }
+    return { success: true, revision: nextRevision }
   } catch (error) {
     console.error('Failed to save dashboard config:', error)
     return { success: false, error: 'Database error while saving config.' }
   }
 }
-
 export async function getUserSettingsAction(): Promise<{
   success: boolean
   settings?: {
