@@ -121,6 +121,9 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   const [dashboardConfig, setDashboardConfig] = useState<DashboardConfig>(() =>
     migrateAndNormalizeDashboardConfig(initialDashboardConfig)
   )
+  const dashboardRevisionRef = useRef(
+    typeof initialDashboardConfig?.revision === 'number' ? initialDashboardConfig.revision : 0
+  )
 
   const [saveError, setSaveError] = useState(false)
   const [isEditingGrid, setIsEditingGrid] = useState(false)
@@ -142,12 +145,16 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
     saveTimeoutRef.current = setTimeout(async () => {
       try {
-        const res = await saveDashboardConfigAction(dashboardConfig)
+        const res = await saveDashboardConfigAction({
+          ...dashboardConfig,
+          revision: dashboardRevisionRef.current,
+        })
         if (!res.success) {
           setSaveError(true)
-        } else {
-          setSaveError(false)
+          return
         }
+        dashboardRevisionRef.current = res.revision ?? dashboardRevisionRef.current + 1
+        setSaveError(false)
       } catch (err) {
         console.error('[TodayDashboard] Exception saving dashboard config:', err)
         setSaveError(true)
