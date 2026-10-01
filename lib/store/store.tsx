@@ -166,7 +166,7 @@ interface StoreContextType {
   deleteActivityTemplateAction: (id: string) => Promise<void>
   deleteActivityTemplatesAction: (ids: string[]) => Promise<void>
   reorderActivityTemplatesAction: (orderedIds: string[]) => Promise<void>
-  logWorkPresenceAction: (fields: any) => Promise<void>
+  logWorkPresenceAction: (fields: any) => Promise<unknown>
   
   // Note Actions
   upsertNoteAction: (dateStr: string, content: string, title?: string | null, noteId?: string) => Promise<void>
