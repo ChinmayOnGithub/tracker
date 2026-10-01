@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { Briefcase, Clock, Play, Square, Pencil, Pause, RotateCcw } from 'lucide-react'
-import { Card, CardHeader, CardBody, Button, Input } from '@/design-system'
+import { Card, CardHeader, CardBody, Button, Input, ConfirmDialog } from '@/design-system'
 import { ActivityLog } from '@/types'
 import { createLocalDateTime } from '@/lib/dateUtils'
 
@@ -114,6 +114,8 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   }
 
   const [isLoggingWork, setIsLoggingWork] = useState(false)
+  const [pendingAction, setPendingAction] = useState<'start' | 'pause' | 'resume' | 'finish' | 'save' | 'clear' | 'undo' | null>(null)
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now())
   const [clearedLogId, setClearedLogId] = useState<string | null>(null)
@@ -188,7 +190,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     return parseFloat((diffMins / 60).toFixed(1))
   }
 
-  const handleSaveWorkPresence = useCallback(async (stateToSave: WorkFormState): Promise<boolean> => {
+  const handleSaveWorkPresence = useCallback(async (stateToSave: WorkFormState, action: 'start' | 'pause' | 'resume' | 'finish' | 'save' | 'clear' = 'save'): Promise<boolean> => {
     if (!workTemplateId || isLoggingWork) return false
     setValidationError(null)
 
@@ -202,6 +204,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     }
 
     setIsLoggingWork(true)
+    setPendingAction(action)
     try {
       if (stateToSave.status !== 'cleared') {
         setShowClearUndo(false)
@@ -245,6 +248,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       return false
     } finally {
       setIsLoggingWork(false)
+      setPendingAction(null)
     }
   }, [workTemplateId, isLoggingWork, todayStr, logWorkPresenceAction])
 
@@ -284,7 +288,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       accumulatedSeconds: formState.sessionState === 'completed' ? formState.accumulatedSeconds : 0,
     }
     setFormState(updated)
-    await handleSaveWorkPresence(updated)
+    await handleSaveWorkPresence(updated, 'start')
   }
 
   // Explicit Pause (Transitions from RUNNING to PAUSED without losing elapsed time)
@@ -302,7 +306,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       currentSegmentStartedAt: null,
     }
     setFormState(updated)
-    await handleSaveWorkPresence(updated)
+    await handleSaveWorkPresence(updated, 'pause')
   }
 
   // Explicit Resume (Transitions from PAUSED to RUNNING, continuing from previous accumulated time)
@@ -315,7 +319,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       currentSegmentStartedAt: nowIso,
     }
     setFormState(updated)
-    await handleSaveWorkPresence(updated)
+    await handleSaveWorkPresence(updated, 'resume')
   }
 
   // Explicit Finish Day (Transitions from RUNNING or PAUSED to COMPLETED)
@@ -336,16 +340,16 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       currentSegmentStartedAt: null,
     }
     setFormState(updated)
-    await handleSaveWorkPresence(updated)
+    await handleSaveWorkPresence(updated, 'finish')
   }
 
-  const handleClearPresence = async () => {
+  const handleClearPresence = () => {
     if (formState.status === 'cleared' || isLoggingWork) return
+    setIsClearConfirmOpen(true)
+  }
 
-    const confirmed = window.confirm(
-      "Clear today's work record? This will remove the office/WFH entry, including your recorded in-time, out-time, and hours from the tracker."
-    )
-    if (!confirmed) return
+  const confirmClearPresence = async () => {
+    setIsClearConfirmOpen(false)
 
     const previousState = formState
     const clearedState: WorkFormState = {
@@ -360,7 +364,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     const saved = await handleSaveWorkPresence({
       ...clearedState,
       status: 'cleared',
-    })
+    }, 'clear')
     if (saved) {
       setFormState(clearedState)
       setLastClearedState(previousState)
@@ -374,6 +378,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
 
     setValidationError(null)
     setIsLoggingWork(true)
+    setPendingAction('undo')
     try {
       const result = await restoreWorkPresenceAction(clearedLogId)
       if (typeof result === 'object' && result !== null && 'success' in result && result.success === false) {
@@ -393,6 +398,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       setValidationError(err instanceof Error ? err.message : 'Failed to restore the cleared work record.')
     } finally {
       setIsLoggingWork(false)
+      setPendingAction(null)
     }
   }
 
@@ -420,7 +426,8 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
             <Button
               type="button"
               onClick={() => void handleUndoClear()}
-              isLoading={isLoggingWork}
+              isLoading={pendingAction === 'undo'}
+              disabled={isLoggingWork && pendingAction !== 'undo'}
               variant="outline"
               size="sm"
               className="shrink-0 text-xs font-bold"
@@ -450,7 +457,8 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
             <div className="flex gap-1.5">
               <Button
                 onClick={handlePauseSession}
-                isLoading={isLoggingWork}
+                isLoading={pendingAction === 'pause'}
+                disabled={isLoggingWork && pendingAction !== 'pause'}
                 variant="outline"
                 size="sm"
                 className="flex-1 font-bold text-xs"
@@ -460,7 +468,8 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
               </Button>
               <Button
                 onClick={handleFinishSession}
-                isLoading={isLoggingWork}
+                isLoading={pendingAction === 'finish'}
+                disabled={isLoggingWork && pendingAction !== 'finish'}
                 variant="primary"
                 size="sm"
                 className="flex-1 font-bold text-xs"
@@ -498,7 +507,8 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
             <div className="flex gap-2">
               <Button
                 onClick={handleResumeSession}
-                isLoading={isLoggingWork}
+                isLoading={pendingAction === 'resume'}
+                disabled={isLoggingWork && pendingAction !== 'resume'}
                 variant="primary"
                 size="sm"
                 className="flex-1 font-bold text-xs"
@@ -508,7 +518,8 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
               </Button>
               <Button
                 onClick={handleFinishSession}
-                isLoading={isLoggingWork}
+                isLoading={pendingAction === 'finish'}
+                disabled={isLoggingWork && pendingAction !== 'finish'}
                 variant="outline"
                 size="sm"
                 className="flex-1 font-bold text-xs"
@@ -547,7 +558,8 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
             <div className="flex gap-2">
               <Button
                 onClick={() => handleStartSession(formState.status === 'wfh' ? 'wfh' : 'office')}
-                isLoading={isLoggingWork}
+                isLoading={pendingAction === 'start'}
+                disabled={isLoggingWork && pendingAction !== 'start'}
                 variant="outline"
                 size="sm"
                 className="flex-1 font-bold text-xs"
@@ -654,7 +666,8 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                         )}
                         <Button
                           onClick={() => handleStartSession(formState.status === 'office' ? 'office' : 'wfh')}
-                          isLoading={isLoggingWork}
+                          isLoading={pendingAction === 'start'}
+                          disabled={isLoggingWork && pendingAction !== 'start'}
                           variant="primary"
                           size="sm"
                           className="w-full font-bold text-xs"
@@ -699,7 +712,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                           accumulatedSeconds: Math.round(computedHrs * 3600),
                         }
                         setFormState(updated)
-                        handleSaveWorkPresence(updated)
+                        handleSaveWorkPresence(updated, 'save')
                       } else if (isEditingTimes && formState.mode === 'time' && formState.sessionState === 'running' && formState.inTime) {
                         try {
                           const effectiveStart = createLocalDateTime(todayStr, formState.inTime)
@@ -712,16 +725,17 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
                             currentSegmentStartedAt: effectiveStart.toISOString(),
                           }
                           setFormState(updated)
-                          handleSaveWorkPresence(updated)
+                          handleSaveWorkPresence(updated, 'save')
                         } catch (err) {
                           setValidationError(err instanceof Error ? err.message : 'Invalid start time')
                           return
                         }
                       } else {
-                        handleSaveWorkPresence(formState)
+                        handleSaveWorkPresence(formState, 'save')
                       }
                     }}
-                    isLoading={isLoggingWork}
+                    isLoading={pendingAction === 'save'}
+                    disabled={isLoggingWork && pendingAction !== 'save'}
                     variant="primary"
                     size="sm"
                     className="flex-1 font-bold text-xs"
@@ -742,6 +756,18 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
             )}
           </div>
         )}
+
+        <ConfirmDialog
+          isOpen={isClearConfirmOpen}
+          onClose={() => setIsClearConfirmOpen(false)}
+          onConfirm={() => void confirmClearPresence()}
+          title="Clear today’s work record?"
+          description="This will remove today’s Office/WFH entry, including the recorded times and hours. You can use Undo immediately afterward to restore it."
+          confirmText="Clear record"
+          cancelText="Keep record"
+          variant="danger"
+          isLoading={pendingAction === 'clear'}
+        />
 
         {/* Weekly Progress Grid */}
         <div className="border-t border-[var(--color-border)]/50 pt-3 space-y-2">

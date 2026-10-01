@@ -268,13 +268,9 @@ export async function logWorkPresence(data: {
 
     if (data.status === 'cleared') {
       if (existing) {
-        if (existing.workSessionId) {
-          await db.workSession.updateMany({
-            where: { id: existing.workSessionId, userId: user.id, deletedAt: null },
-            data: { deletedAt: new Date() }
-          })
-        }
-        await service.deleteLog(user.id, existing.id)
+        // Work Tracker clear must create a real soft-deleted DB record so Undo
+        // can restore the exact ActivityLog + WorkSession reliably.
+        await ActivityService.deleteLog(user.id, existing.id)
       }
     } else {
       const logStatus = data.status === 'office' ? 'done' : 'wfh'
