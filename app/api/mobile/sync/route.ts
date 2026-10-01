@@ -56,10 +56,18 @@ const SyncItemIdentifierSchema = z.union([
   })
 ])
 
-// Composite cursor for deterministic pagination: { updatedAt: ISO string, id: string }
-const SyncCursorSchema = z.object({
+// Composite cursor for deterministic pagination: supports independent per-entity cursors and legacy single cursor
+const EntityCursorSchema = z.object({
   updatedAt: z.string(),
   id: z.string()
+})
+
+const MultiEntityCursorSchema = z.object({
+  templates: EntityCursorSchema.nullable().optional(),
+  logs: EntityCursorSchema.nullable().optional(),
+  notes: EntityCursorSchema.nullable().optional(),
+  updatedAt: z.string().optional(),
+  id: z.string().optional()
 })
 
 const SyncRequestSchema = z.object({
@@ -552,22 +560,43 @@ export async function POST(request: Request) {
         update: { revision: { increment: 1n } }
       })
 
-      // 6. Parse composite cursor for deterministic pagination
+      // 6. Parse multi-entity composite cursor for deterministic, lossless pagination
       const rawCursor = (parseResult.data as { cursor?: string | null }).cursor
-      let compositeCursor: { updatedAt: Date; id: string } | null = null
+      let templateCursor: { updatedAt: Date; id: string } | null = null
+      let logCursor: { updatedAt: Date; id: string } | null = null
+      let noteCursor: { updatedAt: Date; id: string } | null = null
+
       if (rawCursor) {
         try {
           const decoded = JSON.parse(Buffer.from(rawCursor, 'base64').toString('utf8'))
-          const parsed = SyncCursorSchema.safeParse(decoded)
+          const parsed = MultiEntityCursorSchema.safeParse(decoded)
           if (parsed.success) {
-            compositeCursor = { updatedAt: new Date(parsed.data.updatedAt), id: parsed.data.id }
+            if (parsed.data.templates) {
+              templateCursor = { updatedAt: new Date(parsed.data.templates.updatedAt), id: parsed.data.templates.id }
+            }
+            if (parsed.data.logs) {
+              logCursor = { updatedAt: new Date(parsed.data.logs.updatedAt), id: parsed.data.logs.id }
+            }
+            if (parsed.data.notes) {
+              noteCursor = { updatedAt: new Date(parsed.data.notes.updatedAt), id: parsed.data.notes.id }
+            }
+            // Fallback for legacy single cursor format { updatedAt, id }
+            if (!parsed.data.templates && !parsed.data.logs && !parsed.data.notes && parsed.data.updatedAt && parsed.data.id !== undefined) {
+              const legacy = { updatedAt: new Date(parsed.data.updatedAt), id: parsed.data.id }
+              templateCursor = legacy
+              logCursor = legacy
+              noteCursor = legacy
+            }
           }
         } catch {
           // Invalid cursor — treat as first page
         }
       } else if (lastSyncedAt) {
         // Backwards-compat: treat lastSyncedAt as a cursor with empty id (will fetch all after that time)
-        compositeCursor = { updatedAt: new Date(lastSyncedAt), id: '' }
+        const legacy = { updatedAt: new Date(lastSyncedAt), id: '' }
+        templateCursor = legacy
+        logCursor = legacy
+        noteCursor = legacy
       }
 
       const pageLimit = limit || 100
@@ -583,53 +612,59 @@ export async function POST(request: Request) {
         }
       }
 
-      const cursorFilter = buildCursorFilter(compositeCursor)
-      const baseFilter = compositeCursor ? cursorFilter : { deletedAt: null }
-
+      const templateFilter = templateCursor ? buildCursorFilter(templateCursor) : { deletedAt: null }
       const dbTemplates = await tx.activityTemplate.findMany({
-        where: { userId, ...baseFilter },
+        where: { userId, ...templateFilter },
         orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
         take: pageLimit + 1
       })
       const hasMoreTemplates = dbTemplates.length > pageLimit
       const pageTemplates = hasMoreTemplates ? dbTemplates.slice(0, pageLimit) : dbTemplates
+      const nextTemplateCursor = hasMoreTemplates
+        ? { updatedAt: pageTemplates[pageTemplates.length - 1].updatedAt.toISOString(), id: pageTemplates[pageTemplates.length - 1].id }
+        : (templateCursor
+            ? { updatedAt: templateCursor.updatedAt.toISOString(), id: templateCursor.id }
+            : (pageTemplates.length > 0 ? { updatedAt: pageTemplates[pageTemplates.length - 1].updatedAt.toISOString(), id: pageTemplates[pageTemplates.length - 1].id } : null))
 
+      const logFilter = logCursor ? buildCursorFilter(logCursor) : { deletedAt: null }
       const dbLogs = await tx.activityLog.findMany({
-        where: { userId, ...baseFilter },
+        where: { userId, ...logFilter },
         orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
         take: pageLimit + 1
       })
       const hasMoreLogs = dbLogs.length > pageLimit
       const pageLogs = hasMoreLogs ? dbLogs.slice(0, pageLimit) : dbLogs
+      const nextLogCursor = hasMoreLogs
+        ? { updatedAt: pageLogs[pageLogs.length - 1].updatedAt.toISOString(), id: pageLogs[pageLogs.length - 1].id }
+        : (logCursor
+            ? { updatedAt: logCursor.updatedAt.toISOString(), id: logCursor.id }
+            : (pageLogs.length > 0 ? { updatedAt: pageLogs[pageLogs.length - 1].updatedAt.toISOString(), id: pageLogs[pageLogs.length - 1].id } : null))
 
+      const noteFilter = noteCursor ? buildCursorFilter(noteCursor) : { deletedAt: null }
       const dbNotes = await tx.note.findMany({
-        where: { userId, ...baseFilter },
+        where: { userId, ...noteFilter },
         orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
         take: pageLimit + 1
       })
       const hasMoreNotes = dbNotes.length > pageLimit
       const pageNotes = hasMoreNotes ? dbNotes.slice(0, pageLimit) : dbNotes
+      const nextNoteCursor = hasMoreNotes
+        ? { updatedAt: pageNotes[pageNotes.length - 1].updatedAt.toISOString(), id: pageNotes[pageNotes.length - 1].id }
+        : (noteCursor
+            ? { updatedAt: noteCursor.updatedAt.toISOString(), id: noteCursor.id }
+            : (pageNotes.length > 0 ? { updatedAt: pageNotes[pageNotes.length - 1].updatedAt.toISOString(), id: pageNotes[pageNotes.length - 1].id } : null))
 
       const hasMore = hasMoreTemplates || hasMoreLogs || hasMoreNotes
 
-      // Build deterministic composite nextCursor from max (updatedAt, id) across all paged entities
       let nextCursor: string | null = null
       if (hasMore) {
-        const allEntries = [
-          ...pageTemplates.map(t => ({ updatedAt: t.updatedAt, id: t.id })),
-          ...pageLogs.map(l => ({ updatedAt: l.updatedAt, id: l.id })),
-          ...pageNotes.map(n => ({ updatedAt: n.updatedAt, id: n.id }))
-        ].filter(e => e.updatedAt)
-        if (allEntries.length > 0) {
-          const last = allEntries.reduce((prev, cur) => {
-            const prevTime = prev.updatedAt.getTime()
-            const curTime = cur.updatedAt.getTime()
-            if (curTime > prevTime) return cur
-            if (curTime === prevTime && cur.id > prev.id) return cur
-            return prev
+        nextCursor = Buffer.from(
+          JSON.stringify({
+            templates: nextTemplateCursor,
+            logs: nextLogCursor,
+            notes: nextNoteCursor
           })
-          nextCursor = Buffer.from(JSON.stringify({ updatedAt: last.updatedAt.toISOString(), id: last.id })).toString('base64')
-        }
+        ).toString('base64')
       }
 
       const mappedLogs = pageLogs.map(log => ({ ...log, date: log.logDate.toISOString().split('T')[0] }))
