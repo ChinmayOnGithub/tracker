@@ -369,52 +369,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
           </div>
         </header>
 
-        {/* Navigation Header (Mobile Top Bar: [menu] Tracker [search] [more]) */}
-        <header className="lg:hidden flex h-13 bg-[var(--color-bg-surface)] border-b border-[var(--color-border)] items-center justify-between px-3 z-30 shrink-0">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="p-2 -ml-1 rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] active:bg-[var(--color-accent)] cursor-pointer touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
-              title="Open Navigation"
-              aria-label="Open sidebar menu"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <div className="flex items-center gap-1.5">
-              <div className="w-6 h-6 rounded-[var(--radius-xs)] bg-[var(--color-primary)] flex items-center justify-center text-white font-black text-xs">
-                T
-              </div>
-              <span className="text-sm font-extrabold text-[var(--color-text-main)] tracking-tight">
-                Tracker
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={onOpenSearch}
-              className="flex items-center justify-center p-2 rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] active:bg-[var(--color-accent)] border border-[var(--color-border)] min-w-[44px] min-h-[44px] cursor-pointer touch-manipulation shadow-3xs"
-              title="Search Tracker"
-              aria-label="Search Tracker"
-            >
-              <Search className="w-4.5 h-4.5" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setIsMoreOpen(true)}
-              className="flex items-center justify-center p-2 rounded-[var(--radius-md)] text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] hover:bg-[var(--color-accent)] active:bg-[var(--color-accent)] min-w-[44px] min-h-[44px] cursor-pointer touch-manipulation"
-              title="More Modules"
-              aria-label="Open more modules"
-            >
-              <span className="text-xs font-bold text-[var(--color-text-muted)]">•••</span>
-            </button>
-          </div>
-        </header>
-
         {/* Dashboard Workspace */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6 pb-24 lg:pb-6">
+        <main className="flex-1 overflow-y-auto p-4 lg:p-6 pb-28 lg:pb-6">
           <div className="max-w-7xl mx-auto w-full">
             {children}
           </div>
@@ -422,39 +378,74 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
       </div>
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="fixed bottom-0 inset-x-0 bg-[var(--color-bg-surface)] border-t border-[var(--color-border)] h-16 flex items-center justify-around px-2 z-40 lg:hidden pb-safe shadow-lg">
-        {bottomNavItems.map(item => {
-          const IconComponent = item.icon
-          const isActive = activeTab === item.id
+      <nav
+        className="fixed bottom-0 inset-x-0 z-40 lg:hidden h-[72px] bg-[var(--color-bg-surface)]/95 backdrop-blur-xl border-t border-[var(--color-border)] shadow-[0_-10px_30px_-24px_rgba(15,23,42,0.45)] pb-safe"
+        aria-label="Mobile navigation"
+      >
+        <div className="relative mx-auto grid h-full max-w-md grid-cols-5 items-center px-2">
+          {[
+            bottomNavItems.find(item => item.id === 'today'),
+            bottomNavItems.find(item => item.id === 'calendar'),
+          ].filter(Boolean).map(item => {
+            const Item = item!
+            const IconComponent = Item.icon
+            const isActive = activeTab === Item.id
+            return (
+              <button
+                key={Item.id}
+                onClick={() => onTabChange(Item.id)}
+                className={`flex h-full flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-colors ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}`}
+                aria-label={Item.label}
+              >
+                <IconComponent className="h-5 w-5" />
+                <span>{Item.label}</span>
+              </button>
+            )
+          })}
 
-          return (
-            <button
-              key={item.id}
-              onClick={() => {
-                onTabChange(item.id)
-                setIsMoreOpen(false)
-              }}
-              onMouseEnter={() => {
-                const route = item.id === 'today' ? '/' : `/${item.id}`
-                router.prefetch(route)
-              }}
-              className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'
-                }`}
-            >
-              <IconComponent className="w-4.5 h-4.5" />
-              <span className="text-[9px] font-bold tracking-tight">{item.label}</span>
-            </button>
-          )
-        })}
-        <button
-          onClick={() => setIsMoreOpen(true)}
-          className={`flex flex-col items-center justify-center gap-1 flex-1 py-1 transition-all cursor-pointer ${isMoreOpen || moreNavItems.some(n => n.id === activeTab) ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'
-            }`}
-        >
-          <Menu className="w-4.5 h-4.5" />
-          <span className="text-[9px] font-bold tracking-tight">More</span>
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={onOpenSearch}
+            className="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-[62%] place-items-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-foreground)] shadow-[0_8px_24px_-8px_rgba(225,29,72,0.7)] ring-4 ring-[var(--color-bg-surface)] transition-transform active:scale-95"
+            title="Master Search"
+            aria-label="Open Master Search"
+          >
+            <Search className="h-5 w-5" />
+          </button>
+
+          <div className="col-span-1" aria-hidden="true" />
+
+          {[
+            bottomNavItems.find(item => item.id === 'settings'),
+          ].filter(Boolean).map(item => {
+            const Item = item!
+            const IconComponent = Item.icon
+            const isActive = activeTab === Item.id
+            return (
+              <button
+                key={Item.id}
+                onClick={() => onTabChange(Item.id)}
+                className={`flex h-full flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-colors ${isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}`}
+                aria-label={Item.label}
+              >
+                <IconComponent className="h-5 w-5" />
+                <span>{Item.label}</span>
+              </button>
+            )
+          })}
+
+          <button
+            type="button"
+            onClick={() => setIsMoreOpen(true)}
+            className={`flex h-full flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-colors ${isMoreOpen || moreNavItems.some(n => n.id === activeTab) ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}`}
+            title="More modules"
+            aria-label="Open more modules"
+          >
+            <Menu className="h-5 w-5" />
+            <span>More</span>
+          </button>
+        </div>
+      </nav>
 
       {/* Mobile "More" Bottom Sheet Menu */}
       {isMoreOpen && (
