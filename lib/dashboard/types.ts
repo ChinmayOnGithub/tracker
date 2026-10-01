@@ -27,6 +27,7 @@ export interface WidgetDefinition {
 
 export interface DashboardConfig {
   version: number // e.g. 2
+  revision?: number // server persistence revision; not a layout version
   items: WidgetLayoutItem[]
   hidden: string[]
   // Legacy backward compatibility fields
