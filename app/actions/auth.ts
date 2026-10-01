@@ -284,8 +284,8 @@ export async function verifyPinAction(usernameInput: string, secret: string): Pr
     }
     const result = await AuthService.login(usernameInput, secret)
     if (!result.success) {
-      // 3. Increment account rate limit counter only on credential failure
-      await rateLimiter.check(`login:account:${normalizedIdentifier}`, 5, 60, { failClosed: false })
+      // 3. Increment account rate limit counter only on credential failure (fail-closed)
+      await rateLimiter.check(`login:account:${normalizedIdentifier}`, 5, 60, { failClosed: true })
       return { success: false, error: result.error }
     }
 
