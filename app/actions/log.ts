@@ -9,6 +9,17 @@ import { ActivityService } from '@/lib/services/ActivityService'
 import { isFeatureEnabled } from '@/lib/feature-flags'
 import { SyncedActivityService } from '@/lib/services/SyncedActivityService'
 import { createLocalDateTime } from '@/lib/dateUtils'
+import { Prisma } from '@prisma/client'
+
+async function acquireWorkTrackerLock(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  templateId: string,
+  date: string,
+) {
+  const lockKey = 'work-tracker:' + userId + ':' + templateId + ':' + date
+  await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`)
+}
 
 export async function createLog(data: {
   id?: string
@@ -237,7 +248,7 @@ export async function unpostponeOneTimeTask(
  */
 export async function logWorkPresence(data: {
   templateId: string
-  date: string // YYYY-MM-DD
+  date: string
   status: 'office' | 'wfh' | 'cleared'
   inTime?: string | null
   outTime?: string | null
@@ -252,90 +263,104 @@ export async function logWorkPresence(data: {
   try {
     const { user } = await requireOwnership('activityTemplate', data.templateId)
 
-    const logDate = new Date(`${data.date}T12:00:00.000Z`)
-    const existing = await db.activityLog.findFirst({
-      where: {
-        activityId: data.templateId,
-        logDate,
-        userId: user.id,
-        deletedAt: null
-      }
-    })
+    const result = await db.$transaction(async (tx) => {
+      await acquireWorkTrackerLock(tx, user.id, data.templateId, data.date)
 
-    const service = isFeatureEnabled('SYNC_ENGINE_ENABLED') 
-      ? SyncedActivityService 
-      : ActivityService
+      const logDate = new Date(data.date + 'T12:00:00.000Z')
+      const existing = await tx.activityLog.findFirst({
+        where: { activityId: data.templateId, logDate, userId: user.id, deletedAt: null },
+      })
 
-    if (data.status === 'cleared') {
-      if (existing) {
-        // Work Tracker clear must create a real soft-deleted DB record so Undo
-        // can restore the exact ActivityLog + WorkSession reliably.
-        await ActivityService.deleteLog(user.id, existing.id)
+      if (data.status === 'cleared') {
+        if (existing) await ActivityService.deleteLog(user.id, existing.id, tx)
+        return null
       }
-    } else {
+
       const logStatus = data.status === 'office' ? 'done' : 'wfh'
       const sessionState = data.sessionState || (data.outTime ? 'completed' : 'running')
       const accumulatedSeconds = data.accumulatedSeconds !== undefined && data.accumulatedSeconds !== null
-        ? data.accumulatedSeconds
-        : (data.hours ? Math.round(data.hours * 3600) : 0)
+        ? Math.max(0, Math.round(data.accumulatedSeconds))
+        : (data.hours ? Math.max(0, Math.round(data.hours * 3600)) : 0)
 
-      // Ensure a linked WorkSession exists and is synchronized
       let wsId = data.workSessionId || existing?.workSessionId
+
+      if (wsId) {
+        const linkedSession = await tx.workSession.findFirst({
+          where: { id: wsId, userId: user.id, date: data.date, deletedAt: null },
+          include: { activityLog: { select: { activityId: true, userId: true, deletedAt: true } } },
+        })
+        if (!linkedSession) throw new Error('Work session not found or unauthorized.')
+        if (linkedSession.activityLog && (
+          linkedSession.activityLog.activityId !== data.templateId ||
+          linkedSession.activityLog.userId !== user.id ||
+          linkedSession.activityLog.deletedAt !== null
+        )) {
+          throw new Error('Invalid work session for this Work Tracker record.')
+        }
+      }
+
       if (!wsId) {
-        const ws = await db.workSession.create({
+        const ws = await tx.workSession.create({
           data: {
             userId: user.id,
             date: data.date,
             mode: data.status,
-            startedAt: data.currentSegmentStartedAt ? new Date(data.currentSegmentStartedAt) : (data.inTime ? createLocalDateTime(data.date, data.inTime) : null),
-            endedAt: sessionState === 'completed' && data.outTime ? createLocalDateTime(data.date, data.outTime) : null,
+            startedAt: data.currentSegmentStartedAt
+              ? new Date(data.currentSegmentStartedAt)
+              : (data.inTime ? createLocalDateTime(data.date, data.inTime) : null),
+            endedAt: sessionState === 'completed' && data.outTime
+              ? createLocalDateTime(data.date, data.outTime)
+              : null,
             durationMinutes: Math.round(accumulatedSeconds / 60),
+            durationSeconds: accumulatedSeconds,
             loggingMode: data.loggingMode || 'timer',
             manualMinutes: data.manualHours ? Math.round(data.manualHours * 60) : 0,
-          }
+          },
         })
         wsId = ws.id
       } else {
-        await db.workSession.updateMany({
-          where: { id: wsId, userId: user.id },
+        const updated = await tx.workSession.updateMany({
+          where: { id: wsId, userId: user.id, date: data.date, deletedAt: null },
           data: {
             mode: data.status,
             startedAt: data.currentSegmentStartedAt ? new Date(data.currentSegmentStartedAt) : undefined,
-            endedAt: sessionState === 'completed' && data.outTime ? createLocalDateTime(data.date, data.outTime) : (sessionState === 'running' ? null : undefined),
+            endedAt: sessionState === 'completed' && data.outTime
+              ? createLocalDateTime(data.date, data.outTime)
+              : (sessionState === 'running' ? null : undefined),
             durationMinutes: Math.round(accumulatedSeconds / 60),
+            durationSeconds: accumulatedSeconds,
             loggingMode: data.loggingMode || 'timer',
             manualMinutes: data.manualHours ? Math.round(data.manualHours * 60) : 0,
-          }
+          },
         })
+        if (updated.count !== 1) throw new Error('Work session could not be updated.')
       }
 
-      const payloadJson = {
-        inTime: data.inTime || null,
-        outTime: data.outTime || null,
-        isWfh: data.status === 'wfh',
-        hours: data.hours || 0,
-        loggingMode: data.loggingMode || null,
-        manualHours: data.manualHours || null,
-        sessionState,
-        accumulatedSeconds,
-        currentSegmentStartedAt: data.currentSegmentStartedAt ?? null,
-        workSessionId: wsId,
-      }
-
-      await service.logActivity({
+      return ActivityService.logActivity({
         id: existing?.id,
         userId: user.id,
         templateId: data.templateId,
         date: data.date,
         status: logStatus,
-        amount: data.hours || 0,
+        amount: accumulatedSeconds / 3600,
         workSessionId: wsId,
-        payload: payloadJson
-      })
-    }
+        payload: {
+          inTime: data.inTime || null,
+          outTime: data.outTime || null,
+          isWfh: data.status === 'wfh',
+          hours: accumulatedSeconds / 3600,
+          loggingMode: data.loggingMode || null,
+          manualHours: data.manualHours || null,
+          sessionState,
+          accumulatedSeconds,
+          currentSegmentStartedAt: data.currentSegmentStartedAt ?? null,
+          workSessionId: wsId,
+        },
+      }, tx)
+    })
 
     revalidatePath('/')
-    return { success: true }
+    return { success: true, log: result }
   } catch (error) {
     console.error('Failed to log work presence:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
@@ -354,68 +379,51 @@ export async function restoreWorkPresence(logId: string) {
   try {
     const user = await requireAuth()
 
-    const deletedLog = await db.activityLog.findFirst({
-      where: {
-        id: logId,
-        userId: user.id,
-        deletedAt: { not: null },
-        activity: { name: 'Work Tracker', userId: user.id },
-      },
-    })
+    const restoredLog = await db.$transaction(async (tx) => {
+      const deletedLog = await tx.activityLog.findFirst({
+        where: {
+          id: logId,
+          userId: user.id,
+          deletedAt: { not: null },
+          activity: { name: 'Work Tracker', userId: user.id },
+        },
+      })
+      if (!deletedLog) throw new Error('The cleared work record could not be found.')
 
-    if (!deletedLog) {
-      return { success: false, error: 'The cleared work record could not be found.' }
-    }
+      await acquireWorkTrackerLock(tx, user.id, deletedLog.activityId, deletedLog.logDate.toISOString().slice(0, 10))
 
-    const activeRecord = await db.activityLog.findFirst({
-      where: {
-        activityId: deletedLog.activityId,
-        logDate: deletedLog.logDate,
-        userId: user.id,
-        deletedAt: null,
-        id: { not: deletedLog.id },
-      },
-      select: { id: true },
-    })
+      const activeRecord = await tx.activityLog.findFirst({
+        where: {
+          activityId: deletedLog.activityId,
+          logDate: deletedLog.logDate,
+          userId: user.id,
+          deletedAt: null,
+          id: { not: deletedLog.id },
+        },
+        select: { id: true },
+      })
+      if (activeRecord) throw new Error('A newer work record already exists for this date. Undo was not applied.')
 
-    if (activeRecord) {
-      return {
-        success: false,
-        error: 'A newer work record already exists for this date. Undo was not applied.',
-      }
-    }
-
-    await db.$transaction(async (tx) => {
       if (deletedLog.workSessionId) {
         await tx.workSession.updateMany({
-          where: {
-            id: deletedLog.workSessionId,
-            userId: user.id,
-            deletedAt: { not: null },
-          },
+          where: { id: deletedLog.workSessionId, userId: user.id, deletedAt: { not: null } },
           data: { deletedAt: null },
         })
       }
 
       const restored = await tx.activityLog.updateMany({
-        where: {
-          id: deletedLog.id,
-          userId: user.id,
-          deletedAt: { not: null },
-        },
-        data: {
-          deletedAt: null,
-          version: { increment: 1 },
-        },
+        where: { id: deletedLog.id, userId: user.id, deletedAt: { not: null } },
+        data: { deletedAt: null, version: { increment: 1 } },
       })
+      if (restored.count !== 1) throw new Error('The work record changed before it could be restored.')
 
-      if (restored.count !== 1) {
-        throw new Error('The work record changed before it could be restored.')
-      }
+      const freshLog = await tx.activityLog.findUnique({ where: { id: deletedLog.id } })
+      if (!freshLog) throw new Error('The restored work record could not be loaded.')
+      return freshLog
     })
 
     revalidatePath('/')
-    return { success: true, log: deletedLog }
+    return { success: true, log: restoredLog }
   } catch (error) {
     console.error('Failed to restore work presence:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
