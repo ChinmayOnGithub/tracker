@@ -340,8 +340,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   }
 
   const handleClearPresence = async () => {
-    const hasWorkRecord = formState.status !== 'cleared' || !!todayWorkLog
-    if (!hasWorkRecord || isLoggingWork) return
+    if (formState.status === 'cleared' || isLoggingWork) return
 
     const confirmed = window.confirm(
       "Clear today's work record? This will remove the office/WFH entry, including your recorded in-time, out-time, and hours from the tracker."
