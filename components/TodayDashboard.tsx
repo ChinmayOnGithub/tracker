@@ -25,6 +25,8 @@ import { getWeekDates } from '@/lib/recurrence'
 import { LeaveRecord, LeaveAllowance, WeightRecord, JournalEntry, CalendarData } from '@/lib/store/store'
 import { selectJournalForToday } from '@/modules/journal'
 import { Button } from '@/design-system'
+import { CalendarDataContext } from './DashboardLayout'
+import { getUserStorageItem } from '@/lib/storage/userStorage'
 
 import { TodayGrid } from './today/grid/TodayGrid'
 import { EditDashboardModal } from './today/grid/EditDashboardModal'
@@ -70,6 +72,8 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
   isValidating = false,
 }) => {
   const router = useRouter()
+  const calendarContext = React.useContext(CalendarDataContext)
+  const currentUserId = calendarContext?.currentUser?.id ?? null
   const {
     cycleTaskStatusAction,
     setTaskStatusAction,
@@ -155,10 +159,10 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         })
         if (!res.success) {
           setSaveError(true)
-          return
+        } else {
+          dashboardRevisionRef.current = res.revision ?? dashboardRevisionRef.current + 1
+          setSaveError(false)
         }
-        dashboardRevisionRef.current = res.revision ?? dashboardRevisionRef.current + 1
-        setSaveError(false)
       } catch (err) {
         console.error('[TodayDashboard] Exception saving dashboard config:', err)
         setSaveError(true)
@@ -219,7 +223,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
       return initialWeeklyGoal
     }
     if (typeof window !== 'undefined') {
-      const val = localStorage.getItem('personal_weekly_goal')
+      const val = getUserStorageItem(currentUserId, 'personal_weekly_goal')
       if (val) return Number(val)
     }
     return 27
@@ -227,7 +231,7 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
 
   useEffect(() => {
     const handleSettingsChange = () => {
-      const v = localStorage.getItem('personal_weekly_goal')
+      const v = getUserStorageItem(currentUserId, 'personal_weekly_goal')
       if (v) {
         setWeeklyGoal(Number(v))
       }
