@@ -73,6 +73,17 @@ export async function saveGuestPermissionsAction(permissions: Record<string, boo
       return { success: false, error: 'Forbidden: Owner access required' }
     }
 
+    const existing = await db.userSetting.findUnique({
+      where: {
+        userId_module: {
+          userId: loggedUser.id,
+          module: 'GUEST_PERMISSIONS',
+        },
+      },
+    })
+    const existingConfig = (existing?.config as Record<string, boolean> | null) || {}
+    const mergedConfig = { ...existingConfig, ...permissions }
+
     await db.userSetting.upsert({
       where: {
         userId_module: {
@@ -81,12 +92,12 @@ export async function saveGuestPermissionsAction(permissions: Record<string, boo
         },
       },
       update: {
-        config: permissions as unknown as Prisma.InputJsonValue,
+        config: mergedConfig as unknown as Prisma.InputJsonValue,
       },
       create: {
         userId: loggedUser.id,
         module: 'GUEST_PERMISSIONS',
-        config: permissions as unknown as Prisma.InputJsonValue,
+        config: mergedConfig as unknown as Prisma.InputJsonValue,
       },
     })
 
@@ -319,9 +330,13 @@ export async function saveLoginSecuritySettingsAction(enabled: boolean): Promise
     const loggedUser = await getLoggedUser()
     if (!loggedUser) return { success: false, error: 'Unauthorized' }
     if (!canAccess(loggedUser, 'settings.manage')) return { success: false, error: 'Forbidden: Owner access required' }
+    const existing = await db.userSetting.findUnique({
+      where: { userId_module: { userId: loggedUser.id, module: LOGIN_SECURITY_MODULE } },
+    })
+    const existingConfig = (existing?.config as Record<string, unknown> | null) || {}
     await db.userSetting.upsert({
       where: { userId_module: { userId: loggedUser.id, module: LOGIN_SECURITY_MODULE } },
-      update: { config: { humanVerificationEnabled: enabled } },
+      update: { config: { ...existingConfig, humanVerificationEnabled: enabled } },
       create: { userId: loggedUser.id, module: LOGIN_SECURITY_MODULE, config: { humanVerificationEnabled: enabled } },
     })
     return { success: true }

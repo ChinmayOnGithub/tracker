@@ -72,38 +72,7 @@ export async function createLeaveRequest(data: {
     const startUtc = new Date(`${validated.startDate}T00:00:00.000Z`)
     const endUtc = new Date(`${validated.endDate}T23:59:59.999Z`)
 
-    const existingOverlap = await db.leaveRecord.findFirst({
-      where: {
-        userId: user.id,
-        deletedAt: null,
-        status: { not: LeaveStatus.REJECTED },
-        startDate: { lte: endUtc },
-        endDate: { gte: startUtc },
-      },
-    })
-
-    if (existingOverlap) {
-      const overlapStart = existingOverlap.startDate.toISOString().split('T')[0]
-      const overlapEnd = existingOverlap.endDate.toISOString().split('T')[0]
-      return {
-        success: false,
-        error: `Overlapping leave already exists for ${existingOverlap.leaveType} (${overlapStart} to ${overlapEnd}).`,
-      }
-    }
-
-    const record = await db.leaveRecord.create({
-      data: {
-        userId: user.id,
-        leaveType: validated.leaveType,
-        startDate: new Date(`${validated.startDate}T00:00:00.000Z`),
-        endDate: new Date(`${validated.endDate}T00:00:00.000Z`),
-        totalDays: validated.totalDays,
-        notes: validated.notes ?? null,
-        status: validated.status ?? LeaveStatus.APPROVED,
-      },
-    })
-
-    // Log this leave activity to ActivityLog for each date in the range
+    // Precalculate dates for the range
     const start = new Date(`${validated.startDate}T12:00:00.000Z`)
     const end = new Date(`${validated.endDate}T12:00:00.000Z`)
     const dates: string[] = []
@@ -113,34 +82,67 @@ export async function createLeaveRequest(data: {
       curr.setUTCDate(curr.getUTCDate() + 1)
     }
 
-    const template = await ActivityService.getOrCreateDefaultTemplate(
-      user.id,
-      'LEAVE',
-      'Time Off',
-      'personal',
-      'Calendar',
-      'purple'
-    )
-
-    for (let i = 0; i < dates.length; i++) {
-      const dateStr = dates[i]
-      // Day 0 maintains the foreign key relation.
-      // Days > 0 store the leaveRecordId in the payload JSON to satisfy the @unique constraint on leaveRecordId.
-      await ActivityService.logActivity({
-        userId: user.id,
-        templateId: template.id,
-        date: dateStr,
-        status: 'done',
-        leaveRecordId: i === 0 ? record.id : null,
-        payload: {
-          leaveRecordId: record.id,
-          leaveType: data.leaveType,
-          dayIndex: i,
-          totalDays: data.totalDays,
+    const record = await db.$transaction(async (tx) => {
+      const existingOverlap = await tx.leaveRecord.findFirst({
+        where: {
+          userId: user.id,
+          deletedAt: null,
+          status: { not: LeaveStatus.REJECTED },
+          startDate: { lte: endUtc },
+          endDate: { gte: startUtc },
         },
-        note: data.notes ?? `Time Off: ${data.leaveType}`
       })
-    }
+
+      if (existingOverlap) {
+        const overlapStart = existingOverlap.startDate.toISOString().split('T')[0]
+        const overlapEnd = existingOverlap.endDate.toISOString().split('T')[0]
+        throw new Error(`Overlapping leave already exists for ${existingOverlap.leaveType} (${overlapStart} to ${overlapEnd}).`)
+      }
+
+      const createdRecord = await tx.leaveRecord.create({
+        data: {
+          userId: user.id,
+          leaveType: validated.leaveType,
+          startDate: new Date(`${validated.startDate}T00:00:00.000Z`),
+          endDate: new Date(`${validated.endDate}T00:00:00.000Z`),
+          totalDays: validated.totalDays,
+          notes: validated.notes ?? null,
+          status: validated.status ?? LeaveStatus.APPROVED,
+        },
+      })
+
+      const template = await ActivityService.getOrCreateDefaultTemplate(
+        user.id,
+        'LEAVE',
+        'Time Off',
+        'personal',
+        'Calendar',
+        'purple',
+        tx
+      )
+
+      for (let i = 0; i < dates.length; i++) {
+        const dateStr = dates[i]
+        // Day 0 maintains the foreign key relation.
+        // Days > 0 store the leaveRecordId in the payload JSON to satisfy the @unique constraint on leaveRecordId.
+        await ActivityService.logActivity({
+          userId: user.id,
+          templateId: template.id,
+          date: dateStr,
+          status: 'done',
+          leaveRecordId: i === 0 ? createdRecord.id : null,
+          payload: {
+            leaveRecordId: createdRecord.id,
+            leaveType: data.leaveType,
+            dayIndex: i,
+            totalDays: data.totalDays,
+          },
+          note: data.notes ?? `Time Off: ${data.leaveType}`
+        }, tx)
+      }
+
+      return createdRecord
+    })
 
     revalidatePath('/')
     return { success: true, record }
@@ -162,43 +164,47 @@ export async function updateLeaveStatus(id: string, status: LeaveStatus) {
     await requireModuleAccess('leave')
     const { user } = await requireOwnership('leaveRecord', id)
 
-    const { count } = await db.leaveRecord.updateMany({
-      where: { id, userId: user.id, deletedAt: null },
-      data: { status },
+    const updated = await db.$transaction(async (tx) => {
+      const { count } = await tx.leaveRecord.updateMany({
+        where: { id, userId: user.id, deletedAt: null },
+        data: { status },
+      })
+
+      if (count === 0) {
+        throw new Error('Leave record not found')
+      }
+
+      const record = await tx.leaveRecord.findUnique({ where: { id } })
+
+      if (status === LeaveStatus.REJECTED) {
+        // Soft-delete corresponding logs across both 1:1 foreign key and multi-day payloads scoped to user
+        await tx.activityLog.updateMany({
+          where: {
+            userId: user.id,
+            deletedAt: null,
+            OR: [
+              { leaveRecordId: id },
+              { payload: { path: ['leaveRecordId'], equals: id } },
+            ],
+          },
+          data: { deletedAt: new Date() }
+        })
+      } else if (status === LeaveStatus.APPROVED) {
+        // Restore corresponding logs if they were soft-deleted scoped to user
+        await tx.activityLog.updateMany({
+          where: {
+            userId: user.id,
+            OR: [
+              { leaveRecordId: id },
+              { payload: { path: ['leaveRecordId'], equals: id } },
+            ],
+          },
+          data: { deletedAt: null }
+        })
+      }
+
+      return record
     })
-
-    if (count === 0) {
-      return { success: false, error: 'Leave record not found' }
-    }
-
-    const updated = await db.leaveRecord.findUnique({ where: { id } })
-
-    if (status === LeaveStatus.REJECTED) {
-      // Soft-delete corresponding logs across both 1:1 foreign key and multi-day payloads scoped to user
-      await db.activityLog.updateMany({
-        where: {
-          userId: user.id,
-          deletedAt: null,
-          OR: [
-            { leaveRecordId: id },
-            { payload: { path: ['leaveRecordId'], equals: id } },
-          ],
-        },
-        data: { deletedAt: new Date() }
-      })
-    } else if (status === LeaveStatus.APPROVED) {
-      // Restore corresponding logs if they were soft-deleted scoped to user
-      await db.activityLog.updateMany({
-        where: {
-          userId: user.id,
-          OR: [
-            { leaveRecordId: id },
-            { payload: { path: ['leaveRecordId'], equals: id } },
-          ],
-        },
-        data: { deletedAt: null }
-      })
-    }
 
     revalidatePath('/')
     return { success: true, record: updated }
@@ -214,26 +220,28 @@ export async function deleteLeaveRecord(id: string) {
     await requireModuleAccess('leave')
     const { user } = await requireOwnership('leaveRecord', id)
 
-    const { count } = await db.leaveRecord.updateMany({
-      where: { id, userId: user.id, deletedAt: null },
-      data: { deletedAt: new Date() }
-    })
+    await db.$transaction(async (tx) => {
+      const { count } = await tx.leaveRecord.updateMany({
+        where: { id, userId: user.id, deletedAt: null },
+        data: { deletedAt: new Date() }
+      })
 
-    if (count === 0) {
-      return { success: false, error: 'Leave record not found' }
-    }
-    
-    // Soft-delete corresponding activity logs for single-day and multi-day ranges scoped to user
-    await db.activityLog.updateMany({
-      where: {
-        userId: user.id,
-        deletedAt: null,
-        OR: [
-          { leaveRecordId: id },
-          { payload: { path: ['leaveRecordId'], equals: id } },
-        ],
-      },
-      data: { deletedAt: new Date() }
+      if (count === 0) {
+        throw new Error('Leave record not found')
+      }
+      
+      // Soft-delete corresponding activity logs for single-day and multi-day ranges scoped to user
+      await tx.activityLog.updateMany({
+        where: {
+          userId: user.id,
+          deletedAt: null,
+          OR: [
+            { leaveRecordId: id },
+            { payload: { path: ['leaveRecordId'], equals: id } },
+          ],
+        },
+        data: { deletedAt: new Date() }
+      })
     })
 
     revalidatePath('/')

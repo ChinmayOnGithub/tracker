@@ -6,7 +6,7 @@ import {
   User, Palette, Calendar, Layout, Bell, RefreshCw, Lock, 
   Settings2, Database, Shield, CheckCircle2, AlertCircle, 
   Trash2, Key, Check, Sparkles, ShieldCheck, CreditCard,
-  Blocks, Mail, FileText, MessageSquare, GitBranch, Clock, ChevronRight
+  Blocks, Clock, ChevronRight
 } from 'lucide-react'
 import { SettingsBillingSection } from './SettingsBillingSection'
 import { checkGoogleConnection, disconnectGoogleAccount } from '@/modules/sync/google-calendar/actions'

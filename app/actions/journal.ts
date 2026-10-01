@@ -48,47 +48,35 @@ export async function upsertJournalEntry(
     }
     
     const { JournalService } = await import('@/modules/journal/server')
-    const entry = await JournalService.upsert(user.id, date, fields)
-    console.log(`[Journal] Entry upserted successfully: ${entry.id}, content length: ${entry.content.length}`)
-
-    // Verify the save by reading it back
-    const verification = await db.journalEntry.findUnique({
-      where: { id: entry.id },
-      select: { id: true, content: true, updatedAt: true }
-    })
-    console.log(`[Journal] Verification read from DB:`, {
-      id: verification?.id,
-      contentLength: verification?.content.length,
-      updatedAt: verification?.updatedAt
-    })
-
-    // Dynamic Template + Log Sync
-    const template = await ActivityService.getOrCreateDefaultTemplate(
-      user.id,
-      'JOURNAL',
-      'Daily Journal',
-      'personal',
-      'BookOpen',
-      'amber'
-    )
 
     const cleanNoteText = fields.content 
       ? fields.content.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() 
       : ''
 
-    try {
+    const entry = await db.$transaction(async (tx) => {
+      const savedEntry = await JournalService.upsert(user.id, date, fields, tx)
+
+      const template = await ActivityService.getOrCreateDefaultTemplate(
+        user.id,
+        'JOURNAL',
+        'Daily Journal',
+        'personal',
+        'BookOpen',
+        'amber',
+        tx
+      )
+
       await ActivityService.logActivity({
         userId: user.id,
         templateId: template.id,
         date,
         status: 'done',
-        journalEntryId: entry.id,
+        journalEntryId: savedEntry.id,
         note: cleanNoteText ? (cleanNoteText.substring(0, 100) + '...') : ''
-      })
-    } catch (activityError) {
-      // Log the error but don't fail the journal save
-      console.error('Failed to log activity for journal entry:', activityError)
-    }
+      }, tx)
+
+      return savedEntry
+    })
 
     try {
       revalidatePath('/')
@@ -134,7 +122,9 @@ export async function deleteJournalEntry(id: string) {
     const { user } = await requireOwnership('journalEntry', id)
 
     const { JournalService } = await import('@/modules/journal/server')
-    const result = await JournalService.delete(user.id, id)
+    const result = await db.$transaction(async (tx) => {
+      return JournalService.delete(user.id, id, tx)
+    })
     if (!result.success) {
       return { success: false, error: result.error || 'Journal entry not found', code: 'NOT_FOUND' }
     }

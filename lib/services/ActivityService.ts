@@ -64,13 +64,14 @@ export class ActivityService {
 
     let log
     if (existing) {
-      if (existing.userId && existing.userId !== userId) {
+      if (existing.userId !== userId) {
         throw new Error('Log record not found or unauthorized')
       }
       log = await client.activityLog.update({
         where: { id: existing.id },
         data: {
           status,
+          deletedAt: null,
           note: note !== undefined ? note : existing.note,
           amount: amount !== undefined ? amount : existing.amount,
           payload: payload !== undefined ? (payload as Prisma.InputJsonValue) : (existing.payload as Prisma.InputJsonValue),
@@ -185,13 +186,13 @@ export class ActivityService {
     // Cascade soft deletions to linked sub-records scoped strictly to userId
     // NOTE: We do NOT delete the journal entry because it should persist independently
     if (existing.weightRecordId) {
-      await db.weightRecord.updateMany({
+      await client.weightRecord.updateMany({
         where: { id: existing.weightRecordId, userId, deletedAt: null },
         data: { deletedAt: new Date() }
       })
     }
     if (existing.leaveRecordId) {
-      await db.leaveRecord.updateMany({
+      await client.leaveRecord.updateMany({
         where: { id: existing.leaveRecordId, userId, deletedAt: null },
         data: { deletedAt: new Date() }
       })
@@ -214,8 +215,16 @@ export class ActivityService {
   /**
    * Find or create the default template for a system activity type.
    */
-  static async getOrCreateDefaultTemplate(userId: string, type: 'JOURNAL' | 'LEAVE' | 'PERSONAL', name: string, category: string, icon: string, color: string) {
-    const existing = await db.activityTemplate.findFirst({
+  static async getOrCreateDefaultTemplate(
+    userId: string,
+    type: 'JOURNAL' | 'LEAVE' | 'PERSONAL',
+    name: string,
+    category: string,
+    icon: string,
+    color: string,
+    client: TransactionalDbClient = db
+  ) {
+    const existing = await client.activityTemplate.findFirst({
       where: {
         userId,
         type,
@@ -227,7 +236,7 @@ export class ActivityService {
 
     if (existing) return existing
 
-    return await db.activityTemplate.create({
+    return await client.activityTemplate.create({
       data: {
         userId,
         name,

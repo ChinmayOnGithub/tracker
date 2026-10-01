@@ -2,6 +2,8 @@ import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
 import { todayYMD } from '@/lib/dateUtils'
 
+type TransactionalDbClient = Omit<typeof db, '$extends' | '$transaction' | '$disconnect' | '$connect' | '$on' | '$use'>
+
 export interface UpsertJournalData {
   content?: string
   mood?: string | null
@@ -92,16 +94,16 @@ export class JournalService {
   /**
    * Upserts a journal entry for the user on a specific date.
    */
-  static async upsert(userId: string, dateStr: string, fields: UpsertJournalData) {
+  static async upsert(userId: string, dateStr: string, fields: UpsertJournalData, client: TransactionalDbClient = db) {
     if (!userId || !dateStr) throw new Error('userId and date are required')
     const journalDate = new Date(`${dateStr}T12:00:00.000Z`)
 
-    const existing = await db.journalEntry.findFirst({
+    const existing = await client.journalEntry.findFirst({
       where: { userId, journalDate },
     })
 
     if (existing) {
-      return db.journalEntry.update({
+      return client.journalEntry.update({
         where: { id: existing.id },
         data: {
           content: fields.content !== undefined ? fields.content : existing.content,
@@ -118,7 +120,7 @@ export class JournalService {
       })
     }
 
-    return db.journalEntry.create({
+    return client.journalEntry.create({
       data: {
         userId,
         journalDate,
@@ -136,10 +138,10 @@ export class JournalService {
   /**
    * Soft-deletes a journal entry and cascades soft-delete to linked activity logs.
    */
-  static async delete(userId: string, id: string) {
+  static async delete(userId: string, id: string, client: TransactionalDbClient = db) {
     if (!userId || !id) return { success: false, error: 'Unauthorized or missing ID' }
 
-    const { count } = await db.journalEntry.updateMany({
+    const { count } = await client.journalEntry.updateMany({
       where: { id, userId, deletedAt: null },
       data: { deletedAt: new Date() },
     })
@@ -149,7 +151,7 @@ export class JournalService {
     }
 
     // Cascade soft-delete to linked activity log scoped to user
-    await db.activityLog.updateMany({
+    await client.activityLog.updateMany({
       where: { journalEntryId: id, userId, deletedAt: null },
       data: { deletedAt: new Date() },
     })

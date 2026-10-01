@@ -183,7 +183,7 @@ export async function POST(request: Request) {
       where: { id: parsed.data.activityId },
     })
 
-    if (!template || (template.userId && template.userId !== user.id)) {
+    if (!template || template.userId !== user.id) {
       return apiError('FORBIDDEN', 'Template not found or unauthorized', 403)
     }
 

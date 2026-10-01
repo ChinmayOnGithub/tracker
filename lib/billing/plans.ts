@@ -75,7 +75,10 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       },
       limits: {
         vault_storage: 10,
-        active_activities: 10
+        active_activities: 10,
+        activities_active: 10,
+        tasks_created_daily: 50,
+        calendar_events_created_daily: 5
       }
     },
     featureDetails: [
@@ -119,7 +122,10 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       },
       limits: {
         vault_storage: 10000,
-        active_activities: 10000
+        active_activities: 10000,
+        activities_active: 10000,
+        tasks_created_daily: 10000,
+        calendar_events_created_daily: 10000
       }
     },
     featureDetails: [
@@ -161,7 +167,10 @@ export const PLANS: Record<PlanId, PlanConfig> = {
       },
       limits: {
         vault_storage: 10000,
-        active_activities: 10000
+        active_activities: 10000,
+        activities_active: 10000,
+        tasks_created_daily: 10000,
+        calendar_events_created_daily: 10000
       }
     },
     featureDetails: [

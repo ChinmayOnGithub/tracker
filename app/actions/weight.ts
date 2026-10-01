@@ -33,51 +33,56 @@ export async function logWeight(date: string, weight: number, notes?: string | n
 
     // Normalize to noon UTC to avoid timezone boundary issues
     const dateObj = new Date(`${date}T12:00:00.000Z`)
-
-    // Find existing record for this date
     const startOfDay = new Date(`${date}T00:00:00.000Z`)
     const endOfDay = new Date(`${date}T23:59:59.999Z`)
-    const existing = await db.weightRecord.findFirst({
-      where: {
+
+    const record = await db.$transaction(async (tx) => {
+      // Find existing record for this date
+      const existing = await tx.weightRecord.findFirst({
+        where: {
+          userId: user.id,
+          deletedAt: null,
+          date: { gte: startOfDay, lte: endOfDay },
+        },
+      })
+
+      let currentRecord
+      if (existing) {
+        await tx.weightRecord.updateMany({
+          where: { id: existing.id, userId: user.id, deletedAt: null },
+          data: { weight, notes: notes ?? existing.notes },
+        })
+        currentRecord = await tx.weightRecord.findUnique({ where: { id: existing.id } })
+        if (!currentRecord) throw new Error('Failed to retrieve updated weight record')
+      } else {
+        currentRecord = await tx.weightRecord.create({
+          data: { userId: user.id, date: dateObj, weight, notes: notes ?? null },
+        })
+      }
+
+      // Find/create default template for weight tracking
+      const template = await ActivityService.getOrCreateDefaultTemplate(
+        user.id,
+        'PERSONAL',
+        'Log Weight',
+        'health',
+        'Scale',
+        'blue',
+        tx
+      )
+
+      // Log occurrence via ActivityService
+      await ActivityService.logActivity({
         userId: user.id,
-        deletedAt: null,
-        date: { gte: startOfDay, lte: endOfDay },
-      },
-    })
+        templateId: template.id,
+        date,
+        status: 'done',
+        weightRecordId: currentRecord.id,
+        amount: weight,
+        note: notes ?? `Logged weight: ${weight} kg`
+      }, tx)
 
-    let record
-    if (existing) {
-      await db.weightRecord.updateMany({
-        where: { id: existing.id, userId: user.id, deletedAt: null },
-        data: { weight, notes: notes ?? existing.notes },
-      })
-      record = await db.weightRecord.findUnique({ where: { id: existing.id } })
-      if (!record) throw new Error('Failed to retrieve updated weight record')
-    } else {
-      record = await db.weightRecord.create({
-        data: { userId: user.id, date: dateObj, weight, notes: notes ?? null },
-      })
-    }
-
-    // Find/create default template for weight tracking
-    const template = await ActivityService.getOrCreateDefaultTemplate(
-      user.id,
-      'PERSONAL',
-      'Log Weight',
-      'health',
-      'Scale',
-      'blue'
-    )
-
-    // Log occurrence via ActivityService
-    await ActivityService.logActivity({
-      userId: user.id,
-      templateId: template.id,
-      date,
-      status: 'done',
-      weightRecordId: record.id,
-      amount: weight,
-      note: notes ?? `Logged weight: ${weight} kg`
+      return currentRecord
     })
 
     revalidatePath('/')
@@ -124,19 +129,21 @@ export async function deleteWeightRecord(id: string) {
     await requireModuleAccess('weight')
     const { user } = await requireOwnership('weightRecord', id)
 
-    const { count } = await db.weightRecord.updateMany({
-      where: { id, userId: user.id, deletedAt: null },
-      data: { deletedAt: new Date() }
-    })
+    await db.$transaction(async (tx) => {
+      const { count } = await tx.weightRecord.updateMany({
+        where: { id, userId: user.id, deletedAt: null },
+        data: { deletedAt: new Date() }
+      })
 
-    if (count === 0) {
-      return { success: false, error: 'Weight record not found', code: 'NOT_FOUND' }
-    }
-    
-    // Soft-delete corresponding activity logs scoped to userId
-    await db.activityLog.updateMany({
-      where: { weightRecordId: id, userId: user.id, deletedAt: null },
-      data: { deletedAt: new Date() }
+      if (count === 0) {
+        throw new Error('Weight record not found')
+      }
+      
+      // Soft-delete corresponding activity logs scoped to userId
+      await tx.activityLog.updateMany({
+        where: { weightRecordId: id, userId: user.id, deletedAt: null },
+        data: { deletedAt: new Date() }
+      })
     })
 
     revalidatePath('/')

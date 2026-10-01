@@ -168,35 +168,42 @@ export async function postponeOneTimeTask(
   try {
     const { user } = await requireOwnership('activityTemplate', templateId)
 
-    // Feature-flagged: Use Sync Engine if enabled
-    const service = isFeatureEnabled('SYNC_ENGINE_ENABLED')
-      ? SyncedActivityService
-      : ActivityService
-
-    // 1. Mark the current-day log as 'postponed'
-    if (existingLogId) {
-      await service.updateLog(user.id, existingLogId, { status: 'postponed' })
-    } else {
-      await service.logActivity({
-        userId: user.id,
-        templateId,
-        date: currentDate,
-        status: 'postponed',
-      })
-    }
-
-    // 2. Compute the next day and update the template's targetDate
+    // Compute the next day
     const [y, m, d] = currentDate.split('-').map(Number)
     const nextDay = new Date(Date.UTC(y, m - 1, d))
     nextDay.setUTCDate(nextDay.getUTCDate() + 1)
     const nextDayStr = nextDay.toISOString().split('T')[0]
 
-    await db.activityTemplate.update({
-      where: { id: templateId },
-      data: { targetDate: new Date(`${nextDayStr}T12:00:00.000Z`) }
+    await db.$transaction(async (tx) => {
+      // 1. Mark the current-day log as 'postponed'
+      if (existingLogId) {
+        const existing = await tx.activityLog.findUnique({ where: { id: existingLogId } })
+        if (!existing || existing.userId !== user.id) {
+          throw new Error('Log record not found or unauthorized')
+        }
+        await tx.activityLog.update({
+          where: { id: existingLogId },
+          data: { status: 'postponed', deletedAt: null }
+        })
+      } else {
+        await ActivityService.logActivity({
+          userId: user.id,
+          templateId,
+          date: currentDate,
+          status: 'postponed',
+        }, tx)
+      }
+
+      // 2. Atomically update the template's targetDate
+      await tx.activityTemplate.update({
+        where: { id: templateId },
+        data: { targetDate: new Date(`${nextDayStr}T12:00:00.000Z`) }
+      })
     })
 
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {}
     return { success: true, nextDate: nextDayStr }
   } catch (error) {
     console.error('Failed to postpone one_time task:', error)
@@ -217,21 +224,20 @@ export async function unpostponeOneTimeTask(
   try {
     const { user } = await requireOwnership('activityTemplate', templateId)
 
-    // Feature-flagged: Use Sync Engine if enabled
-    const service = isFeatureEnabled('SYNC_ENGINE_ENABLED')
-      ? SyncedActivityService
-      : ActivityService
+    await db.$transaction(async (tx) => {
+      // 1. Soft-delete the postponed log
+      await ActivityService.deleteLog(user.id, logId, tx)
 
-    // 1. Soft-delete the postponed log
-    await service.deleteLog(user.id, logId)
-
-    // 2. Revert the template's targetDate
-    await db.activityTemplate.update({
-      where: { id: templateId },
-      data: { targetDate: new Date(`${originalDate}T12:00:00.000Z`) }
+      // 2. Revert the template's targetDate
+      await tx.activityTemplate.update({
+        where: { id: templateId },
+        data: { targetDate: new Date(`${originalDate}T12:00:00.000Z`) }
+      })
     })
 
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {}
     return { success: true }
   } catch (error) {
     console.error('Failed to un-postpone one_time task:', error)
