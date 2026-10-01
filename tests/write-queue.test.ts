@@ -80,6 +80,27 @@ describe("Write Queue", () => {
     expect(lastArg).toBe("second")
   })
 
+  test("should resolve addAndWait only after the queued write succeeds", async () => {
+    let completed = false
+
+    const resultPromise = writeQueue.addAndWait({
+      id: "awaited-item",
+      dedupKey: "awaited-key",
+      run: async () => {
+        await new Promise(resolve => setTimeout(resolve, 20))
+        completed = true
+        return { success: true, value: "saved" }
+      },
+      rollback: () => {},
+    })
+
+    expect(completed).toBe(false)
+    const result = await resultPromise
+    expect(completed).toBe(true)
+    expect(result.success).toBe(true)
+    expect(result.value).toBe("saved")
+  })
+
   test("should trigger rollback on final failure after 3 retries", async () => {
     let _rollbackTriggered = false
     let runCount = 0
