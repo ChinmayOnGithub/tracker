@@ -72,7 +72,7 @@ function parseInitialWorkState(todayWorkLog: ActivityLog | null): WorkFormState 
   }
 
   return {
-    status: 'cleared',
+    status: 'office',
     mode: 'time',
     sessionState: 'idle',
     accumulatedSeconds: 0,
@@ -347,21 +347,22 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     )
     if (!confirmed) return
 
-    const updated: WorkFormState = {
-      status: 'cleared',
-      mode: 'time',
+    const previousState = formState
+    const clearedState: WorkFormState = {
+      ...previousState,
       sessionState: 'idle',
       accumulatedSeconds: 0,
       currentSegmentStartedAt: null,
       inTime: '',
       outTime: '',
-      manualHours: 8.0,
     }
 
-    const previousState = formState
-    const saved = await handleSaveWorkPresence(updated)
+    const saved = await handleSaveWorkPresence({
+      ...clearedState,
+      status: 'cleared',
+    })
     if (saved) {
-      setFormState(updated)
+      setFormState(clearedState)
       setLastClearedState(previousState)
       setClearedLogId(todayWorkLog?.id || null)
       setShowClearUndo(!!todayWorkLog?.id)
