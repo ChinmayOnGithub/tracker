@@ -190,13 +190,6 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
     return `${hh}:${mm}`
   }
 
-  const formatElapsedDisplay = (totalSec: number): string => {
-    const h = Math.floor(totalSec / 3600)
-    const m = Math.floor((totalSec % 3600) / 60)
-    const s = totalSec % 60
-    return `${h}h ${m}m ${s}s`
-  }
-
   const formatDecimalHours = (totalSec: number): string => `${(totalSec / 3600).toFixed(2)}h`
 
   const computeManualOrTimeHours = (inT: string, outT: string): number => {
