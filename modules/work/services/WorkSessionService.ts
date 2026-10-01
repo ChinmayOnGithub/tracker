@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { ActivityService } from '@/lib/services/ActivityService';
+import { ActivityService, type TransactionalDbClient } from '@/lib/services/ActivityService';
 import { createLocalDateTime } from '@/lib/dateUtils';
 
 export interface WorkSessionUpdateInput {
@@ -110,172 +110,218 @@ export class WorkSessionService {
   /**
    * Pauses an active work session, calculating the elapsed segment duration and accumulating it.
    * Session status is set to PAUSED without setting endedAt (#155).
+   * Fully atomic: WorkSession update and ActivityLog update commit or rollback together.
    */
   public static async pauseSession(userId: string, id: string) {
-    const session = await db.workSession.findFirst({
-      where: { id, userId, deletedAt: null }
-    });
-    if (!session) {
-      throw new Error('Work session not found.');
-    }
-    // Idempotent: already paused
-    if (session.status === 'PAUSED') {
-      return session;
-    }
-
-    const now = new Date();
-    const started = session.startedAt ? new Date(session.startedAt) : now;
-    const segmentMs = Math.max(0, now.getTime() - started.getTime());
-    const segmentMinutes = Math.round(segmentMs / 60000);
-    const totalMinutes = session.durationMinutes + segmentMinutes;
-
-    const updatedSession = await db.workSession.update({
-      where: { id },
-      data: {
-        status: 'PAUSED',
-        durationMinutes: totalMinutes
+    return await db.$transaction(async (tx) => {
+      try {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('work-session:' || ${userId}))`;
+      } catch {
+        // Non-fatal in mock/test environments
       }
-    });
 
-    const log = await db.activityLog.findFirst({
-      where: { workSessionId: id, userId, deletedAt: null }
-    });
-    if (log) {
-      const prevPayload = (log.payload || {}) as Record<string, unknown>;
-      await ActivityService.logActivity({
-        id: log.id,
-        userId,
-        templateId: log.activityId,
-        date: session.date,
-        status: session.mode === 'office' ? 'done' : 'wfh',
-        workSessionId: id,
-        amount: parseFloat((totalMinutes / 60).toFixed(1)),
-        note: `Paused work session: ${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m (${session.mode.toUpperCase()})`,
-        payload: {
-          ...prevPayload,
-          sessionState: 'paused',
-          accumulatedSeconds: totalMinutes * 60,
-          currentSegmentStartedAt: null,
-          workSessionId: id,
+      const session = await tx.workSession.findFirst({
+        where: { id, userId, deletedAt: null }
+      });
+      if (!session) {
+        throw new Error('Work session not found.');
+      }
+
+      const currentStatus = session.status?.toUpperCase() || (session.endedAt ? 'COMPLETED' : 'ACTIVE');
+
+      // Idempotent: already paused
+      if (currentStatus === 'PAUSED') {
+        return session;
+      }
+      if (currentStatus === 'COMPLETED') {
+        throw new Error('Cannot pause a completed work session.');
+      }
+
+      const now = new Date();
+      const started = session.startedAt ? new Date(session.startedAt) : now;
+      const segmentMs = Math.max(0, now.getTime() - started.getTime());
+      const segmentMinutes = Math.round(segmentMs / 60000);
+      const totalMinutes = session.durationMinutes + segmentMinutes;
+
+      const updatedSession = await tx.workSession.update({
+        where: { id },
+        data: {
+          status: 'PAUSED',
+          durationMinutes: totalMinutes
         }
       });
-    }
 
-    return updatedSession;
+      const log = await tx.activityLog.findFirst({
+        where: { workSessionId: id, userId, deletedAt: null }
+      });
+      if (log) {
+        const prevPayload = (log.payload || {}) as Record<string, unknown>;
+        await ActivityService.logActivity({
+          id: log.id,
+          userId,
+          templateId: log.activityId,
+          date: session.date,
+          status: session.mode === 'office' ? 'done' : 'wfh',
+          workSessionId: id,
+          amount: parseFloat((totalMinutes / 60).toFixed(1)),
+          note: `Paused work session: ${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m (${session.mode.toUpperCase()})`,
+          payload: {
+            ...prevPayload,
+            sessionState: 'paused',
+            accumulatedSeconds: totalMinutes * 60,
+            currentSegmentStartedAt: null,
+            workSessionId: id,
+          }
+        }, tx as TransactionalDbClient);
+      }
+
+      return updatedSession;
+    });
   }
 
   /**
    * Resumes a paused work session without losing accumulated duration.
+   * Fully atomic: WorkSession update and ActivityLog update commit or rollback together.
    */
   public static async resumeSession(userId: string, id: string) {
-    const session = await db.workSession.findFirst({
-      where: { id, userId, deletedAt: null }
-    });
-    if (!session) {
-      throw new Error('Work session not found.');
-    }
-    // Idempotent: already running
-    if (session.status === 'ACTIVE' && session.endedAt === null) {
-      return session;
-    }
-
-    const now = new Date();
-    const updatedSession = await db.workSession.update({
-      where: { id },
-      data: {
-        status: 'ACTIVE',
-        startedAt: now,
-        endedAt: null,
+    return await db.$transaction(async (tx) => {
+      try {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('work-session:' || ${userId}))`;
+      } catch {
+        // Non-fatal in mock/test environments
       }
-    });
 
-    const log = await db.activityLog.findFirst({
-      where: { workSessionId: id, userId, deletedAt: null }
-    });
-    if (log) {
-      const prevPayload = (log.payload || {}) as Record<string, unknown>;
-      await ActivityService.logActivity({
-        id: log.id,
-        userId,
-        templateId: log.activityId,
-        date: session.date,
-        status: session.mode === 'office' ? 'done' : 'wfh',
-        workSessionId: id,
-        amount: parseFloat((session.durationMinutes / 60).toFixed(1)),
-        note: `Resumed work session (${session.mode.toUpperCase()})`,
-        payload: {
-          ...prevPayload,
-          sessionState: 'running',
-          accumulatedSeconds: session.durationMinutes * 60,
-          currentSegmentStartedAt: now.toISOString(),
-          workSessionId: id,
+      const session = await tx.workSession.findFirst({
+        where: { id, userId, deletedAt: null }
+      });
+      if (!session) {
+        throw new Error('Work session not found.');
+      }
+
+      const currentStatus = session.status?.toUpperCase() || (session.endedAt ? 'COMPLETED' : 'ACTIVE');
+
+      // Idempotent: already running
+      if (currentStatus === 'ACTIVE' && session.endedAt === null) {
+        return session;
+      }
+      if (currentStatus === 'COMPLETED') {
+        throw new Error('Cannot resume a completed work session.');
+      }
+
+      const now = new Date();
+      const updatedSession = await tx.workSession.update({
+        where: { id },
+        data: {
+          status: 'ACTIVE',
+          startedAt: now,
+          endedAt: null,
         }
       });
-    }
 
-    return updatedSession;
+      const log = await tx.activityLog.findFirst({
+        where: { workSessionId: id, userId, deletedAt: null }
+      });
+      if (log) {
+        const prevPayload = (log.payload || {}) as Record<string, unknown>;
+        await ActivityService.logActivity({
+          id: log.id,
+          userId,
+          templateId: log.activityId,
+          date: session.date,
+          status: session.mode === 'office' ? 'done' : 'wfh',
+          workSessionId: id,
+          amount: parseFloat((session.durationMinutes / 60).toFixed(1)),
+          note: `Resumed work session (${session.mode.toUpperCase()})`,
+          payload: {
+            ...prevPayload,
+            sessionState: 'running',
+            accumulatedSeconds: session.durationMinutes * 60,
+            currentSegmentStartedAt: now.toISOString(),
+            workSessionId: id,
+          }
+        }, tx as TransactionalDbClient);
+      }
+
+      return updatedSession;
+    });
   }
 
   /**
    * Finalizes/stops a work session and logs the final duration.
+   * Fully atomic: WorkSession update and ActivityLog update commit or rollback together.
    */
   public static async finishSession(userId: string, id: string) {
-    const session = await db.workSession.findFirst({
-      where: { id, userId, deletedAt: null }
-    });
-    if (!session) {
-      throw new Error('Work session not found.');
-    }
-
-    const now = new Date();
-    let finalDurationMinutes = session.durationMinutes;
-
-    // If currently running, add the elapsed time of the active segment
-    if (session.status === 'ACTIVE' && session.startedAt !== null) {
-      const started = new Date(session.startedAt);
-      const segmentMinutes = Math.max(0, Math.round((now.getTime() - started.getTime()) / 60000));
-      finalDurationMinutes += segmentMinutes;
-    }
-
-    const updatedSession = await db.workSession.update({
-      where: { id },
-      data: {
-        status: 'COMPLETED',
-        endedAt: now,
-        durationMinutes: finalDurationMinutes
+    return await db.$transaction(async (tx) => {
+      try {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('work-session:' || ${userId}))`;
+      } catch {
+        // Non-fatal in mock/test environments
       }
-    });
 
-    const log = await db.activityLog.findFirst({
-      where: { workSessionId: id, userId, deletedAt: null }
-    });
-    if (log) {
-      const prevPayload = (log.payload || {}) as Record<string, unknown>;
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const outTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      const session = await tx.workSession.findFirst({
+        where: { id, userId, deletedAt: null }
+      });
+      if (!session) {
+        throw new Error('Work session not found.');
+      }
 
-      await ActivityService.logActivity({
-        id: log.id,
-        userId,
-        templateId: log.activityId,
-        date: session.date,
-        status: session.mode === 'office' ? 'done' : 'wfh',
-        workSessionId: id,
-        amount: parseFloat((finalDurationMinutes / 60).toFixed(1)),
-        note: `Worked ${Math.floor(finalDurationMinutes / 60)}h ${finalDurationMinutes % 60}m (${session.mode.toUpperCase()})`,
-        payload: {
-          ...prevPayload,
-          sessionState: 'completed',
-          outTime,
-          accumulatedSeconds: finalDurationMinutes * 60,
-          currentSegmentStartedAt: null,
-          hours: parseFloat((finalDurationMinutes / 60).toFixed(1)),
-          workSessionId: id,
+      const currentStatus = session.status?.toUpperCase() || (session.endedAt ? 'COMPLETED' : 'ACTIVE');
+
+      // Idempotent: already completed
+      if (currentStatus === 'COMPLETED') {
+        return session;
+      }
+
+      const now = new Date();
+      let finalDurationMinutes = session.durationMinutes;
+
+      // If currently running, add the elapsed time of the active segment
+      if (currentStatus === 'ACTIVE' && session.startedAt !== null) {
+        const started = new Date(session.startedAt);
+        const segmentMinutes = Math.max(0, Math.round((now.getTime() - started.getTime()) / 60000));
+        finalDurationMinutes += segmentMinutes;
+      }
+
+      const updatedSession = await tx.workSession.update({
+        where: { id },
+        data: {
+          status: 'COMPLETED',
+          endedAt: now,
+          durationMinutes: finalDurationMinutes
         }
       });
-    }
 
-    return updatedSession;
+      const log = await tx.activityLog.findFirst({
+        where: { workSessionId: id, userId, deletedAt: null }
+      });
+      if (log) {
+        const prevPayload = (log.payload || {}) as Record<string, unknown>;
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const outTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+        await ActivityService.logActivity({
+          id: log.id,
+          userId,
+          templateId: log.activityId,
+          date: session.date,
+          status: session.mode === 'office' ? 'done' : 'wfh',
+          workSessionId: id,
+          amount: parseFloat((finalDurationMinutes / 60).toFixed(1)),
+          note: `Worked ${Math.floor(finalDurationMinutes / 60)}h ${finalDurationMinutes % 60}m (${session.mode.toUpperCase()})`,
+          payload: {
+            ...prevPayload,
+            sessionState: 'completed',
+            outTime,
+            accumulatedSeconds: finalDurationMinutes * 60,
+            currentSegmentStartedAt: null,
+            hours: parseFloat((finalDurationMinutes / 60).toFixed(1)),
+            workSessionId: id,
+          }
+        }, tx as TransactionalDbClient);
+      }
+
+      return updatedSession;
+    });
   }
 
   /**
@@ -363,24 +409,32 @@ export class WorkSessionService {
   }
 
   /**
-   * Soft deletes a work session and removes the corresponding ActivityLog.
+   * Soft deletes a work session and removes the corresponding ActivityLog atomically.
    */
   public static async deleteSession(userId: string, id: string) {
-    const session = await db.workSession.findFirst({
-      where: { id, userId, deletedAt: null }
-    });
-    if (!session) {
-      throw new Error('Work session not found.');
-    }
+    return await db.$transaction(async (tx) => {
+      try {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('work-session:' || ${userId}))`;
+      } catch {
+        // Non-fatal in mock/test environments
+      }
 
-    await db.workSession.update({
-      where: { id },
-      data: { deletedAt: new Date() }
-    });
+      const session = await tx.workSession.findFirst({
+        where: { id, userId, deletedAt: null }
+      });
+      if (!session) {
+        throw new Error('Work session not found.');
+      }
 
-    await db.activityLog.updateMany({
-      where: { workSessionId: id, userId, deletedAt: null },
-      data: { deletedAt: new Date() }
+      await tx.workSession.update({
+        where: { id },
+        data: { deletedAt: new Date() }
+      });
+
+      await tx.activityLog.updateMany({
+        where: { workSessionId: id, userId, deletedAt: null },
+        data: { deletedAt: new Date() }
+      });
     });
   }
 

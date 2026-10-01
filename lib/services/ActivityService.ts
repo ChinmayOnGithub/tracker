@@ -2,7 +2,7 @@ import { db } from '../db'
 import { eventBus } from '../events'
 import { Prisma } from '@prisma/client'
 
-type TransactionalDbClient = Omit<typeof db, '$extends' | '$transaction' | '$disconnect' | '$connect' | '$on' | '$use'>
+export type TransactionalDbClient = Omit<typeof db, '$extends' | '$transaction' | '$disconnect' | '$connect' | '$on' | '$use'>
 
 export class ActivityService {
   /**
