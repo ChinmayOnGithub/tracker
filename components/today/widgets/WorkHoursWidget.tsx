@@ -14,6 +14,7 @@ interface WorkHoursWidgetProps {
   logs: ActivityLog[]
   weeklyGoal: number
   logWorkPresenceAction: (data: unknown) => Promise<unknown>
+  restoreWorkPresenceAction: (logId: string) => Promise<unknown>
   gridW?: number
   gridH?: number
 }
@@ -96,6 +97,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   logs,
   weeklyGoal,
   logWorkPresenceAction,
+  restoreWorkPresenceAction,
   gridW: _gridW = 7,
   gridH = 5,
 }) => {
@@ -114,6 +116,9 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
   const [isLoggingWork, setIsLoggingWork] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now())
+  const [clearedLogId, setClearedLogId] = useState<string | null>(null)
+  const [lastClearedState, setLastClearedState] = useState<WorkFormState | null>(null)
+  const [showClearUndo, setShowClearUndo] = useState(false)
 
   // Timer ticking for live display when RUNNING
   useEffect(() => {
@@ -198,6 +203,11 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
 
     setIsLoggingWork(true)
     try {
+      if (stateToSave.status !== 'cleared') {
+        setShowClearUndo(false)
+        setClearedLogId(null)
+        setLastClearedState(null)
+      }
       let computedHours = 0
       if (stateToSave.status !== 'cleared') {
         if (stateToSave.mode === 'manual') {
@@ -349,9 +359,40 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       manualHours: 8.0,
     }
 
+    const previousState = formState
     const saved = await handleSaveWorkPresence(updated)
     if (saved) {
       setFormState(updated)
+      setLastClearedState(previousState)
+      setClearedLogId(todayWorkLog?.id || null)
+      setShowClearUndo(!!todayWorkLog?.id)
+    }
+  }
+
+  const handleUndoClear = async () => {
+    if (!clearedLogId || !lastClearedState || isLoggingWork) return
+
+    setValidationError(null)
+    setIsLoggingWork(true)
+    try {
+      const result = await restoreWorkPresenceAction(clearedLogId)
+      if (typeof result === 'object' && result !== null && 'success' in result && result.success === false) {
+        throw new Error(
+          'error' in result && typeof result.error === 'string'
+            ? result.error
+            : 'Failed to restore the cleared work record.'
+        )
+      }
+
+      setFormState(lastClearedState)
+      setShowClearUndo(false)
+      setClearedLogId(null)
+      setLastClearedState(null)
+    } catch (err) {
+      console.error('Failed to undo cleared work record:', err)
+      setValidationError(err instanceof Error ? err.message : 'Failed to restore the cleared work record.')
+    } finally {
+      setIsLoggingWork(false)
     }
   }
 
@@ -368,6 +409,26 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       </CardHeader>
 
       <CardBody className={isCompactHeight ? 'space-y-2 py-1' : 'space-y-3'}>
+        {showClearUndo && lastClearedState && (
+          <div
+            role="status"
+            className="flex items-center justify-between gap-2 rounded-[var(--radius-lg)] border border-amber-500/30 bg-amber-50/60 px-3 py-2 dark:bg-amber-950/20"
+          >
+            <span className="text-[10px] font-semibold text-[var(--color-text-muted)]">
+              Work record cleared. You can restore the previous entry.
+            </span>
+            <Button
+              type="button"
+              onClick={() => void handleUndoClear()}
+              isLoading={isLoggingWork}
+              variant="outline"
+              size="sm"
+              className="shrink-0 text-xs font-bold"
+            >
+              Undo
+            </Button>
+          </div>
+        )}
         {/* RUNNING STATE */}
         {formState.sessionState === 'running' && !isEditingTimes && (
           <div className={isCompactHeight ? 'space-y-2' : 'space-y-3'}>
