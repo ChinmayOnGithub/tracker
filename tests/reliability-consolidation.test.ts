@@ -388,7 +388,14 @@ describe('Main Reliability & Atomicity Consolidation Suite (#130, #131, #132, #1
       db.$transaction = (async <T>(callback: (tx: unknown) => Promise<T>): Promise<T> => {
         const fakeTx = {
           activityLog: {
-            findUnique: () => Promise.resolve({ id: 'log-postponed', userId, deletedAt: null }),
+            findUnique: () => Promise.resolve({
+              id: 'log-postponed',
+              userId,
+              deletedAt: null,
+              activityId: 'task-1',         // matches templateId
+              status: 'postponed',           // required status
+              logDate: new Date('2026-10-01T12:00:00.000Z') // matches originalDate
+            }),
             update: (args: { where: { id: string } }) => {
               softDeletedLogId = args.where.id
               return Promise.resolve({ id: args.where.id, deletedAt: new Date() })

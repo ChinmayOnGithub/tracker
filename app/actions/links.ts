@@ -565,11 +565,11 @@ export async function checkDuplicateLink(url: string) {
 
 export async function registerLinkVisit(id: string) {
   try {
-    const { record: link } = await requireOwnership<SavedLink>('savedLink', id)
+    await requireOwnership<SavedLink>('savedLink', id)
     const updated = await db.savedLink.update({
       where: { id },
       data: {
-        openCount: link.openCount + 1,
+        openCount: { increment: 1 },
         lastOpenedAt: new Date()
       }
     })

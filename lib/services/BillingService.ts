@@ -1,4 +1,4 @@
-import { Subscription, Payment } from '@prisma/client'
+import { Subscription, Payment, BillingWebhookEvent } from '@prisma/client'
 import { db } from '../db'
 import { getBillingProvider, IBillingProvider } from '../billing/providers'
 import {
@@ -378,13 +378,10 @@ export class BillingService {
         }
       }
     } catch (err) {
-      // If checkout creation failed on provider, rollback the reservation so user isn't penalized
+      // If checkout creation failed on provider, rollback the reservation so user isn't penalized (#153)
       if (isIntroductory && customer?.id) {
         await db.billingCustomer.updateMany({
-          where: {
-            id: customer.id,
-            subscriptions: { none: { isIntroductory: true } }
-          },
+          where: { id: customer.id },
           data: {
             hasUsedIntroductoryOffer: false,
             introductoryOfferClaimedAt: null
@@ -919,41 +916,70 @@ export class BillingService {
 
     const norm = provider.normalizeWebhookEvent(rawJson)
 
-    // 3. Idempotency deduplication check
-    const existingEvent = await db.billingWebhookEvent.findUnique({
-      where: {
-        provider_providerEventId: {
-          provider: provider.name,
-          providerEventId: norm.eventId
-        }
-      }
-    })
+    // 3. Atomic event claim with lease timeout (#142)
+    const now = new Date()
+    const STALE_LEASE_MS = 60_000 // 60 seconds processing lease
+    const staleThreshold = new Date(now.getTime() - STALE_LEASE_MS)
 
-    if (existingEvent && existingEvent.status === 'PROCESSED') {
-      return { status: 200, message: 'Event already processed' }
+    let webhookRecord: BillingWebhookEvent | null = null
+
+    try {
+      // First attempt: create record directly in PROCESSING status
+      webhookRecord = await db.billingWebhookEvent.create({
+        data: {
+          provider: provider.name,
+          providerEventId: norm.eventId,
+          eventType: norm.eventType,
+          occurredAt: norm.occurredAt,
+          status: 'PROCESSING',
+          payload: rawJson as object
+        }
+      })
+    } catch {
+      // Record already exists. Query existing row and attempt atomic claim.
+      const existing = await db.billingWebhookEvent.findUnique({
+        where: {
+          provider_providerEventId: {
+            provider: provider.name,
+            providerEventId: norm.eventId
+          }
+        }
+      })
+
+      if (!existing) {
+        throw new Error('Failed to claim billing webhook event')
+      }
+
+      if (existing.status === 'PROCESSED') {
+        return { status: 200, message: 'Event already processed' }
+      }
+
+      // Atomically claim if FAILED, PENDING, or stale PROCESSING
+      const claimResult = await db.billingWebhookEvent.updateMany({
+        where: {
+          id: existing.id,
+          OR: [
+            { status: 'FAILED' },
+            { status: 'PENDING' },
+            {
+              status: 'PROCESSING',
+              updatedAt: { lt: staleThreshold }
+            }
+          ]
+        },
+        data: {
+          status: 'PROCESSING',
+          updatedAt: now
+        }
+      })
+
+      if (claimResult.count === 1) {
+        webhookRecord = existing
+      } else {
+        // Another concurrent request holds the active PROCESSING claim
+        return { status: 200, message: 'Event is currently being processed by another worker' }
+      }
     }
-
-    // Record webhook event as PENDING
-    const webhookRecord = await db.billingWebhookEvent.upsert({
-      where: {
-        provider_providerEventId: {
-          provider: provider.name,
-          providerEventId: norm.eventId
-        }
-      },
-      create: {
-        provider: provider.name,
-        providerEventId: norm.eventId,
-        eventType: norm.eventType,
-        occurredAt: norm.occurredAt,
-        status: 'PENDING',
-        payload: rawJson as object
-      },
-      update: {
-        status: 'PENDING',
-        updatedAt: new Date()
-      }
-    })
 
     try {
       // 4. Handle Subscription Lifecycle & Payment Events via canonical reconciliation

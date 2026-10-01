@@ -95,17 +95,30 @@ export async function upsertJournalEntry(
 export async function listJournalEntries(page = 1, limit = 20) {
   try {
     const user = await requireModuleAccess('journal')
-    const skip = (page - 1) * limit
+    const numPage = Number(page)
+    const numLimit = Number(limit)
+
+    if (isNaN(numPage) || isNaN(numLimit) || !Number.isInteger(numPage) || !Number.isInteger(numLimit) || numPage < 1 || numLimit < 1) {
+      return { success: false, error: 'Invalid page or limit parameter. Both must be positive integers.', entries: [], total: 0 }
+    }
+
+    if (numPage > 10000) {
+      return { success: false, error: 'Requested page exceeds maximum allowed pagination depth of 10000.', entries: [], total: 0 }
+    }
+
+    const safeLimit = Math.min(100, numLimit)
+    const safePage = numPage
+    const skip = (safePage - 1) * safeLimit
 
     const entries = await db.journalEntry.findMany({
       where: { userId: user.id, deletedAt: null },
       orderBy: { journalDate: 'desc' },
       skip,
-      take: limit,
+      take: safeLimit,
     })
     const total = await db.journalEntry.count({ where: { userId: user.id, deletedAt: null } })
 
-    return { success: true, entries, total, page, limit }
+    return { success: true, entries, total, page: safePage, limit: safeLimit }
   } catch (error) {
     console.error('Failed to list journal entries:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'

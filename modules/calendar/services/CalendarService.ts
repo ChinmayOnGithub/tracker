@@ -78,7 +78,7 @@ export class CalendarService {
     try {
       const provider = await this.getProvider(userId)
       if (provider && localEvent.externalId) {
-        await provider.deleteExternalEvent(localEvent.externalId)
+        await provider.deleteExternalEvent(localEvent.externalId, userId)
       }
     } catch (err) {
       logger.error('CalendarService', 'Failed to push deleted event to external provider', err)

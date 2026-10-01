@@ -149,8 +149,24 @@ describe('Turnstile Security Policy & Fail-Closed Protection', () => {
         })
       )) as unknown as typeof fetch
 
-    const res = await verifyHumanChallengeAction('valid-token')
-    expect(res.success).toBe(true)
+    // Mock DB to avoid real connection in tests
+    const { db } = await import('@/lib/db')
+    const origCreate = db.humanChallenge.create
+    db.humanChallenge.create = mock(() => Promise.resolve({
+      id: 'challenge-test-1',
+      nonce: 'test-nonce',
+      flow: 'LOGIN',
+      expiresAt: new Date(Date.now() + 300000),
+      consumedAt: null,
+      createdAt: new Date()
+    })) as unknown as typeof db.humanChallenge.create
+
+    try {
+      const res = await verifyHumanChallengeAction('valid-token')
+      expect(res.success).toBe(true)
+    } finally {
+      db.humanChallenge.create = origCreate
+    }
   })
 })
 

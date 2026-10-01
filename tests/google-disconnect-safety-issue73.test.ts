@@ -56,7 +56,8 @@ describe('Issue #73: Non-Destructive Google Calendar Disconnect', () => {
       throw new Error('VIOLATION: weightRecord must NEVER be deleted on Google disconnect')
     }) as unknown as typeof db.weightRecord.deleteMany
 
-    db.$transaction = mock((ops: unknown[]) => Promise.resolve(ops)) as unknown as typeof db.$transaction
+    // Mock $transaction to invoke the callback with the mocked db (so tx.xxx calls db.xxx mocks)
+    db.$transaction = mock((cb: (tx: typeof db) => Promise<unknown>) => cb(db)) as unknown as typeof db.$transaction
     GoogleCredentialService.getRefreshToken = mock(() => Promise.resolve(null))
 
     try {

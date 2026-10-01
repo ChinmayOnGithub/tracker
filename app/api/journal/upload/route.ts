@@ -89,16 +89,25 @@ export async function POST(request: NextRequest) {
     // ─── Persist to Durable Storage ───────────────────────────────────
     await StorageService.saveJournalImage(user.id, fileId, buffer, mimeType)
 
-    // ─── Create Database-backed Ownership Record ───────────────────────
-    await db.attachment.create({
-      data: {
-        userId: user.id,
-        fileName: file.name,
-        fileKey: fileId,
-        fileSize: file.size,
-        mimeType: mimeType,
+    // ─── Create Database-backed Ownership Record with Compensating Cleanup (#152) ───
+    try {
+      await db.attachment.create({
+        data: {
+          userId: user.id,
+          fileName: file.name,
+          fileKey: fileId,
+          fileSize: file.size,
+          mimeType: mimeType,
+        }
+      })
+    } catch (dbErr) {
+      try {
+        await StorageService.deleteJournalImage(user.id, fileId)
+      } catch (delErr) {
+        console.warn('[JournalUpload] Failed to clean up orphaned image after DB failure:', delErr)
       }
-    })
+      throw dbErr
+    }
 
     const url = `/api/journal/image/${fileId}`
     return NextResponse.json({

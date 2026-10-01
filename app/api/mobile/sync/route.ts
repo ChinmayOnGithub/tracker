@@ -47,18 +47,27 @@ const SyncTemplateSchema = z.object({
   version: z.number().int().nonnegative().optional()
 })
 
+const SyncItemIdentifierSchema = z.union([
+  z.string().max(128).transform(id => ({ id, version: undefined as number | undefined })),
+  z.object({
+    id: z.string().max(128),
+    version: z.number().int().nonnegative().optional()
+  })
+])
+
 const SyncRequestSchema = z.object({
-  lastSyncedAt: z.string().datetime().nullable().optional(),
+  lastSyncedAt: z.string().nullable().optional(),
+  limit: z.number().int().min(1).max(200).optional().default(100),
   localChanges: z.object({
     logs: z.array(SyncLogSchema).max(MAX_RECORDS_PER_ENTITY).default([]),
     notes: z.array(SyncNoteSchema).max(MAX_RECORDS_PER_ENTITY).default([]),
     templates: z.array(SyncTemplateSchema).max(MAX_RECORDS_PER_ENTITY).default([]),
-    deletedLogs: z.array(z.string().max(128)).max(MAX_RECORDS_PER_ENTITY).default([]),
-    deletedNotes: z.array(z.string().max(128)).max(MAX_RECORDS_PER_ENTITY).default([]),
-    deletedTemplates: z.array(z.string().max(128)).max(MAX_RECORDS_PER_ENTITY).default([]),
-    restoredNotes: z.array(z.string().max(128)).max(MAX_RECORDS_PER_ENTITY).default([]),
-    restoredTemplates: z.array(z.string().max(128)).max(MAX_RECORDS_PER_ENTITY).default([]),
-    restoredLogs: z.array(z.string().max(128)).max(MAX_RECORDS_PER_ENTITY).default([])
+    deletedLogs: z.array(SyncItemIdentifierSchema).max(MAX_RECORDS_PER_ENTITY).default([]),
+    deletedNotes: z.array(SyncItemIdentifierSchema).max(MAX_RECORDS_PER_ENTITY).default([]),
+    deletedTemplates: z.array(SyncItemIdentifierSchema).max(MAX_RECORDS_PER_ENTITY).default([]),
+    restoredNotes: z.array(SyncItemIdentifierSchema).max(MAX_RECORDS_PER_ENTITY).default([]),
+    restoredTemplates: z.array(SyncItemIdentifierSchema).max(MAX_RECORDS_PER_ENTITY).default([]),
+    restoredLogs: z.array(SyncItemIdentifierSchema).max(MAX_RECORDS_PER_ENTITY).default([])
   }).default({
     logs: [],
     notes: [],
@@ -132,7 +141,24 @@ export async function POST(request: Request) {
       )
     }
 
-    const { lastSyncedAt, localChanges } = parseResult.data
+    const { lastSyncedAt, localChanges, limit } = parseResult.data
+
+    if (lastSyncedAt) {
+      const syncTime = new Date(lastSyncedAt).getTime()
+      if (isNaN(syncTime)) {
+        return NextResponse.json(
+          { error: { code: 'INVALID_TIMESTAMP', message: 'Malformed lastSyncedAt timestamp' } },
+          { status: 400 }
+        )
+      }
+      if (syncTime > Date.now() + 5000) {
+        return NextResponse.json(
+          { error: { code: 'FUTURE_TIMESTAMP', message: 'lastSyncedAt cannot be in the future' } },
+          { status: 400 }
+        )
+      }
+    }
+
     const totalRecords = localChanges.logs.length + localChanges.notes.length + localChanges.templates.length
     if (totalRecords > MAX_TOTAL_RECORDS) {
       return NextResponse.json(
@@ -165,7 +191,7 @@ export async function POST(request: Request) {
 
         if (existing) {
           // If deleted on server and not explicitly restored, ignore update
-          if (existing.deletedAt && !localChanges.restoredLogs.includes(log.id)) {
+          if (existing.deletedAt && !localChanges.restoredLogs.some(r => r.id === log.id)) {
             continue
           }
 
@@ -233,7 +259,7 @@ export async function POST(request: Request) {
 
         if (existing) {
           // Normal UPDATE must never clear deletedAt. Only explicit restore can clear deletedAt.
-          const isRestore = localChanges.restoredNotes.includes(note.id)
+          const isRestore = localChanges.restoredNotes.some(r => r.id === note.id)
           if (existing.deletedAt && !isRestore) {
             continue
           }
@@ -284,7 +310,7 @@ export async function POST(request: Request) {
         })
 
         if (existing) {
-          const isRestore = localChanges.restoredTemplates.includes(t.id)
+          const isRestore = localChanges.restoredTemplates.some(r => r.id === t.id)
           if (existing.deletedAt && !isRestore) {
             continue
           }
@@ -352,25 +378,162 @@ export async function POST(request: Request) {
         }
       }
 
-      // 4. Process deletions (Never hard delete, increment version)
-      if (localChanges.deletedLogs.length > 0) {
-        await tx.activityLog.updateMany({
-          where: { id: { in: localChanges.deletedLogs }, userId, deletedAt: null },
-          data: { deletedAt: new Date(), version: { increment: 1 } }
+      // 3.5. Process explicit restores
+      for (const item of localChanges.restoredLogs) {
+        const existing = await tx.activityLog.findFirst({
+          where: { id: item.id, userId }
+        })
+        if (!existing || !existing.deletedAt) {
+          continue
+        }
+        if (item.version !== undefined && existing.version !== item.version) {
+          conflicts.push({
+            entity: 'logs',
+            id: existing.id,
+            serverVersion: existing.version,
+            serverRecord: {
+              id: existing.id,
+              status: existing.status,
+              version: existing.version,
+              deletedAt: existing.deletedAt
+            }
+          })
+          continue
+        }
+        await tx.activityLog.update({
+          where: { id: existing.id },
+          data: {
+            deletedAt: null,
+            version: existing.version + 1,
+            updatedAt: new Date()
+          }
         })
       }
 
-      if (localChanges.deletedNotes.length > 0) {
-        await tx.note.updateMany({
-          where: { id: { in: localChanges.deletedNotes }, userId, deletedAt: null },
-          data: { deletedAt: new Date(), version: { increment: 1 } }
+      for (const item of localChanges.restoredNotes) {
+        const existing = await tx.note.findFirst({
+          where: { id: item.id, userId }
+        })
+        if (!existing || !existing.deletedAt) continue
+        if (item.version !== undefined && existing.version !== item.version) {
+          conflicts.push({
+            entity: 'notes',
+            id: existing.id,
+            serverVersion: existing.version,
+            serverRecord: { id: existing.id, version: existing.version, deletedAt: existing.deletedAt }
+          })
+          continue
+        }
+        await tx.note.update({
+          where: { id: existing.id },
+          data: {
+            deletedAt: null,
+            version: existing.version + 1,
+            updatedAt: new Date()
+          }
         })
       }
 
-      if (localChanges.deletedTemplates.length > 0) {
-        await tx.activityTemplate.updateMany({
-          where: { id: { in: localChanges.deletedTemplates }, userId, deletedAt: null },
-          data: { deletedAt: new Date(), version: { increment: 1 } }
+      for (const item of localChanges.restoredTemplates) {
+        const existing = await tx.activityTemplate.findFirst({
+          where: { id: item.id, userId }
+        })
+        if (!existing || !existing.deletedAt) continue
+        if (item.version !== undefined && existing.version !== item.version) {
+          conflicts.push({
+            entity: 'templates',
+            id: existing.id,
+            serverVersion: existing.version,
+            serverRecord: { id: existing.id, version: existing.version, deletedAt: existing.deletedAt }
+          })
+          continue
+        }
+        await tx.activityTemplate.update({
+          where: { id: existing.id },
+          data: {
+            deletedAt: null,
+            version: existing.version + 1,
+            updatedAt: new Date()
+          }
+        })
+      }
+
+      // 4. Process deletions (Never hard delete, version check, increment version)
+      for (const item of localChanges.deletedLogs) {
+        const existing = await tx.activityLog.findFirst({
+          where: { id: item.id, userId }
+        })
+        if (!existing || existing.deletedAt) {
+          continue
+        }
+        if (item.version !== undefined && existing.version !== item.version) {
+          conflicts.push({
+            entity: 'logs',
+            id: existing.id,
+            serverVersion: existing.version,
+            serverRecord: {
+              id: existing.id,
+              status: existing.status,
+              version: existing.version
+            }
+          })
+          continue
+        }
+        await tx.activityLog.update({
+          where: { id: existing.id },
+          data: { deletedAt: new Date(), version: existing.version + 1, updatedAt: new Date() }
+        })
+      }
+
+      for (const item of localChanges.deletedNotes) {
+        const existing = await tx.note.findFirst({
+          where: { id: item.id, userId }
+        })
+        if (!existing || existing.deletedAt) {
+          continue
+        }
+        if (item.version !== undefined && existing.version !== item.version) {
+          conflicts.push({
+            entity: 'notes',
+            id: existing.id,
+            serverVersion: existing.version,
+            serverRecord: {
+              id: existing.id,
+              title: existing.title,
+              version: existing.version
+            }
+          })
+          continue
+        }
+        await tx.note.update({
+          where: { id: existing.id },
+          data: { deletedAt: new Date(), version: existing.version + 1, updatedAt: new Date() }
+        })
+      }
+
+      for (const item of localChanges.deletedTemplates) {
+        const existing = await tx.activityTemplate.findFirst({
+          where: { id: item.id, userId }
+        })
+        if (!existing || existing.deletedAt) {
+          continue
+        }
+        if (item.version !== undefined && existing.version !== item.version) {
+          conflicts.push({
+            entity: 'templates',
+            id: existing.id,
+            serverVersion: existing.version,
+            serverRecord: {
+              id: existing.id,
+              name: existing.name,
+              version: existing.version
+            }
+          })
+          continue
+        }
+        await tx.activityTemplate.update({
+          where: { id: existing.id },
+          data: { deletedAt: new Date(), version: existing.version + 1, updatedAt: new Date() }
         })
       }
 
@@ -382,36 +545,68 @@ export async function POST(request: Request) {
       })
 
       // 6. Fetch authoritative updates since lastSyncedAt (including soft-deleted tombstones)
+      const pageLimit = limit || 100
       const syncFilter = lastSyncedAt
         ? { updatedAt: { gt: new Date(lastSyncedAt) } }
         : { deletedAt: null }
 
       const dbTemplates = await tx.activityTemplate.findMany({
-        where: { userId, ...syncFilter }
+        where: { userId, ...syncFilter },
+        orderBy: { updatedAt: 'asc' },
+        take: pageLimit + 1
       })
+      const hasMoreTemplates = dbTemplates.length > pageLimit
+      const pageTemplates = hasMoreTemplates ? dbTemplates.slice(0, pageLimit) : dbTemplates
 
       const dbLogs = await tx.activityLog.findMany({
-        where: { userId, ...syncFilter }
+        where: { userId, ...syncFilter },
+        orderBy: { updatedAt: 'asc' },
+        take: pageLimit + 1
       })
+      const hasMoreLogs = dbLogs.length > pageLimit
+      const pageLogs = hasMoreLogs ? dbLogs.slice(0, pageLimit) : dbLogs
 
       const dbNotes = await tx.note.findMany({
-        where: { userId, ...syncFilter }
+        where: { userId, ...syncFilter },
+        orderBy: { updatedAt: 'asc' },
+        take: pageLimit + 1
       })
+      const hasMoreNotes = dbNotes.length > pageLimit
+      const pageNotes = hasMoreNotes ? dbNotes.slice(0, pageLimit) : dbNotes
+
+      const hasMore = hasMoreTemplates || hasMoreLogs || hasMoreNotes
+
+      let nextCursor: string | null = null
+      if (hasMore) {
+        const allDates = [
+          ...pageTemplates.map(t => t.updatedAt),
+          ...pageLogs.map(l => l.updatedAt),
+          ...pageNotes.map(n => n.updatedAt)
+        ].filter(Boolean) as Date[]
+        if (allDates.length > 0) {
+          const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())))
+          nextCursor = maxDate.toISOString()
+        }
+      }
 
       return {
         cursor: syncCursor.revision.toString(),
-        templates: dbTemplates,
-        logs: dbLogs.map(log => ({
+        hasMore,
+        nextCursor,
+        templates: pageTemplates,
+        logs: pageLogs.map(log => ({
           ...log,
           date: log.logDate.toISOString().split('T')[0]
         })),
-        notes: dbNotes
+        notes: pageNotes
       }
     })
 
     return NextResponse.json({
       serverTime: new Date().toISOString(),
       cursor: result.cursor,
+      hasMore: result.hasMore,
+      nextCursor: result.nextCursor,
       conflicts,
       syncData: {
         templates: result.templates,

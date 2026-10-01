@@ -124,47 +124,85 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to store file' }, { status: 500 })
     }
 
-    // ─── Create database records transactionally ──────────────────────
+    // ─── Create database records transactionally with atomic capacity check (#151) ───
     let doc
     try {
-      doc = await db.secureDocument.create({
-        data: {
-          userId: user.id,
-          encryptedTitle: encryptedName,
-          searchName,
-          encryptedType,
-          mimeGroup,
-          extension,
-          storageKey,
-          storageProvider: 'storage_service',
-          iv,
-          tag,
-          fileSize: file.size,
-          isFolder: false,
-          parentId: parentId,
-          metadata: metadata,
-        },
+      doc = await db.$transaction(async (tx) => {
+        try {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('vault-upload:' || ${user.id}))`
+        } catch {
+          // Fallback in SQLite or mock test environments
+        }
+
+        const currentCount = await tx.secureDocument.count({
+          where: { userId: user.id, isFolder: false, deletedAt: null }
+        })
+        const capacityCheck = await EntitlementService.checkVaultCapacity(user.id, currentCount)
+        if (!capacityCheck.allowed) {
+          const limitErr = Object.assign(
+            new Error(`Vault storage limit reached (${capacityCheck.maxFiles} files on Free plan). Upgrade to Tracker Pro for unlimited storage.`),
+            { code: 'VAULT_LIMIT_EXCEEDED' }
+          )
+          throw limitErr
+        }
+
+        const createdDoc = await tx.secureDocument.create({
+          data: {
+            userId: user.id,
+            encryptedTitle: encryptedName,
+            searchName,
+            encryptedType,
+            mimeGroup,
+            extension,
+            storageKey,
+            storageProvider: 'storage_service',
+            iv,
+            tag,
+            fileSize: file.size,
+            isFolder: false,
+            parentId: parentId,
+            metadata: metadata,
+          },
+        })
+
+        // Database-backed attachment record
+        await tx.attachment.create({
+          data: {
+            userId: user.id,
+            fileName: file.name,
+            fileKey: storageKey,
+            fileSize: file.size,
+            mimeType: file.type || 'application/octet-stream',
+            documentId: createdDoc.id,
+          },
+        })
+
+        return createdDoc
       })
-
-      // Database-backed attachment record
-      await db.attachment.create({
-        data: {
-          userId: user.id,
-          fileName: file.name,
-          fileKey: storageKey,
-          fileSize: file.size,
-          mimeType: file.type || 'application/octet-stream',
-          documentId: doc.id,
-        },
-      }).catch(attErr => console.warn('Attachment creation warning:', attErr))
-
-    } catch (error) {
+    } catch (error: unknown) {
       // Rollback: delete the stored file
       try {
         await StorageService.deleteVaultFile(user.id, storageKey)
       } catch {
         // Silent fail on cleanup
       }
+
+      const errorCode = error && typeof error === 'object' && 'code' in error
+        ? String((error as { code: unknown }).code)
+        : undefined
+
+      const errorMessage = error instanceof Error ? error.message : 'Vault limit exceeded'
+
+      if (errorCode === 'VAULT_LIMIT_EXCEEDED') {
+        return NextResponse.json(
+          {
+            error: errorMessage,
+            code: 'VAULT_LIMIT_EXCEEDED'
+          },
+          { status: 403 }
+        )
+      }
+
       console.error('Failed to create database record:', error)
       return NextResponse.json({ error: 'Failed to save file metadata' }, { status: 500 })
     }
