@@ -217,7 +217,7 @@ describe('Step 5 / Issue #72: Cross-Account Security & Data Isolation Hardening'
   // 4. Weight Access & Pro Write Enforcement
   // ---------------------------------------------------------------------------
   describe('Phase 3: Weight Access & Write Capability', () => {
-    it('denies Free / lapsed user weight log writes while preserving historical reads', async () => {
+    it('allows Free / lapsed user weight tracking under canonical activity quota with consent while requiring consent when activity is missing', async () => {
       const origRequireModule = AuthorizationService.requireModuleAccess
       const origIsPro = EntitlementService.isPro
       const origFindMany = db.weightRecord.findMany
@@ -225,7 +225,7 @@ describe('Step 5 / Issue #72: Cross-Account Security & Data Isolation Hardening'
       AuthorizationService.requireModuleAccess = mock(() =>
         Promise.resolve({ id: userA, username: 'user_a', isOwner: false })
       )
-      // Free user is not Pro
+      // Free user is not Pro, but Weight is included in canonical Free plan (#195)
       EntitlementService.isPro = mock(() => Promise.resolve(false))
 
       db.weightRecord.findMany = mock(() =>
@@ -244,10 +244,10 @@ describe('Step 5 / Issue #72: Cross-Account Security & Data Isolation Hardening'
       ) as unknown as typeof db.weightRecord.findMany
 
       try {
-        // Write action must fail with ACCESS_DENIED
-        const logResult = await logWeight('2026-09-20', 73.0)
-        expect(logResult.success).toBe(false)
-        expect(logResult.code).toBe('ACCESS_DENIED')
+        // Without explicit consent when template is missing, returns FEATURE_ACTIVITY_CONSENT_REQUIRED
+        const consentResult = await logWeight('2026-09-20', 73.0)
+        expect(consentResult.success).toBe(false)
+        expect(consentResult.code).toBe('FEATURE_ACTIVITY_CONSENT_REQUIRED')
 
         // Historical read must succeed
         const readResult = await getWeightHistory(90)

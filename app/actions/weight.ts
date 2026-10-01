@@ -5,13 +5,18 @@ import { revalidatePath } from 'next/cache'
 import { requireOwnership, requireModuleAccess } from '@/lib/auth-guards'
 import { logWeightSchema } from '@/lib/validations'
 
-import { ActivityService } from '@/lib/services/ActivityService'
+import { ActivityService, type TransactionalDbClient } from '@/lib/services/ActivityService'
 
 /**
  * Log or update today's weight entry (one per day per user).
  * Uses upsert-by-date pattern to avoid duplicates.
  */
-export async function logWeight(date: string, weight: number, notes?: string | null) {
+export async function logWeight(
+  date: string,
+  weight: number,
+  notes?: string | null,
+  options?: { consentToCreateActivity?: boolean } | boolean
+) {
   const parsed = logWeightSchema.safeParse({ date, weight, notes })
   if (!parsed.success) {
     const message = parsed.error.issues.map((i) => i.message).join('; ')
@@ -21,22 +26,110 @@ export async function logWeight(date: string, weight: number, notes?: string | n
   try {
     const user = await requireModuleAccess('weight')
 
-    const { EntitlementService } = await import('@/lib/services/EntitlementService')
-    const isPro = await EntitlementService.isPro(user.id)
-    if (!isPro) {
-      return {
-        success: false,
-        error: 'Weight tracking requires an active Tracker Pro subscription. Your historical weight records remain accessible.',
-        code: 'ACCESS_DENIED'
-      }
-    }
+    const hasConsent = typeof options === 'boolean' ? options : Boolean(options?.consentToCreateActivity)
 
     // Normalize to noon UTC to avoid timezone boundary issues
     const dateObj = new Date(`${date}T12:00:00.000Z`)
     const startOfDay = new Date(`${date}T00:00:00.000Z`)
     const endOfDay = new Date(`${date}T23:59:59.999Z`)
 
-    const record = await db.$transaction(async (tx) => {
+    const txResult = await db.$transaction(async (tx) => {
+      // Concurrency lock for template provisioning and weight logging
+      try {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('user-template:' || ${user.id}))`
+      } catch {
+        // Non-fatal in mock/test environments
+      }
+
+      // 1. Find or provision canonical template atomically
+      let template = await tx.activityTemplate.findFirst({
+        where: {
+          userId: user.id,
+          name: 'Log Weight',
+          deletedAt: null
+        }
+      })
+
+      // 2. If activity does not exist, require explicit user consent before provisioning (#195)
+      if (!template && !hasConsent) {
+        return {
+          requiresConsent: true,
+          code: 'FEATURE_ACTIVITY_CONSENT_REQUIRED' as const,
+          error: 'Weight tracking requires a "Log Weight" activity in your routine. Would you like to create or restore it?',
+          feature: 'weight',
+          activityName: 'Log Weight'
+        }
+      }
+
+      // 3. If consent is provided and template is missing, check activity quota against canonical entitlement
+      if (!template && hasConsent) {
+        const { EntitlementService } = await import('@/lib/services/EntitlementService')
+        const activeCount = await tx.activityTemplate.count({
+          where: {
+            userId: user.id,
+            deletedAt: null,
+            isActive: true
+          }
+        })
+        const quotaLimit = await EntitlementService.getLimit(user.id, 'activities_active')
+
+        if (activeCount >= quotaLimit) {
+          return {
+            success: false,
+            code: 'ACTIVITY_LIMIT_REACHED' as const,
+            error: `You have reached your active activity limit (${activeCount}/${quotaLimit}). Please archive an activity or upgrade to Tracker Pro to add weight tracking.`,
+            limit: quotaLimit,
+            current: activeCount
+          }
+        }
+
+        // Prefer restoring a soft-deleted canonical template rather than creating a duplicate
+        const softDeletedTemplate = await tx.activityTemplate.findFirst({
+          where: {
+            userId: user.id,
+            name: 'Log Weight',
+            deletedAt: { not: null }
+          },
+          orderBy: { updatedAt: 'desc' }
+        })
+
+        if (softDeletedTemplate) {
+          template = await tx.activityTemplate.update({
+            where: { id: softDeletedTemplate.id },
+            data: { deletedAt: null, isActive: true }
+          })
+        } else {
+          template = await tx.activityTemplate.create({
+            data: {
+              userId: user.id,
+              name: 'Log Weight',
+              type: 'PERSONAL',
+              recurrenceType: 'daily',
+              category: 'health',
+              icon: 'Scale',
+              color: 'blue',
+              sortOrder: activeCount + 1,
+              notes: 'Track daily weight fluctuations',
+              metadata: {
+                completion: {
+                  method: 'VALUE',
+                  hook: 'weight',
+                  value: {
+                    label: 'Weight',
+                    unit: 'kg',
+                    required: true,
+                  }
+                }
+              }
+            }
+          })
+        }
+      }
+
+      if (!template) {
+        throw new Error('Failed to resolve activity template for weight tracking')
+      }
+
       // Find existing record for this date
       const existing = await tx.weightRecord.findFirst({
         where: {
@@ -60,17 +153,6 @@ export async function logWeight(date: string, weight: number, notes?: string | n
         })
       }
 
-      // Find/create default template for weight tracking
-      const template = await ActivityService.getOrCreateDefaultTemplate(
-        user.id,
-        'PERSONAL',
-        'Log Weight',
-        'health',
-        'Scale',
-        'blue',
-        tx
-      )
-
       // Log occurrence via ActivityService
       await ActivityService.logActivity({
         userId: user.id,
@@ -80,13 +162,32 @@ export async function logWeight(date: string, weight: number, notes?: string | n
         weightRecordId: currentRecord.id,
         amount: weight,
         note: notes ?? `Logged weight: ${weight} kg`
-      }, tx)
+      }, tx as TransactionalDbClient)
 
-      return currentRecord
+      return { success: true, record: currentRecord }
     })
 
-    revalidatePath('/')
-    return { success: true, record }
+    if ('requiresConsent' in txResult && txResult.requiresConsent) {
+      return {
+        success: false,
+        code: txResult.code,
+        error: txResult.error,
+        requiresConsent: true,
+        feature: txResult.feature,
+        activityName: txResult.activityName
+      }
+    }
+
+    if ('code' in txResult && txResult.code === 'ACTIVITY_LIMIT_REACHED') {
+      return txResult
+    }
+
+    try {
+      revalidatePath('/')
+    } catch {
+      // Non-fatal if invoked outside Next.js request context (e.g. in test suites)
+    }
+    return txResult
   } catch (error) {
     console.error('Failed to log weight:', error)
     const message = error instanceof Error ? error.message : 'Unknown error'
@@ -158,7 +259,11 @@ export async function deleteWeightRecord(id: string) {
       })
     })
 
-    revalidatePath('/')
+    try {
+      revalidatePath('/')
+    } catch {
+      // Non-fatal if invoked outside Next.js request context (e.g. in test suites)
+    }
     return { success: true }
   } catch (error) {
     console.error('Failed to delete weight record:', error)
