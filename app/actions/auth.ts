@@ -7,6 +7,7 @@ import { CredentialService } from '@/lib/services/CredentialService'
 import { AuthorizationService } from '@/lib/services/AuthorizationService'
 import { OnboardingService } from '@/lib/services/OnboardingService'
 import { cookies } from 'next/headers'
+import { z } from 'zod'
 
 const LOGIN_SECURITY_MODULE = 'LOGIN_SECURITY'
 const HUMAN_VERIFIED_COOKIE = 'tracker_human_verified'
