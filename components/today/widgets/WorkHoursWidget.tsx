@@ -280,13 +280,16 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
 
     const now = new Date()
     const nowTime = getLocalTimeStr()
-    const effectiveInTime = formState.inTime || nowTime
+    // "Start New Session" from a completed day begins a new segment at the
+    // current time. The previous completed session must never seed the new timer.
+    const isNewSession = formState.sessionState === 'completed'
+    const effectiveInTime = isNewSession ? nowTime : (formState.inTime || nowTime)
     let effectiveStart: Date
 
     try {
-      effectiveStart = formState.inTime
-        ? createLocalDateTime(todayStr, effectiveInTime)
-        : now
+      effectiveStart = isNewSession
+        ? now
+        : (formState.inTime ? createLocalDateTime(todayStr, effectiveInTime) : now)
     } catch (err) {
       setValidationError(err instanceof Error ? err.message : 'Invalid start time')
       return
@@ -305,8 +308,7 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
       inTime: effectiveInTime,
       outTime: '',
       currentSegmentStartedAt: effectiveStart.toISOString(),
-      // If starting fresh from IDLE, accumulatedSeconds is preserved if restarting same day or 0
-      accumulatedSeconds: formState.sessionState === 'completed' ? formState.accumulatedSeconds : 0,
+      accumulatedSeconds: isNewSession ? 0 : 0,
     }
     setFormState(updated)
     await handleSaveWorkPresence(updated, 'start')
