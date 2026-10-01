@@ -10,7 +10,7 @@ export default function ThemeScript({ userId }: { userId?: string | null }) {
           document.documentElement.classList.remove('dark');
         }
 
-        var authenticatedUserId = null;
+        var authenticatedUserId = ${JSON.stringify(userId ?? null)};
         var accent = localStorage.getItem(scopedPrefix + 'personal_accent_color') || localStorage.getItem('personal_accent_color') || 'blue';
         var fontSize = localStorage.getItem(scopedPrefix + 'personal_font_size') || localStorage.getItem('personal_font_size') || 'md';
         var rounded = localStorage.getItem(scopedPrefix + 'personal_rounded_corners') || localStorage.getItem('personal_rounded_corners') || 'md';
