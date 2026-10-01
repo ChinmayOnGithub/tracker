@@ -12,7 +12,7 @@ import { createLocalDateTime } from '@/lib/dateUtils'
 import { Prisma } from '@prisma/client'
 
 async function acquireWorkTrackerLock(
-  tx: Prisma.TransactionClient,
+  tx: Pick<typeof db, '$executeRaw'>,
   userId: string,
   templateId: string,
   date: string,
