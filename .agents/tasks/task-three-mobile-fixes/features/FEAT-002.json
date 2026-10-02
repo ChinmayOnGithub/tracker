@@ -1,0 +1,30 @@
+{
+  "id": "FEAT-002",
+  "type": "fix",
+  "description": "Fix activity icons not displaying by correcting the prop passed to ActivitySymbolBadge. The component expects 'symbol' prop but is not receiving template.icon correctly. Database field is 'icon', API returns 'icon', but component mapping is broken.",
+  "status": "completed",
+  "steps": [
+    "Read m/src/features/activities/components/ActivitySymbolBadge.tsx to confirm it expects a 'symbol' prop (line 8)",
+    "Read m/src/features/activities/components/ActivityCard.tsx line 23 where ActivitySymbolBadge is rendered",
+    "Verify the ActivitySymbolBadge is receiving symbol={template.icon} - if not, fix the prop to pass template.icon to the symbol prop",
+    "The template object has an 'icon' field from the API (confirmed in m/src/api/types.ts line 35 and Prisma schema line 369)",
+    "Ensure no other changes are needed - the icon resolution logic in symbol-registry.ts already handles the icon value correctly"
+  ],
+  "acceptance_criteria": [
+    "ActivityCard passes template.icon to ActivitySymbolBadge's symbol prop",
+    "Activity icons render correctly on the Activities screen instead of showing default activity icon for all items",
+    "Both emoji and wireframe icons display properly",
+    "Icon resolution fallback to default activity icon still works for templates with missing/null icon values"
+  ],
+  "verification": [
+    "Start server with 'bun dev'",
+    "Start mobile client with 'cd m && npx expo start'",
+    "Open mobile app on iOS or Android simulator/device",
+    "Navigate to Activities tab",
+    "Confirm that each activity shows its assigned icon (emoji or wireframe) instead of the default activity icon",
+    "Create a new activity with a custom icon and verify it displays correctly",
+    "Check activities created from seed data show their icons (e.g. 🏃 for workout, 💻 for coding, etc.)"
+  ],
+  "blocked_reason": null,
+  "findings": "The ActivityCard component was already correctly passing template.icon to the symbol prop. The actual issue was that seed data and default activity templates used PascalCase icon names (e.g., 'Pill', 'BookOpen', 'Dumbbell') which don't match TrackerIcon's kebab-case naming convention (e.g., 'book-open', 'dumbbell'). Fixed by updating: 1) prisma/seed.ts - converted all PascalCase icon names to either kebab-case or emojis, 2) lib/services/DefaultActivitiesService.ts - converted default template icons to kebab-case or emojis, 3) test files (activity-deletion-issue73.test.ts, correctness-pass.test.ts, task-ux-consolidation.test.ts) - updated mock data to use kebab-case, 4) docs/mobile/API_SURFACE.md - updated example to use kebab-case. Icons now properly resolve and display on mobile."
+}

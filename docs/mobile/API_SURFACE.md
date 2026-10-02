@@ -157,7 +157,7 @@ Retrieves all active activity templates owned by the authenticated user.
           "category": "fitness",
           "type": "WORKOUT",
           "priority": "HIGH",
-          "icon": "Dumbbell",
+          "icon": "dumbbell",
           "color": "emerald",
           "recurrenceType": "daily",
           "estimatedDuration": 45,

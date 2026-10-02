@@ -38,7 +38,7 @@ describe("Task UX Consolidation & Today Polish Tests", () => {
       const valid = taskCreateSchema.safeParse({
         name: "Read Chapter 4",
         category: "learning",
-        icon: "BookOpen",
+        icon: "book-open",
         color: "blue",
         priority: "NORMAL",
         type: "TASK",

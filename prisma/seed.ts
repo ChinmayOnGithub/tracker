@@ -28,7 +28,7 @@ async function main() {
     data: {
       name: 'Take Multivitamin',
       category: 'health',
-      icon: 'Pill',
+      icon: '💊',
       color: 'red',
       recurrenceType: 'daily',
       sortOrder: 1,
@@ -42,7 +42,7 @@ async function main() {
     data: {
       name: 'Write Daily Journal',
       category: 'personal',
-      icon: 'BookOpen',
+      icon: 'book-open',
       color: 'amber',
       recurrenceType: 'daily',
       sortOrder: 2,
@@ -56,7 +56,7 @@ async function main() {
     data: {
       name: 'Training Session',
       category: 'fitness',
-      icon: 'Dumbbell',
+      icon: 'dumbbell',
       color: 'blue',
       recurrenceType: 'weekly',
       recurrenceDaysOfWeek: '1,3,5', // Mon, Wed, Fri
@@ -71,7 +71,7 @@ async function main() {
     data: {
       name: 'Spotify Subscription',
       category: 'finance',
-      icon: 'Music',
+      icon: '🎵',
       color: 'green',
       recurrenceType: 'monthly',
       recurrenceDayOfMonth: 15,
@@ -87,7 +87,7 @@ async function main() {
     data: {
       name: 'Get Haircut',
       category: 'personal',
-      icon: 'Scissors',
+      icon: '✂️',
       color: 'purple',
       recurrenceType: 'milestone',
       sortOrder: 5,
@@ -101,7 +101,7 @@ async function main() {
     data: {
       name: 'Domain Renewal (my-portfolio.com)',
       category: 'finance',
-      icon: 'Globe',
+      icon: '🌐',
       color: 'orange',
       recurrenceType: 'yearly',
       recurrenceMonth: 6,
@@ -118,7 +118,7 @@ async function main() {
     data: {
       name: 'Wash Hair',
       category: 'personal',
-      icon: 'Droplet',
+      icon: '💧',
       color: 'blue',
       recurrenceType: 'milestone',
       sortOrder: 7,
@@ -132,7 +132,7 @@ async function main() {
     data: {
       name: 'Japa Mala',
       category: 'personal',
-      icon: 'JapaMala',
+      icon: '🙏',
       color: 'red',
       recurrenceType: 'daily',
       sortOrder: 8,
@@ -146,7 +146,7 @@ async function main() {
     data: {
       name: 'Read Book',
       category: 'personal',
-      icon: 'BookOpen',
+      icon: 'book-open',
       color: 'purple',
       recurrenceType: 'daily',
       sortOrder: 9,
@@ -160,7 +160,7 @@ async function main() {
     data: {
       name: 'Running Log',
       category: 'fitness',
-      icon: 'TrendingUp',
+      icon: '🏃',
       color: 'blue',
       recurrenceType: 'weekly',
       recurrenceDaysOfWeek: '0,4', // Sun, Thu
@@ -175,7 +175,7 @@ async function main() {
     data: {
       name: 'Weekly Measurements',
       category: 'health',
-      icon: 'Heart',
+      icon: 'heart',
       color: 'purple',
       recurrenceType: 'weekly',
       recurrenceDaysOfWeek: '0', // Sunday

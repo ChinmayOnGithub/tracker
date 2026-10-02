@@ -13,7 +13,7 @@ describe('Correctness Pass - Bug 1: Decimal Amounts', () => {
         type: 'BILL',
         priority: 'NORMAL',
         color: 'emerald',
-        icon: 'Music',
+        icon: '🎵',
         recurrenceType: 'monthly',
         amount,
       });
