@@ -1,5 +1,6 @@
 import { apiSuccess, apiError } from '@/lib/api-response'
 import { AuthService } from '@/lib/services/AuthService'
+import { EntitlementService } from '@/lib/services/EntitlementService'
 
 export async function GET(request: Request) {
   try {
@@ -8,11 +9,26 @@ export async function GET(request: Request) {
       return apiError('UNAUTHENTICATED', 'Missing or invalid session token', 401)
     }
 
+    let isPro = false
+    let tier = 'FREE'
+    let plan = 'FREE'
+    try {
+      const entitlements = await EntitlementService.getEntitlements(user.id)
+      isPro = entitlements.isPro
+      tier = entitlements.tier
+      plan = entitlements.plan
+    } catch (err) {
+      console.warn('[MobileAuthMe] Entitlements fallback to FREE:', err)
+    }
+
     return apiSuccess({
       id: user.id,
       username: user.username,
       email: user.email,
       isOwner: user.isOwner,
+      isPro,
+      tier,
+      plan,
     })
   } catch (error) {
     console.error('[MobileAuthMe] Internal error:', error)
