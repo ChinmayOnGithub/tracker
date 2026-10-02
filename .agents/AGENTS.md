@@ -47,6 +47,7 @@ You MUST read and strictly adhere to the **AI Constitution** in [AI Constitution
 
 Use the on-demand skills under `.agents/skills/` instead of loading the whole AI methodology into context.
 
+### General Engineering Skills
 - Repository understanding: `project-analysis`, `project-audit`, `context-engineering`
 - Requirements/domain: `grilling`, `domain-modeling`, `to-spec`, `to-tickets`
 - Planning/orchestration: `planning-with-files`, `orchestration`, `project-memory`
@@ -57,9 +58,85 @@ Use the on-demand skills under `.agents/skills/` instead of loading the whole AI
 - UI/web: `design-systems-frontend-architecture`, `ui-visual-composition`, `ux-usability-foundations`, `ux-writing-content-design`, `accessibility-inclusive-design`, `tailwind-css`, `web-quality`, `seo`
 - Workflow: `git-workflow`, `documentation-and-adrs`, `why-we-do-this`, `retrospective`
 
-Tracker-native skills remain authoritative for Tracker-specific behavior: `tracker-core` and `tracker-qa`.
+### Mobile Skill Routing (Expo / React Native)
+
+> **Rule**: Always load `expo-overview` first for any Expo/EAS task. It detects the goal and routes to the right sub-skill. Never load all mobile skills at once.
+
+| User goal | Skills to load (in order) |
+|-----------|--------------------------|
+| Any Expo/EAS task | `expo-overview` → then route below |
+| Navigation, routing, tabs, modals, sheets | `expo-router` |
+| Native UI, Apple HIG, SF Symbols, semantic colors | `expo-native-ui` |
+| Native controls: BottomSheet, Picker, Slider, Switch | `expo-ui` |
+| Animations, gestures, Reanimated, haptics | `expo-animation` |
+| Design tokens, component library, theme consistency | `expo-design-system` |
+| Any networking, API calls, caching, offline states | `expo-data-fetching` |
+| Web → native migration, DOM → RN, CSS → StyleSheet | `expo-web-to-native` |
+| Development build, physical device, Expo Go limits | `expo-dev-client` |
+| Agent-driven simulator, cloud iOS/Android, screenshots | `eas-simulator` |
+| Native module (Swift/Kotlin), config plugin | `expo-module` |
+| CI/CD, build pipelines, workflows | `eas-workflows` |
+| OTA updates, runtime versions, rollouts | `eas-update` |
+| OTA crash rate, adoption, payload size | `eas-update-insights` |
+| Launch performance, TTI, production observability | `eas-observe` |
+| Android/iOS build, TestFlight, Play Store, App Store | `eas-app-stores` |
+| Adding React Native to existing native app | `expo-brownfield` |
+| iOS App Clip | `expo-app-clip` |
+| DOM components in webview | `expo-dom` |
+| SDK upgrade, dependency compatibility | `expo-upgrade` |
+| Official example integrations (Stripe, Clerk, etc.) | `expo-examples` |
+| Accessibility (TalkBack, VoiceOver) | `accessibility-inclusive-design` |
+| Submit skill feedback or bug reports | `expo-skill-feedback` |
+| Evaluate a skill end-to-end | `expo-skill-eval` |
+
+#### Example dispatch patterns
+```
+"Fix Android OAuth crash"
+  → expo-overview → expo-dev-client → debugger
+
+"Add gesture-based swipe-to-delete"
+  → expo-overview → expo-animation
+
+"Ship to Google Play"
+  → expo-overview → eas-app-stores
+
+"Offline mutation not syncing"
+  → expo-data-fetching → tracker-core → debugger
+
+"App startup is slow on Android"
+  → expo-observe → eas-update-insights → performance-optimization
+
+"Agent: screenshot and verify the login screen"
+  → eas-simulator (requires expo-mcp local capabilities)
+```
+
+### Expo MCP Server
+
+The Expo MCP server is configured in `.agents/mcp_config.json`. It provides:
+- Live Expo documentation fetching
+- Compatible package installation via `npx expo install`
+- EAS build monitoring and crash data
+- **Local capabilities** (screenshots, simulator interaction, DevTools) when `expo-mcp` is installed
+
+**Local capabilities setup** (already installed — `expo-mcp@0.2.4` in `m/`):
+```sh
+# Start dev server with MCP capabilities enabled
+cd m
+EXPO_UNSTABLE_MCP_SERVER=1 npx expo start
+```
+After starting, reconnect/restart the MCP server connection in Antigravity to refresh capabilities.
+
+> **Authentication**: The Expo MCP server requires OAuth. You will be prompted to authenticate with your Expo account on first use.
+
+### Tracker-Native Skills (Authoritative)
+
+`tracker-core` and `tracker-qa` remain authoritative for Tracker-specific behavior. Generic Expo skills provide methodology only and must never override:
+- `SPEC.md`
+- The Tracker AI Constitution (`docs/07-ai/AI Constitution.md`)
+- Architecture decisions in `.agents/rules/`
+- Domain semantics (Activity, TaskOccurrence, recurrence, outbox, postpone)
 
 ### Context Rule
-Load only the skill(s) required by the current task. Generic skills provide methodology only and must never override `SPEC.md`, the Tracker AI Constitution, architecture decisions, or `.agents/rules/`.
+Load **only** the skill(s) required by the current task. Generic skills provide methodology only.
 
 See `docs/07-ai/EXTERNAL_SKILLS.md` for provenance and `docs/07-ai/AI_WORKFLOW.md` for the development lifecycle.

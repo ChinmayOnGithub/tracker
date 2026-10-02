@@ -56,3 +56,5 @@ dev.db.*
 build-output.txt
 build.log
 scratch/
+
+certificates

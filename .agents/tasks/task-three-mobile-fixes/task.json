@@ -1,0 +1,7 @@
+{
+  "task_id": "task-three-mobile-fixes",
+  "task_description": "Fix three mobile app issues: leave module 500 errors, activity icons not displaying, and light mode styling broken",
+  "status": "pending",
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003"],
+  "blocked_reason": null
+}

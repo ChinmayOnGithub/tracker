@@ -3,6 +3,10 @@
     "razorpay": {
       "command": "node",
       "args": [".agents/scripts/razorpay-bridge.mjs"]
+    },
+    "expo": {
+      "type": "http",
+      "url": "https://mcp.expo.dev/mcp"
     }
   }
 }
