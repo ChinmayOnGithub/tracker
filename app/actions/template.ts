@@ -108,31 +108,43 @@ export async function createActivityTemplate(data: {
         throw err
       }
     } else {
-      // 2. Activity creation: enforce activities_active active-resource limit
+      // 2. Activity creation: enforce activities_active limit atomically (#195/#159)
+      // The advisory transaction lock serializes concurrent quota checks for this user.
       const activityLimit = await EntitlementService.getLimit(user.id, 'activities_active')
-      const activeCount = await db.activityTemplate.count({
-        where: {
-          userId: user.id,
-          isActive: true,
-          deletedAt: null,
-          recurrenceType: { not: 'one_time' },
-        },
-      })
-      if (activeCount >= activityLimit) {
-        const plan = (await EntitlementService.getEntitlements(user.id)).plan
-        const isPro = plan !== 'FREE'
-        return {
-          success: false,
-          code: 'QUOTA_EXCEEDED',
-          error: isPro
-            ? `You have reached the activity limit for your ${plan} plan (${activityLimit} active activities).`
-            : `Free plan limit reached (${activityLimit} active activities). Upgrade to Pro for more.`,
-        }
-      }
+      try {
+        created = await db.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('activity-quota:' || ${user.id}))`
 
-      created = await db.activityTemplate.create({
-        data: templateCreateData,
-      })
+          const activeCount = await tx.activityTemplate.count({
+            where: {
+              userId: user.id,
+              isActive: true,
+              deletedAt: null,
+              recurrenceType: { not: 'one_time' },
+            },
+          })
+
+          if (activeCount >= activityLimit) {
+            const error = new QuotaExceededError(
+              `You have reached the activity limit for your plan (${activityLimit} active activities).`
+            )
+            throw error
+          }
+
+          return tx.activityTemplate.create({
+            data: templateCreateData,
+          })
+        })
+      } catch (err) {
+        if (err instanceof QuotaExceededError) {
+          return {
+            success: false,
+            code: 'QUOTA_EXCEEDED',
+            error: err.message,
+          }
+        }
+        throw err
+      }
     }
 
     // Auto-schedule task in calendar if it has a scheduledTime
