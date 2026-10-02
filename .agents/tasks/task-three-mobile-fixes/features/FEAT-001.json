@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Fix leave module 500 errors by wrapping assertUserModuleAccess in try/catch and returning proper 403 responses instead of letting authorization errors bubble up as 500s. Pattern already exists in vault and journal routes.",
+  "status": "completed",
+  "steps": [
+    "Read app/api/vault/upload/route.ts (lines 24-27) to see the correct try/catch pattern around assertUserModuleAccess",
+    "Open app/api/mobile/v1/leave/route.ts",
+    "Wrap the assertUserModuleAccess(user, 'leave') call on line 19 in GET handler with try/catch, return apiError('FORBIDDEN', 'Access denied to Leave module', 403) in catch block",
+    "Wrap the assertUserModuleAccess(user, 'leave') call on line 105 in POST handler with the same try/catch pattern",
+    "Wrap the assertUserModuleAccess(user, 'leave') call on line 230 in DELETE handler with the same try/catch pattern",
+    "Wrap the assertUserModuleAccess(user, 'leave') call on line 277 in PATCH handler with the same try/catch pattern"
+  ],
+  "acceptance_criteria": [
+    "All four route handlers (GET, POST, DELETE, PATCH) have try/catch around assertUserModuleAccess",
+    "When leave module is disabled for a guest user, the API returns HTTP 403 with error message 'Access denied to Leave module'",
+    "No error stack traces appear in server logs for module access denials",
+    "Authorized users can still access the leave endpoints successfully"
+  ],
+  "verification": [
+    "Start server with 'bun dev'",
+    "Make a GET request to /api/mobile/v1/leave?year=2026 as a guest user with leave module disabled",
+    "Confirm response is 403 with { success: false, error: { code: 'FORBIDDEN', message: 'Access denied to Leave module' } }",
+    "Check server logs - should see no error stack traces for authorization failures",
+    "Run 'bun test' to ensure no regressions in existing tests"
+  ],
+  "blocked_reason": null,
+  "findings": "All four route handlers (GET, POST, DELETE, PATCH) in app/api/mobile/v1/leave/route.ts now properly wrap assertUserModuleAccess calls in try/catch blocks and return HTTP 403 with apiError('FORBIDDEN', 'Access denied to Leave module', 403) when access is denied. This matches the pattern used in vault/upload/route.ts. All leave-related tests pass. The 5 failing tests in the test suite are unrelated CalendarService Sync integration tests."
+}

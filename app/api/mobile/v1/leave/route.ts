@@ -16,7 +16,11 @@ export async function GET(request: Request) {
       return apiError('UNAUTHENTICATED', 'Missing or invalid session token', 401)
     }
 
-    await assertUserModuleAccess(user, 'leave')
+    try {
+      await assertUserModuleAccess(user, 'leave')
+    } catch {
+      return apiError('FORBIDDEN', 'Access denied to Leave module', 403)
+    }
 
     const { searchParams } = new URL(request.url)
     const yearParam = searchParams.get('year')
@@ -102,7 +106,11 @@ export async function POST(request: Request) {
       return apiError('UNAUTHENTICATED', 'Missing or invalid session token', 401)
     }
 
-    await assertUserModuleAccess(user, 'leave')
+    try {
+      await assertUserModuleAccess(user, 'leave')
+    } catch {
+      return apiError('FORBIDDEN', 'Access denied to Leave module', 403)
+    }
 
     let body: unknown
     try {
@@ -227,7 +235,11 @@ export async function DELETE(request: Request) {
       return apiError('UNAUTHENTICATED', 'Missing or invalid session token', 401)
     }
 
-    await assertUserModuleAccess(user, 'leave')
+    try {
+      await assertUserModuleAccess(user, 'leave')
+    } catch {
+      return apiError('FORBIDDEN', 'Access denied to Leave module', 403)
+    }
 
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
@@ -274,7 +286,11 @@ export async function PATCH(request: Request) {
       return apiError('UNAUTHENTICATED', 'Missing or invalid session token', 401)
     }
 
-    await assertUserModuleAccess(user, 'leave')
+    try {
+      await assertUserModuleAccess(user, 'leave')
+    } catch {
+      return apiError('FORBIDDEN', 'Access denied to Leave module', 403)
+    }
 
     let body: unknown
     try {
