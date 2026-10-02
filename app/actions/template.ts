@@ -203,31 +203,16 @@ export async function updateActivityTemplate(
     await requireModuleAccess('activities')
     const { user, record: existing } = await requireOwnership<ActivityTemplate>('activityTemplate', id)
 
-    // If activating an activity, verify capacity under activities_active limit
-    if (data.isActive === true) {
-      if (existing && !existing.isActive && existing.recurrenceType !== 'one_time') {
-        const activityLimit = await EntitlementService.getLimit(user.id, 'activities_active')
-        const activeCount = await db.activityTemplate.count({
-          where: {
-            userId: user.id,
-            isActive: true,
-            deletedAt: null,
-            recurrenceType: { not: 'one_time' },
-          },
-        })
-        if (activeCount >= activityLimit) {
-          const plan = (await EntitlementService.getEntitlements(user.id)).plan
-          const isPro = plan !== 'FREE'
-          return {
-            success: false,
-            code: 'QUOTA_EXCEEDED',
-            error: isPro
-              ? `You have reached the activity limit for your ${plan} plan (${activityLimit} active activities).`
-              : `Free plan limit reached (${activityLimit} active activities). Upgrade to Pro for more.`,
-          }
-        }
-      }
-    }
+    // If activating an activity, enforce capacity atomically (#195/#159).
+    // The lock is only held for the DB transaction; no external calls occur inside it.
+    const activationRequiresQuota = data.isActive === true &&
+      !!existing &&
+      !existing.isActive &&
+      existing.recurrenceType !== 'one_time'
+
+    const activityLimit = activationRequiresQuota
+      ? await EntitlementService.getLimit(user.id, 'activities_active')
+      : null
 
     const { tagNames, ...rest } = data
 
@@ -247,23 +232,67 @@ export async function updateActivityTemplate(
 
     const { recurrenceType, ...templateRest } = rest
 
-    const { count } = await db.activityTemplate.updateMany({
-      where: {
-        id,
-        deletedAt: null,
-        OR: [
-          { userId: user.id },
-          ...(user.isOwner ? [{ userId: null }] : [])
-        ]
-      },
-      data: {
-        ...templateRest,
-        recurrenceType: recurrenceType ? (recurrenceType as RecurrenceType) : undefined,
-        targetDate: recurrenceType === 'one_time' && rest.targetDate ? new Date(rest.targetDate) : undefined,
-        metadata: templateRest.metadata as Prisma.InputJsonValue,
-        notificationRules: templateRest.notificationRules as Prisma.InputJsonValue,
-      },
-    })
+    const updateWhere = {
+      id,
+      deletedAt: null,
+      OR: [
+        { userId: user.id },
+        ...(user.isOwner ? [{ userId: null }] : [])
+      ]
+    }
+
+    const updateData = {
+      ...templateRest,
+      recurrenceType: recurrenceType ? (recurrenceType as RecurrenceType) : undefined,
+      targetDate: recurrenceType === 'one_time' && rest.targetDate ? new Date(rest.targetDate) : undefined,
+      metadata: templateRest.metadata as Prisma.InputJsonValue,
+      notificationRules: templateRest.notificationRules as Prisma.InputJsonValue,
+    }
+
+    let count = 0
+    if (activationRequiresQuota) {
+      try {
+        count = await db.$transaction(async (tx) => {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('activity-quota:' || ${user.id}))`
+
+          const activeCount = await tx.activityTemplate.count({
+            where: {
+              userId: user.id,
+              isActive: true,
+              deletedAt: null,
+              recurrenceType: { not: 'one_time' },
+            },
+          })
+
+          if (activeCount >= (activityLimit ?? 0)) {
+            throw new QuotaExceededError(
+              `You have reached the activity limit for your plan (${activityLimit} active activities).`
+            )
+          }
+
+          const result = await tx.activityTemplate.updateMany({
+            where: updateWhere,
+            data: updateData,
+          })
+          return result.count
+        })
+      } catch (err) {
+        if (err instanceof QuotaExceededError) {
+          return {
+            success: false,
+            code: 'QUOTA_EXCEEDED',
+            error: err.message,
+          }
+        }
+        throw err
+      }
+    } else {
+      const result = await db.activityTemplate.updateMany({
+        where: updateWhere,
+        data: updateData,
+      })
+      count = result.count
+    }
 
     if (count === 0) {
       return { success: false, error: 'Template not found' }
