@@ -77,7 +77,7 @@ export async function logWeight(
           return {
             success: false,
             code: 'ACTIVITY_LIMIT_REACHED' as const,
-            error: `You have reached your active activity limit (${activeCount}/${quotaLimit}). Please archive an activity or upgrade to Tracker Pro to add weight tracking.`,
+            error: `You have reached your active activity limit (${activeCount}/${quotaLimit}). Please deactivate or delete an activity to make room for Weight Tracking, or upgrade your plan.`,
             limit: quotaLimit,
             current: activeCount
           }
