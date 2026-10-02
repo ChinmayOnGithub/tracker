@@ -26,16 +26,29 @@ export class OccurrenceService {
     for (const event of events) {
       // Check if it is a single event or has recurrence
       const metadata = event.externalMetadata as Record<string, unknown> | null
-      let rrule: string | null = null
+      let ruleString: string | null = null
       if (metadata && typeof metadata === 'object') {
-        if ('rrule' in metadata && typeof metadata.rrule === 'string') {
-          rrule = metadata.rrule
-        } else if ('recurrence' in metadata && Array.isArray(metadata.recurrence) && metadata.recurrence.length > 0 && typeof metadata.recurrence[0] === 'string') {
-          rrule = metadata.recurrence[0]
+        if (Array.isArray(metadata.recurrence) && metadata.recurrence.length > 0) {
+          const lines = metadata.recurrence.filter((l): l is string => typeof l === 'string')
+          if (lines.length > 0) {
+            ruleString = lines.join('\n')
+          }
+        } else if ('rrule' in metadata && typeof metadata.rrule === 'string') {
+          ruleString = metadata.rrule
+        }
+
+        if (metadata.exdate) {
+          const exdates = Array.isArray(metadata.exdate) ? metadata.exdate : [metadata.exdate]
+          for (const ex of exdates) {
+            if (typeof ex === 'string') {
+              const exLine = ex.trim().startsWith('EXDATE') ? ex.trim() : `EXDATE:${ex.trim()}`
+              ruleString = ruleString ? `${ruleString}\n${exLine}` : exLine
+            }
+          }
         }
       }
 
-      if (!rrule) {
+      if (!ruleString) {
         // Single event
         let eventEnd = event.end
         const durationMs = event.end.getTime() - event.start.getTime()
@@ -58,15 +71,22 @@ export class OccurrenceService {
           })
         }
       } else {
-        // Recurrence rule compliant with RFC 5545 (BYDAY, COUNT, UNTIL, INTERVAL, FREQ) (#161)
+        // Recurrence rule compliant with RFC 5545 (BYDAY, COUNT, UNTIL, INTERVAL, FREQ, EXDATE) (#161)
         let durationMs = event.end.getTime() - event.start.getTime()
         if (event.allDay && durationMs % 86400000 === 0) {
           durationMs -= 1
         }
 
         try {
-          const ruleString = rrule.trim().startsWith('RRULE:') ? rrule.trim() : `RRULE:${rrule.trim()}`
-          const rule = rrulestr(ruleString, { dtstart: event.start })
+          const dtstartStr = event.start.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+          let cleanedRule = ruleString.trim()
+          if (!cleanedRule.includes('DTSTART')) {
+            const rruleContent = cleanedRule.startsWith('RRULE:') || cleanedRule.includes('\n')
+              ? cleanedRule
+              : `RRULE:${cleanedRule}`
+            cleanedRule = `DTSTART:${dtstartStr}\n${rruleContent}`
+          }
+          const rule = rrulestr(cleanedRule, { dtstart: event.start, forceset: true })
           const dates = rule.between(rangeStart, rangeEnd, true)
 
           for (const occDate of dates) {
@@ -88,7 +108,7 @@ export class OccurrenceService {
           }
         } catch (err) {
           // Graceful fallback for non-standard or malformed rules
-          console.warn('[OccurrenceService] Failed to parse RRULE:', rrule, err)
+          console.warn('[OccurrenceService] Failed to parse RRULE:', ruleString, err)
           if (event.start <= rangeEnd && event.end >= rangeStart) {
             occurrences.push({
               id: event.id,

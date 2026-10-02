@@ -60,6 +60,7 @@ export class JournalService {
         deletedAt: null,
       },
       orderBy: { journalDate: 'asc' },
+      take: 366,
     })
   }
 

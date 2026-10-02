@@ -1,6 +1,7 @@
 import { apiSuccess, apiError } from '@/lib/api-response'
 import { AuthService } from '@/lib/services/AuthService'
 import { db } from '@/lib/db'
+import { decryptTitle } from '@/lib/vault-crypto'
 
 export async function GET(request: Request) {
   try {
@@ -9,7 +10,7 @@ export async function GET(request: Request) {
       return apiError('UNAUTHENTICATED', 'Missing or invalid session token', 401)
     }
 
-    const [deletedJournals, deletedNotes, deletedTemplates, deletedWeights, deletedLeaves] = await Promise.all([
+    const [deletedJournals, deletedNotes, deletedTemplates, deletedWeights, deletedLeaves, deletedDocuments] = await Promise.all([
       db.journalEntry.findMany({
         where: { userId: user.id, deletedAt: { not: null } },
         orderBy: { deletedAt: 'desc' },
@@ -31,6 +32,11 @@ export async function GET(request: Request) {
         take: 50,
       }),
       db.leaveRecord.findMany({
+        where: { userId: user.id, deletedAt: { not: null } },
+        orderBy: { deletedAt: 'desc' },
+        take: 50,
+      }),
+      db.secureDocument.findMany({
         where: { userId: user.id, deletedAt: { not: null } },
         orderBy: { deletedAt: 'desc' },
         take: 50,
@@ -73,6 +79,21 @@ export async function GET(request: Request) {
         preview: `${l.startDate.toISOString().slice(0, 10)} to ${l.endDate.toISOString().slice(0, 10)}${l.notes ? ' • ' + l.notes : ''}`,
         deletedAt: l.deletedAt?.toISOString() || new Date().toISOString(),
       })),
+      ...deletedDocuments.map((doc) => {
+        let name = doc.searchName || 'Document'
+        try {
+          name = decryptTitle(doc.encryptedTitle)
+        } catch {
+          name = doc.searchName || 'Document'
+        }
+        return {
+          id: doc.id,
+          entityType: 'vault' as const,
+          title: `${doc.isFolder ? 'Folder' : 'File'}: ${name}`,
+          preview: doc.isFolder ? 'Vault Folder' : `${doc.extension?.toUpperCase() || 'FILE'} • ${doc.fileSize ? Math.round(doc.fileSize / 1024) + ' KB' : 'Encrypted'}`,
+          deletedAt: doc.deletedAt?.toISOString() || new Date().toISOString(),
+        }
+      }),
     ].sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime())
 
     return apiSuccess({ items })
@@ -163,6 +184,12 @@ export async function POST(request: Request) {
           data: { deletedAt: null },
         })
       }
+    } else if (entityType === 'vault') {
+      const res = await db.secureDocument.updateMany({
+        where: { id, userId: user.id, deletedAt: { not: null } },
+        data: { deletedAt: null },
+      })
+      restoredCount = res.count
     } else {
       return apiError('VALIDATION_ERROR', `Unsupported entity type: ${entityType}`, 400)
     }

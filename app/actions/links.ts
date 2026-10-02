@@ -74,120 +74,7 @@ export async function deleteLinkCollection(id: string) {
 
 // ─── Links ────────────────────────────────────────────────────────────────────
 
-import dns from 'dns/promises'
-import net from 'net'
-
-function isPrivateIp(ip: string): boolean {
-  if (net.isIPv4(ip)) {
-    const parts = ip.split('.').map(Number)
-    if (parts.length !== 4) return true
-    const [b0, b1] = parts
-    if (b0 === 0) return true
-    if (b0 === 10) return true
-    if (b0 === 100 && b1 >= 64 && b1 <= 127) return true
-    if (b0 === 127) return true
-    if (b0 === 169 && b1 === 254) return true
-    if (b0 === 172 && b1 >= 16 && b1 <= 31) return true
-    if (b0 === 192 && b1 === 0) return true
-    if (b0 === 192 && b1 === 168) return true
-    if (b0 === 198 && (b1 === 18 || b1 === 19)) return true
-    if (b0 === 198 && b1 === 51) return true
-    if (b0 === 203 && b1 === 0) return true
-    if (b0 >= 224) return true
-    return false
-  } else if (net.isIPv6(ip)) {
-    const normalized = ip.toLowerCase()
-    if (normalized === '::1' || normalized === '::') return true
-    if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true
-    if (normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) return true
-    if (normalized.startsWith('ff')) return true
-    if (normalized.includes('::ffff:')) {
-      const ipv4Part = normalized.split('::ffff:')[1]
-      if (ipv4Part && net.isIPv4(ipv4Part)) {
-        return isPrivateIp(ipv4Part)
-      }
-      return true
-    }
-    return false
-  }
-  return true
-}
-
-async function validateSafePublicUrl(url: URL): Promise<void> {
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('Only HTTP and HTTPS protocols are allowed')
-  }
-
-  const hostname = url.hostname.toLowerCase().trim()
-  if (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '::1' ||
-    hostname === '0.0.0.0' ||
-    hostname.endsWith('.localhost') ||
-    hostname.endsWith('.local') ||
-    hostname.endsWith('.internal')
-  ) {
-    throw new Error('Access to local/private addresses is restricted')
-  }
-
-  if (net.isIP(hostname)) {
-    if (isPrivateIp(hostname)) {
-      throw new Error('Access to local/private IP addresses is restricted')
-    }
-    return
-  }
-
-  try {
-    const addresses = await dns.lookup(hostname, { all: true })
-    if (!addresses || addresses.length === 0) {
-      throw new Error('Could not resolve destination hostname')
-    }
-    for (const addr of addresses) {
-      if (isPrivateIp(addr.address)) {
-        throw new Error('Destination host resolves to a private or restricted address')
-      }
-    }
-  } catch (dnsErr) {
-    if (dnsErr instanceof Error && dnsErr.message.includes('restricted')) {
-      throw dnsErr
-    }
-    throw new Error('Failed to verify destination address')
-  }
-}
-
-async function fetchSafeUrl(initialUrl: URL, maxRedirects = 3): Promise<Response> {
-  let currentUrl = initialUrl
-  let redirectsCount = 0
-
-  while (redirectsCount <= maxRedirects) {
-    await validateSafePublicUrl(currentUrl)
-
-    const response = await fetch(currentUrl.toString(), {
-      redirect: 'manual',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      signal: AbortSignal.timeout(8000),
-    })
-
-    if ([301, 302, 303, 307, 308].includes(response.status)) {
-      redirectsCount++
-      const location = response.headers.get('location')
-      if (!location) {
-        throw new Error('Redirect missing location header')
-      }
-      currentUrl = new URL(location, currentUrl)
-      continue
-    }
-
-    return response
-  }
-
-  throw new Error('Too many redirects')
-}
+import { fetchSafeUrl, readBoundedResponseBody } from '@/lib/security/ssrf'
 
 async function scrapeMetadata(urlString: string) {
   try {
@@ -222,32 +109,7 @@ async function scrapeMetadata(urlString: string) {
     }
 
     // Enforce maximum response body size (512 KB) to prevent memory exhaustion / DoS (#145)
-    const MAX_METADATA_BYTES = 512 * 1024
-    let html = ''
-    if (response.body) {
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder('utf-8', { fatal: false })
-      let bytesReceived = 0
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          if (value) {
-            bytesReceived += value.byteLength
-            html += decoder.decode(value, { stream: true })
-            if (bytesReceived >= MAX_METADATA_BYTES || html.toLowerCase().includes('</head>')) {
-              await reader.cancel()
-              break
-            }
-          }
-        }
-      } catch {
-        // Stream reading completed or cancelled
-      }
-    } else {
-      html = await response.text()
-    }
+    const html = await readBoundedResponseBody(response)
 
     // Extract head section to parse efficiently
     const headMatch = html.match(/<head[^>]*>([\s\S]*?)<\/head>/i)
