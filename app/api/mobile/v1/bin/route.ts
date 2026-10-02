@@ -9,7 +9,7 @@ export async function GET(request: Request) {
       return apiError('UNAUTHENTICATED', 'Missing or invalid session token', 401)
     }
 
-    const [deletedJournals, deletedNotes, deletedTemplates, deletedWeights] = await Promise.all([
+    const [deletedJournals, deletedNotes, deletedTemplates, deletedWeights, deletedLeaves] = await Promise.all([
       db.journalEntry.findMany({
         where: { userId: user.id, deletedAt: { not: null } },
         orderBy: { deletedAt: 'desc' },
@@ -26,6 +26,11 @@ export async function GET(request: Request) {
         take: 50,
       }),
       db.weightRecord.findMany({
+        where: { userId: user.id, deletedAt: { not: null } },
+        orderBy: { deletedAt: 'desc' },
+        take: 50,
+      }),
+      db.leaveRecord.findMany({
         where: { userId: user.id, deletedAt: { not: null } },
         orderBy: { deletedAt: 'desc' },
         take: 50,
@@ -60,6 +65,13 @@ export async function GET(request: Request) {
         title: `Weight Record: ${w.weight} kg`,
         preview: w.notes || `Logged on ${w.date.toISOString().slice(0, 10)}`,
         deletedAt: w.deletedAt?.toISOString() || new Date().toISOString(),
+      })),
+      ...deletedLeaves.map((l) => ({
+        id: l.id,
+        entityType: 'leave' as const,
+        title: `Time Off: ${l.leaveType} (${l.totalDays}d)`,
+        preview: `${l.startDate.toISOString().slice(0, 10)} to ${l.endDate.toISOString().slice(0, 10)}${l.notes ? ' • ' + l.notes : ''}`,
+        deletedAt: l.deletedAt?.toISOString() || new Date().toISOString(),
       })),
     ].sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime())
 
@@ -129,6 +141,25 @@ export async function POST(request: Request) {
       if (restoredCount > 0) {
         await db.activityLog.updateMany({
           where: { weightRecordId: id, userId: user.id, deletedAt: { not: null } },
+          data: { deletedAt: null },
+        })
+      }
+    } else if (entityType === 'leave') {
+      const res = await db.leaveRecord.updateMany({
+        where: { id, userId: user.id, deletedAt: { not: null } },
+        data: { deletedAt: null },
+      })
+      restoredCount = res.count
+      if (restoredCount > 0) {
+        await db.activityLog.updateMany({
+          where: {
+            userId: user.id,
+            deletedAt: { not: null },
+            OR: [
+              { leaveRecordId: id },
+              { payload: { path: ['leaveRecordId'], equals: id } },
+            ],
+          },
           data: { deletedAt: null },
         })
       }

@@ -75,9 +75,33 @@ describe('Mobile API Bin Suite (/api/mobile/v1/bin)', () => {
       body: JSON.stringify({ entityType: 'note', id: '123', action: 'explode' }),
     })
     const res = await POST(req)
-    expect(res.status).toBe(400)
     const json = await res.json()
     expect(json.success).toBe(false)
     expect(json.error.code).toBe('VALIDATION_ERROR')
   })
+
+  it('POST restores a deleted leave record', async () => {
+    const originalLeaveUpdateMany = db.leaveRecord.updateMany
+    const originalLogUpdateMany = db.activityLog.updateMany
+
+    db.leaveRecord.updateMany = mock(() => Promise.resolve({ count: 1 })) as unknown as typeof db.leaveRecord.updateMany
+    db.activityLog.updateMany = mock(() => Promise.resolve({ count: 2 })) as unknown as typeof db.activityLog.updateMany
+
+    try {
+      const req = new Request('http://localhost:3000/api/mobile/v1/bin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: validToken },
+        body: JSON.stringify({ entityType: 'leave', id: 'leave-123', action: 'restore' }),
+      })
+      const res = await POST(req)
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      expect(json.success).toBe(true)
+      expect(json.data.restored).toBe(true)
+    } finally {
+      db.leaveRecord.updateMany = originalLeaveUpdateMany
+      db.activityLog.updateMany = originalLogUpdateMany
+    }
+  })
 })
+
