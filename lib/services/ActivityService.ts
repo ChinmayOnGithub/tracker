@@ -139,6 +139,7 @@ export class ActivityService {
         note: data.note !== undefined ? data.note : undefined,
         amount: data.amount !== undefined ? data.amount : undefined,
         payload: data.payload !== undefined ? (data.payload as Prisma.InputJsonValue) : undefined,
+        version: { increment: 1 },
       }
     })
     if (count === 0) {
@@ -208,7 +209,7 @@ export class ActivityService {
 
     return await client.activityLog.update({
       where: { id: logId },
-      data: { deletedAt: new Date() }
+      data: { deletedAt: new Date(), version: { increment: 1 } }
     })
   }
 

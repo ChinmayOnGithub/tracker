@@ -19,7 +19,11 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url)
-    const days = parseInt(searchParams.get('days') || '30', 10)
+    const rawDays = searchParams.get('days') || '30'
+    const days = parseInt(rawDays, 10)
+    if (isNaN(days) || days <= 0 || days > 730) {
+      return apiError('VALIDATION_ERROR', 'Days must be an integer between 1 and 730', 400)
+    }
     const since = new Date()
     since.setUTCHours(0, 0, 0, 0)
     since.setUTCDate(since.getUTCDate() - days)

@@ -221,7 +221,33 @@ async function scrapeMetadata(urlString: string) {
       }
     }
 
-    const html = await response.text()
+    // Enforce maximum response body size (512 KB) to prevent memory exhaustion / DoS (#145)
+    const MAX_METADATA_BYTES = 512 * 1024
+    let html = ''
+    if (response.body) {
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder('utf-8', { fatal: false })
+      let bytesReceived = 0
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (value) {
+            bytesReceived += value.byteLength
+            html += decoder.decode(value, { stream: true })
+            if (bytesReceived >= MAX_METADATA_BYTES || html.toLowerCase().includes('</head>')) {
+              await reader.cancel()
+              break
+            }
+          }
+        }
+      } catch {
+        // Stream reading completed or cancelled
+      }
+    } else {
+      html = await response.text()
+    }
 
     // Extract head section to parse efficiently
     const headMatch = html.match(/<head[^>]*>([\s\S]*?)<\/head>/i)

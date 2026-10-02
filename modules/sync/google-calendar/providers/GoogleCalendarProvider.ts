@@ -77,22 +77,21 @@ export class GoogleCalendarProvider implements CalendarProvider, ICalendarProvid
   }
 
   async deleteExternalEvent(externalId: string, userId?: string): Promise<void> {
-    const whereClause: { externalId: string; deletedAt: null; userId?: string } = {
-      externalId,
-      deletedAt: null
-    }
-    if (userId) {
-      whereClause.userId = userId
+    if (!userId) {
+      throw new Error('userId is required for deleteExternalEvent to prevent cross-tenant operations')
     }
     const localEvent = await db.calendarEvent.findFirst({
-      where: whereClause
+      where: {
+        externalId,
+        userId,
+        deletedAt: null
+      }
     })
-    const targetUserId = userId || localEvent?.userId
-    if (targetUserId) {
-      await GoogleCalendarService.deleteEvent(targetUserId, externalId)
-    } else {
-      logger.warn('GoogleCalendarProvider', 'deleteExternalEvent requested but no local CalendarEvent found for externalId', { externalId })
+    if (!localEvent) {
+      logger.warn('GoogleCalendarProvider', 'deleteExternalEvent requested but no matching local CalendarEvent found for user and externalId', { externalId, userId })
+      return
     }
+    await GoogleCalendarService.deleteEvent(userId, externalId)
   }
 
   async fullSync(userId: string): Promise<SyncResult> {

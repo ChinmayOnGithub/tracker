@@ -302,14 +302,12 @@ export const WorkHoursWidget: React.FC<WorkHoursWidgetProps> = ({
 
     const now = new Date()
     const nowTime = getLocalTimeStr()
-    const isNewSession = formState.sessionState === 'completed'
-    const effectiveInTime = isNewSession ? nowTime : (formState.inTime || nowTime)
+    const isNewSession = formState.sessionState === 'completed' || formState.sessionState === 'idle'
+    const effectiveInTime = formState.inTime || nowTime
     let effectiveStart: Date
 
     try {
-      effectiveStart = isNewSession
-        ? now
-        : (formState.inTime ? createLocalDateTime(todayStr, effectiveInTime) : now)
+      effectiveStart = formState.inTime ? createLocalDateTime(todayStr, effectiveInTime) : now
     } catch (err) {
       setValidationError(err instanceof Error ? err.message : 'Invalid start time')
       return

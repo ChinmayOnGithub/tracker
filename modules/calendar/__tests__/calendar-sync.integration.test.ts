@@ -114,9 +114,8 @@ describe('CalendarService Sync - Google Calendar Integration', () => {
     // Clean up test data
     await cleanupUser(testUserId)
     
-    // Reset registries
-    calendarProviderRegistry.reset()
-    providerRegistry.reset()
+    // Restore canonical provider to prevent parallel test suite starvation
+    calendarProviderRegistry.register('GOOGLE', new GoogleCalendarProvider())
   })
 
   // TC-1: Initial full sync (no stored token)

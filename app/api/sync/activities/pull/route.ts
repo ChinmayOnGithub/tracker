@@ -17,13 +17,14 @@ export async function GET(request: NextRequest) {
     const sinceParam = searchParams.get('since')
     const since = parseInt(sinceParam || '0')
 
-    // Cursor validation: if since is invalid/negative, require full resync
-    if (sinceParam !== null && (isNaN(since) || since < 0)) {
+    const now = Date.now()
+    // Cursor validation: if since is invalid, negative, or from the future (> 1 minute ahead), require full resync
+    if (sinceParam !== null && (isNaN(since) || since < 0 || since > now + 60_000)) {
       return NextResponse.json(
         {
           error: {
             code: 'SYNC_RESYNC_REQUIRED',
-            message: 'A full synchronization is required.'
+            message: 'A full synchronization is required due to invalid or future sync timestamp.'
           }
         },
         { status: 409 }
@@ -67,6 +68,8 @@ export async function GET(request: NextRequest) {
 
     const operations: SyncOperation[] = []
 
+    const MAX_SYNC_BATCH = 200
+
     // ─── Activity Logs ────────────────────────────────────────────────
     // In incremental sync, we include soft-deleted records so clients delete their local copies
     const activityLogs = await db.activityLog.findMany({
@@ -78,7 +81,8 @@ export async function GET(request: NextRequest) {
       },
       orderBy: {
         updatedAt: 'asc'
-      }
+      },
+      take: MAX_SYNC_BATCH,
     })
 
     for (const log of activityLogs) {
@@ -131,7 +135,8 @@ export async function GET(request: NextRequest) {
       },
       orderBy: {
         updatedAt: 'asc'
-      }
+      },
+      take: MAX_SYNC_BATCH,
     })
 
     for (const template of activityTemplates) {
