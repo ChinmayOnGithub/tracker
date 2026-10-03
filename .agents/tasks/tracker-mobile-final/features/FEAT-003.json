@@ -1,0 +1,52 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Complete missing mobile lifecycle functionality for all domain entities to match web parity. Current mobile implementation is incomplete for: Vault (encryption, upload, download, quota), Bin (restoration for all entities), Notes (full CRUD), Journal (range bounding, full CRUD), Leave (full CRUD, overlap prevention), Weight (full CRUD), Quick Add (web parser integration), Calendar (RFC 5545 recurrence, sync lease, disconnect consistency), and WorkSession (atomic creation with ActivityLog, server-authoritative timestamps, single active session constraint). All features must use web domain services as source of truth, never inventing mobile-specific business rules.",
+  "status": "pending",
+  "steps": [
+    "Read web Vault implementation: lib/vault-crypto.ts, lib/vault-crypto-client.ts, modules/vault/*, SecureDocument schema in prisma/schema.prisma",
+    "Implement mobile Vault: encryption using web encryption scheme (AES-256-GCM with same key derivation), upload/download via web API, quota enforcement matching web BillingService/QuotaService, local SQLite cache for instant render",
+    "Read web Bin logic: soft-deletion (deletedAt), restoration (set deletedAt = null), supported entity types from schema",
+    "Implement mobile Bin restoration: support all soft-delete entities (Activity templates, Journals, Notes, Weights, Leave records, Vault documents), call web restoration API, update local SQLite, verify Bin screen shows all deleted entities",
+    "Read web Notes: modules/notes/* or similar, Note schema, validation in lib/validations/note.ts",
+    "Complete mobile Notes: create, read, update, soft-delete, restore, sync via API, local SQLite repository",
+    "Read web Journal: JournalEntry schema, validation in lib/validations/journal.ts, range bounding rules",
+    "Complete mobile Journal: create/update with full fields (content, mood, gratitude, reflections, lessonsLearned, tomorrowPlan), soft-delete, restore, enforce range bounding (one entry per date), sync",
+    "Read web Leave: LeaveRecord schema, LeaveAllowance, validation in lib/validations/leave.ts, overlap prevention logic",
+    "Complete mobile Leave: create with validation, prevent overlaps, respect allowances, soft-delete, restore, sync",
+    "Read web Weight: WeightRecord schema, validation in lib/validations/weight.ts",
+    "Complete mobile Weight: create, update, delete, restore, sync",
+    "Read web Quick Add: identify parser logic (may be in modules/quick-add/* or lib/services/QuickAddService.ts or similar)",
+    "Implement mobile Quick Add: call web parser API, never implement mobile-only parser that invents different semantics",
+    "Read web Calendar: CalendarEvent schema, CalendarSyncState, RFC 5545 recurrence handling, sync lease (syncLockUntil), disconnect consistency (remove external events on disconnect)",
+    "Complete mobile Calendar: RFC 5545 recurrence (existing or via web API), sync lease respect, disconnect cleanup, event merging into Timeline",
+    "Read web WorkSession: modules/work/services/WorkSessionService.ts, WorkSession schema, atomic creation pattern with ActivityLog, advisory lock for concurrency",
+    "Fix mobile WorkSession: atomic creation in single transaction, server-authoritative timestamps (effectiveStartTimestamp from server time, not client clock), prevent duplicate active sessions, correct duration accumulation",
+    "Verify all features call web API and never duplicate business logic locally beyond optimistic UI updates"
+  ],
+  "acceptance_criteria": [
+    "Vault: encryption matches web scheme, upload/download work, quota enforced, files decrypt correctly, mobile and web can interoperate on same encrypted files",
+    "Bin: restoration works for all supported entities (ActivityTemplate, JournalEntry, Note, WeightRecord, LeaveRecord, SecureDocument), restored entity appears in normal view with deletedAt = null",
+    "Notes: full CRUD lifecycle works, syncs to web, local SQLite caches for instant render, soft-delete moves to Bin",
+    "Journal: full lifecycle works, one entry per date enforced, all fields supported (content, mood, gratitude, reflections, lessonsLearned, tomorrowPlan), soft-delete/restore work",
+    "Leave: create with validation, overlaps prevented, allowances respected, soft-delete/restore work",
+    "Weight: full lifecycle works, soft-delete/restore work",
+    "Quick Add: uses web parser API, does not invent mobile parser, parsed tasks match web parsing results",
+    "Calendar: RFC 5545 recurrence preserved, sync lease respected (no concurrent syncs), disconnect removes external events cleanly",
+    "WorkSession: atomic creation with ActivityLog, server time authoritative, no duplicate active sessions, duration accumulates correctly matching web WorkSessionService logic"
+  ],
+  "verification": [
+    "cd m && bun run typecheck && bun test",
+    "Vault: upload test file via mobile, download via web, decrypt and verify content matches; upload via web, download via mobile, verify content matches",
+    "Bin: delete each entity type via mobile, verify appears in Bin, restore, verify appears in normal view",
+    "Notes: create note on mobile, verify syncs to web, update on web, verify mobile receives update",
+    "Journal: create entry with all fields on mobile, verify web shows all fields, enforce one per date (attempt second entry for same date fails)",
+    "Leave: create leave with overlap, verify rejection, create valid leave, verify appears on calendar and Today",
+    "Weight: create weight record on mobile, verify syncs to web, delete on mobile, verify moves to Bin",
+    "Quick Add: enter quick add text on mobile, verify parsed task matches web quick add parser output",
+    "Calendar: import recurring Google Calendar event, verify all occurrences appear correctly, disconnect Google Calendar, verify external events removed",
+    "WorkSession: start session on mobile, verify single active session, check database: exactly one ACTIVE WorkSession, one ActivityLog linked to it, timestamps match server, pause/resume/complete, verify duration accumulates correctly"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

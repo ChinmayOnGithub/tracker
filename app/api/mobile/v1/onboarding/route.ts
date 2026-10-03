@@ -66,3 +66,27 @@ export async function POST(request: Request) {
     return apiError('INTERNAL_ERROR', 'Failed to save onboarding state', 500)
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    if (process.env.NODE_ENV === 'production') {
+      return apiError(
+        'FORBIDDEN',
+        'Onboarding reset is only allowed in development/testing mode',
+        403
+      )
+    }
+
+    const user = await AuthService.resolveAuthFromRequest(request)
+    if (!user) {
+      return apiError('UNAUTHENTICATED', 'Missing or invalid session token', 401)
+    }
+
+    const state = await OnboardingService.resetForDevelopmentLogin(user.id)
+    return apiSuccess({ state })
+  } catch (error) {
+    console.error('[MobileOnboardingDelete] Internal error:', error)
+    return apiError('INTERNAL_ERROR', 'Failed to reset onboarding state', 500)
+  }
+}
+

@@ -33,11 +33,21 @@ describe('Commercial Workflows: Dual Free Rejection & Pro Success Suite', () => 
       // Mock requireModuleAccess to authenticate free user
       const originalCount = db.activityTemplate.count
       const originalAggregate = db.activityTemplate.aggregate
+      const originalTransaction = db.$transaction
 
       try {
         // Simulate user already having 10 active activities
         (db.activityTemplate as any).count = async () => 10;
         (db.activityTemplate as any).aggregate = async () => ({ _max: { sortOrder: 10 } });
+        (db as any).$transaction = async (cb: any) => {
+          if (typeof cb === 'function') {
+            return cb({
+              $executeRaw: async () => 1,
+              activityTemplate: db.activityTemplate,
+            })
+          }
+          return cb
+        };
 
         // Mock Session / Auth
         const { AuthorizationService } = await import('@/lib/services/AuthorizationService')
@@ -64,6 +74,7 @@ describe('Commercial Workflows: Dual Free Rejection & Pro Success Suite', () => 
       } finally {
         db.activityTemplate.count = originalCount
         db.activityTemplate.aggregate = originalAggregate
+        db.$transaction = originalTransaction
       }
     })
 
@@ -96,6 +107,7 @@ describe('Commercial Workflows: Dual Free Rejection & Pro Success Suite', () => 
       const originalCount = db.activityTemplate.count
       const originalAggregate = db.activityTemplate.aggregate
       const originalCreate = db.activityTemplate.create
+      const originalTransaction = db.$transaction
 
       try {
         // Simulate user having 10 active activities, but with a Pro limit of 10,000
@@ -108,6 +120,15 @@ describe('Commercial Workflows: Dual Free Rejection & Pro Success Suite', () => 
           updatedAt: new Date(),
           deletedAt: null
         });
+        (db as any).$transaction = async (cb: any) => {
+          if (typeof cb === 'function') {
+            return cb({
+              $executeRaw: async () => 1,
+              activityTemplate: db.activityTemplate,
+            })
+          }
+          return cb
+        };
 
         const { AuthorizationService } = await import('@/lib/services/AuthorizationService')
         const origRequireAuth = AuthorizationService.requireAuth
@@ -135,6 +156,7 @@ describe('Commercial Workflows: Dual Free Rejection & Pro Success Suite', () => 
         db.activityTemplate.count = originalCount
         db.activityTemplate.aggregate = originalAggregate
         db.activityTemplate.create = originalCreate
+        db.$transaction = originalTransaction
       }
     })
   })

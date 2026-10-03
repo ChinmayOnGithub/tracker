@@ -17,18 +17,21 @@ describe('Google Calendar Sync (Phase 2)', () => {
   const originalGoogleCredentialCount = db.googleCredential.count
   const originalGetSyncState = CalendarRepository.getSyncState
   const originalUpdateSyncState = CalendarRepository.updateSyncState
+  const originalUpdateManySyncState = db.calendarSyncState.updateMany
 
   beforeEach(() => {
     const mockList = GoogleCalendarService.listEventsWithSyncToken as unknown as MockCallTracker
     if (mockList && mockList.mock) {
       mockList.mock.calls.length = 0
     }
+    db.calendarSyncState.updateMany = mock(() => Promise.resolve({ count: 1 })) as unknown as typeof db.calendarSyncState.updateMany
   })
 
   afterEach(() => {
     db.googleCredential.count = originalGoogleCredentialCount
     CalendarRepository.getSyncState = originalGetSyncState
     CalendarRepository.updateSyncState = originalUpdateSyncState
+    db.calendarSyncState.updateMany = originalUpdateManySyncState
     calendarProviderRegistry.reset()
     providerRegistry.reset()
   })

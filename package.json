@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "prisma generate && next build --webpack",
-    "test": "bun test tests/ lib/services/",
+    "test": "bun test --concurrency 4 tests/ lib/services/",
     "start": "next start",
     "lint": "eslint",
     "prepare": "husky"

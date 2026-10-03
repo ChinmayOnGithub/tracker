@@ -125,8 +125,12 @@ export async function createActivityTemplate(data: {
           })
 
           if (activeCount >= activityLimit) {
+            const plan = (await EntitlementService.getEntitlements(user.id)).plan
+            const isPro = plan !== 'FREE'
             const error = new QuotaExceededError(
-              `You have reached the activity limit for your plan (${activityLimit} active activities).`
+              isPro
+                ? `You have reached the activity limit for your ${plan} plan (${activityLimit} active activities).`
+                : `Free plan limit reached (${activityLimit} active activities). Upgrade to Pro for more.`
             )
             throw error
           }
@@ -265,8 +269,12 @@ export async function updateActivityTemplate(
           })
 
           if (activeCount >= (activityLimit ?? 0)) {
+            const plan = (await EntitlementService.getEntitlements(user.id)).plan
+            const isPro = plan !== 'FREE'
             throw new QuotaExceededError(
-              `You have reached the activity limit for your plan (${activityLimit} active activities).`
+              isPro
+                ? `You have reached the activity limit for your ${plan} plan (${activityLimit} active activities).`
+                : `Free plan limit reached (${activityLimit} active activities). Upgrade to Pro for more.`
             )
           }
 

@@ -1,0 +1,13 @@
+{
+  "task_id": "task-tracker-mobile-final-implementation",
+  "task_description": "Bring Tracker mobile app to full parity with web app - correct all semantic drift, complete missing lifecycle functionality, eliminate mobile-specific business rules, and strengthen engineering foundation",
+  "status": "pending",
+  "feature_order": [
+    "FEAT-001",
+    "FEAT-002",
+    "FEAT-003",
+    "FEAT-004",
+    "FEAT-005"
+  ],
+  "blocked_reason": null
+}

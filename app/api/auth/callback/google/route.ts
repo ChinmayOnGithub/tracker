@@ -279,13 +279,20 @@ export async function GET(request: Request) {
     }
 
     if (isMobile) {
-      const mobileRedirect = NextResponse.redirect(`tracker://auth-callback?token=${sessionToken}&username=${encodeURIComponent(user.username)}`)
+      const customRedirect = cookieStore.get('auth_redirect_url')?.value
+      const targetBase = customRedirect || 'tracker://auth-callback'
+      const separator = targetBase.includes('?') ? '&' : '?'
+      const mobileRedirect = NextResponse.redirect(
+        `${targetBase}${separator}token=${sessionToken}&username=${encodeURIComponent(user.username)}`
+      )
       mobileRedirect.cookies.set(COOKIES.SESSION_TOKEN, sessionToken, sessionCookieOpts)
       mobileRedirect.cookies.delete(COOKIES.AUTH_SOURCE)
+      mobileRedirect.cookies.delete('auth_redirect_url')
       mobileRedirect.cookies.delete(COOKIES.GOOGLE_AUTH_STATE)
       mobileRedirect.cookies.delete(COOKIES.GOOGLE_AUTH_CODE_VERIFIER)
       return mobileRedirect
     }
+
 
     logger.info('OAuthCallback', 'Google authentication completed', {
       userId: user.id,

@@ -1,0 +1,32 @@
+{
+  "id": "FEAT-001",
+  "type": "fix",
+  "description": "Correct onboarding semantic drift and remove invented questionnaire fields not present in web implementation. Current mobile onboarding contains focus areas, capacity options, work start/end time, planning style, and first day objective that do not match web OnboardingService requirements. Web onboarding (lib/services/OnboardingService.ts) requires minimal setup: timezone detection and optional first plan activity generation. Mobile must match this minimal flow: Google Login → check onboarding state → minimal required setup → Today screen.",
+  "status": "pending",
+  "steps": [
+    "Read web OnboardingService (lib/services/OnboardingService.ts) and identify actual required onboarding fields",
+    "Read web onboarding action/route to understand server contract",
+    "Compare against mobile OnboardingScreen.tsx (m/src/features/onboarding/OnboardingScreen.tsx) and OnboardingState type in m/src/api/types.ts",
+    "Remove unnecessary fields from mobile: focusAreas array expansion beyond web semantics, dailyCapacity if not server-required, planningStyle if invented, work start/end time if not canonical",
+    "Preserve only fields web actually stores and uses: timezone, firstDayObjective (if web uses it), completedAt",
+    "Update OnboardingScreen.tsx to reflect minimal web-matched UX: timezone detection, optional goal input, immediate completion",
+    "Update m/src/api/types.ts OnboardingState interface to match web contract exactly",
+    "Verify web onboarding completion creates default activities correctly and mobile replicates this via API",
+    "Remove any mobile-only questionnaire steps not present in web flow"
+  ],
+  "acceptance_criteria": [
+    "Mobile OnboardingState type matches web OnboardingService state shape exactly",
+    "Mobile onboarding screen collects only data web onboarding requires",
+    "No invented mobile-only questionnaire steps remain",
+    "Onboarding completion calls web API and receives same initial setup as web users",
+    "User reaches Today screen immediately after minimal setup, matching web behavior"
+  ],
+  "verification": [
+    "cd m && bun run typecheck (passes)",
+    "Visual inspection: OnboardingScreen.tsx contains no focus area selection, no capacity slider, no work hours, no planning style picker beyond what web uses",
+    "Compare OnboardingState fields in m/src/api/types.ts against lib/services/OnboardingService.ts DEFAULT_ONBOARDING_STATE",
+    "Test flow: Start onboarding → complete minimal setup → verify Today screen loads with same initial state as web new user"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

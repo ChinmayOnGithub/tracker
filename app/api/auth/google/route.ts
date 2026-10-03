@@ -8,6 +8,7 @@ import { getCanonicalOrigin } from '@/lib/url'
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const source = searchParams.get('source')
+  const redirectUrl = searchParams.get('redirect_url')
 
   const clientId = env.GOOGLE_CLIENT_ID
   const siteUrl = getCanonicalOrigin(request)
@@ -66,7 +67,11 @@ export async function GET(request: Request) {
       sameSite: 'lax' as const,
     }
     response.cookies.set(COOKIES.AUTH_SOURCE, 'mobile', mobileOpts)
+    if (redirectUrl) {
+      response.cookies.set('auth_redirect_url', redirectUrl, mobileOpts)
+    }
   }
 
   return response
 }
+

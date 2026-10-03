@@ -66,9 +66,10 @@ export async function GET(request: NextRequest) {
 
     console.log(`[SyncAPI] Pulling changes for user ${user.id} since ${new Date(since).toISOString()}`)
 
-    const operations: SyncOperation[] = []
+    const limitParam = searchParams.get('limit')
+    const limit = Math.min(Math.max(parseInt(limitParam || '100', 10) || 100, 1), 200)
 
-    const MAX_SYNC_BATCH = 200
+    const operations: SyncOperation[] = []
 
     // ─── Activity Logs ────────────────────────────────────────────────
     // In incremental sync, we include soft-deleted records so clients delete their local copies
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest) {
       orderBy: {
         updatedAt: 'asc'
       },
-      take: MAX_SYNC_BATCH,
+      take: limit,
     })
 
     for (const log of activityLogs) {
@@ -136,7 +137,7 @@ export async function GET(request: NextRequest) {
       orderBy: {
         updatedAt: 'asc'
       },
-      take: MAX_SYNC_BATCH,
+      take: limit,
     })
 
     for (const template of activityTemplates) {
@@ -200,11 +201,15 @@ export async function GET(request: NextRequest) {
       where: { userId: user.id }
     })
 
-    console.log(`[SyncAPI] Returning ${operations.length} operations`)
+    const hasMore = activityLogs.length >= limit || activityTemplates.length >= limit
+
+    console.log(`[SyncAPI] Returning ${operations.length} operations (hasMore: ${hasMore})`)
 
     return NextResponse.json({
       operations,
-      cursor: (syncCursor?.revision ?? 0n).toString()
+      cursor: (syncCursor?.revision ?? 0n).toString(),
+      hasMore,
+      serverTime: new Date(now).toISOString()
     })
   } catch (error) {
     console.error('[SyncAPI] Pull failed:', error)

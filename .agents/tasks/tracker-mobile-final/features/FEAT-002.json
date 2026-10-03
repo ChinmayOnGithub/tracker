@@ -1,0 +1,43 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Implement correct Today screen semantics matching web Timeline assembly logic. Current mobile Today screen may not correctly assemble Timeline from three sources (Template Occurrences from recurrence engine, External Events from calendar providers, Orphaned Records). Mobile must replicate web TimelineService logic: evaluate templates for selectedDate using web recurrence rules, merge with calendar events, include orphaned logs, and use exact web task state transitions (Completed/Cancelled/Postponed with correct postpone date algorithm).",
+  "status": "pending",
+  "steps": [
+    "Read web TimelineService (lib/services/TimelineService.ts) to understand Timeline assembly logic",
+    "Read web recurrence engine (lib/recurrence.ts) to understand occurrence evaluation rules",
+    "Read web task state transitions in lib/services/ActivityService.ts and modules/*/services/*",
+    "Compare against mobile Today screen (m/src/features/today/TodayScreen.tsx) and timeline domain logic (m/src/domain/timeline.ts)",
+    "Verify mobile recurrence evaluation (m/src/domain/recurrence.ts) matches web recurrence.ts exactly",
+    "Verify mobile task status cycling matches web: Non-daily: Cleared → Done → Canceled → Postponed → Cleared; Daily: Cleared → Done → Canceled → Cleared (no Postponed)",
+    "Verify mobile Postpone algorithm matches web: does web use addUTCDays(date, 1) or a more complex algorithm? Mobile must replicate exactly",
+    "Verify mobile Today screen merges: computed template occurrences + local calendar events + orphaned activity logs (logs without matching template occurrence)",
+    "Ensure mobile does NOT persist future occurrences (violation of SPEC.md invariant)",
+    "Ensure ActivityLog records are immutable history (status changes create version increments, not silent overwrites)",
+    "Update m/src/domain/activity.ts getNextActivityStatus to match web cycling rules",
+    "Update m/src/domain/completion.ts MobileCompletionService to match web CompletionService",
+    "Update m/src/features/today/TodayScreen.tsx to correctly assemble Timeline from three sources",
+    "Verify Work Session widget (WorkSessionCard.tsx) displays active session correctly without creating duplicate sessions"
+  ],
+  "acceptance_criteria": [
+    "Mobile timeline assembly matches web TimelineService logic exactly",
+    "Mobile recurrence evaluation produces same occurrences as web for all recurrence types (daily, weekly, monthly, yearly, custom, milestone, one_time)",
+    "Mobile task status transitions match web cycling rules (non-daily vs daily)",
+    "Mobile postpone uses exact web postpone date algorithm",
+    "Mobile does not persist future occurrences to SQLite",
+    "Mobile ActivityLog updates increment version, preserving historical immutability",
+    "Today screen shows merged view: template occurrences + calendar events + orphaned logs",
+    "Work session display shows active session without duplicate creation bugs"
+  ],
+  "verification": [
+    "cd m && bun run typecheck && bun test",
+    "Compare m/src/domain/recurrence.ts against lib/recurrence.ts - logic must match",
+    "Compare m/src/domain/activity.ts status transitions against web transitions",
+    "Visual inspection: Today screen shows template-based tasks, Google Calendar events, and orphaned logs merged correctly",
+    "Test postpone: postpone a non-daily task, verify it appears on next day at same position web would show",
+    "Verify SQLite activity_logs table contains only historical records, no future dates except postponed (which are still historical with future logDate)",
+    "Test work session: start session, verify no duplicate active sessions, pause/resume, verify duration accumulation matches web WorkSessionService"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

@@ -1,0 +1,30 @@
+{
+  "project_type": "Expo 57 React Native mobile app + Next.js 16 web app with shared PostgreSQL backend",
+  "language": "TypeScript",
+  "build_system": "Bun for web (bun run build), Expo CLI for mobile (expo start, expo run:android/ios)",
+  "test_framework": "bun test (web and mobile unit tests)",
+  "build_command": "Web: bun run build (prisma generate + next build); Mobile: expo start (dev), eas build (production)",
+  "test_command": "bun test tests/ lib/services/ (web), cd m && bun test (mobile)",
+  "verification_instructions": "Web: bunx tsc --noEmit (type check), bun test (unit tests). Mobile: cd m && bun run typecheck && bun test. Runtime validation requires actual Android emulator/device or iOS simulator.",
+  "snapshot_or_generated_files": "prisma/client generated via prisma generate (committed .prisma/client/). No snapshots checked in.",
+  "environment_constraints": "Mobile runtime validation (Android/iOS) may not be available in automation environment. Static validation (tsc, tests) is mandatory. Never report Android tested without actual runtime execution.",
+  "contribution_requirements": "AI Constitution (docs/07-ai/AI Constitution.md), mobile architecture standards (.agents/rules/mobile-architecture-and-standards.md), database safety (no hard deletes on soft-delete tables, no unscoped bulk operations), styling consistency (design-system components, semantic tokens), web domain logic is authoritative source of truth",
+  "key_patterns": "Web: Server actions (app/actions/*.ts) → Domain services (lib/services/*.ts) → Prisma (lib/db.ts). Mobile: API client (m/src/api/client.ts) → Repository (m/src/db/repository/*.ts) → SQLite cache + mutation outbox → UI. Soft deletion universal (deletedAt field). Work sessions atomic with ActivityLog. Recurrence computed at runtime (never persisted). Feature flags control rollout.",
+  "relevant_files": [
+    "d:\\github_projeccts\\tracker\\SPEC.md",
+    "d:\\github_projeccts\\tracker\\README.md",
+    "d:\\github_projeccts\\tracker\\docs\\07-ai\\AI Constitution.md",
+    "d:\\github_projeccts\\tracker\\.agents\\rules\\mobile-architecture-and-standards.md",
+    "d:\\github_projeccts\\tracker\\prisma\\schema.prisma",
+    "d:\\github_projeccts\\tracker\\lib\\services\\ActivityService.ts",
+    "d:\\github_projeccts\\tracker\\lib\\services\\OnboardingService.ts",
+    "d:\\github_projeccts\\tracker\\modules\\work\\services\\WorkSessionService.ts",
+    "d:\\github_projeccts\\tracker\\app\\actions\\log.ts",
+    "d:\\github_projeccts\\tracker\\m\\src\\features\\onboarding\\OnboardingScreen.tsx",
+    "d:\\github_projeccts\\tracker\\m\\src\\features\\today\\TodayScreen.tsx",
+    "d:\\github_projeccts\\tracker\\m\\src\\api\\client.ts",
+    "d:\\github_projeccts\\tracker\\m\\src\\db\\repository\\*.ts",
+    "d:\\github_projeccts\\tracker\\m\\src\\domain\\*.ts"
+  ],
+  "directory_structure": "Web: app/ (Next.js routes/actions), lib/ (services, db, utils), modules/ (domain features), design-system/ (components), prisma/ (schema). Mobile: m/src/app/ (Expo Router screens), m/src/api/ (API client), m/src/db/ (SQLite repositories), m/src/domain/ (business logic), m/src/features/ (feature modules), m/src/components/ (design system), m/src/theme/ (tokens)."
+}

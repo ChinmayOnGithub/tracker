@@ -48,16 +48,20 @@ export function getCanonicalOrigin(request?: Request): string {
     }
 
     try {
-      const origin = new URL(request.url).origin
-      if (origin && !origin.includes('0.0.0.0')) {
-        if (isProduction && origin.startsWith('http://')) {
-          return origin.replace('http://', 'https://')
+      const originUrl = new URL(request.url)
+      const isPrivateLan = /^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(originUrl.hostname)
+      // Google OAuth rejects private LAN IP addresses in redirect URIs.
+      // If we are accessed via LAN IP and a configured site URL exists, prefer the configured URL.
+      if (!isPrivateLan && originUrl.origin && !originUrl.origin.includes('0.0.0.0')) {
+        if (isProduction && originUrl.origin.startsWith('http://')) {
+          return originUrl.origin.replace('http://', 'https://')
         }
-        return origin
+        return originUrl.origin
       }
     } catch {
       // Fall through
     }
+
   }
 
   // 4. Fallback to configured dev URL or localhost default

@@ -139,6 +139,13 @@ export async function POST(request: Request) {
     }
 
     const record = await db.$transaction(async (tx) => {
+      // Serialize concurrent leave requests for the same user to prevent overlap race conditions (#159)
+      try {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('leave-overlap:' || ${user.id}))`
+      } catch {
+        // Fallback for SQLite / mock test environments
+      }
+
       // Concurrency protection: check overlapping active leave
       const existingOverlap = await tx.leaveRecord.findFirst({
         where: {

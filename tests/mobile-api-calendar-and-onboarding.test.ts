@@ -3,7 +3,7 @@ import { GET as getCalendarMonth } from '@/app/api/mobile/v1/calendar/month/rout
 import { GET as getCalendarWeek } from '@/app/api/mobile/v1/calendar/week/route'
 import { GET as getCalendarDay } from '@/app/api/mobile/v1/calendar/day/route'
 import { POST as postCalendarSync } from '@/app/api/mobile/v1/calendar/sync/route'
-import { GET as getOnboarding, POST as postOnboarding } from '@/app/api/mobile/v1/onboarding/route'
+import { GET as getOnboarding, POST as postOnboarding, DELETE as deleteOnboarding } from '@/app/api/mobile/v1/onboarding/route'
 import { POST as postOnboardingComplete } from '@/app/api/mobile/v1/onboarding/complete/route'
 import { signSession } from '@/lib/session'
 import { db } from '@/lib/db'
@@ -344,6 +344,33 @@ describe('Mobile API Calendar & Onboarding Suite (/api/mobile/v1/)', () => {
       expect(json.success).toBe(true)
       expect(json.data.state.status).toBe('COMPLETED')
       expect(json.data.plan.activityIds).toContain('act-first-day-1')
+    })
+
+    it('DELETE /api/mobile/v1/onboarding resets state for development testing', async () => {
+      const originalReset = OnboardingService.resetForDevelopmentLogin
+      OnboardingService.resetForDevelopmentLogin = mock((userId) => {
+        expect(userId).toBe(testUserId)
+        return Promise.resolve({
+          ...DEFAULT_ONBOARDING_STATE,
+          createdAt: new Date().toISOString(),
+        })
+      }) as unknown as typeof OnboardingService.resetForDevelopmentLogin
+
+      try {
+        const req = new Request('http://localhost:3000/api/mobile/v1/onboarding', {
+          method: 'DELETE',
+          headers: {
+            Authorization: validToken,
+          },
+        })
+        const res = await deleteOnboarding(req)
+        expect(res.status).toBe(200)
+        const json = await res.json()
+        expect(json.success).toBe(true)
+        expect(json.data.state.status).toBe('NOT_STARTED')
+      } finally {
+        OnboardingService.resetForDevelopmentLogin = originalReset
+      }
     })
   })
 })

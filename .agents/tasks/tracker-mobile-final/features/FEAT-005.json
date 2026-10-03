@@ -1,0 +1,49 @@
+{
+  "id": "FEAT-005",
+  "type": "chore",
+  "description": "Strengthen mobile engineering foundation with error boundaries, validation, performance optimizations, accessibility, responsive layouts, and testing. Adopt useful patterns from Obytes and daboigbae templates where they improve Tracker without replacing existing architecture. This feature focuses on code quality, user experience, and maintainability improvements that do not change domain semantics.",
+  "status": "pending",
+  "steps": [
+    "ERROR BOUNDARIES: Add route-level error boundaries in m/src/app/_layout.tsx and feature-level boundaries in complex screens (Today, Vault, Calendar). Use expo-router error boundaries pattern.",
+    "ZOD VALIDATION: Add Zod validation schemas for API request/response contracts where valuable for type safety (m/src/api/types.ts, m/src/domain/validation/*). Mirror web validators (lib/validations/*) where applicable.",
+    "FLASHLIST: Replace FlatList with FlashList from @shopify/flash-list for genuinely large lists: Notes list (potentially hundreds of notes), Journal history (years of entries), Bin (many deleted items), Calendar month view, Vault file list. Do NOT replace for small lists (Today tasks, typically < 20 items).",
+    "LOCALIZATION FOUNDATION: Set up i18n structure for future localization. Use expo-localization, i18next or similar. Extract hardcoded strings to locale files in m/src/locales/. Do not fully localize now, just establish structure.",
+    "ENVIRONMENT SEPARATION: Create environment configs (dev/staging/production) using expo-constants and .env files. Separate API URLs, feature flags, logging levels. Pattern: m/src/config.ts reads from expo-constants, supports NODE_ENV.",
+    "ACCESSIBILITY: Audit all interactive components for: accessible labels (accessibilityLabel), roles (accessibilityRole), states (accessibilityState), minimum 48dp touch targets. Focus on Today screen, Vault, Calendar, settings. Add accessibility labels to all TrackerIcon usages in buttons.",
+    "RESPONSIVE LAYOUTS: Support tablet (600dp+) and landscape. Use useWindowDimensions, create responsive layouts for Today, Calendar, Vault. Pattern: detect screen width, render multi-column on tablet, single column on phone.",
+    "NATIVE UI PATTERNS: Adopt native patterns from Obytes: bottom sheets for modals (replace some full-screen modals with bottom sheets for better UX), improved keyboard handling (KeyboardAvoidingView), improved form architecture (if current forms are cumbersome).",
+    "PERFORMANCE: Add memoization to expensive computations (timeline assembly, recurrence evaluation), lazy load heavy features (Vault, Calendar month), code split large feature modules if bundle size grows.",
+    "FORM ARCHITECTURE: Review current form handling in Notes, Journal, Activity template creation. If cumbersome, adopt react-hook-form + Zod pattern from Obytes. Do not change if current forms work well.",
+    "OBYTES PATTERNS: Review Obytes template for useful patterns. Adopt: strict TypeScript configs, better error handling patterns, form validation patterns, testing structure (if better than current). Do NOT adopt: Redux (Tracker has domain-driven state), React Navigation (Tracker uses Expo Router), anything that replaces existing working architecture.",
+    "DABOIGBAE PATTERNS: Review daboigbae template for useful isolated concepts. Potentially useful: animation patterns (if Tracker needs animated states), better localization structure. Do NOT adopt: Redux, React Navigation, NativeWind (Tracker has semantic tokens).",
+    "TESTING: Add unit tests for: domain logic (m/src/domain/*.ts), repositories (m/src/db/repository/*.ts), API client error handling (m/src/api/client.ts), completion service (m/src/domain/completion.ts), recurrence evaluation (m/src/domain/recurrence.ts). Follow pattern: m/src/__tests__/*.test.ts.",
+    "LINT/COMMIT HYGIENE: Set up lint-staged in m/ if not already present. Run typecheck + lint on pre-commit. Pattern from Obytes: .husky/pre-commit runs lint-staged."
+  ],
+  "acceptance_criteria": [
+    "Error boundaries: errors in Today screen do not crash entire app, show error UI with retry",
+    "Zod validation: API types validated at runtime, invalid responses caught before reaching UI",
+    "FlashList: large lists (Notes, Journal history, Bin, Calendar month, Vault) use FlashList and render smoothly with 100+ items",
+    "Localization: structure in place (i18n config, locale files), hardcoded strings extracted, easy to add new language",
+    "Environment: dev/staging/production configs work, API URLs switch based on environment, feature flags respect environment",
+    "Accessibility: all interactive elements have labels, 48dp touch targets, screen reader compatible (basic compliance, not full WCAG audit)",
+    "Responsive: tablet layout tested on 600dp+ device or simulator, landscape works",
+    "Native UI: bottom sheets used appropriately, keyboard handling smooth, forms easy to use",
+    "Performance: timeline assembly for 50 templates < 100ms, no jank on Today screen, lazy loading reduces initial bundle",
+    "Testing: domain logic and repositories have unit tests, test coverage > 60% for critical paths",
+    "Commit hygiene: pre-commit hook runs typecheck + lint, commits fail if errors"
+  ],
+  "verification": [
+    "cd m && bun run typecheck && bun test (passes)",
+    "Error boundary: crash Today screen deliberately (throw error), verify error boundary catches it and shows retry UI",
+    "FlashList: render Notes list with 200 notes, verify smooth scrolling (use React DevTools Profiler to verify < 16ms frame time)",
+    "Localization: change locale in code, verify UI strings switch (basic test)",
+    "Environment: start with NODE_ENV=production, verify production API URL used, start with NODE_ENV=development, verify dev API URL",
+    "Accessibility: run on device with TalkBack (Android) or VoiceOver (iOS), verify Today screen navigable, buttons have labels (if device available; otherwise manual code inspection)",
+    "Responsive: test on tablet simulator or adjust simulator size to 600dp+, verify multi-column layout",
+    "Performance: measure timeline assembly time with console.time, verify < 100ms for 50 templates",
+    "Testing: bun test m/src/__tests__, verify domain and repository tests pass",
+    "Commit hygiene: make commit with type error, verify pre-commit hook fails"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}
