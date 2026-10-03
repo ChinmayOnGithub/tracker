@@ -2,6 +2,7 @@ import { apiSuccess, apiError } from '@/lib/api-response'
 import { AuthService } from '@/lib/services/AuthService'
 import { WorkSessionService } from '@/modules/work/services/WorkSessionService'
 import { db } from '@/lib/db'
+import { getWeekDates } from '@/lib/recurrence'
 import { z } from 'zod'
 
 const startOrManualSchema = z.object({
@@ -28,8 +29,12 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const date = searchParams.get('date') || new Date().toISOString().slice(0, 10)
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
 
-    const [activeSession, sessionForDate] = await Promise.all([
+    const weekDates = getWeekDates(date, 'monday')
+
+    const [activeSession, sessionForDate, weekSessions, rangeSessions] = await Promise.all([
       db.workSession.findFirst({
         where: {
           userId: user.id,
@@ -44,11 +49,62 @@ export async function GET(request: Request) {
           deletedAt: null,
         },
       }),
+      db.workSession.findMany({
+        where: {
+          userId: user.id,
+          date: { in: weekDates },
+          deletedAt: null,
+        },
+        orderBy: { date: 'asc' },
+      }),
+      startDate && endDate
+        ? db.workSession.findMany({
+            where: {
+              userId: user.id,
+              date: { gte: startDate, lte: endDate },
+              deletedAt: null,
+            },
+            orderBy: { date: 'asc' },
+          })
+        : Promise.resolve([]),
     ])
+
+    // Compute weekly hours with 2 decimal precision
+    const now = Date.now()
+    let weeklyOfficeSec = 0
+    let weeklyWfhSec = 0
+
+    for (const ws of weekSessions) {
+      let sec = (ws.durationSeconds && ws.durationSeconds > 0)
+        ? ws.durationSeconds
+        : (ws.durationMinutes * 60)
+
+      if (ws.status === 'ACTIVE' && ws.startedAt) {
+        const seg = Math.max(0, Math.floor((now - new Date(ws.startedAt).getTime()) / 1000))
+        sec += seg
+      }
+
+      if (ws.mode === 'office') {
+        weeklyOfficeSec += sec
+      } else {
+        weeklyWfhSec += sec
+      }
+    }
+
+    const weeklyOfficeHours = parseFloat((weeklyOfficeSec / 3600).toFixed(2))
+    const weeklyWfhHours = parseFloat((weeklyWfhSec / 3600).toFixed(2))
+    const weeklyTotalHours = parseFloat(((weeklyOfficeSec + weeklyWfhSec) / 3600).toFixed(2))
 
     return apiSuccess({
       activeSession,
       sessionForDate,
+      weekDates,
+      weekSessions,
+      rangeSessions,
+      weeklyTotalHours,
+      weeklyOfficeHours,
+      weeklyWfhHours,
+      weeklyGoal: 40.0,
     })
   } catch (error) {
     console.error('[MobileWorkSession GET] Internal error:', error)

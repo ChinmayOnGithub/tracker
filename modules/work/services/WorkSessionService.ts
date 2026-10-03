@@ -140,14 +140,20 @@ export class WorkSessionService {
       const now = new Date();
       const started = session.startedAt ? new Date(session.startedAt) : now;
       const segmentMs = Math.max(0, now.getTime() - started.getTime());
-      const segmentMinutes = Math.round(segmentMs / 60000);
-      const totalMinutes = session.durationMinutes + segmentMinutes;
+      const segmentSeconds = Math.max(0, Math.floor(segmentMs / 1000));
+      const currentAccumulated = (session.durationSeconds && session.durationSeconds > 0)
+        ? session.durationSeconds
+        : (session.durationMinutes * 60);
+      const totalSeconds = currentAccumulated + segmentSeconds;
+      const totalMinutes = Math.round(totalSeconds / 60);
 
       const updatedSession = await tx.workSession.update({
         where: { id },
         data: {
           status: 'PAUSED',
-          durationMinutes: totalMinutes
+          durationSeconds: totalSeconds,
+          durationMinutes: totalMinutes,
+          startedAt: null,
         }
       });
 
@@ -156,6 +162,7 @@ export class WorkSessionService {
       });
       if (log) {
         const prevPayload = (log.payload || {}) as Record<string, unknown>;
+        const hours = parseFloat((totalSeconds / 3600).toFixed(2));
         await ActivityService.logActivity({
           id: log.id,
           userId,
@@ -163,12 +170,12 @@ export class WorkSessionService {
           date: session.date,
           status: session.mode === 'office' ? 'done' : 'wfh',
           workSessionId: id,
-          amount: parseFloat((totalMinutes / 60).toFixed(1)),
-          note: `Paused work session: ${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m (${session.mode.toUpperCase()})`,
+          amount: hours,
+          note: `Paused work session: ${Math.floor(totalSeconds / 3600)}h ${Math.floor((totalSeconds % 3600) / 60)}m (${session.mode.toUpperCase()})`,
           payload: {
             ...prevPayload,
             sessionState: 'paused',
-            accumulatedSeconds: totalMinutes * 60,
+            accumulatedSeconds: totalSeconds,
             currentSegmentStartedAt: null,
             workSessionId: id,
           }
@@ -223,6 +230,10 @@ export class WorkSessionService {
       });
       if (log) {
         const prevPayload = (log.payload || {}) as Record<string, unknown>;
+        const currentAccumulated = (session.durationSeconds && session.durationSeconds > 0)
+          ? session.durationSeconds
+          : (session.durationMinutes * 60);
+        const hours = parseFloat((currentAccumulated / 3600).toFixed(2));
         await ActivityService.logActivity({
           id: log.id,
           userId,
@@ -230,12 +241,12 @@ export class WorkSessionService {
           date: session.date,
           status: session.mode === 'office' ? 'done' : 'wfh',
           workSessionId: id,
-          amount: parseFloat((session.durationMinutes / 60).toFixed(1)),
+          amount: hours,
           note: `Resumed work session (${session.mode.toUpperCase()})`,
           payload: {
             ...prevPayload,
             sessionState: 'running',
-            accumulatedSeconds: session.durationMinutes * 60,
+            accumulatedSeconds: currentAccumulated,
             currentSegmentStartedAt: now.toISOString(),
             workSessionId: id,
           }
@@ -273,20 +284,26 @@ export class WorkSessionService {
       }
 
       const now = new Date();
-      let finalDurationMinutes = session.durationMinutes;
+      let totalSeconds = (session.durationSeconds && session.durationSeconds > 0)
+        ? session.durationSeconds
+        : (session.durationMinutes * 60);
 
       // If currently running, add the elapsed time of the active segment
       if (currentStatus === 'ACTIVE' && session.startedAt !== null) {
         const started = new Date(session.startedAt);
-        const segmentMinutes = Math.max(0, Math.round((now.getTime() - started.getTime()) / 60000));
-        finalDurationMinutes += segmentMinutes;
+        const segmentSeconds = Math.max(0, Math.floor((now.getTime() - started.getTime()) / 1000));
+        totalSeconds += segmentSeconds;
       }
+
+      const finalDurationMinutes = Math.round(totalSeconds / 60);
+      const finalHours = parseFloat((totalSeconds / 3600).toFixed(2));
 
       const updatedSession = await tx.workSession.update({
         where: { id },
         data: {
           status: 'COMPLETED',
           endedAt: now,
+          durationSeconds: totalSeconds,
           durationMinutes: finalDurationMinutes
         }
       });
@@ -306,15 +323,15 @@ export class WorkSessionService {
           date: session.date,
           status: session.mode === 'office' ? 'done' : 'wfh',
           workSessionId: id,
-          amount: parseFloat((finalDurationMinutes / 60).toFixed(1)),
-          note: `Worked ${Math.floor(finalDurationMinutes / 60)}h ${finalDurationMinutes % 60}m (${session.mode.toUpperCase()})`,
+          amount: finalHours,
+          note: `Worked ${Math.floor(totalSeconds / 3600)}h ${Math.floor((totalSeconds % 3600) / 60)}m (${session.mode.toUpperCase()})`,
           payload: {
             ...prevPayload,
             sessionState: 'completed',
             outTime,
-            accumulatedSeconds: finalDurationMinutes * 60,
+            accumulatedSeconds: totalSeconds,
             currentSegmentStartedAt: null,
-            hours: parseFloat((finalDurationMinutes / 60).toFixed(1)),
+            hours: finalHours,
             workSessionId: id,
           }
         }, tx as TransactionalDbClient);
@@ -342,9 +359,12 @@ export class WorkSessionService {
       throw new Error('Work session not found or unauthorized.');
     }
 
-    const data: { mode?: string; durationMinutes?: number; status?: string } = {};
+    const data: { mode?: string; durationMinutes?: number; durationSeconds?: number; status?: string } = {};
     if (updates.mode !== undefined) data.mode = updates.mode;
-    if (updates.durationMinutes !== undefined) data.durationMinutes = updates.durationMinutes;
+    if (updates.durationMinutes !== undefined) {
+      data.durationMinutes = updates.durationMinutes;
+      data.durationSeconds = updates.durationMinutes * 60;
+    }
     if (updates.status !== undefined) data.status = updates.status;
 
     if (Object.keys(data).length === 0) {
@@ -378,6 +398,7 @@ export class WorkSessionService {
           status: 'COMPLETED', // Manual sessions are already complete — never ACTIVE
           loggingMode: 'manual',
           durationMinutes: params.durationMinutes,
+          durationSeconds: params.durationMinutes * 60,
           manualMinutes: params.durationMinutes,
           startedAt: null,
           endedAt: null
@@ -394,13 +415,14 @@ export class WorkSessionService {
         tx
       );
 
+      const hours = parseFloat((params.durationMinutes / 60).toFixed(2));
       await ActivityService.logActivity({
         userId: params.userId,
         templateId: template.id,
         date: params.date,
-        status: 'done',
+        status: params.mode === 'office' ? 'done' : 'wfh',
         workSessionId: session.id,
-        amount: params.durationMinutes,
+        amount: hours,
         note: `Manually logged work: ${Math.floor(params.durationMinutes / 60)}h ${params.durationMinutes % 60}m (${params.mode.toUpperCase()})`
       }, tx);
 
