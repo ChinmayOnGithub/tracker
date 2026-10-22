@@ -109,6 +109,7 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
           onAddTemplate={onOpenCreateActivity}
           onEditTemplate={onEditTemplate}
           onReorderTemplatesAction={reorderActivityTemplatesAction}
+          logs={effectiveLogs}
         />
       </div>
 
