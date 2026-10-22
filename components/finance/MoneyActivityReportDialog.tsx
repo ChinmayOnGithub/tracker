@@ -132,7 +132,7 @@ export function MoneyActivityReportDialog({ open, onOpenChange, template, logs, 
       .catch(error => { if (!cancelled) setHistoryError(error instanceof Error ? error.message : 'Could not load complete activity history.') })
       .finally(() => { if (!cancelled) setIsLoadingHistory(false) })
     return () => { cancelled = true }
-  }, [open, template?.id, logs])
+  }, [open, template, logs])
 
   const points = useMemo<MoneyPoint[]>(() => reportLogs
     .filter(log => log.activityId === template?.id && !['skipped', 'canceled', 'cancelled', 'postponed'].includes(log.status.toLowerCase()))
