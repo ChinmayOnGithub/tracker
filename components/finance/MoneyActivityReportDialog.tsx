@@ -1,35 +1,79 @@
 "use client"
 
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { ActivityTemplate, ActivityLog } from '@/types'
 import { formatMoney } from '@/lib/formatMoney'
+import { getActivityReportLogs } from '@/app/actions/activity-report'
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/design-system'
 import { CalendarDays, ChartColumnIncreasing, Pencil } from 'lucide-react'
 
 type MoneyPoint = { date: string; amount: number }
 
-function readAmount(log: ActivityLog): number | null {
-  if (typeof log.amount === 'number' && Number.isFinite(log.amount)) return log.amount
-  const payload = log.payload
-  if (!payload || typeof payload !== 'object') return null
-  const obj = payload as Record<string, unknown>
-  const candidates = [obj.amount, obj.value, obj.cost, obj.price, obj.spent, obj.total]
-  for (const candidate of candidates) {
-    if (typeof candidate === 'number' && Number.isFinite(candidate)) return candidate
-    if (typeof candidate === 'string' && candidate.trim() && Number.isFinite(Number(candidate))) return Number(candidate)
+function readAmount(log: ActivityLog, template: ActivityTemplate): number | null {
+  const numeric = (value: unknown): number | null => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+    if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value)
+    return null
   }
-  const values = obj.values && typeof obj.values === 'object' ? obj.values as Record<string, unknown> : null
-  if (values) {
-    for (const [key, value] of Object.entries(values)) {
-      if (/amount|cost|price|spent|total|payment|money|expense/i.test(key)) {
-        const parsed = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN
-        if (Number.isFinite(parsed)) return parsed
+
+  const direct = numeric(log.amount)
+  if (direct !== null) return direct
+
+  const payload = log.payload
+  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+    const obj = payload as Record<string, unknown>
+    const moneyKey = /amount|cost|price|spent|total|payment|money|expense|bill|fee|charge|currency/i
+    const metadata = template.metadata && typeof template.metadata === 'object'
+      ? template.metadata as Record<string, unknown>
+      : typeof template.metadata === 'string'
+        ? (() => { try { return JSON.parse(template.metadata as string) as Record<string, unknown> } catch { return {} } })()
+        : {}
+    const completion = metadata.completion && typeof metadata.completion === 'object'
+      ? metadata.completion as Record<string, unknown>
+      : {}
+    const schema = (completion.schema || completion.form) as { fields?: Array<{ id: string; label?: string; type?: string; unit?: string }> } | undefined
+    const valueObject = obj.value && typeof obj.value === 'object' && !Array.isArray(obj.value)
+      ? obj.value as Record<string, unknown>
+      : null
+    const valuesObject = obj.values && typeof obj.values === 'object' && !Array.isArray(obj.values)
+      ? obj.values as Record<string, unknown>
+      : null
+    const nestedObjects = [valueObject, valuesObject, obj]
+
+    for (const field of schema?.fields || []) {
+      if (field.type === 'currency' || /₹|\$|€|£|\bINR\b|\bUSD\b|\bEUR\b|\bGBP\b/i.test(field.unit || '') ||
+          moneyKey.test(field.id) || moneyKey.test(field.label || '')) {
+        for (const source of nestedObjects) {
+          if (source && Object.prototype.hasOwnProperty.call(source, field.id)) {
+            const amount = numeric(source[field.id])
+            if (amount !== null) return amount
+          }
+        }
+      }
+    }
+
+    for (const key of ['amount', 'value', 'cost', 'price', 'spent', 'total', 'payment', 'expense', 'bill', 'fee', 'charge']) {
+      for (const source of nestedObjects) {
+        if (source && Object.prototype.hasOwnProperty.call(source, key)) {
+          const amount = numeric(source[key])
+          if (amount !== null) return amount
+        }
+      }
+    }
+
+    for (const source of nestedObjects) {
+      if (!source) continue
+      for (const [key, value] of Object.entries(source)) {
+        if (moneyKey.test(key)) {
+          const amount = numeric(value)
+          if (amount !== null) return amount
+        }
       }
     }
   }
-  return null
-}
 
+  return numeric(template.amount)
+}
 export function isMoneyActivity(template: ActivityTemplate): boolean {
   if (template.amount !== null && template.amount !== undefined) return true
   if (template.type === 'BILL' || template.category.toLowerCase() === 'finance') return true
@@ -73,12 +117,28 @@ interface MoneyActivityReportDialogProps {
 export function MoneyActivityReportDialog({ open, onOpenChange, template, logs, onEdit }: MoneyActivityReportDialogProps) {
   const [view, setView] = useState<'monthly' | 'yearly'>('monthly')
   const [year, setYear] = useState(new Date().getFullYear())
+  const [reportLogs, setReportLogs] = useState<ActivityLog[]>([])
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
 
-  const points = useMemo<MoneyPoint[]>(() => logs
+  useEffect(() => {
+    if (!open || !template) return
+    let cancelled = false
+    setIsLoadingHistory(true)
+    setHistoryError(null)
+    setReportLogs(logs.filter(log => log.activityId === template.id))
+    getActivityReportLogs(template.id)
+      .then(records => { if (!cancelled) setReportLogs(records as ActivityLog[]) })
+      .catch(error => { if (!cancelled) setHistoryError(error instanceof Error ? error.message : 'Could not load complete activity history.') })
+      .finally(() => { if (!cancelled) setIsLoadingHistory(false) })
+    return () => { cancelled = true }
+  }, [open, template?.id, logs])
+
+  const points = useMemo<MoneyPoint[]>(() => reportLogs
     .filter(log => log.activityId === template?.id && !['skipped', 'canceled', 'cancelled', 'postponed'].includes(log.status.toLowerCase()))
-    .map(log => ({ date: log.date.slice(0, 10), amount: readAmount(log) ?? 0 }))
+    .map(log => ({ date: String(log.date || log.logDate || '').slice(0, 10), amount: template ? (readAmount(log, template) ?? 0) : 0 }))
     .filter(point => point.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(point.date))
-    .sort((a, b) => a.date.localeCompare(b.date)), [logs, template?.id])
+    .sort((a, b) => a.date.localeCompare(b.date)), [reportLogs, template])
 
   const monthlyData = useMemo(() => Array.from({ length: 12 }, (_, index) => {
     const month = String(index + 1).padStart(2, '0')
@@ -156,7 +216,7 @@ export function MoneyActivityReportDialog({ open, onOpenChange, template, logs, 
               <div className="flex h-40 items-center justify-center rounded-lg bg-[var(--color-bg-subtle)] text-center text-sm text-[var(--color-text-muted)]">No spending records for {year} yet.</div>
             )}
           </section>
-          <p className="text-xs text-[var(--color-text-muted)]">{points.length} spending record{points.length === 1 ? '' : 's'} included. Only positive, non-cancelled amounts are counted. Add amounts to completed logs to improve report accuracy.</p>
+          <p className="text-xs text-[var(--color-text-muted)]">{isLoadingHistory ? 'Loading complete activity history… ' : ''}{points.length} spending record{points.length === 1 ? '' : 's'} included. {historyError ? `History refresh failed: ${historyError}. Showing locally available records.` : 'History is loaded from saved activity logs.'}</p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close report</Button>
