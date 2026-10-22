@@ -1,12 +1,13 @@
 "use client"
 
 import React, { useState, useMemo } from 'react'
-import { ActivityTemplate, RecurrenceAnalysis } from '@/types'
+import { ActivityTemplate, ActivityLog, RecurrenceAnalysis } from '@/types'
 import { duplicateActivityTemplate, updateActivityTemplate, reorderActivityTemplates } from '@/app/actions/template'
 import { useStore } from '@/lib/store/store'
 import { Icon } from './Icon'
 import { Plus, Edit2, Copy, Check, Trash2, EyeOff, MoreVertical } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
+import { isMoneyActivity, MoneyActivityReportDialog } from '@/components/finance/MoneyActivityReportDialog'
 import { SortableList, DragHandle } from '@/components/shared/SortableList'
 import {
   Button,
@@ -25,6 +26,7 @@ interface ActivityManagerProps {
   onAddTemplate: () => void
   onEditTemplate: (template: ActivityTemplate) => void
   onReorderTemplatesAction?: (orderedIds: string[]) => Promise<void>
+  logs?: ActivityLog[]
 }
 
 const RECURRENCE_FILTERS = [
@@ -48,6 +50,7 @@ interface ActivityItemRowProps {
   onDuplicate: (id: string) => void
   onToggleArchive: (template: ActivityTemplate) => void
   onDelete: (id: string, name: string) => void
+  onOpenReport: (template: ActivityTemplate) => void
   // Injected by SortableItem via cloneElement
   _dragHandleRef?: (el: HTMLElement | null) => void
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -68,6 +71,7 @@ const ActivityItemRow: React.FC<ActivityItemRowProps> = ({
   onDuplicate,
   onToggleArchive,
   onDelete,
+  onOpenReport,
   _dragHandleRef,
   _dragHandleListeners,
   _dragHandleAttributes,
@@ -86,7 +90,11 @@ const ActivityItemRow: React.FC<ActivityItemRowProps> = ({
 
   return (
     <div
-      className={`relative flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-[var(--color-border)]/60 bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)]/20 transition-all duration-[var(--motion-duration-fast)] group select-none ${
+      onClick={() => { if (isMoneyActivity(template)) onOpenReport(template) }}
+      role={isMoneyActivity(template) ? 'button' : undefined}
+      tabIndex={isMoneyActivity(template) ? 0 : undefined}
+      onKeyDown={event => { if (isMoneyActivity(template) && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpenReport(template) } }}
+      className={`relative flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-[var(--color-border)]/60 bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)]/20 transition-all duration-[var(--motion-duration-fast)] group select-none ${isMoneyActivity(template) ? 'cursor-pointer' : ''} ${
         !isTemplateActive ? 'opacity-40' : 'shadow-2xs'
       } ${isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''} ${
         isDragOverlay ? 'shadow-lg border-[var(--color-primary)] scale-[1.01] bg-[var(--color-bg-surface)] cursor-grabbing z-50' : ''
@@ -110,6 +118,7 @@ const ActivityItemRow: React.FC<ActivityItemRowProps> = ({
         <input
           type="checkbox"
           checked={isSelected}
+          onClick={e => e.stopPropagation()}
           onChange={e => onSelectItem(template.id, e.target.checked)}
           className="w-3.5 h-3.5 accent-[var(--color-primary)] bg-[var(--color-bg-surface)] border-[var(--color-border)] dark:bg-zinc-800 dark:border-zinc-700 rounded-sm cursor-pointer shrink-0"
         />
@@ -197,10 +206,12 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
   onAddTemplate,
   onEditTemplate,
   onReorderTemplatesAction,
+  logs = [],
 }) => {
   const [isProcessing, setIsProcessing] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [manualOrderIds, setManualOrderIds] = useState<string[] | null>(null)
+  const [reportTemplate, setReportTemplate] = useState<ActivityTemplate | null>(null)
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('')
@@ -470,12 +481,20 @@ export const ActivityManager: React.FC<ActivityManagerProps> = ({
                   onDuplicate={handleDuplicate}
                   onToggleArchive={handleToggleArchive}
                   onDelete={handleDelete}
+                  onOpenReport={setReportTemplate}
                 />
               )
             }}
           />
         </div>
       )}
+      <MoneyActivityReportDialog
+        open={reportTemplate !== null}
+        onOpenChange={open => { if (!open) setReportTemplate(null) }}
+        template={reportTemplate}
+        logs={logs}
+        onEdit={template => { setReportTemplate(null); onEditTemplate(template) }}
+      />
     </div>
   )
 }
