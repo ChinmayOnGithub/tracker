@@ -3,8 +3,7 @@ import { FeatureKey, LimitKey, UserEntitlements } from '../billing/types'
 
 export class EntitlementService {
   /**
-   * Retrieves authoritative server-side entitlements for a given user.
-   * Scoped per server render request using React.cache().
+   * Retrieves fresh authoritative server-side entitlements for a given user.
    */
   static async getEntitlements(userId: string): Promise<UserEntitlements> {
     // Entitlements can change immediately after reconciliation or cancellation.
