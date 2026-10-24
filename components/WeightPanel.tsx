@@ -526,8 +526,7 @@ export const WeightPanel: React.FC<WeightPanelProps> = ({ initialRecords = [] })
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
       <PageHeader
-        title="Weight Tracker"
-        description={`${records.length} log${records.length !== 1 ? 's' : ''} recorded`}
+        title="Weight"
         actions={
           <div className="flex items-center gap-2 text-xs font-semibold text-[var(--muted-foreground)]">
             <span>Height:</span>
