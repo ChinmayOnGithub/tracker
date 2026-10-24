@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { ActivityTemplate, Tag, RecurrenceType, ActivityType, Priority, CalendarProvider, CompletionField, CompletionFieldType } from '@/types'
 import { createActivityTemplate, updateActivityTemplate } from '@/app/actions/template'
 import { ICON_OPTIONS, Icon } from './Icon'
-import { ChevronDown, ChevronRight, AlertTriangle, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle, Plus, Trash2, Droplets, Fuel, Footprints, Dumbbell, BookOpen, Moon, Brain, PencilLine } from 'lucide-react'
 import { Modal, Input, Select, Button } from '@/design-system'
 import { templateFormSchema, type TemplateFormValues } from '@/lib/validations'
 
@@ -107,6 +107,31 @@ function buildDefaultValues(template: ActivityTemplate | null): TemplateFormValu
   }
 }
 
+type StarterPreset = {
+  id: string
+  name: string
+  description: string
+  category: string
+  icon: string
+  color: string
+  completionMethod: 'CHECKBOX' | 'VALUE' | 'FORM'
+  valueLabel?: string
+  valueInputType?: string
+  valueUnit?: string
+  fields?: CompletionField[]
+}
+
+const STARTER_PRESETS: StarterPreset[] = [
+  { id: 'water', name: 'Water intake', description: 'Track water consumed in ml', category: 'health', icon: 'Droplets', color: 'blue', completionMethod: 'VALUE', valueLabel: 'Water consumed', valueInputType: 'number', valueUnit: 'ml' },
+  { id: 'fuel', name: 'Fuel refill', description: 'Record fuel volume and cost', category: 'finance', icon: 'Fuel', color: 'amber', completionMethod: 'FORM', fields: [{ id: 'liters', label: 'Fuel volume', type: 'decimal', unit: 'L', required: true }, { id: 'cost', label: 'Total cost', type: 'currency', unit: '₹', required: true }, { id: 'odometer', label: 'Odometer', type: 'number', unit: 'km', required: false }] },
+  { id: 'jogging', name: 'Jogging / Running', description: 'Track distance and duration', category: 'fitness', icon: 'Footprints', color: 'green', completionMethod: 'FORM', fields: [{ id: 'distance', label: 'Distance', type: 'decimal', unit: 'km', required: true }, { id: 'duration', label: 'Duration', type: 'duration', unit: 'min', required: false }] },
+  { id: 'workout', name: 'Workout', description: 'Log sets, reps and weight', category: 'fitness', icon: 'Dumbbell', color: 'purple', completionMethod: 'FORM', fields: [{ id: 'sets', label: 'Sets', type: 'number', required: true }, { id: 'reps', label: 'Reps', type: 'number', required: true }, { id: 'weight', label: 'Weight', type: 'decimal', unit: 'kg', required: false }] },
+  { id: 'reading', name: 'Reading', description: 'Track pages read', category: 'personal', icon: 'BookOpen', color: 'blue', completionMethod: 'VALUE', valueLabel: 'Pages read', valueInputType: 'number', valueUnit: 'pages' },
+  { id: 'sleep', name: 'Sleep', description: 'Record hours slept', category: 'health', icon: 'Moon', color: 'purple', completionMethod: 'VALUE', valueLabel: 'Hours slept', valueInputType: 'decimal', valueUnit: 'hours' },
+  { id: 'meditation', name: 'Meditation', description: 'Track mindfulness minutes', category: 'health', icon: 'Brain', color: 'green', completionMethod: 'VALUE', valueLabel: 'Duration', valueInputType: 'number', valueUnit: 'min' },
+  { id: 'study', name: 'Study session', description: 'Track focused study time', category: 'work', icon: 'BookOpen', color: 'amber', completionMethod: 'VALUE', valueLabel: 'Study duration', valueInputType: 'number', valueUnit: 'min' },
+]
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export const TemplateModal: React.FC<TemplateModalProps> = ({
@@ -118,6 +143,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
   const [iconSearch, setIconSearch] = useState('')
   const [serverError, setServerError] = useState('')
   const [formFields, setFormFields] = useState<CompletionField[]>([])
+  const [showStarterPicker, setShowStarterPicker] = useState(true)
 
   const {
     register,
@@ -137,6 +163,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
     if (isOpen) {
       reset(buildDefaultValues(templateToEdit))
       setShowAdvanced(false)
+      setShowStarterPicker(!templateToEdit)
       setIconSearch('')
       setServerError('')
       const meta = parseMeta(templateToEdit)
@@ -181,6 +208,31 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       case 'milestone': return 'Custom / Ad-hoc (Unscheduled, added manually)'
       default:         return 'No repeat'
     }
+  }
+
+  const chooseStarter = (preset?: StarterPreset) => {
+    const defaults = buildDefaultValues(null)
+    if (!preset) {
+      reset(defaults)
+      setFormFields([])
+    } else {
+      reset({
+        ...defaults,
+        name: preset.name,
+        category: preset.category as TemplateFormValues['category'],
+        icon: preset.icon,
+        color: preset.color,
+        completionMethod: preset.completionMethod,
+        valueLabel: preset.valueLabel ?? preset.name,
+        valueInputType: (preset.valueInputType ?? 'number') as TemplateFormValues['valueInputType'],
+        valueUnit: preset.valueUnit ?? '',
+        valueRequired: preset.completionMethod === 'VALUE',
+        notes: '',
+      })
+      setFormFields(preset.fields ?? [])
+    }
+    setServerError('')
+    setShowStarterPicker(false)
   }
 
   const onSubmit = async (values: TemplateFormValues) => {
@@ -299,6 +351,28 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
       title={templateToEdit ? 'Edit Activity' : 'New Activity'}
       size="lg"
     >
+      {showStarterPicker && !templateToEdit ? (
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-[var(--color-text-main)]">Start with a template</h3>
+            <p className="mt-1 text-xs text-[var(--color-text-muted)]">Choose a ready-made activity and customize it next, or build your own from scratch.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {STARTER_PRESETS.map(preset => {
+              const PresetIcon = ({water: Droplets, fuel: Fuel, jogging: Footprints, workout: Dumbbell, reading: BookOpen, sleep: Moon, meditation: Brain, study: BookOpen} as const)[preset.id]
+              return (
+                <button key={preset.id} type="button" onClick={() => chooseStarter(preset)} className="flex items-start gap-3 rounded-xl border border-[var(--color-border)] p-3 text-left transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 active:scale-[.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--color-bg-subtle)] text-[var(--color-primary)]"><PresetIcon size={18} /></span>
+                  <span className="min-w-0"><span className="block text-sm font-semibold">{preset.name}</span><span className="mt-1 block text-xs text-[var(--color-text-muted)]">{preset.description}</span></span>
+                </button>
+              )
+            })}
+          </div>
+          <button type="button" onClick={() => chooseStarter()} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] p-4 text-sm font-semibold transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-bg-subtle)] active:scale-[.99]">
+            <PencilLine size={16} /> Start from scratch
+          </button>
+        </div>
+      ) : (
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
 
         {/* Server-level error banner */}
@@ -900,6 +974,7 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
           </Button>
         </div>
       </form>
+      )}
     </Modal>
   )
 }
