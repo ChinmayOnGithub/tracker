@@ -56,7 +56,7 @@ export const TodayHeader: React.FC<TodayHeaderProps> = ({
       />
       <div className="min-w-0 text-center rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-3 py-2.5 shadow-xs">
         <div className="text-base sm:text-lg font-bold text-[var(--color-text-main)] leading-tight truncate">{todayLongDate}</div>
-        {!isCurrentToday && (
+        {isCurrentToday ? <div className="mt-1 flex justify-center"><CompactTodayPills /></div> : (
           <button type="button" onClick={onGoToToday} className="mt-1 text-xs font-semibold text-[var(--color-primary)] hover:underline">Today</button>
         )}
       </div>
