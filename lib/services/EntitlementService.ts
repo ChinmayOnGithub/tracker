@@ -1,4 +1,3 @@
-import { cache } from 'react'
 import { BillingService } from './BillingService'
 import { FeatureKey, LimitKey, UserEntitlements } from '../billing/types'
 
@@ -7,9 +6,11 @@ export class EntitlementService {
    * Retrieves authoritative server-side entitlements for a given user.
    * Scoped per server render request using React.cache().
    */
-  static getEntitlements = cache(async (userId: string): Promise<UserEntitlements> => {
+  static async getEntitlements(userId: string): Promise<UserEntitlements> {
+    // Entitlements can change immediately after reconciliation or cancellation.
+    // Do not memoize this mutable billing state across calls in the same render/test.
     return await BillingService.getEntitlements(userId)
-  })
+  }
 
   /**
    * Checks whether a user has an active Pro subscription or valid grace period.
