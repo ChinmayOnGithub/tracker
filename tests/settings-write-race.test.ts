@@ -3,7 +3,8 @@ import { writeQueue } from '@/lib/store/write-queue'
 
 describe('Settings Write Race & Local Revision Synchronization Suite (#47)', () => {
   beforeEach(() => {
-    // Clear any queue activity
+    // The queue is a process-wide singleton; isolate this suite from other tests.
+    writeQueue.drain()
   })
 
   it('deduplicates rapid consecutive setting mutations using dedupKey', async () => {
@@ -39,8 +40,12 @@ describe('Settings Write Race & Local Revision Synchronization Suite (#47)', () 
       rollback: () => {},
     })
 
-    // Wait for queue processing
-    await new Promise(resolve => setTimeout(resolve, 80))
+    // Wait for the singleton queue to finish, with a bounded timeout.
+    const deadline = Date.now() + 1_000
+    while (writeQueue.getStatus() !== 'idle' && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 10))
+    }
+    expect(writeQueue.getStatus()).toBe('idle')
 
     // Because update-1 may start immediately, update-2 is replaced by update-3 in queue
     // The final applied state MUST be the latest 'green'
