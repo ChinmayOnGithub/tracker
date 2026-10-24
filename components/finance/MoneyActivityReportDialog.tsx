@@ -8,6 +8,8 @@ import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogH
 import { CalendarDays, ChartColumnIncreasing, Pencil, RefreshCw } from 'lucide-react'
 
 type ReportLog = ActivityLog & { date?: string; logDate?: string | Date; amount?: number | null; payload?: unknown }
+const historyCache = new Map<string, { savedAt: number; records: ReportLog[] }>()
+const HISTORY_CACHE_TTL = 2 * 60 * 1000
 
 function readAmount(log: ReportLog, template: ActivityTemplate): number | null {
   const numeric = (value: unknown): number | null => {
@@ -81,7 +83,7 @@ function Chart({ data, money }: { data: { label: string; value: number }[]; mone
   const max = Math.max(1, ...data.map(item => item.value))
   return (
     <div className="w-full min-w-0">
-      <div className="grid h-44 w-full grid-cols-12 items-end gap-1 border-b border-[var(--color-border)] px-1 pt-4 sm:gap-2">
+      <div className="grid h-44 w-full items-end gap-1 border-b border-[var(--color-border)] px-1 pt-4 sm:gap-2" style={{ gridTemplateColumns: `repeat(${data.length}, minmax(0, 1fr))` }}>
         {data.map(item => {
           const height = item.value > 0 ? Math.max(4, (item.value / max) * 112) : 2
           return (
@@ -151,11 +153,23 @@ export function MoneyActivityReportDialog({ open, onOpenChange, template, logs, 
   useEffect(() => {
     if (!open || !template) return
     let cancelled = false
+    const cached = historyCache.get(template.id)
+    const isFresh = cached && Date.now() - cached.savedAt < HISTORY_CACHE_TTL
+    if (isFresh) {
+      setReportLogs(cached.records)
+      setIsLoadingHistory(false)
+      setHistoryError(null)
+      return
+    }
     setIsLoadingHistory(true)
     setHistoryError(null)
-    setReportLogs(logs.filter(log => log.activityId === template.id) as ReportLog[])
+    setReportLogs(cached?.records || (logs.filter(log => log.activityId === template.id) as ReportLog[]))
     getActivityReportLogs(template.id)
-      .then(records => { if (!cancelled) setReportLogs(records as ReportLog[]) })
+      .then(records => {
+        const normalized = records as ReportLog[]
+        historyCache.set(template.id, { savedAt: Date.now(), records: normalized })
+        if (!cancelled) setReportLogs(normalized)
+      })
       .catch(error => { if (!cancelled) setHistoryError(error instanceof Error ? error.message : 'Could not load complete activity history.') })
       .finally(() => { if (!cancelled) setIsLoadingHistory(false) })
     return () => { cancelled = true }
