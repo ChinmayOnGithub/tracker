@@ -641,9 +641,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
         {mobileSettingsHub ? (
           <div className="space-y-5">
             <div className="pt-1">
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--color-primary)]">Settings Hub</p>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight text-[var(--color-text-main)]">Settings & Support</h1>
-              <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">Manage your account, preferences, connections and security.</p>
+              <h1 className="text-2xl font-bold tracking-tight text-[var(--color-text-main)]">Settings</h1>
             </div>
 
             {userProfile && (
