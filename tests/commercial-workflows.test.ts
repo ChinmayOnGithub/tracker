@@ -59,11 +59,7 @@ describe('Commercial Workflows: Dual Free Rejection & Pro Success Suite', () => 
           isOwner: false
         })
         // This test targets the free-plan quota boundary, not guest-module gating.
-        AuthorizationService.assertUserModuleAccess = async (user: any) => ({
-          id: freeUserId,
-          username: 'free_user',
-          isOwner: false
-        })
+        AuthorizationService.assertUserModuleAccess = async (user: any) => user
 
         const result = await createActivityTemplate({
           name: '11th Activity',
