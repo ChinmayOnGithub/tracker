@@ -52,7 +52,10 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
   }, [state])
 
   // Background fetch/revalidate logic (SWR) with Request Deduplication
-  const dateCacheKey = `today:${todayStr}`
+  // The payload contains user-wide dashboard data (templates, recurrence logs, recent journal,
+  // current-year leave, and recent weights), not a separate dataset for each selected day.
+  // Cache it by user so changing the date only recomputes the view-model instead of refetching it.
+  const dateCacheKey = `today:data:${currentUserId}`
   const isValidating = !!state.cacheMetadata.isValidating[dateCacheKey]
   const hasFetchedCurrentDate = (state.cacheMetadata.lastFetched[dateCacheKey] || 0) > 0
 
@@ -60,11 +63,12 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     let active = true
     const lastFetched = stateRef.current.cacheMetadata.lastFetched[dateCacheKey] || 0
     const validating = stateRef.current.cacheMetadata.isValidating[dateCacheKey]
-    const templatesLength = stateRef.current.templates.length
-    const isStale = Date.now() - lastFetched > TODAY_TTL
+    const isStale = lastFetched === 0 || Date.now() - lastFetched > TODAY_TTL
     const needsInitialFetch = lastFetched === 0
 
-    if (!validating && (isStale || templatesLength === 0 || needsInitialFetch)) {
+    // An empty template list can be a valid account state; cache metadata, not array length,
+    // determines whether the first load has completed.
+    if (!validating && isStale) {
       const revalidate = async () => {
         if (needsInitialFetch && active) {
           setInitialLoadState('loading')
@@ -74,7 +78,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
         setCacheMetadata(dateCacheKey, lastFetched, true) // set validation in progress
         try {
           // P0: In-flight deduplication prevents duplicate identical requests
-          const res = await requestDeduplicator.dedupe(`dashboard:${todayStr}:${currentUserId}`, () =>
+          const res = await requestDeduplicator.dedupe(`dashboard:data:${currentUserId}`, () =>
             fetchDashboardDataAction(todayStr)
           )
 
@@ -145,7 +149,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     return () => {
       active = false
     }
-  }, [todayStr, dateCacheKey, initialize, setCacheMetadata, currentUserId, retryAttempt, hasFetchedCurrentDate])
+  }, [dateCacheKey, initialize, setCacheMetadata, currentUserId, retryAttempt])
 
   if (!context) {
     throw new Error('TodayDashboardWrapper must be rendered inside a DashboardLayout')
