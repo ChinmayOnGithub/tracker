@@ -153,25 +153,40 @@ export function MoneyActivityReportDialog({ open, onOpenChange, template, logs, 
   useEffect(() => {
     if (!open || !template) return
     let cancelled = false
-    const cached = historyCache.get(template.id)
-    const isFresh = cached && Date.now() - cached.savedAt < HISTORY_CACHE_TTL
-    if (isFresh) {
-      setReportLogs(cached.records)
-      setIsLoadingHistory(false)
-      setHistoryError(null)
-      return
-    }
-    setIsLoadingHistory(true)
-    setHistoryError(null)
-    setReportLogs(cached?.records || (logs.filter(log => log.activityId === template.id) as ReportLog[]))
-    getActivityReportLogs(template.id)
-      .then(records => {
+    const activityId = template.id
+
+    const loadHistory = async () => {
+      const cached = historyCache.get(activityId)
+      const isFresh = cached && Date.now() - cached.savedAt < HISTORY_CACHE_TTL
+      if (isFresh) {
+        if (!cancelled) {
+          setReportLogs(cached.records)
+          setIsLoadingHistory(false)
+          setHistoryError(null)
+        }
+        return
+      }
+
+      if (!cancelled) {
+        setIsLoadingHistory(true)
+        setHistoryError(null)
+        setReportLogs(cached?.records || (logs.filter(log => log.activityId === activityId) as ReportLog[]))
+      }
+
+      try {
+        const records = await getActivityReportLogs(activityId)
         const normalized = records as ReportLog[]
-        historyCache.set(template.id, { savedAt: Date.now(), records: normalized })
+        historyCache.set(activityId, { savedAt: Date.now(), records: normalized })
         if (!cancelled) setReportLogs(normalized)
-      })
-      .catch(error => { if (!cancelled) setHistoryError(error instanceof Error ? error.message : 'Could not load complete activity history.') })
-      .finally(() => { if (!cancelled) setIsLoadingHistory(false) })
+      } catch (error) {
+        if (!cancelled) setHistoryError(error instanceof Error ? error.message : 'Could not load complete activity history.')
+      } finally {
+        if (!cancelled) setIsLoadingHistory(false)
+      }
+    }
+
+    // Defer the state transition out of the effect's synchronous phase.
+    void Promise.resolve().then(loadHistory)
     return () => { cancelled = true }
   }, [open, template, logs])
 
