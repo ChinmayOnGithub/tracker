@@ -4,6 +4,7 @@ import React from 'react'
 import { ChevronLeft, ChevronRight, RefreshCw, Plus, Loader2 } from 'lucide-react'
 import { Button, IconButton } from '@/design-system'
 import { todayYMD } from '@/lib/dateUtils'
+import { CompactTodayPills } from './CompactTodayPills'
 
 /**
  * TodayHeader
