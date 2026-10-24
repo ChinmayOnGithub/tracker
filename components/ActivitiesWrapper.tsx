@@ -98,10 +98,7 @@ export const ActivitiesWrapper: React.FC<ActivitiesWrapperProps> = ({
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      <PageHeader
-        title="Activity Schedules & Templates"
-        description="Manage recurring routines, habits, and scheduled activities"
-      />
+      <PageHeader title="Activities" />
       
       <div className="w-full">
         <ActivityManager

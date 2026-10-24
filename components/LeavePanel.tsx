@@ -605,8 +605,7 @@ export const LeavePanel: React.FC<LeavePanelProps> = ({
     <div className="max-w-3xl mx-auto space-y-6">
       {/* Header */}
       <PageHeader
-        title="Time Off"
-        description={`${currentYear} leave & entitlement tracker`}
+        title="Leave"
         actions={
           <Button
             variant="outline"

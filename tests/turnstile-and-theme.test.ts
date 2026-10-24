@@ -4,6 +4,14 @@ import { getIsDark, getStoredTheme, applyTheme } from '@/lib/theme/useTheme'
 import { getCanonicalOrigin } from '@/lib/url'
 
 const cookieJar: Record<string, string> = {}
+
+// Preserve the Bun test environment: theme tests install minimal browser mocks only when absent.
+const originalBrowserGlobals = {
+  window: global.window,
+  document: global.document,
+  localStorage: global.localStorage,
+  CustomEvent: global.CustomEvent,
+}
 mock.module('next/headers', () => ({
   cookies: () =>
     Promise.resolve({
@@ -216,6 +224,18 @@ describe('Canonical Public Origin & OAuth Redirect Synchronization', () => {
 })
 
 describe('Theme Service & Preference Synchronization', () => {
+  afterEach(() => {
+    // Do not leak fake browser globals into later test files (notably calendar event tests).
+    if (originalBrowserGlobals.window === undefined) delete (global as { window?: Window }).window
+    else global.window = originalBrowserGlobals.window
+    if (originalBrowserGlobals.document === undefined) delete (global as { document?: Document }).document
+    else global.document = originalBrowserGlobals.document
+    if (originalBrowserGlobals.localStorage === undefined) delete (global as { localStorage?: Storage }).localStorage
+    else global.localStorage = originalBrowserGlobals.localStorage
+    if (originalBrowserGlobals.CustomEvent === undefined) delete (global as { CustomEvent?: typeof CustomEvent }).CustomEvent
+    else global.CustomEvent = originalBrowserGlobals.CustomEvent
+  })
+
   beforeEach(() => {
     // Setup minimal DOM mocks in bun environment
     if (typeof window === 'undefined') {

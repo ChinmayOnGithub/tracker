@@ -90,7 +90,7 @@ jobs:
         run: |
           set -o pipefail
           echo "Running all Bun tests under tests/ and lib/services/..."
-          bun test tests/ lib/services/ 2>&1 | tee test-results.log
+          bun test --concurrency 1 tests/ lib/services/ 2>&1 | tee test-results.log
 
       - name: Upload Test Logs
         if: always()

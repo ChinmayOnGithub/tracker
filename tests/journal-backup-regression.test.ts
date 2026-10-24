@@ -25,7 +25,7 @@ describe('Journal Backup & Restore Regression Test Suite', () => {
       settings: []
     }
 
-    if (typeof window === 'undefined') {
+    {
       const mockEngine = {
         put: async (storeName: string, item: Record<string, unknown>) => {
           console.log(`[Mock IDB] put ${storeName} key=${item.id}`)
