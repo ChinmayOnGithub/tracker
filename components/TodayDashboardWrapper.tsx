@@ -57,7 +57,8 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
   // Cache it by user so changing the date only recomputes the view-model instead of refetching it.
   const dateCacheKey = `today:data:${currentUserId}`
   const isValidating = !!state.cacheMetadata.isValidating[dateCacheKey]
-  const hasFetchedCurrentDate = (state.cacheMetadata.lastFetched[dateCacheKey] || 0) > 0
+  const cacheTimestamp = state.cacheMetadata.lastFetched[dateCacheKey] || 0
+  const hasFetchedCurrentDate = cacheTimestamp > 0
 
   useEffect(() => {
     let active = true
@@ -149,7 +150,7 @@ export const TodayDashboardWrapper: React.FC<TodayDashboardWrapperProps> = ({
     return () => {
       active = false
     }
-  }, [dateCacheKey, initialize, setCacheMetadata, currentUserId, retryAttempt])
+  }, [dateCacheKey, cacheTimestamp, initialize, setCacheMetadata, currentUserId, retryAttempt])
 
   if (!context) {
     throw new Error('TodayDashboardWrapper must be rendered inside a DashboardLayout')
