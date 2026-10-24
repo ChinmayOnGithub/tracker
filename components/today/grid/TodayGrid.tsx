@@ -14,6 +14,7 @@ import {
   clampItem,
 } from '@/lib/dashboard/layoutEngine'
 import { GridWidgetWrapper } from './GridWidgetWrapper'
+import { Loader2 } from 'lucide-react'
 
 interface TodayGridProps {
   config: DashboardConfig
@@ -21,6 +22,7 @@ interface TodayGridProps {
   onChangeConfig: (newConfig: DashboardConfig) => void
   renderWidget: (widgetId: string, w: number, h: number) => React.ReactNode
   onHideWidget: (widgetId: string) => void
+  isLoading?: boolean
 }
 
 export const TodayGrid: React.FC<TodayGridProps> = ({
@@ -29,6 +31,7 @@ export const TodayGrid: React.FC<TodayGridProps> = ({
   onChangeConfig,
   renderWidget,
   onHideWidget,
+  isLoading = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
 
