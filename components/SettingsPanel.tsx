@@ -632,8 +632,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ initialUserProfile
     <div className="space-y-[var(--spacing-6)]">
       <div className="hidden lg:block">
         <PageHeader
-          title="Personalization Center"
-          description="Configure modules, accent styling, dashboard preferences, and security options for your Life Operating System."
+          title="Settings"
         />
       </div>
 
