@@ -279,7 +279,7 @@ describe('Canonical Razorpay Billing Reconciliation Engine (Tests 1-12 & Inciden
         id: subId,
         status: 'active',
         currentStart: new Date('2026-09-20T01:30:00Z'),
-        currentEnd: new Date('2026-10-20T01:30:00Z'),
+        currentEnd: new Date(Date.now() + 30 * 86400000),
         planId: 'PRO_MONTHLY'
       }),
       retrievePayment: async () => ({
@@ -348,7 +348,7 @@ describe('Canonical Razorpay Billing Reconciliation Engine (Tests 1-12 & Inciden
         id: subId,
         status: captured ? 'active' : 'pending',
         currentStart: captured ? new Date('2026-09-20T01:45:00Z') : null,
-        currentEnd: captured ? new Date('2026-10-20T01:45:00Z') : null,
+        currentEnd: captured ? new Date(Date.now() + 30 * 86400000) : null,
         planId: 'PRO_MONTHLY'
       }),
       retrievePayment: async () => ({
@@ -773,7 +773,7 @@ describe('Canonical Razorpay Billing Reconciliation Engine (Tests 1-12 & Inciden
           id: sId,
           status: 'active',
           currentStart: new Date('2026-09-20T01:28:00Z'),
-          currentEnd: new Date('2026-10-20T01:28:00Z'),
+          currentEnd: new Date(Date.now() + 30 * 86400000),
           planId: 'PRO_MONTHLY'
         }
       },

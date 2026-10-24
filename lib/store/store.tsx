@@ -252,6 +252,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
     }))
   }, [])
 
+  const invalidateTodayDataCache = useCallback(() => {
+    const key = `today:data:${userId ?? 'guest'}`
+    setState(prev => ({
+      ...prev,
+      cacheMetadata: {
+        lastFetched: { ...prev.cacheMetadata.lastFetched, [key]: 0 },
+        isValidating: { ...prev.cacheMetadata.isValidating, [key]: false },
+      },
+    }))
+  }, [userId])
+
   const saveJournalDraftAction = useCallback((date: string, fields: any) => {
     setState(prev => ({
       ...prev,
@@ -659,6 +670,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
 
   // --- CALENDAR ACTIONS ---
   const cycleTaskStatusAction = async (occurrence: TimelineItem, todayStr: string, payload?: any) => {
+    invalidateTodayDataCache()
     if (!occurrence.templateId) return
 
     const templateId = occurrence.templateId
@@ -793,6 +805,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
     targetStatus: 'cleared' | 'done' | 'skipped' | 'postponed',
     payload?: any
   ) => {
+    invalidateTodayDataCache()
     if (!occurrence.templateId) return
 
     const templateId = occurrence.templateId
@@ -886,6 +899,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const deleteActivityLog = async (logId: string) => {
+    invalidateTodayDataCache()
     const previousLogs = [...state.logs]
     setState(prev => ({ ...prev, logs: prev.logs.filter(l => l.id !== logId) }))
 
@@ -900,6 +914,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const postponeOneTimeTaskAction = async (templateId: string, date: string, logId: string | null) => {
+    invalidateTodayDataCache()
     const previousLogs = [...state.logs]
     const previousTemplates = [...state.templates]
 
@@ -934,6 +949,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const unpostponeOneTimeTaskAction = async (templateId: string, logId: string, originalDate: string) => {
+    invalidateTodayDataCache()
     const previousLogs = [...state.logs]
     const previousTemplates = [...state.templates]
 
@@ -962,6 +978,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const createActivityTemplateAction = async (templateData: any) => {
+    invalidateTodayDataCache()
     const previousTemplates = [...state.templates]
     const tempId = templateData.id || `temp-template-${Date.now()}`
 
@@ -1012,6 +1029,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const updateActivityTemplateAction = async (id: string, updates: Partial<ActivityTemplate>) => {
+    invalidateTodayDataCache()
     const previousTemplates = [...state.templates]
 
     setState(prev => ({
@@ -1038,6 +1056,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const deleteActivityTemplateAction = async (id: string) => {
+    invalidateTodayDataCache()
     const previousTemplates = [...state.templates]
     const previousLogs = [...state.logs]
 
@@ -1066,6 +1085,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const deleteActivityTemplatesAction = async (ids: string[]) => {
+    invalidateTodayDataCache()
     const idsSet = new Set(ids)
     const previousTemplates = [...state.templates]
     const previousLogs = [...state.logs]
@@ -1097,6 +1117,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const reorderActivityTemplatesAction = async (orderedIds: string[]) => {
+    invalidateTodayDataCache()
     const previousTemplates = [...state.templates]
 
     setState(prev => ({
@@ -1267,6 +1288,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const updateLeaveAllowanceAction = async (leaveType: string, year: number, val: number) => {
+    invalidateTodayDataCache()
     const previousAllowances = [...state.leaveAllowances]
     setState(prev => {
       const exists = prev.leaveAllowances.some(a => a.leaveType === leaveType)
@@ -1292,6 +1314,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const batchUpdateLeaveAllowancesAction = async (year: number, updates: { leaveType: string; allowance: number }[]) => {
+    invalidateTodayDataCache()
     const previousAllowances = [...state.leaveAllowances]
     setState(prev => {
       const copy = [...prev.leaveAllowances]
@@ -1320,6 +1343,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const ensureLeaveAllowancesAction = async (year: number) => {
+    invalidateTodayDataCache()
     const { ensureLeaveAllowances, getLeaveAllowances } = await import('@/app/actions/leave')
     await ensureLeaveAllowances(year)
     const res = await getLeaveAllowances(year)
@@ -1330,6 +1354,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
 
   // --- JOURNAL ACTIONS ---
   const upsertJournalAction = async (date: string, fields: any) => {
+    invalidateTodayDataCache()
     const previousJournal = [...state.journalEntries]
 
     const existing = state.journalEntries.find(e => {
@@ -1397,6 +1422,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const deleteJournalAction = async (id: string) => {
+    invalidateTodayDataCache()
     const previousJournal = [...state.journalEntries]
     setState(prev => ({ ...prev, journalEntries: prev.journalEntries.filter(e => e.id !== id) }))
 
@@ -1414,6 +1440,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
 
   // --- WEIGHT ACTIONS ---
   const logWeightAction = async (date: string, weight: number, note?: string | null) => {
+    invalidateTodayDataCache()
     const previousWeight = [...state.weightRecords]
 
     const existing = state.weightRecords.find(r => {
@@ -1464,6 +1491,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const deleteWeightAction = async (id: string) => {
+    invalidateTodayDataCache()
     const previousWeight = [...state.weightRecords]
     setState(prev => ({ ...prev, weightRecords: prev.weightRecords.filter(r => r.id !== id) }))
 
@@ -1479,6 +1507,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
 
   // --- LEAVE ACTIONS ---
   const createLeaveRecordAction = async (record: any) => {
+    invalidateTodayDataCache()
     const previousLeaves = [...state.leaveRecords]
     const tempId = `temp-lv-${Date.now()}`
 
@@ -1527,6 +1556,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const updateLeaveRecordAction = async (id: string, status: any) => {
+    invalidateTodayDataCache()
     const previousLeaves = [...state.leaveRecords]
 
     setState(prev => ({
@@ -1553,6 +1583,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode; userId?: strin
   }
 
   const deleteLeaveRecordAction = async (id: string) => {
+    invalidateTodayDataCache()
     const previousLeaves = [...state.leaveRecords]
 
     setState(prev => ({

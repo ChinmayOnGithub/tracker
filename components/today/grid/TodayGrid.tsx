@@ -256,7 +256,7 @@ export const TodayGrid: React.FC<TodayGridProps> = ({
                 onResizeStart={handleResizeStart}
                 className="h-full"
               >
-                {renderWidget(item.id, item.w, item.h)}
+{renderWidget(item.id, item.w, item.h)}
               </GridWidgetWrapper>
             </div>
           )
@@ -272,7 +272,7 @@ export const TodayGrid: React.FC<TodayGridProps> = ({
               isEditing={false} // Clean touch experience on mobile
               className="w-full"
             >
-              {renderWidget(item.id, item.w, item.h)}
+{renderWidget(item.id, item.w, item.h)}
             </GridWidgetWrapper>
           </div>
         ))}

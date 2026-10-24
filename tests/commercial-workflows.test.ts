@@ -52,11 +52,14 @@ describe('Commercial Workflows: Dual Free Rejection & Pro Success Suite', () => 
         // Mock Session / Auth
         const { AuthorizationService } = await import('@/lib/services/AuthorizationService')
         const origRequireAuth = AuthorizationService.requireAuth
+        const origAssertUserModuleAccess = AuthorizationService.assertUserModuleAccess
         AuthorizationService.requireAuth = async () => ({
           id: freeUserId,
           username: 'free_user',
           isOwner: false
         })
+        // This test targets the free-plan quota boundary, not guest-module gating.
+        AuthorizationService.assertUserModuleAccess = async (user: any) => user
 
         const result = await createActivityTemplate({
           name: '11th Activity',
@@ -71,6 +74,7 @@ describe('Commercial Workflows: Dual Free Rejection & Pro Success Suite', () => 
         expect(result.error).toContain('Free plan limit reached (10 active activities)')
 
         AuthorizationService.requireAuth = origRequireAuth
+        AuthorizationService.assertUserModuleAccess = origAssertUserModuleAccess
       } finally {
         db.activityTemplate.count = originalCount
         db.activityTemplate.aggregate = originalAggregate

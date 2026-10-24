@@ -923,6 +923,21 @@ export class BillingService {
 
     let webhookRecord: BillingWebhookEvent | null = null
 
+    // Fast-path duplicate detection. The unique constraint on (provider, providerEventId)
+    // remains the concurrency-safe source of truth; this lookup avoids relying on a
+    // failed insert to detect ordinary retries and makes already-processed events a no-op.
+    const priorEvent = await db.billingWebhookEvent.findUnique({
+      where: {
+        provider_providerEventId: {
+          provider: provider.name,
+          providerEventId: norm.eventId
+        }
+      }
+    })
+    if (priorEvent?.status === 'PROCESSED') {
+      return { status: 200, message: 'Event already processed' }
+    }
+
     try {
       // First attempt: create record directly in PROCESSING status
       webhookRecord = await db.billingWebhookEvent.create({
