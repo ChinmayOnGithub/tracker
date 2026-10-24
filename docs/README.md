@@ -21,6 +21,7 @@ Welcome to the Tracker documentation hub. This directory contains all design sys
   - Success criteria
 
 ### Implementation
+- **[Widget Loading & Performance](./05-engineering/Widget-Loading-and-Performance.md)** - Widget-level loading, stale-while-revalidate, caching, race safety, web/mobile performance, and testing rules
 - **[UI_IMPLEMENTATION_PLAN.md](./UI_IMPLEMENTATION_PLAN.md)** - Step-by-step migration guide
   - Installation instructions
   - Phase-by-phase breakdown
