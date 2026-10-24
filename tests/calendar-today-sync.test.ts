@@ -88,7 +88,7 @@ describe('Calendar and Today Dashboard Cross-Module Synchronization (Area E)', (
       }
 
       // Add listener to globalThis/window
-      const target = typeof window !== 'undefined' ? window : (globalThis as unknown as EventTarget)
+      const target: EventTarget = typeof window !== 'undefined' ? window : new EventTarget()
       target.addEventListener('calendar_data_changed', listener)
 
       // Dispatch event as done in Calendar actions / drag drop / resize
