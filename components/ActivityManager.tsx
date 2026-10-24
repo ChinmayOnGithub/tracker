@@ -7,7 +7,7 @@ import { useStore } from '@/lib/store/store'
 import { Icon } from './Icon'
 import { Plus, Edit2, Copy, Check, Trash2, EyeOff, MoreVertical } from 'lucide-react'
 import { getTemplateColorClasses } from '@/lib/colors'
-import { isMoneyActivity, MoneyActivityReportDialog } from '@/components/finance/MoneyActivityReportDialog'
+import { MoneyActivityReportDialog } from '@/components/finance/MoneyActivityReportDialog'
 import { SortableList, DragHandle } from '@/components/shared/SortableList'
 import {
   Button,
@@ -90,11 +90,11 @@ const ActivityItemRow: React.FC<ActivityItemRowProps> = ({
 
   return (
     <div
-      onClick={() => { if (isMoneyActivity(template)) onOpenReport(template) }}
-      role={isMoneyActivity(template) ? 'button' : undefined}
-      tabIndex={isMoneyActivity(template) ? 0 : undefined}
-      onKeyDown={event => { if (isMoneyActivity(template) && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpenReport(template) } }}
-      className={`relative flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-[var(--color-border)]/60 bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)]/20 transition-all duration-[var(--motion-duration-fast)] group select-none ${isMoneyActivity(template) ? 'cursor-pointer' : ''} ${
+      onClick={() => onOpenReport(template)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpenReport(template) } }}
+      className={`relative flex items-center justify-between gap-3 px-3 py-2 rounded-xl border border-[var(--color-border)]/60 bg-[var(--color-bg-surface)] hover:bg-[var(--color-accent)]/20 transition-all duration-[var(--motion-duration-fast)] group select-none cursor-pointer ${
         !isTemplateActive ? 'opacity-40' : 'shadow-2xs'
       } ${isSelected ? 'ring-2 ring-[var(--color-primary)]' : ''} ${
         isDragOverlay ? 'shadow-lg border-[var(--color-primary)] scale-[1.01] bg-[var(--color-bg-surface)] cursor-grabbing z-50' : ''
@@ -165,15 +165,15 @@ const ActivityItemRow: React.FC<ActivityItemRowProps> = ({
             />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => onEditTemplate(template)}>
+            <DropdownMenuItem onClick={event => { event.stopPropagation(); onEditTemplate(template) }}>
               <Edit2 className="w-3.5 h-3.5 mr-2 opacity-70" />
               Edit Activity
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onDuplicate(template.id)}>
+            <DropdownMenuItem onClick={event => { event.stopPropagation(); onDuplicate(template.id) }}>
               <Copy className="w-3.5 h-3.5 mr-2 opacity-70" />
               Duplicate Activity
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onToggleArchive(template)}>
+            <DropdownMenuItem onClick={event => { event.stopPropagation(); onToggleArchive(template) }}>
               {isTemplateActive ? (
                 <>
                   <EyeOff className="w-3.5 h-3.5 mr-2 opacity-70" />
@@ -189,7 +189,7 @@ const ActivityItemRow: React.FC<ActivityItemRowProps> = ({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="danger"
-              onClick={() => onDelete(template.id, template.name)}
+              onClick={event => { event.stopPropagation(); onDelete(template.id, template.name) }}
             >
               <Trash2 className="w-3.5 h-3.5 mr-2" />
               Delete Activity
