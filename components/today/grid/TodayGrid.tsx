@@ -14,7 +14,6 @@ import {
   clampItem,
 } from '@/lib/dashboard/layoutEngine'
 import { GridWidgetWrapper } from './GridWidgetWrapper'
-import { Loader2 } from 'lucide-react'
 
 interface TodayGridProps {
   config: DashboardConfig
@@ -22,7 +21,6 @@ interface TodayGridProps {
   onChangeConfig: (newConfig: DashboardConfig) => void
   renderWidget: (widgetId: string, w: number, h: number) => React.ReactNode
   onHideWidget: (widgetId: string) => void
-  isLoading?: boolean
 }
 
 export const TodayGrid: React.FC<TodayGridProps> = ({
@@ -31,7 +29,6 @@ export const TodayGrid: React.FC<TodayGridProps> = ({
   onChangeConfig,
   renderWidget,
   onHideWidget,
-  isLoading = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -259,14 +256,7 @@ export const TodayGrid: React.FC<TodayGridProps> = ({
                 onResizeStart={handleResizeStart}
                 className="h-full"
               >
-{isLoading ? (
-                  <div className="relative">
-                    {renderWidget(item.id, item.w, item.h)}
-                    <div className="absolute right-2 top-2 z-20 inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface)]/95 px-2 py-1 text-[10px] font-medium text-[var(--color-text-muted)] shadow-sm" role="status" aria-label="Updating widget">
-                      <Loader2 className="h-3 w-3 animate-spin" /> Updating
-                    </div>
-                  </div>
-                ) : renderWidget(item.id, item.w, item.h)}
+{renderWidget(item.id, item.w, item.h)}
               </GridWidgetWrapper>
             </div>
           )
@@ -282,14 +272,7 @@ export const TodayGrid: React.FC<TodayGridProps> = ({
               isEditing={false} // Clean touch experience on mobile
               className="w-full"
             >
-{isLoading ? (
-              <div className="relative">
-                {renderWidget(item.id, item.w, item.h)}
-                <div className="absolute right-2 top-2 z-20 inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-bg-surface)]/95 px-2 py-1 text-[10px] font-medium text-[var(--color-text-muted)] shadow-sm" role="status" aria-label="Updating widget">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Updating
-                </div>
-              </div>
-            ) : renderWidget(item.id, item.w, item.h)}
+{renderWidget(item.id, item.w, item.h)}
             </GridWidgetWrapper>
           </div>
         ))}
