@@ -1064,8 +1064,7 @@ export function VaultPanel() {
 
       {/* PAGE HEADER */}
       <PageHeader
-        title="Secure Vault"
-        subtitle="Your encrypted documents and confidential information cabinet"
+        title="Vault"
         prefix={
           <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 flex items-center justify-center shrink-0">
             <Shield className="w-5 h-5 text-[var(--color-primary)]" />
