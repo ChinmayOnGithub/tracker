@@ -425,7 +425,6 @@ export const TodayDashboard: React.FC<TodayDashboardProps> = ({
         isEditing={isEditingGrid}
         onChangeConfig={setDashboardConfig}
         onHideWidget={handleToggleWidget}
-        isLoading={isValidating}
         renderWidget={(widgetId, w, h) => {
           switch (widgetId) {
             case 'tasks':
