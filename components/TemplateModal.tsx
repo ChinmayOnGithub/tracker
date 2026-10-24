@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { ActivityTemplate, Tag, RecurrenceType, ActivityType, Priority, CalendarProvider, CompletionField, CompletionFieldType } from '@/types'
 import { createActivityTemplate, updateActivityTemplate } from '@/app/actions/template'
 import { ICON_OPTIONS, Icon } from './Icon'
-import { ChevronDown, ChevronRight, AlertTriangle, Plus, Trash2, Droplets, Fuel, Footprints, Dumbbell, BookOpen, Moon, Brain, Sparkles, PencilLine } from 'lucide-react'
+import { ChevronDown, ChevronRight, AlertTriangle, Plus, Trash2, Droplets, Fuel, Footprints, Dumbbell, BookOpen, Moon, Brain, PencilLine } from 'lucide-react'
 import { Modal, Input, Select, Button } from '@/design-system'
 import { templateFormSchema, type TemplateFormValues } from '@/lib/validations'
 
